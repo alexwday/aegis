@@ -59,6 +59,7 @@ Place your `.cer` file in the configured path or update `SSL_CERT_PATH` in `.env
 
 ## Running Tests
 
+### Unit Tests
 ```bash
 # Run all tests
 pytest tests/
@@ -69,6 +70,24 @@ pytest tests/ --cov=src/aegis --cov-report=term-missing
 # Run specific test file
 pytest tests/aegis/connections/test_oauth.py -xvs
 ```
+
+### Testing LLM Connector
+To test the LLM connector with actual API calls:
+
+```bash
+# Activate virtual environment
+source venv/bin/activate
+
+# Ensure API_KEY is set in .env file
+# Run the test script
+python src/aegis/connections/llm/test_connector.py
+```
+
+This test script:
+- Replicates the full workflow process (SSL → conversation processing → authentication)
+- Tests actual LLM API connection
+- Tests both completion and streaming endpoints
+- Provides detailed success/failure feedback
 
 ## Project Structure
 
