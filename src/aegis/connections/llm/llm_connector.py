@@ -98,13 +98,8 @@ def _get_llm_client(
 
 def complete(
     messages: List[Dict[str, str]],
-    auth_config: Dict[str, Any],
-    ssl_config: Dict[str, Any],
-    execution_id: str,
-    model: Optional[str] = None,
-    temperature: Optional[float] = None,
-    max_tokens: Optional[int] = None,
-    **kwargs,
+    context: Dict[str, Any],
+    llm_params: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """
     Generate a non-streaming completion from the LLM.
@@ -114,13 +109,15 @@ def complete(
 
     Args:
         messages: List of message dictionaries with 'role' and 'content'.
-        auth_config: Authentication configuration from workflow.
-        ssl_config: SSL configuration from workflow.
-        execution_id: Unique identifier for this execution.
-        model: Optional model override (defaults to medium tier).
-        temperature: Optional temperature override.
-        max_tokens: Optional max tokens override.
-        **kwargs: Additional parameters to pass to OpenAI API.
+        context: Runtime context containing:
+                 - execution_id: Unique identifier for this execution
+                 - auth_config: Authentication configuration
+                 - ssl_config: SSL configuration
+        llm_params: Optional LLM parameters:
+                    - model: Model to use (defaults to medium tier)
+                    - temperature: Temperature setting
+                    - max_tokens: Maximum tokens
+                    - Additional OpenAI API parameters
 
     Returns:
         Response dictionary containing the completion.
@@ -135,6 +132,24 @@ def complete(
         Exception: If the API call fails.
     """
     logger = get_logger()
+
+    # Extract context
+    execution_id = context["execution_id"]
+    auth_config = context["auth_config"]
+    ssl_config = context["ssl_config"]
+
+    # Extract LLM parameters with defaults
+    if llm_params is None:
+        llm_params = {}
+
+    model = llm_params.get("model")
+    temperature = llm_params.get("temperature")
+    max_tokens = llm_params.get("max_tokens")
+
+    # Remove our known params, pass rest as kwargs
+    kwargs = {
+        k: v for k, v in llm_params.items() if k not in ["model", "temperature", "max_tokens"]
+    }
 
     # Default to medium model if not specified
     if model is None:
@@ -197,13 +212,8 @@ def complete(
 
 def stream(
     messages: List[Dict[str, str]],
-    auth_config: Dict[str, Any],
-    ssl_config: Dict[str, Any],
-    execution_id: str,
-    model: Optional[str] = None,
-    temperature: Optional[float] = None,
-    max_tokens: Optional[int] = None,
-    **kwargs,
+    context: Dict[str, Any],
+    llm_params: Optional[Dict[str, Any]] = None,
 ) -> Generator[Dict[str, Any], None, None]:
     """
     Generate a streaming completion from the LLM.
@@ -213,13 +223,15 @@ def stream(
 
     Args:
         messages: List of message dictionaries with 'role' and 'content'.
-        auth_config: Authentication configuration from workflow.
-        ssl_config: SSL configuration from workflow.
-        execution_id: Unique identifier for this execution.
-        model: Optional model override (defaults to medium tier).
-        temperature: Optional temperature override.
-        max_tokens: Optional max tokens override.
-        **kwargs: Additional parameters to pass to OpenAI API.
+        context: Runtime context containing:
+                 - execution_id: Unique identifier for this execution
+                 - auth_config: Authentication configuration
+                 - ssl_config: SSL configuration
+        llm_params: Optional LLM parameters:
+                    - model: Model to use (defaults to medium tier)
+                    - temperature: Temperature setting
+                    - max_tokens: Maximum tokens
+                    - Additional OpenAI API parameters
 
     Yields:
         Response chunks as they arrive from the API.
@@ -234,6 +246,24 @@ def stream(
         Exception: If the API call fails.
     """
     logger = get_logger()
+
+    # Extract context
+    execution_id = context["execution_id"]
+    auth_config = context["auth_config"]
+    ssl_config = context["ssl_config"]
+
+    # Extract LLM parameters with defaults
+    if llm_params is None:
+        llm_params = {}
+
+    model = llm_params.get("model")
+    temperature = llm_params.get("temperature")
+    max_tokens = llm_params.get("max_tokens")
+
+    # Remove our known params, pass rest as kwargs
+    kwargs = {
+        k: v for k, v in llm_params.items() if k not in ["model", "temperature", "max_tokens"]
+    }
 
     # Default to medium model if not specified
     if model is None:
@@ -302,13 +332,8 @@ def stream(
 def complete_with_tools(
     messages: List[Dict[str, str]],
     tools: List[Dict[str, Any]],
-    auth_config: Dict[str, Any],
-    ssl_config: Dict[str, Any],
-    execution_id: str,
-    model: Optional[str] = None,
-    temperature: Optional[float] = None,
-    max_tokens: Optional[int] = None,
-    **kwargs,
+    context: Dict[str, Any],
+    llm_params: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """
     Generate a completion with tool/function calling capabilities.
@@ -319,13 +344,15 @@ def complete_with_tools(
     Args:
         messages: List of message dictionaries with 'role' and 'content'.
         tools: List of tool definitions for function calling.
-        auth_config: Authentication configuration from workflow.
-        ssl_config: SSL configuration from workflow.
-        execution_id: Unique identifier for this execution.
-        model: Optional model override (defaults to large tier for tools).
-        temperature: Optional temperature override.
-        max_tokens: Optional max tokens override.
-        **kwargs: Additional parameters to pass to OpenAI API.
+        context: Runtime context containing:
+                 - execution_id: Unique identifier for this execution
+                 - auth_config: Authentication configuration
+                 - ssl_config: SSL configuration
+        llm_params: Optional LLM parameters:
+                    - model: Model to use (defaults to large tier for tools)
+                    - temperature: Temperature setting
+                    - max_tokens: Maximum tokens
+                    - Additional OpenAI API parameters
 
     Returns:
         Response dictionary containing the completion with tool calls.
@@ -345,6 +372,24 @@ def complete_with_tools(
         Exception: If the API call fails.
     """
     logger = get_logger()
+
+    # Extract context
+    execution_id = context["execution_id"]
+    auth_config = context["auth_config"]
+    ssl_config = context["ssl_config"]
+
+    # Extract LLM parameters with defaults
+    if llm_params is None:
+        llm_params = {}
+
+    model = llm_params.get("model")
+    temperature = llm_params.get("temperature")
+    max_tokens = llm_params.get("max_tokens")
+
+    # Remove our known params, pass rest as kwargs
+    kwargs = {
+        k: v for k, v in llm_params.items() if k not in ["model", "temperature", "max_tokens"]
+    }
 
     # Default to large model for tool usage (better reasoning)
     if model is None:
@@ -414,9 +459,7 @@ def complete_with_tools(
         raise
 
 
-def check_connection(
-    auth_config: Dict[str, Any], ssl_config: Dict[str, Any], execution_id: str
-) -> Dict[str, Any]:
+def check_connection(context: Dict[str, Any]) -> Dict[str, Any]:
     """
     Check the LLM connection with a simple prompt.
 
@@ -424,9 +467,10 @@ def check_connection(
     connectivity are working properly.
 
     Args:
-        auth_config: Authentication configuration from workflow.
-        ssl_config: SSL configuration from workflow.
-        execution_id: Unique identifier for this execution.
+        context: Runtime context containing:
+                 - execution_id: Unique identifier for this execution
+                 - auth_config: Authentication configuration
+                 - ssl_config: SSL configuration
 
     Returns:
         Test response with status and details.
@@ -439,6 +483,10 @@ def check_connection(
         # }
     """
     logger = get_logger()
+
+    # Extract context
+    execution_id = context["execution_id"]
+    auth_config = context["auth_config"]
 
     logger.info(
         "Testing LLM connection",
@@ -456,12 +504,12 @@ def check_connection(
         # Use small model for testing (faster and cheaper)
         response = complete(
             messages=test_messages,
-            auth_config=auth_config,
-            ssl_config=ssl_config,
-            execution_id=execution_id,
-            model=config.llm.small.model,
-            temperature=0,  # Deterministic for testing
-            max_tokens=50,
+            context=context,
+            llm_params={
+                "model": config.llm.small.model,
+                "temperature": 0,  # Deterministic for testing
+                "max_tokens": 50,
+            },
         )
 
         content = response["choices"][0]["message"]["content"]
@@ -482,7 +530,7 @@ def check_connection(
 
         return result
 
-    except Exception as e:
+    except Exception as e:  # pylint: disable=broad-exception-caught
         result = {
             "status": "failed",
             "error": str(e),

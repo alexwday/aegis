@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# pylint: disable=wrong-import-position
 """
 Manual test script for LLM connector.
 Replicates the workflow process and tests actual LLM API calls.
@@ -26,7 +27,7 @@ setup_logging()
 logger = get_logger()
 
 
-def test_workflow_to_llm():
+def test_workflow_to_llm():  # pylint: disable=too-many-statements
     """
     Test the full workflow up to LLM connector.
     """
@@ -64,7 +65,10 @@ def test_workflow_to_llm():
     print("Testing LLM Connection...")
     print("=" * 50)
 
-    is_connected = check_connection(auth_headers, ssl_config, execution_id)
+    # Create context for all LLM calls
+    context = {"execution_id": execution_id, "auth_config": auth_headers, "ssl_config": ssl_config}
+
+    is_connected = check_connection(context)
     if is_connected:
         logger.info("✅ LLM connection successful", execution_id=execution_id)
     else:
@@ -78,13 +82,11 @@ def test_workflow_to_llm():
     print("=" * 50)
 
     try:
+        # Use config settings, not hardcoded values
         response = complete(
             messages=processed["messages"],
-            auth_config=auth_headers,
-            ssl_config=ssl_config,
-            execution_id=execution_id,
-            model="gpt-4o-mini",  # Using smaller model for testing
-            temperature=0.7,
+            context=context,
+            llm_params={},  # Will use default medium model from config
         )
 
         if response:
@@ -93,7 +95,7 @@ def test_workflow_to_llm():
         else:
             logger.error("❌ LLM completion returned empty response", execution_id=execution_id)
 
-    except Exception as e:
+    except Exception as e:  # pylint: disable=broad-exception-caught
         logger.error("❌ LLM completion failed", error=str(e), execution_id=execution_id)
 
     # Step 6: Test streaming
@@ -105,13 +107,11 @@ def test_workflow_to_llm():
         print("\nStreaming response: ", end="", flush=True)
         full_response = ""
 
+        # Use config settings for streaming too
         for chunk in stream(
             messages=processed["messages"],
-            auth_config=auth_headers,
-            ssl_config=ssl_config,
-            execution_id=execution_id,
-            model="gpt-4o-mini",
-            temperature=0.7,
+            context=context,
+            llm_params={},  # Will use default medium model from config
         ):
             if chunk:
                 print(chunk, end="", flush=True)
@@ -125,7 +125,7 @@ def test_workflow_to_llm():
         else:
             logger.error("❌ LLM streaming returned empty response", execution_id=execution_id)
 
-    except Exception as e:
+    except Exception as e:  # pylint: disable=broad-exception-caught
         logger.error("❌ LLM streaming failed", error=str(e), execution_id=execution_id)
 
     print("\n" + "=" * 50)

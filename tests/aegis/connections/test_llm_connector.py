@@ -62,12 +62,9 @@ class TestLLMComplete:
         # Make request
         result = complete(
             messages=messages,
-            auth_config=auth_config,
-            ssl_config=ssl_config,
-            execution_id="test-exec-id",
-            model=config.llm.small.model,
-            temperature=0.5,
-            max_tokens=100
+            context={"execution_id": "test-exec-id", "auth_config": auth_config, "ssl_config": ssl_config},
+            llm_params={"model": config.llm.small.model, "temperature": 0.5, "max_tokens": 100
+        }
         )
         
         # Verify response
@@ -104,9 +101,9 @@ class TestLLMComplete:
         
         complete(
             messages=messages,
-            auth_config=auth_config,
-            ssl_config=ssl_config,
-            execution_id="test-exec-id"
+            context={"execution_id": "test-exec-id"
+        , "auth_config": auth_config, "ssl_config": ssl_config},
+            llm_params=None
         )
         
         # Should use medium model by default
@@ -132,11 +129,11 @@ class TestLLMComplete:
         # Should raise exception
         with pytest.raises(Exception, match="API Error"):
             complete(
-                messages=messages,
-                auth_config=auth_config,
-                ssl_config=ssl_config,
-                execution_id="test-exec-id"
-            )
+            messages=messages,
+            context={"execution_id": "test-exec-id"
+            , "auth_config": auth_config, "ssl_config": ssl_config},
+            llm_params=None
+        )
 
 
 class TestLLMStream:
@@ -171,10 +168,9 @@ class TestLLMStream:
         # Collect streamed chunks
         chunks = list(stream(
             messages=messages,
-            auth_config=auth_config,
-            ssl_config=ssl_config,
-            execution_id="test-exec-id",
-            model=config.llm.large.model
+            context={"execution_id": "test-exec-id", "auth_config": auth_config, "ssl_config": ssl_config},
+            llm_params={"model": config.llm.large.model
+        }
         ))
         
         # Verify chunks
@@ -242,9 +238,9 @@ class TestLLMTools:
         result = complete_with_tools(
             messages=messages,
             tools=tools,
-            auth_config=auth_config,
-            ssl_config=ssl_config,
-            execution_id="test-exec-id"
+            context={"execution_id": "test-exec-id"
+        , "auth_config": auth_config, "ssl_config": ssl_config},
+            llm_params=None
         )
         
         # Verify response has tool calls
@@ -278,9 +274,9 @@ class TestLLMTools:
         complete_with_tools(
             messages=messages,
             tools=tools,
-            auth_config=auth_config,
-            ssl_config=ssl_config,
-            execution_id="test-exec-id"
+            context={"execution_id": "test-exec-id"
+        , "auth_config": auth_config, "ssl_config": ssl_config},
+            llm_params=None
         )
         
         # Should use large model for tools by default
@@ -304,7 +300,8 @@ class TestLLMConnection:
         auth_config = {"token": "test-token", "method": "api_key"}
         ssl_config = {"verify": False, "cert_path": None}
         
-        result = check_connection(auth_config, ssl_config, "test-exec-id")
+        context = {"execution_id": "test-exec-id", "auth_config": auth_config, "ssl_config": ssl_config}
+        result = check_connection(context)
         
         assert result["status"] == "success"
         assert result["response"] == "Hello! I'm working properly."
@@ -320,7 +317,8 @@ class TestLLMConnection:
         auth_config = {"token": "test-token", "method": "oauth"}
         ssl_config = {"verify": True, "cert_path": "/path/to/cert"}
         
-        result = check_connection(auth_config, ssl_config, "test-exec-id")
+        context = {"execution_id": "test-exec-id", "auth_config": auth_config, "ssl_config": ssl_config}
+        result = check_connection(context)
         
         assert result["status"] == "failed"
         assert "Connection failed" in result["error"]
@@ -350,16 +348,16 @@ class TestClientCaching:
         ssl_config = {"verify": False, "cert_path": None}
         
         # First call - should create client
-        complete(messages, auth_config, ssl_config, "exec-1")
+        complete(messages, {"execution_id": "exec-1", "auth_config": auth_config, "ssl_config": ssl_config}, None)
         assert mock_openai_class.call_count == 1
         
         # Second call with same token - should reuse client
-        complete(messages, auth_config, ssl_config, "exec-2")
+        complete(messages, {"execution_id": "exec-2", "auth_config": auth_config, "ssl_config": ssl_config}, None)
         assert mock_openai_class.call_count == 1  # Still 1, client was reused
         
         # Third call with different token - should create new client
         auth_config2 = {"token": "different-token", "method": "api_key"}
-        complete(messages, auth_config2, ssl_config, "exec-3")
+        complete(messages, {"execution_id": "exec-3", "auth_config": auth_config2, "ssl_config": ssl_config}, None)
         assert mock_openai_class.call_count == 2  # New client created
 
 
@@ -385,7 +383,7 @@ class TestSSLConfiguration:
         auth_config = {"token": "test-token", "method": "api_key"}
         ssl_config = {"verify": True, "cert_path": "/path/to/cert.pem"}
         
-        complete(messages, auth_config, ssl_config, "test-exec-id")
+        complete(messages, {"execution_id": "test-exec-id", "auth_config": auth_config, "ssl_config": ssl_config}, None)
         
         # Verify httpx.Client was created with cert path
         mock_httpx_client.assert_called_once()
@@ -411,7 +409,7 @@ class TestSSLConfiguration:
         auth_config = {"token": "test-token", "method": "api_key"}
         ssl_config = {"verify": False, "cert_path": None}
         
-        complete(messages, auth_config, ssl_config, "test-exec-id")
+        complete(messages, {"execution_id": "test-exec-id", "auth_config": auth_config, "ssl_config": ssl_config}, None)
         
         # Verify httpx.Client was created with verify=False
         mock_httpx_client.assert_called_once()

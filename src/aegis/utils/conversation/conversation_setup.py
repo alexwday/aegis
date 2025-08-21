@@ -80,7 +80,7 @@ def process_conversation(conversation_input: Any, execution_id: str) -> Dict[str
 
         # Keep only the most recent messages based on config
         if len(processed_messages) > config.max_history_length:
-            processed_messages = processed_messages[-config.max_history_length:]
+            processed_messages = processed_messages[-config.max_history_length :]
 
         # Extract the latest message (what we need to respond to)
         latest_message = processed_messages[-1]
