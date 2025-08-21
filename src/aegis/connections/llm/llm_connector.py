@@ -16,6 +16,64 @@ from aegis.utils.settings import config
 _client_cache: Dict[str, OpenAI] = {}
 
 
+def _get_model_config(
+    model: Optional[str],
+    temperature: Optional[float],
+    max_tokens: Optional[int],
+    default_tier: str = "medium",
+) -> tuple:
+    """
+    Determine model configuration based on model name.
+
+    Args:
+        model: Model name or None
+        temperature: Temperature override or None
+        max_tokens: Max tokens override or None
+        default_tier: Default tier if model is None ("small", "medium", "large")
+
+    Returns:
+        Tuple of (model, temperature, max_tokens, model_tier)
+    """
+    if model is None:
+        tier_config = getattr(config.llm, default_tier)
+        return (
+            tier_config.model,
+            temperature or tier_config.temperature,
+            max_tokens or tier_config.max_tokens,
+            default_tier,
+        )
+
+    # Determine tier from model name
+    if model == config.llm.small.model:
+        return (
+            model,
+            temperature or config.llm.small.temperature,
+            max_tokens or config.llm.small.max_tokens,
+            "small",
+        )
+    if model == config.llm.large.model:
+        return (
+            model,
+            temperature or config.llm.large.temperature,
+            max_tokens or config.llm.large.max_tokens,
+            "large",
+        )
+    if model == config.llm.medium.model:
+        return (
+            model,
+            temperature or config.llm.medium.temperature,
+            max_tokens or config.llm.medium.max_tokens,
+            "medium",
+        )
+    # Unknown model, use medium defaults
+    return (
+        model,
+        temperature or config.llm.medium.temperature,
+        max_tokens or config.llm.medium.max_tokens,
+        "medium",
+    )
+
+
 def _get_llm_client(
     auth_config: Dict[str, Any], ssl_config: Dict[str, Any], model_tier: str = "medium"
 ) -> OpenAI:
@@ -133,48 +191,24 @@ def complete(
     """
     logger = get_logger()
 
-    # Extract context
-    execution_id = context["execution_id"]
-    auth_config = context["auth_config"]
-    ssl_config = context["ssl_config"]
 
     # Extract LLM parameters with defaults
     if llm_params is None:
         llm_params = {}
 
-    model = llm_params.get("model")
-    temperature = llm_params.get("temperature")
-    max_tokens = llm_params.get("max_tokens")
+    # Get model configuration using helper
+    model, temperature, max_tokens, model_tier = _get_model_config(
+        llm_params.get("model"), llm_params.get("temperature"), llm_params.get("max_tokens")
+    )
 
     # Remove our known params, pass rest as kwargs
     kwargs = {
         k: v for k, v in llm_params.items() if k not in ["model", "temperature", "max_tokens"]
     }
 
-    # Default to medium model if not specified
-    if model is None:
-        model = config.llm.medium.model
-        temperature = temperature or config.llm.medium.temperature
-        max_tokens = max_tokens or config.llm.medium.max_tokens
-        model_tier = "medium"
-    else:
-        # Determine tier from model
-        if model == config.llm.small.model:
-            model_tier = "small"
-            temperature = temperature or config.llm.small.temperature
-            max_tokens = max_tokens or config.llm.small.max_tokens
-        elif model == config.llm.large.model:
-            model_tier = "large"
-            temperature = temperature or config.llm.large.temperature
-            max_tokens = max_tokens or config.llm.large.max_tokens
-        else:
-            model_tier = "medium"
-            temperature = temperature or config.llm.medium.temperature
-            max_tokens = max_tokens or config.llm.medium.max_tokens
-
     logger.info(
         "Generating LLM completion",
-        execution_id=execution_id,
+        execution_id=context["execution_id"],
         model=model,
         temperature=temperature,
         max_tokens=max_tokens,
@@ -182,7 +216,7 @@ def complete(
     )
 
     try:
-        client = _get_llm_client(auth_config, ssl_config, model_tier)
+        client = _get_llm_client(context["auth_config"], context["ssl_config"], model_tier)
 
         response = client.chat.completions.create(
             model=model, messages=messages, temperature=temperature, max_tokens=max_tokens, **kwargs
@@ -193,7 +227,7 @@ def complete(
 
         logger.info(
             "LLM completion successful",
-            execution_id=execution_id,
+            execution_id=context["execution_id"],
             model=model,
             usage=response_dict.get("usage"),
         )
@@ -203,7 +237,7 @@ def complete(
     except Exception as e:
         logger.error(
             "LLM completion failed",
-            execution_id=execution_id,
+            execution_id=context["execution_id"],
             model=model,
             error=str(e),
         )
@@ -247,48 +281,24 @@ def stream(
     """
     logger = get_logger()
 
-    # Extract context
-    execution_id = context["execution_id"]
-    auth_config = context["auth_config"]
-    ssl_config = context["ssl_config"]
 
     # Extract LLM parameters with defaults
     if llm_params is None:
         llm_params = {}
 
-    model = llm_params.get("model")
-    temperature = llm_params.get("temperature")
-    max_tokens = llm_params.get("max_tokens")
+    # Get model configuration using helper
+    model, temperature, max_tokens, model_tier = _get_model_config(
+        llm_params.get("model"), llm_params.get("temperature"), llm_params.get("max_tokens")
+    )
 
     # Remove our known params, pass rest as kwargs
     kwargs = {
         k: v for k, v in llm_params.items() if k not in ["model", "temperature", "max_tokens"]
     }
 
-    # Default to medium model if not specified
-    if model is None:
-        model = config.llm.medium.model
-        temperature = temperature or config.llm.medium.temperature
-        max_tokens = max_tokens or config.llm.medium.max_tokens
-        model_tier = "medium"
-    else:
-        # Determine tier from model
-        if model == config.llm.small.model:
-            model_tier = "small"
-            temperature = temperature or config.llm.small.temperature
-            max_tokens = max_tokens or config.llm.small.max_tokens
-        elif model == config.llm.large.model:
-            model_tier = "large"
-            temperature = temperature or config.llm.large.temperature
-            max_tokens = max_tokens or config.llm.large.max_tokens
-        else:
-            model_tier = "medium"
-            temperature = temperature or config.llm.medium.temperature
-            max_tokens = max_tokens or config.llm.medium.max_tokens
-
     logger.info(
         "Starting LLM streaming",
-        execution_id=execution_id,
+        execution_id=context["execution_id"],
         model=model,
         temperature=temperature,
         max_tokens=max_tokens,
@@ -296,7 +306,7 @@ def stream(
     )
 
     try:
-        client = _get_llm_client(auth_config, ssl_config, model_tier)
+        client = _get_llm_client(context["auth_config"], context["ssl_config"], model_tier)
 
         stream_response = client.chat.completions.create(
             model=model,
@@ -314,7 +324,7 @@ def stream(
 
         logger.info(
             "LLM streaming completed",
-            execution_id=execution_id,
+            execution_id=context["execution_id"],
             model=model,
             chunks=chunk_count,
         )
@@ -322,7 +332,7 @@ def stream(
     except Exception as e:
         logger.error(
             "LLM streaming failed",
-            execution_id=execution_id,
+            execution_id=context["execution_id"],
             model=model,
             error=str(e),
         )
@@ -373,48 +383,27 @@ def complete_with_tools(
     """
     logger = get_logger()
 
-    # Extract context
-    execution_id = context["execution_id"]
-    auth_config = context["auth_config"]
-    ssl_config = context["ssl_config"]
 
     # Extract LLM parameters with defaults
     if llm_params is None:
         llm_params = {}
 
-    model = llm_params.get("model")
-    temperature = llm_params.get("temperature")
-    max_tokens = llm_params.get("max_tokens")
+    # Get model configuration using helper (default to large for tools)
+    model, temperature, max_tokens, model_tier = _get_model_config(
+        llm_params.get("model"),
+        llm_params.get("temperature"),
+        llm_params.get("max_tokens"),
+        default_tier="large",  # Tools need better reasoning
+    )
 
     # Remove our known params, pass rest as kwargs
     kwargs = {
         k: v for k, v in llm_params.items() if k not in ["model", "temperature", "max_tokens"]
     }
 
-    # Default to large model for tool usage (better reasoning)
-    if model is None:
-        model = config.llm.large.model
-        temperature = temperature or config.llm.large.temperature
-        max_tokens = max_tokens or config.llm.large.max_tokens
-        model_tier = "large"
-    else:
-        # Determine tier from model
-        if model == config.llm.small.model:
-            model_tier = "small"
-            temperature = temperature or config.llm.small.temperature
-            max_tokens = max_tokens or config.llm.small.max_tokens
-        elif model == config.llm.medium.model:
-            model_tier = "medium"
-            temperature = temperature or config.llm.medium.temperature
-            max_tokens = max_tokens or config.llm.medium.max_tokens
-        else:
-            model_tier = "large"
-            temperature = temperature or config.llm.large.temperature
-            max_tokens = max_tokens or config.llm.large.max_tokens
-
     logger.info(
         "Generating LLM completion with tools",
-        execution_id=execution_id,
+        execution_id=context["execution_id"],
         model=model,
         temperature=temperature,
         max_tokens=max_tokens,
@@ -423,7 +412,7 @@ def complete_with_tools(
     )
 
     try:
-        client = _get_llm_client(auth_config, ssl_config, model_tier)
+        client = _get_llm_client(context["auth_config"], context["ssl_config"], model_tier)
 
         response = client.chat.completions.create(
             model=model,
@@ -439,7 +428,7 @@ def complete_with_tools(
 
         logger.info(
             "LLM tool completion successful",
-            execution_id=execution_id,
+            execution_id=context["execution_id"],
             model=model,
             usage=response_dict.get("usage"),
             has_tool_calls=bool(
@@ -452,7 +441,7 @@ def complete_with_tools(
     except Exception as e:
         logger.error(
             "LLM tool completion failed",
-            execution_id=execution_id,
+            execution_id=context["execution_id"],
             model=model,
             error=str(e),
         )
@@ -484,14 +473,10 @@ def check_connection(context: Dict[str, Any]) -> Dict[str, Any]:
     """
     logger = get_logger()
 
-    # Extract context
-    execution_id = context["execution_id"]
-    auth_config = context["auth_config"]
-
     logger.info(
         "Testing LLM connection",
-        execution_id=execution_id,
-        auth_method=auth_config.get("method"),
+        execution_id=context["execution_id"],
+        auth_method=context["auth_config"].get("method"),
         base_url=config.llm.base_url,
     )
 
@@ -518,13 +503,13 @@ def check_connection(context: Dict[str, Any]) -> Dict[str, Any]:
             "status": "success",
             "model": config.llm.small.model,
             "response": content,
-            "auth_method": auth_config.get("method"),
+            "auth_method": context["auth_config"].get("method"),
             "base_url": config.llm.base_url,
         }
 
         logger.info(
             "LLM connection test successful",
-            execution_id=execution_id,
+            execution_id=context["execution_id"],
             response=content,
         )
 
@@ -534,13 +519,13 @@ def check_connection(context: Dict[str, Any]) -> Dict[str, Any]:
         result = {
             "status": "failed",
             "error": str(e),
-            "auth_method": auth_config.get("method"),
+            "auth_method": context["auth_config"].get("method"),
             "base_url": config.llm.base_url,
         }
 
         logger.error(
             "LLM connection test failed",
-            execution_id=execution_id,
+            execution_id=context["execution_id"],
             error=str(e),
         )
 
