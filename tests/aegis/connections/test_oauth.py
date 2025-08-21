@@ -1,8 +1,6 @@
 """
 Tests for OAuth connector module.
 """
-
-import json
 from unittest import mock
 
 import pytest
@@ -17,19 +15,19 @@ def reset_config():
     """Reset config to defaults before each test to ensure test isolation."""
     # Save original values
     original_values = {
-        'auth_method': config.auth_method,
-        'api_key': config.api_key,
-        'oauth_endpoint': config.oauth_endpoint,
-        'oauth_client_id': config.oauth_client_id,
-        'oauth_client_secret': config.oauth_client_secret,
-        'oauth_grant_type': config.oauth_grant_type,
-        'oauth_max_retries': config.oauth_max_retries,
-        'oauth_retry_delay': config.oauth_retry_delay,
+        "auth_method": config.auth_method,
+        "api_key": config.api_key,
+        "oauth_endpoint": config.oauth_endpoint,
+        "oauth_client_id": config.oauth_client_id,
+        "oauth_client_secret": config.oauth_client_secret,
+        "oauth_grant_type": config.oauth_grant_type,
+        "oauth_max_retries": config.oauth_max_retries,
+        "oauth_retry_delay": config.oauth_retry_delay,
     }
-    
+
     # Let test run
     yield
-    
+
     # Restore original values
     for key, value in original_values.items():
         setattr(config, key, value)
@@ -47,32 +45,32 @@ class TestOAuthToken:
         mock_response.json.return_value = {
             "access_token": "test_token_123",
             "token_type": "Bearer",
-            "expires_in": 3600
+            "expires_in": 3600,
         }
         mock_response.raise_for_status = mock.Mock()
-        
+
         # Setup mock session
         mock_session = mock.Mock()
         mock_session.post.return_value = mock_response
         mock_session_class.return_value = mock_session
-        
+
         # Configure OAuth settings
         config.oauth_endpoint = "https://test.com/oauth/token"
         config.oauth_client_id = "test_client_id"
         config.oauth_client_secret = "test_secret"
         config.oauth_grant_type = "client_credentials"
-        
+
         # SSL config from workflow
         ssl_config = {"verify": False, "cert_path": None}
-        
+
         # Get token
         result = get_oauth_token("test-execution-id", ssl_config)
-        
+
         # Verify result
         assert result["access_token"] == "test_token_123"
         assert result["token_type"] == "Bearer"
         assert result["expires_in"] == 3600
-        
+
         # Verify request was made with Basic Auth
         mock_session.post.assert_called_once()
         call_args = mock_session.post.call_args
@@ -85,7 +83,7 @@ class TestOAuthToken:
         config.oauth_endpoint = ""
         config.oauth_client_id = ""
         config.oauth_client_secret = ""
-        
+
         # Should return None instead of raising error
         ssl_config = {"verify": False, "cert_path": None}
         result = get_oauth_token("test-execution-id", ssl_config)
@@ -100,17 +98,17 @@ class TestOAuthToken:
         mock_response.raise_for_status.side_effect = requests.exceptions.HTTPError(
             "401 Unauthorized"
         )
-        
+
         # Setup mock session
         mock_session = mock.Mock()
         mock_session.post.return_value = mock_response
         mock_session_class.return_value = mock_session
-        
+
         # Configure OAuth settings
         config.oauth_endpoint = "https://test.com/oauth/token"
         config.oauth_client_id = "test_client_id"
         config.oauth_client_secret = "test_secret"
-        
+
         # Should raise HTTPError
         ssl_config = {"verify": False, "cert_path": None}
         with pytest.raises(requests.exceptions.HTTPError):
@@ -121,16 +119,14 @@ class TestOAuthToken:
         """Test OAuth token generation handles connection errors."""
         # Setup mock session with connection error
         mock_session = mock.Mock()
-        mock_session.post.side_effect = requests.exceptions.ConnectionError(
-            "Failed to connect"
-        )
+        mock_session.post.side_effect = requests.exceptions.ConnectionError("Failed to connect")
         mock_session_class.return_value = mock_session
-        
+
         # Configure OAuth settings
         config.oauth_endpoint = "https://test.com/oauth/token"
         config.oauth_client_id = "test_client_id"
         config.oauth_client_secret = "test_secret"
-        
+
         # Should raise ConnectionError
         ssl_config = {"verify": False, "cert_path": None}
         with pytest.raises(requests.exceptions.ConnectionError):
@@ -143,12 +139,12 @@ class TestOAuthToken:
         mock_session = mock.Mock()
         mock_session.post.side_effect = requests.exceptions.Timeout("Request timed out")
         mock_session_class.return_value = mock_session
-        
+
         # Configure OAuth settings
         config.oauth_endpoint = "https://test.com/oauth/token"
         config.oauth_client_id = "test_client_id"
         config.oauth_client_secret = "test_secret"
-        
+
         # Should raise Timeout
         ssl_config = {"verify": False, "cert_path": None}
         with pytest.raises(requests.exceptions.Timeout):
@@ -160,21 +156,19 @@ class TestOAuthToken:
         # Setup mock response without access_token
         mock_response = mock.Mock()
         mock_response.status_code = 200
-        mock_response.json.return_value = {
-            "error": "invalid_grant"
-        }
+        mock_response.json.return_value = {"error": "invalid_grant"}
         mock_response.raise_for_status = mock.Mock()
-        
+
         # Setup mock session
         mock_session = mock.Mock()
         mock_session.post.return_value = mock_response
         mock_session_class.return_value = mock_session
-        
+
         # Configure OAuth settings
         config.oauth_endpoint = "https://test.com/oauth/token"
         config.oauth_client_id = "test_client_id"
         config.oauth_client_secret = "test_secret"
-        
+
         # Should raise ValueError
         ssl_config = {"verify": False, "cert_path": None}
         with pytest.raises(ValueError, match="missing 'access_token'"):
@@ -192,17 +186,17 @@ class TestAuthenticationSetup:
         config.oauth_endpoint = "https://test.com/oauth"
         config.oauth_client_id = "client"
         config.oauth_client_secret = "secret"
-        
+
         # Mock OAuth token response
         mock_get_oauth.return_value = {
             "access_token": "test_oauth_token",
             "token_type": "Bearer",
-            "expires_in": 3600
+            "expires_in": 3600,
         }
-        
+
         ssl_config = {"verify": False, "cert_path": None}
         result = setup_authentication("test-id", ssl_config)
-        
+
         assert result["method"] == "oauth"
         assert result["token"] == "test_oauth_token"
         assert result["header"] == {"Authorization": "Bearer test_oauth_token"}
@@ -212,10 +206,10 @@ class TestAuthenticationSetup:
         # Setup config
         config.auth_method = "api_key"
         config.api_key = "test_api_key_123"
-        
+
         ssl_config = {"verify": False, "cert_path": None}
         result = setup_authentication("test-id", ssl_config)
-        
+
         assert result["method"] == "api_key"
         assert result["token"] == "test_api_key_123"
         assert result["header"] == {"Authorization": "Bearer test_api_key_123"}
@@ -226,10 +220,10 @@ class TestAuthenticationSetup:
         config.oauth_endpoint = ""
         config.oauth_client_id = ""
         config.oauth_client_secret = ""
-        
+
         ssl_config = {"verify": False, "cert_path": None}
         result = setup_authentication("test-id", ssl_config)
-        
+
         # Should return placeholder config, not raise error
         assert result["method"] == "placeholder"
         assert result["token"] == "no-oauth-configured"
@@ -239,10 +233,10 @@ class TestAuthenticationSetup:
         """Test API key returns placeholder when not configured."""
         config.auth_method = "api_key"
         config.api_key = ""
-        
+
         ssl_config = {"verify": False, "cert_path": None}
         result = setup_authentication("test-id", ssl_config)
-        
+
         # Should return placeholder config, not raise error
         assert result["method"] == "placeholder"
         assert result["token"] == "no-api-key"
@@ -251,10 +245,10 @@ class TestAuthenticationSetup:
     def test_setup_authentication_invalid_method(self):
         """Test invalid auth method returns placeholder."""
         config.auth_method = "invalid"
-        
+
         ssl_config = {"verify": False, "cert_path": None}
         result = setup_authentication("test-id", ssl_config)
-        
+
         # Should return placeholder config, not raise error
         assert result["method"] == "placeholder"
         assert result["token"] == "invalid-auth-method"
@@ -267,30 +261,32 @@ class TestRetryLogic:
     @mock.patch("aegis.connections.oauth.oauth_connector.requests.Session")
     @mock.patch("aegis.connections.oauth.oauth_connector.HTTPAdapter")
     @mock.patch("aegis.connections.oauth.oauth_connector.Retry")
-    def test_session_retry_configuration(self, mock_retry_class, mock_adapter_class, mock_session_class):
+    def test_session_retry_configuration(
+        self, mock_retry_class, mock_adapter_class, mock_session_class
+    ):
         """Test session is configured with proper retry settings."""
         from aegis.connections.oauth.oauth_connector import _create_session_with_retry
-        
+
         # Setup mock session
         mock_session = mock.Mock()
         mock_session_class.return_value = mock_session
-        
+
         # Configure retry settings
         config.oauth_max_retries = 3
         config.oauth_retry_delay = 1
-        
+
         # Create session
-        session = _create_session_with_retry()
-        
+        _ = _create_session_with_retry()
+
         # Verify retry configuration
         mock_retry_class.assert_called_once_with(
             total=3,
             backoff_factor=1,
             status_forcelist=[500, 502, 503, 504],
             allowed_methods=["POST"],
-            raise_on_status=False
+            raise_on_status=False,
         )
-        
+
         # Verify adapter was mounted
         assert mock_session.mount.call_count == 2  # http:// and https://
 
@@ -302,30 +298,27 @@ class TestIntegration:
     def test_oauth_with_ssl_enabled(self, mock_session_class):
         """Test OAuth uses SSL configuration when enabled."""
         # Setup SSL config
-        ssl_config = {
-            "verify": True,
-            "cert_path": "/path/to/cert.pem"
-        }
-        
+        ssl_config = {"verify": True, "cert_path": "/path/to/cert.pem"}
+
         # Setup mock response
         mock_response = mock.Mock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"access_token": "token"}
         mock_response.raise_for_status = mock.Mock()
-        
+
         # Setup mock session
         mock_session = mock.Mock()
         mock_session.post.return_value = mock_response
         mock_session_class.return_value = mock_session
-        
+
         # Configure OAuth
         config.oauth_endpoint = "https://test.com/oauth/token"
         config.oauth_client_id = "client"
         config.oauth_client_secret = "secret"
-        
+
         # Get token with SSL config
         get_oauth_token("test-id", ssl_config)
-        
+
         # Verify SSL cert was used
         call_args = mock_session.post.call_args
         assert call_args.kwargs["verify"] == "/path/to/cert.pem"
@@ -334,30 +327,27 @@ class TestIntegration:
     def test_oauth_with_ssl_disabled(self, mock_session_class):
         """Test OAuth with SSL verification disabled."""
         # Setup SSL config
-        ssl_config = {
-            "verify": False,
-            "cert_path": None
-        }
-        
+        ssl_config = {"verify": False, "cert_path": None}
+
         # Setup mock response
         mock_response = mock.Mock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"access_token": "token"}
         mock_response.raise_for_status = mock.Mock()
-        
+
         # Setup mock session
         mock_session = mock.Mock()
         mock_session.post.return_value = mock_response
         mock_session_class.return_value = mock_session
-        
+
         # Configure OAuth
         config.oauth_endpoint = "https://test.com/oauth/token"
         config.oauth_client_id = "client"
         config.oauth_client_secret = "secret"
-        
+
         # Get token with SSL config
         get_oauth_token("test-id", ssl_config)
-        
+
         # Verify SSL was disabled
         call_args = mock_session.post.call_args
         assert call_args.kwargs["verify"] is False

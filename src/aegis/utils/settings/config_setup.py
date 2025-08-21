@@ -53,6 +53,16 @@ class LLMModelConfig:
 
 
 @dataclass
+class LLMEmbeddingConfig:
+    """Configuration for embedding model."""
+
+    model: str
+    dimensions: int
+    timeout: int
+    max_retries: int
+
+
+@dataclass
 class LLMConfig:
     """LLM service configuration with model tiers."""
 
@@ -60,6 +70,7 @@ class LLMConfig:
     small: LLMModelConfig
     medium: LLMModelConfig
     large: LLMModelConfig
+    embedding: LLMEmbeddingConfig
 
 
 class Config:  # pylint: disable=too-many-instance-attributes
@@ -178,6 +189,12 @@ class Config:  # pylint: disable=too-many-instance-attributes
                 max_tokens=int(os.getenv("LLM_MAX_TOKENS_LARGE", "4000")),
                 timeout=int(os.getenv("LLM_TIMEOUT_LARGE", "120")),
                 max_retries=int(os.getenv("LLM_MAX_RETRIES_LARGE", "3")),
+            ),
+            embedding=LLMEmbeddingConfig(
+                model=os.getenv("LLM_EMBEDDING_MODEL", "text-embedding-3-large"),
+                dimensions=int(os.getenv("LLM_EMBEDDING_DIMENSIONS", "3072")),
+                timeout=int(os.getenv("LLM_EMBEDDING_TIMEOUT", "30")),
+                max_retries=int(os.getenv("LLM_EMBEDDING_MAX_RETRIES", "3")),
             ),
         )
 

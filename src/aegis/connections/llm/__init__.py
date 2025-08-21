@@ -10,6 +10,8 @@ from aegis.connections.llm.llm_connector import (
     stream,
     complete_with_tools,
     check_connection,
+    embed,
+    embed_batch,
 )
 
 __all__ = [
@@ -17,4 +19,6 @@ __all__ = [
     "stream",
     "complete_with_tools",
     "check_connection",
+    "embed",
+    "embed_batch",
 ]

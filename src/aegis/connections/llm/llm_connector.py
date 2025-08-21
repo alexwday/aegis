@@ -110,6 +110,7 @@ def _get_llm_client(
         "small": config.llm.small.timeout,
         "medium": config.llm.medium.timeout,
         "large": config.llm.large.timeout,
+        "embedding": config.llm.embedding.timeout,
     }
     timeout = timeout_config.get(model_tier, config.llm.medium.timeout)
 
@@ -440,6 +441,196 @@ def complete_with_tools(
             "LLM tool completion failed",
             execution_id=context["execution_id"],
             model=model,
+            error=str(e),
+        )
+        raise
+
+
+def embed(
+    input_text: str,
+    context: Dict[str, Any],
+    embedding_params: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """
+    Generate embedding vector for input text.
+
+    Creates a vector representation of the input text using OpenAI's
+    embedding models. Suitable for similarity search, clustering, and
+    other vector operations.
+
+    Args:
+        input_text: Text to generate embedding for.
+        context: Runtime context containing:
+                 - execution_id: Unique identifier for this execution
+                 - auth_config: Authentication configuration
+                 - ssl_config: SSL configuration
+        embedding_params: Optional embedding parameters:
+                          - model: Embedding model to use (defaults to configured model)
+                          - dimensions: Vector dimensions (for models that support it)
+                          - Additional OpenAI API parameters
+
+    Returns:
+        Response dictionary containing the embedding vector.
+
+        # Returns: {
+        #     "data": [{
+        #         "embedding": [0.123, -0.456, ...],  # Vector of floats
+        #         "index": 0,
+        #         "object": "embedding"
+        #     }],
+        #     "model": "text-embedding-3-large",
+        #     "usage": {"prompt_tokens": 10, "total_tokens": 10}
+        # }
+
+    Raises:
+        Exception: If the API call fails.
+    """
+    logger = get_logger()
+
+    # Extract embedding parameters with defaults
+    if embedding_params is None:
+        embedding_params = {}
+
+    # Get embedding configuration
+    model = embedding_params.get("model", config.llm.embedding.model)
+    dimensions = embedding_params.get("dimensions", config.llm.embedding.dimensions)
+
+    # Remove our known params, pass rest as kwargs
+    kwargs = {k: v for k, v in embedding_params.items() if k not in ["model", "dimensions"]}
+
+    # Add dimensions if supported by the model
+    if "text-embedding-3" in model and dimensions:
+        kwargs["dimensions"] = dimensions
+
+    logger.info(
+        "Generating text embedding",
+        execution_id=context["execution_id"],
+        model=model,
+        dimensions=dimensions if "text-embedding-3" in model else "default",
+        input_length=len(input_text),
+    )
+
+    try:
+        # Use embedding timeout for client
+        client = _get_llm_client(context["auth_config"], context["ssl_config"], "embedding")
+
+        response = client.embeddings.create(model=model, input=input_text, **kwargs)
+
+        # Convert response to dict
+        response_dict = response.model_dump()
+
+        logger.info(
+            "Embedding generation successful",
+            execution_id=context["execution_id"],
+            model=model,
+            usage=response_dict.get("usage"),
+            vector_length=len(response_dict["data"][0]["embedding"]),
+        )
+
+        return response_dict
+
+    except Exception as e:
+        logger.error(
+            "Embedding generation failed",
+            execution_id=context["execution_id"],
+            model=model,
+            error=str(e),
+        )
+        raise
+
+
+def embed_batch(
+    input_texts: List[str],
+    context: Dict[str, Any],
+    embedding_params: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """
+    Generate embeddings for multiple texts in a single API call.
+
+    Creates vector representations for multiple input texts efficiently
+    using OpenAI's batch embedding capability.
+
+    Args:
+        input_texts: List of texts to generate embeddings for.
+        context: Runtime context containing:
+                 - execution_id: Unique identifier for this execution
+                 - auth_config: Authentication configuration
+                 - ssl_config: SSL configuration
+        embedding_params: Optional embedding parameters:
+                          - model: Embedding model to use (defaults to configured model)
+                          - dimensions: Vector dimensions (for models that support it)
+                          - Additional OpenAI API parameters
+
+    Returns:
+        Response dictionary containing embedding vectors for all inputs.
+
+        # Returns: {
+        #     "data": [
+        #         {"embedding": [...], "index": 0, "object": "embedding"},
+        #         {"embedding": [...], "index": 1, "object": "embedding"},
+        #         ...
+        #     ],
+        #     "model": "text-embedding-3-large",
+        #     "usage": {"prompt_tokens": 100, "total_tokens": 100}
+        # }
+
+    Raises:
+        Exception: If the API call fails.
+    """
+    logger = get_logger()
+
+    # Extract embedding parameters with defaults
+    if embedding_params is None:
+        embedding_params = {}
+
+    # Get embedding configuration
+    model = embedding_params.get("model", config.llm.embedding.model)
+    dimensions = embedding_params.get("dimensions", config.llm.embedding.dimensions)
+
+    # Remove our known params, pass rest as kwargs
+    kwargs = {k: v for k, v in embedding_params.items() if k not in ["model", "dimensions"]}
+
+    # Add dimensions if supported by the model
+    if "text-embedding-3" in model and dimensions:
+        kwargs["dimensions"] = dimensions
+
+    logger.info(
+        "Generating batch embeddings",
+        execution_id=context["execution_id"],
+        model=model,
+        dimensions=dimensions if "text-embedding-3" in model else "default",
+        batch_size=len(input_texts),
+        total_chars=sum(len(text) for text in input_texts),
+    )
+
+    try:
+        # Use embedding timeout for client
+        client = _get_llm_client(context["auth_config"], context["ssl_config"], "embedding")
+
+        response = client.embeddings.create(model=model, input=input_texts, **kwargs)
+
+        # Convert response to dict
+        response_dict = response.model_dump()
+
+        logger.info(
+            "Batch embedding generation successful",
+            execution_id=context["execution_id"],
+            model=model,
+            usage=response_dict.get("usage"),
+            vectors_generated=len(response_dict["data"]),
+            vector_length=(
+                len(response_dict["data"][0]["embedding"]) if response_dict["data"] else 0
+            ),
+        )
+
+        return response_dict
+
+    except Exception as e:
+        logger.error(
+            "Batch embedding generation failed",
+            execution_id=context["execution_id"],
+            model=model,
+            batch_size=len(input_texts),
             error=str(e),
         )
         raise
