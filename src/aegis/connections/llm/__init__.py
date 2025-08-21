@@ -14,7 +14,7 @@ from aegis.connections.llm.llm_connector import (
 
 __all__ = [
     "complete",
-    "stream", 
+    "stream",
     "complete_with_tools",
     "check_connection",
 ]

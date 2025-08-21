@@ -211,21 +211,17 @@ def setup_authentication(execution_id: str, ssl_config: Dict[str, Any]) -> Dict[
 def _handle_oauth_auth(execution_id: str, ssl_config: Dict[str, Any], logger) -> Dict[str, Any]:
     """
     Handle OAuth authentication setup.
-    
+
     Args:
         execution_id: Unique identifier for this execution.
         ssl_config: SSL configuration from workflow.
         logger: Logger instance.
-        
+
     Returns:
         Authentication configuration dict.
     """
     # Validate OAuth configuration
-    if (
-        not config.oauth_endpoint
-        or not config.oauth_client_id
-        or not config.oauth_client_secret
-    ):
+    if not config.oauth_endpoint or not config.oauth_client_id or not config.oauth_client_secret:
         logger.warning(
             "OAuth selected but credentials not configured - using placeholder",
             execution_id=execution_id,
@@ -281,11 +277,11 @@ def _handle_oauth_auth(execution_id: str, ssl_config: Dict[str, Any], logger) ->
 def _handle_api_key_auth(execution_id: str, logger) -> Dict[str, Any]:
     """
     Handle API key authentication setup.
-    
+
     Args:
         execution_id: Unique identifier for this execution.
         logger: Logger instance.
-        
+
     Returns:
         Authentication configuration dict.
     """

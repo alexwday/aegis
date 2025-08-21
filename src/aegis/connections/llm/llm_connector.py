@@ -17,38 +17,36 @@ _client_cache: Dict[str, OpenAI] = {}
 
 
 def _get_llm_client(
-    auth_config: Dict[str, Any], 
-    ssl_config: Dict[str, Any],
-    model_tier: str = "medium"
+    auth_config: Dict[str, Any], ssl_config: Dict[str, Any], model_tier: str = "medium"
 ) -> OpenAI:
     """
     Get or create an OpenAI client with proper configuration.
-    
+
     Creates a cached OpenAI client configured with the appropriate
     authentication and SSL settings. Clients are cached by auth token
     to enable connection reuse.
-    
+
     Args:
         auth_config: Authentication configuration from workflow.
         ssl_config: SSL configuration from workflow.
         model_tier: Model tier for timeout configuration ("small", "medium", "large").
-        
+
     Returns:
         Configured OpenAI client instance.
-        
+
     Raises:
         ValueError: If authentication configuration is invalid.
     """
     logger = get_logger()
-    
+
     # Use token as cache key
     cache_key = auth_config.get("token", "no-auth")
-    
+
     # Return cached client if exists
     if cache_key in _client_cache:
         logger.debug("Using cached LLM client", cache_key=cache_key[:8] + "...")
         return _client_cache[cache_key]
-    
+
     # Get timeout based on model tier
     timeout_config = {
         "small": config.llm.small.timeout,
@@ -56,12 +54,12 @@ def _get_llm_client(
         "large": config.llm.large.timeout,
     }
     timeout = timeout_config.get(model_tier, config.llm.medium.timeout)
-    
+
     # Configure HTTP client with SSL settings
     http_client_kwargs = {
         "timeout": httpx.Timeout(timeout=timeout),
     }
-    
+
     # Apply SSL configuration
     if ssl_config.get("verify"):
         if ssl_config.get("cert_path"):
@@ -73,20 +71,20 @@ def _get_llm_client(
     else:
         # Disable SSL verification
         http_client_kwargs["verify"] = False
-    
+
     # Create HTTP client
     http_client = httpx.Client(**http_client_kwargs)
-    
+
     # Create OpenAI client
     client = OpenAI(
         api_key=auth_config.get("token", "no-token"),
         base_url=config.llm.base_url,
         http_client=http_client,
     )
-    
+
     # Cache the client
     _client_cache[cache_key] = client
-    
+
     logger.info(
         "Created new LLM client",
         base_url=config.llm.base_url,
@@ -94,7 +92,7 @@ def _get_llm_client(
         ssl_verify=ssl_config.get("verify"),
         timeout=timeout,
     )
-    
+
     return client
 
 
@@ -106,14 +104,14 @@ def complete(
     model: Optional[str] = None,
     temperature: Optional[float] = None,
     max_tokens: Optional[int] = None,
-    **kwargs
+    **kwargs,
 ) -> Dict[str, Any]:
     """
     Generate a non-streaming completion from the LLM.
-    
+
     Makes a synchronous call to the OpenAI API and returns the complete
     response. Suitable for simple question-answering and short responses.
-    
+
     Args:
         messages: List of message dictionaries with 'role' and 'content'.
         auth_config: Authentication configuration from workflow.
@@ -123,21 +121,21 @@ def complete(
         temperature: Optional temperature override.
         max_tokens: Optional max tokens override.
         **kwargs: Additional parameters to pass to OpenAI API.
-        
+
     Returns:
         Response dictionary containing the completion.
-        
+
         # Returns: {
         #     "id": "chatcmpl-...",
         #     "choices": [{"message": {"role": "assistant", "content": "..."}}],
         #     "usage": {"prompt_tokens": 10, "completion_tokens": 20, "total_tokens": 30}
         # }
-        
+
     Raises:
         Exception: If the API call fails.
     """
     logger = get_logger()
-    
+
     # Default to medium model if not specified
     if model is None:
         model = config.llm.medium.model
@@ -158,7 +156,7 @@ def complete(
             model_tier = "medium"
             temperature = temperature or config.llm.medium.temperature
             max_tokens = max_tokens or config.llm.medium.max_tokens
-    
+
     logger.info(
         "Generating LLM completion",
         execution_id=execution_id,
@@ -167,30 +165,26 @@ def complete(
         max_tokens=max_tokens,
         message_count=len(messages),
     )
-    
+
     try:
         client = _get_llm_client(auth_config, ssl_config, model_tier)
-        
+
         response = client.chat.completions.create(
-            model=model,
-            messages=messages,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            **kwargs
+            model=model, messages=messages, temperature=temperature, max_tokens=max_tokens, **kwargs
         )
-        
+
         # Convert response to dict
         response_dict = response.model_dump()
-        
+
         logger.info(
             "LLM completion successful",
             execution_id=execution_id,
             model=model,
             usage=response_dict.get("usage"),
         )
-        
+
         return response_dict
-        
+
     except Exception as e:
         logger.error(
             "LLM completion failed",
@@ -209,14 +203,14 @@ def stream(
     model: Optional[str] = None,
     temperature: Optional[float] = None,
     max_tokens: Optional[int] = None,
-    **kwargs
+    **kwargs,
 ) -> Generator[Dict[str, Any], None, None]:
     """
     Generate a streaming completion from the LLM.
-    
+
     Makes a streaming call to the OpenAI API and yields chunks as they
     arrive. Suitable for long responses where you want to show progress.
-    
+
     Args:
         messages: List of message dictionaries with 'role' and 'content'.
         auth_config: Authentication configuration from workflow.
@@ -226,21 +220,21 @@ def stream(
         temperature: Optional temperature override.
         max_tokens: Optional max tokens override.
         **kwargs: Additional parameters to pass to OpenAI API.
-        
+
     Yields:
         Response chunks as they arrive from the API.
-        
+
         # Yields: {
         #     "id": "chatcmpl-...",
         #     "choices": [{"delta": {"content": "Hello"}, "index": 0}],
         #     "created": 1234567890
         # }
-        
+
     Raises:
         Exception: If the API call fails.
     """
     logger = get_logger()
-    
+
     # Default to medium model if not specified
     if model is None:
         model = config.llm.medium.model
@@ -261,7 +255,7 @@ def stream(
             model_tier = "medium"
             temperature = temperature or config.llm.medium.temperature
             max_tokens = max_tokens or config.llm.medium.max_tokens
-    
+
     logger.info(
         "Starting LLM streaming",
         execution_id=execution_id,
@@ -270,31 +264,31 @@ def stream(
         max_tokens=max_tokens,
         message_count=len(messages),
     )
-    
+
     try:
         client = _get_llm_client(auth_config, ssl_config, model_tier)
-        
+
         stream_response = client.chat.completions.create(
             model=model,
             messages=messages,
             temperature=temperature,
             max_tokens=max_tokens,
             stream=True,
-            **kwargs
+            **kwargs,
         )
-        
+
         chunk_count = 0
         for chunk in stream_response:
             chunk_count += 1
             yield chunk.model_dump()
-        
+
         logger.info(
             "LLM streaming completed",
             execution_id=execution_id,
             model=model,
             chunks=chunk_count,
         )
-        
+
     except Exception as e:
         logger.error(
             "LLM streaming failed",
@@ -314,14 +308,14 @@ def complete_with_tools(
     model: Optional[str] = None,
     temperature: Optional[float] = None,
     max_tokens: Optional[int] = None,
-    **kwargs
+    **kwargs,
 ) -> Dict[str, Any]:
     """
     Generate a completion with tool/function calling capabilities.
-    
+
     Makes a call to the OpenAI API with tools defined, allowing the model
     to call functions and return structured responses.
-    
+
     Args:
         messages: List of message dictionaries with 'role' and 'content'.
         tools: List of tool definitions for function calling.
@@ -332,10 +326,10 @@ def complete_with_tools(
         temperature: Optional temperature override.
         max_tokens: Optional max tokens override.
         **kwargs: Additional parameters to pass to OpenAI API.
-        
+
     Returns:
         Response dictionary containing the completion with tool calls.
-        
+
         # Returns: {
         #     "id": "chatcmpl-...",
         #     "choices": [{
@@ -346,12 +340,12 @@ def complete_with_tools(
         #     }],
         #     "usage": {"prompt_tokens": 10, "completion_tokens": 20, "total_tokens": 30}
         # }
-        
+
     Raises:
         Exception: If the API call fails.
     """
     logger = get_logger()
-    
+
     # Default to large model for tool usage (better reasoning)
     if model is None:
         model = config.llm.large.model
@@ -372,7 +366,7 @@ def complete_with_tools(
             model_tier = "large"
             temperature = temperature or config.llm.large.temperature
             max_tokens = max_tokens or config.llm.large.max_tokens
-    
+
     logger.info(
         "Generating LLM completion with tools",
         execution_id=execution_id,
@@ -382,36 +376,34 @@ def complete_with_tools(
         message_count=len(messages),
         tool_count=len(tools),
     )
-    
+
     try:
         client = _get_llm_client(auth_config, ssl_config, model_tier)
-        
+
         response = client.chat.completions.create(
             model=model,
             messages=messages,
             tools=tools,
             temperature=temperature,
             max_tokens=max_tokens,
-            **kwargs
+            **kwargs,
         )
-        
+
         # Convert response to dict
         response_dict = response.model_dump()
-        
+
         logger.info(
             "LLM tool completion successful",
             execution_id=execution_id,
             model=model,
             usage=response_dict.get("usage"),
             has_tool_calls=bool(
-                response_dict.get("choices", [{}])[0]
-                .get("message", {})
-                .get("tool_calls")
+                response_dict.get("choices", [{}])[0].get("message", {}).get("tool_calls")
             ),
         )
-        
+
         return response_dict
-        
+
     except Exception as e:
         logger.error(
             "LLM tool completion failed",
@@ -423,24 +415,22 @@ def complete_with_tools(
 
 
 def check_connection(
-    auth_config: Dict[str, Any],
-    ssl_config: Dict[str, Any],
-    execution_id: str
+    auth_config: Dict[str, Any], ssl_config: Dict[str, Any], execution_id: str
 ) -> Dict[str, Any]:
     """
     Check the LLM connection with a simple prompt.
-    
+
     Sends a basic test message to verify that authentication and
     connectivity are working properly.
-    
+
     Args:
         auth_config: Authentication configuration from workflow.
         ssl_config: SSL configuration from workflow.
         execution_id: Unique identifier for this execution.
-        
+
     Returns:
         Test response with status and details.
-        
+
         # Returns: {
         #     "status": "success",
         #     "model": "gpt-3.5-turbo",
@@ -449,19 +439,19 @@ def check_connection(
         # }
     """
     logger = get_logger()
-    
+
     logger.info(
         "Testing LLM connection",
         execution_id=execution_id,
         auth_method=auth_config.get("method"),
         base_url=config.llm.base_url,
     )
-    
+
     test_messages = [
         {"role": "system", "content": "You are a helpful assistant."},
-        {"role": "user", "content": "Say 'Hello! I'm working properly.' and nothing else."}
+        {"role": "user", "content": "Say 'Hello! I'm working properly.' and nothing else."},
     ]
-    
+
     try:
         # Use small model for testing (faster and cheaper)
         response = complete(
@@ -473,9 +463,9 @@ def check_connection(
             temperature=0,  # Deterministic for testing
             max_tokens=50,
         )
-        
+
         content = response["choices"][0]["message"]["content"]
-        
+
         result = {
             "status": "success",
             "model": config.llm.small.model,
@@ -483,15 +473,15 @@ def check_connection(
             "auth_method": auth_config.get("method"),
             "base_url": config.llm.base_url,
         }
-        
+
         logger.info(
             "LLM connection test successful",
             execution_id=execution_id,
             response=content,
         )
-        
+
         return result
-        
+
     except Exception as e:
         result = {
             "status": "failed",
@@ -499,11 +489,11 @@ def check_connection(
             "auth_method": auth_config.get("method"),
             "base_url": config.llm.base_url,
         }
-        
+
         logger.error(
             "LLM connection test failed",
             execution_id=execution_id,
             error=str(e),
         )
-        
+
         return result
