@@ -85,8 +85,12 @@ python src/aegis/connections/llm/test_connector.py
 
 This test script:
 - Replicates the full workflow process (SSL → conversation processing → authentication)
-- Tests actual LLM API connection
-- Tests both completion and streaming endpoints
+- Tests actual LLM API connection with all model tiers (small/medium/large)
+- Tests all LLM capabilities:
+  - `check_connection` - Connection verification
+  - `complete` - Standard completions (all 3 model tiers)
+  - `stream` - Streaming responses
+  - `complete_with_tools` - Function calling with tools
 - Provides detailed success/failure feedback
 
 ## Project Structure
