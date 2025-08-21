@@ -175,8 +175,10 @@ def test_streaming(messages: List[Dict[str, str]], context: Dict[str, Any]) -> N
             context=context,
             llm_params={},
         ):
-            if chunk and "choices" in chunk:
-                delta = chunk["choices"][0].get("delta", {})
+            if chunk and "choices" in chunk and chunk["choices"]:
+                # Safely get the first choice if it exists
+                first_choice = chunk["choices"][0] if chunk["choices"] else {}
+                delta = first_choice.get("delta", {})
                 content = delta.get("content", "")
                 if content:
                     print(content, end="", flush=True)
