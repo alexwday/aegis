@@ -138,7 +138,8 @@ def test_model_tiers(messages: List[Dict[str, str]], context: Dict[str, Any]) ->
                     f"✅ LLM completion with {tier} model successful",
                     execution_id=context["execution_id"],
                 )
-                print(f"  Response preview: {response[:100]}...")
+                content = response["choices"][0]["message"]["content"]
+                print(f"  Response preview: {content[:100]}...")
             else:
                 logger.error(
                     f"❌ LLM completion with {tier} model returned empty response",
@@ -174,12 +175,15 @@ def test_streaming(messages: List[Dict[str, str]], context: Dict[str, Any]) -> N
             context=context,
             llm_params={},
         ):
-            if chunk:
-                print(chunk, end="", flush=True)
-                full_response += chunk
-                if len(full_response) > 100:  # Limit output for testing
-                    print("...[truncated]")
-                    break
+            if chunk and "choices" in chunk:
+                delta = chunk["choices"][0].get("delta", {})
+                content = delta.get("content", "")
+                if content:
+                    print(content, end="", flush=True)
+                    full_response += content
+                    if len(full_response) > 100:  # Limit output for testing
+                        print("...[truncated]")
+                        break
 
         if full_response:
             logger.info("✅ LLM streaming successful", execution_id=context["execution_id"])
