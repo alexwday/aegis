@@ -191,7 +191,6 @@ def complete(
     """
     logger = get_logger()
 
-
     # Extract LLM parameters with defaults
     if llm_params is None:
         llm_params = {}
@@ -280,7 +279,6 @@ def stream(
         Exception: If the API call fails.
     """
     logger = get_logger()
-
 
     # Extract LLM parameters with defaults
     if llm_params is None:
@@ -382,7 +380,6 @@ def complete_with_tools(
         Exception: If the API call fails.
     """
     logger = get_logger()
-
 
     # Extract LLM parameters with defaults
     if llm_params is None:

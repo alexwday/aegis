@@ -15,7 +15,7 @@ from uuid import uuid4
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
-from aegis.connections.llm import check_connection, complete, stream  # noqa: E402
+from aegis.connections.llm import check_connection, complete, stream, complete_with_tools  # noqa: E402
 from aegis.connections.oauth import setup_authentication  # noqa: E402
 from aegis.utils.conversation import process_conversation  # noqa: E402
 from aegis.utils.logging import get_logger, setup_logging  # noqa: E402
@@ -76,27 +76,30 @@ def test_workflow_to_llm():  # pylint: disable=too-many-statements
         logger.error("Please check your API key and network connection")
         return
 
-    # Step 5: Test completion
+    # Step 5: Test completion with all three model tiers
     print("\n" + "=" * 50)
-    print("Testing LLM Completion...")
+    print("Testing LLM Completion (All Model Tiers)...")
     print("=" * 50)
+    
+    # Test each model tier
+    for tier in ["small", "medium", "large"]:
+        print(f"\nTesting {tier} model...")
+        try:
+            model_name = getattr(config.llm, tier).model
+            response = complete(
+                messages=processed["messages"],
+                context=context,
+                llm_params={"model": model_name},
+            )
 
-    try:
-        # Use config settings, not hardcoded values
-        response = complete(
-            messages=processed["messages"],
-            context=context,
-            llm_params={},  # Will use default medium model from config
-        )
+            if response:
+                logger.info(f"✅ LLM completion with {tier} model successful", execution_id=execution_id)
+                print(f"  Response preview: {response[:100]}...")
+            else:
+                logger.error(f"❌ LLM completion with {tier} model returned empty response", execution_id=execution_id)
 
-        if response:
-            logger.info("✅ LLM completion successful", execution_id=execution_id)
-            print(f"\nResponse: {response[:200]}...")  # First 200 chars
-        else:
-            logger.error("❌ LLM completion returned empty response", execution_id=execution_id)
-
-    except Exception as e:  # pylint: disable=broad-exception-caught
-        logger.error("❌ LLM completion failed", error=str(e), execution_id=execution_id)
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            logger.error(f"❌ LLM completion with {tier} model failed", error=str(e), execution_id=execution_id)
 
     # Step 6: Test streaming
     print("\n" + "=" * 50)
@@ -107,11 +110,11 @@ def test_workflow_to_llm():  # pylint: disable=too-many-statements
         print("\nStreaming response: ", end="", flush=True)
         full_response = ""
 
-        # Use config settings for streaming too
+        # Use default medium model for streaming
         for chunk in stream(
             messages=processed["messages"],
             context=context,
-            llm_params={},  # Will use default medium model from config
+            llm_params={},
         ):
             if chunk:
                 print(chunk, end="", flush=True)
@@ -127,6 +130,55 @@ def test_workflow_to_llm():  # pylint: disable=too-many-statements
 
     except Exception as e:  # pylint: disable=broad-exception-caught
         logger.error("❌ LLM streaming failed", error=str(e), execution_id=execution_id)
+    
+    # Step 7: Test completion with tools
+    print("\n" + "=" * 50)
+    print("Testing LLM with Tools...")
+    print("=" * 50)
+    
+    try:
+        # Define a simple tool for testing
+        tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_weather",
+                    "description": "Get the current weather",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "location": {"type": "string", "description": "City name"},
+                        },
+                        "required": ["location"],
+                    },
+                },
+            }
+        ]
+        
+        tool_messages = [
+            {"role": "user", "content": "What's the weather in Paris?"}
+        ]
+        
+        response = complete_with_tools(
+            messages=tool_messages,
+            tools=tools,
+            context=context,
+            llm_params={},  # Will use default large model for tools
+        )
+        
+        if response:
+            has_tool_calls = "tool_calls" in response.get("choices", [{}])[0].get("message", {})
+            if has_tool_calls:
+                logger.info("✅ LLM tool completion successful with tool calls", execution_id=execution_id)
+                print("  Tool calls detected in response")
+            else:
+                logger.info("✅ LLM tool completion successful (no tool calls needed)", execution_id=execution_id)
+                print(f"  Response: {response['choices'][0]['message']['content'][:100]}...")
+        else:
+            logger.error("❌ LLM tool completion returned empty response", execution_id=execution_id)
+            
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        logger.error("❌ LLM tool completion failed", error=str(e), execution_id=execution_id)
 
     print("\n" + "=" * 50)
     print("Test Complete")
