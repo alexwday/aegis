@@ -19,7 +19,7 @@ from aegis.utils.settings import config
 from aegis.utils.ssl import setup_ssl
 from aegis.utils.conversation import process_conversation
 from aegis.connections.oauth import setup_authentication
-from aegis.connections.llm import llm_complete, llm_stream, test_llm_connection
+from aegis.connections.llm import complete, stream, check_connection
 
 # Set up logging
 setup_logging()
@@ -62,7 +62,7 @@ def test_workflow_to_llm():
     print("Testing LLM Connection...")
     print("="*50)
     
-    is_connected = test_llm_connection()
+    is_connected = check_connection()
     if is_connected:
         logger.info("✅ LLM connection successful", execution_id=execution_id)
     else:
@@ -76,7 +76,7 @@ def test_workflow_to_llm():
     print("="*50)
     
     try:
-        response = llm_complete(
+        response = complete(
             messages=processed["messages"],
             model="gpt-4o-mini",  # Using smaller model for testing
             temperature=0.7
@@ -100,7 +100,7 @@ def test_workflow_to_llm():
         print("\nStreaming response: ", end="", flush=True)
         full_response = ""
         
-        for chunk in llm_stream(
+        for chunk in stream(
             messages=processed["messages"],
             model="gpt-4o-mini",
             temperature=0.7
