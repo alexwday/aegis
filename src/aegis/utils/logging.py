@@ -11,7 +11,7 @@ from typing import Any, Dict, Optional
 
 import structlog
 
-from aegis.utils.settings import config
+from .settings import config
 
 
 def custom_renderer(_, __, event_dict: Dict[str, Any]) -> str:
@@ -99,7 +99,7 @@ def setup_logging(log_level: Optional[str] = None) -> None:
             structlog.processors.TimeStamper(fmt="%Y-%m-%d %H:%M:%S"),
             custom_renderer,
         ],
-        wrapper_class=structlog.make_filtering_bound_logger(logging.INFO),
+        wrapper_class=structlog.make_filtering_bound_logger(getattr(logging, log_level.upper())),
         context_class=dict,
         logger_factory=structlog.PrintLoggerFactory(),
         cache_logger_on_first_use=True,

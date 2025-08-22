@@ -6,14 +6,187 @@ OAuth and API key authentication, with configurable model tiers.
 """
 
 from typing import Any, Dict, Generator, List, Optional
+import time
 import httpx
 from openai import OpenAI
 
-from aegis.utils.logging import get_logger
-from aegis.utils.settings import config
+from ..utils.logging import get_logger
+from ..utils.settings import config
 
 # Module-level client cache to reuse connections
 _client_cache: Dict[str, OpenAI] = {}
+
+
+# Cost tracking utilities integrated directly
+def _calculate_cost(
+    usage: Dict,
+    cost_per_1k_input: float,
+    cost_per_1k_output: Optional[float] = None,
+    response_time: float = 0.0,
+    model: str = "",
+) -> Dict:
+    """
+    Calculate cost metrics from token usage.
+
+    Args:
+        usage: Usage dictionary from API response containing token counts
+        cost_per_1k_input: Cost per 1000 input tokens in USD
+        cost_per_1k_output: Cost per 1000 output tokens in USD (None for embeddings)
+        response_time: Time taken for the API call in seconds
+        model: Model name used for the operation
+
+    Returns:
+        Dictionary with calculated costs and metrics
+    """
+    prompt_tokens = usage.get("prompt_tokens", 0)
+    completion_tokens = usage.get("completion_tokens")
+    total_tokens = usage.get("total_tokens", prompt_tokens)
+
+    # Calculate prompt cost
+    prompt_cost = (prompt_tokens / 1000.0) * cost_per_1k_input
+
+    # Calculate completion cost (if applicable)
+    completion_cost = None
+    if completion_tokens is not None and cost_per_1k_output is not None:
+        completion_cost = (completion_tokens / 1000.0) * cost_per_1k_output
+        total_cost = prompt_cost + completion_cost
+    else:
+        # For embeddings, only prompt cost
+        total_cost = prompt_cost
+
+    return {
+        "prompt_tokens": prompt_tokens,
+        "completion_tokens": completion_tokens,
+        "total_tokens": total_tokens,
+        "prompt_cost": round(prompt_cost, 6),
+        "completion_cost": round(completion_cost, 6) if completion_cost else None,
+        "total_cost": round(total_cost, 6),
+        "response_time": round(response_time, 3),
+        "model": model,
+    }
+
+
+def _format_cost_for_logging(metrics: Dict) -> Dict:
+    """
+    Format metrics for structured logging output.
+
+    Args:
+        metrics: Dictionary of metrics to format
+
+    Returns:
+        Dictionary formatted for logging
+    """
+    log_data = {
+        "tokens": {
+            "prompt": metrics["prompt_tokens"],
+            "total": metrics["total_tokens"],
+        },
+        "cost": {
+            "prompt": f"${metrics['prompt_cost']:.6f}",
+            "total": f"${metrics['total_cost']:.6f}",
+        },
+        "response_time_seconds": metrics["response_time"],
+    }
+
+    # Add completion data if present
+    if metrics["completion_tokens"] is not None:
+        log_data["tokens"]["completion"] = metrics["completion_tokens"]
+    if metrics["completion_cost"] is not None:
+        log_data["cost"]["completion"] = f"${metrics['completion_cost']:.6f}"
+
+    return log_data
+
+
+class ResponseTimer:
+    """
+    Context manager for timing API responses.
+    """
+
+    def __init__(self):
+        """Initialize the timer."""
+        self.start_time = None
+        self.elapsed = 0.0
+
+    def __enter__(self):
+        """Start the timer."""
+        self.start_time = time.time()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Stop the timer and calculate elapsed time."""
+        self.elapsed = time.time() - self.start_time
+        return False
+
+
+def _calculate_and_log_metrics(
+    usage: Dict[str, Any], model_tier: str, context: Dict[str, Any], operation_type: str
+) -> Dict[str, Any]:
+    """
+    Calculate cost metrics and log them.
+
+    Args:
+        usage: Usage dictionary from API response
+        model_tier: Model tier (small, medium, large)
+        context: Context with model, response_time, execution_id, logger
+        operation_type: Type of operation for log message
+
+    Returns:
+        Metrics dictionary
+    """
+    model_config = getattr(config.llm, model_tier)
+    metrics = _calculate_cost(
+        usage=usage,
+        cost_per_1k_input=model_config.cost_per_1k_input,
+        cost_per_1k_output=model_config.cost_per_1k_output,
+        response_time=context["response_time"],
+        model=context["model"],
+    )
+
+    log_data = {
+        "execution_id": context["execution_id"],
+        "model": context["model"],
+        "usage": usage,
+        **_format_cost_for_logging(metrics),
+    }
+
+    context["logger"].info(f"LLM {operation_type} successful", **log_data)
+
+    return metrics
+
+
+def _calculate_embedding_metrics(
+    usage: Dict[str, Any], context: Dict[str, Any], operation_type: str
+) -> Dict[str, Any]:
+    """
+    Calculate cost metrics for embeddings and log them.
+
+    Args:
+        usage: Usage dictionary from API response
+        context: Context with model, response_time, execution_id, logger, vector_info
+        operation_type: Type of operation for log message
+
+    Returns:
+        Metrics dictionary
+    """
+    metrics = _calculate_cost(
+        usage=usage,
+        cost_per_1k_input=config.llm.embedding.cost_per_1k_input,
+        cost_per_1k_output=None,  # Embeddings don't have output tokens
+        response_time=context["response_time"],
+        model=context["model"],
+    )
+
+    log_data = {
+        "execution_id": context["execution_id"],
+        "model": context["model"],
+        "usage": usage,
+        **context.get("vector_info", {}),
+        **_format_cost_for_logging(metrics),
+    }
+
+    context["logger"].info(f"{operation_type} successful", **log_data)
+
+    return metrics
 
 
 def _get_model_config(
@@ -191,20 +364,12 @@ def complete(
         Exception: If the API call fails.
     """
     logger = get_logger()
-
-    # Extract LLM parameters with defaults
-    if llm_params is None:
-        llm_params = {}
+    llm_params = llm_params or {}
 
     # Get model configuration using helper
     model, temperature, max_tokens, model_tier = _get_model_config(
         llm_params.get("model"), llm_params.get("temperature"), llm_params.get("max_tokens")
     )
-
-    # Remove our known params, pass rest as kwargs
-    kwargs = {
-        k: v for k, v in llm_params.items() if k not in ["model", "temperature", "max_tokens"]
-    }
 
     logger.info(
         "Generating LLM completion",
@@ -218,18 +383,34 @@ def complete(
     try:
         client = _get_llm_client(context["auth_config"], context["ssl_config"], model_tier)
 
-        response = client.chat.completions.create(
-            model=model, messages=messages, temperature=temperature, max_tokens=max_tokens, **kwargs
-        )
+        # Time the API call
+        with ResponseTimer() as timer:
+            response = client.chat.completions.create(
+                model=model,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                **{
+                    k: v
+                    for k, v in llm_params.items()
+                    if k not in ["model", "temperature", "max_tokens"]
+                },
+            )
 
         # Convert response to dict
         response_dict = response.model_dump()
 
-        logger.info(
-            "LLM completion successful",
-            execution_id=context["execution_id"],
-            model=model,
-            usage=response_dict.get("usage"),
+        # Calculate and log metrics
+        response_dict["metrics"] = _calculate_and_log_metrics(
+            usage=response_dict.get("usage", {}),
+            model_tier=model_tier,
+            context={
+                "model": model,
+                "response_time": timer.elapsed,
+                "execution_id": context["execution_id"],
+                "logger": logger,
+            },
+            operation_type="completion",
         )
 
         return response_dict
@@ -244,7 +425,8 @@ def complete(
         raise
 
 
-def stream(
+def stream(  # pylint: disable=too-many-locals
+    # Complex streaming logic requires multiple local vars for metrics, timing, and state tracking.
     messages: List[Dict[str, str]],
     context: Dict[str, Any],
     llm_params: Optional[Dict[str, Any]] = None,
@@ -280,20 +462,12 @@ def stream(
         Exception: If the API call fails.
     """
     logger = get_logger()
-
-    # Extract LLM parameters with defaults
-    if llm_params is None:
-        llm_params = {}
+    llm_params = llm_params or {}
 
     # Get model configuration using helper
     model, temperature, max_tokens, model_tier = _get_model_config(
         llm_params.get("model"), llm_params.get("temperature"), llm_params.get("max_tokens")
     )
-
-    # Remove our known params, pass rest as kwargs
-    kwargs = {
-        k: v for k, v in llm_params.items() if k not in ["model", "temperature", "max_tokens"]
-    }
 
     logger.info(
         "Starting LLM streaming",
@@ -307,26 +481,60 @@ def stream(
     try:
         client = _get_llm_client(context["auth_config"], context["ssl_config"], model_tier)
 
+        # Start timing
+        start_time = time.time()
+
+        # Remove our known params, pass rest as kwargs
         stream_response = client.chat.completions.create(
             model=model,
             messages=messages,
             temperature=temperature,
             max_tokens=max_tokens,
             stream=True,
-            **kwargs,
+            **{
+                k: v
+                for k, v in llm_params.items()
+                if k not in ["model", "temperature", "max_tokens"]
+            },
         )
 
         chunk_count = 0
+        accumulated_usage = None
+
         for chunk in stream_response:
             chunk_count += 1
-            yield chunk.model_dump()
+            chunk_dict = chunk.model_dump()
 
-        logger.info(
-            "LLM streaming completed",
-            execution_id=context["execution_id"],
-            model=model,
-            chunks=chunk_count,
-        )
+            # Accumulate usage from the final chunk (if present)
+            if chunk_dict.get("usage"):
+                accumulated_usage = chunk_dict["usage"]
+
+            yield chunk_dict
+
+        # Calculate elapsed time
+        elapsed = time.time() - start_time
+
+        # Log streaming completion
+        if accumulated_usage:
+            _calculate_and_log_metrics(
+                usage=accumulated_usage,
+                model_tier=model_tier,
+                context={
+                    "model": model,
+                    "response_time": elapsed,
+                    "execution_id": context["execution_id"],
+                    "logger": logger,
+                },
+                operation_type=f"streaming completed (chunks={chunk_count})",
+            )
+        else:
+            logger.info(
+                "LLM streaming completed",
+                execution_id=context["execution_id"],
+                model=model,
+                chunks=chunk_count,
+                response_time=elapsed,
+            )
 
     except Exception as e:
         logger.error(
@@ -381,10 +589,7 @@ def complete_with_tools(
         Exception: If the API call fails.
     """
     logger = get_logger()
-
-    # Extract LLM parameters with defaults
-    if llm_params is None:
-        llm_params = {}
+    llm_params = llm_params or {}
 
     # Get model configuration using helper (default to large for tools)
     model, temperature, max_tokens, model_tier = _get_model_config(
@@ -393,11 +598,6 @@ def complete_with_tools(
         llm_params.get("max_tokens"),
         default_tier="large",  # Tools need better reasoning
     )
-
-    # Remove our known params, pass rest as kwargs
-    kwargs = {
-        k: v for k, v in llm_params.items() if k not in ["model", "temperature", "max_tokens"]
-    }
 
     logger.info(
         "Generating LLM completion with tools",
@@ -412,26 +612,40 @@ def complete_with_tools(
     try:
         client = _get_llm_client(context["auth_config"], context["ssl_config"], model_tier)
 
-        response = client.chat.completions.create(
-            model=model,
-            messages=messages,
-            tools=tools,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            **kwargs,
-        )
+        # Time the API call
+        with ResponseTimer() as timer:
+            response = client.chat.completions.create(
+                model=model,
+                messages=messages,
+                tools=tools,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                **{
+                    k: v
+                    for k, v in llm_params.items()
+                    if k not in ["model", "temperature", "max_tokens"]
+                },
+            )
 
         # Convert response to dict
         response_dict = response.model_dump()
 
-        logger.info(
-            "LLM tool completion successful",
-            execution_id=context["execution_id"],
-            model=model,
-            usage=response_dict.get("usage"),
-            has_tool_calls=bool(
-                response_dict.get("choices", [{}])[0].get("message", {}).get("tool_calls")
-            ),
+        # Check if tools were called
+        has_tool_calls = bool(
+            response_dict.get("choices", [{}])[0].get("message", {}).get("tool_calls")
+        )
+
+        # Calculate and log metrics
+        response_dict["metrics"] = _calculate_and_log_metrics(
+            usage=response_dict.get("usage", {}),
+            model_tier=model_tier,
+            context={
+                "model": model,
+                "response_time": timer.elapsed,
+                "execution_id": context["execution_id"],
+                "logger": logger,
+            },
+            operation_type=f"tool completion (has_tool_calls={has_tool_calls})",
         )
 
         return response_dict
@@ -514,17 +728,24 @@ def embed(
         # Use embedding timeout for client
         client = _get_llm_client(context["auth_config"], context["ssl_config"], "embedding")
 
-        response = client.embeddings.create(model=model, input=input_text, **kwargs)
+        # Time the API call
+        with ResponseTimer() as timer:
+            response = client.embeddings.create(model=model, input=input_text, **kwargs)
 
         # Convert response to dict
         response_dict = response.model_dump()
 
-        logger.info(
-            "Embedding generation successful",
-            execution_id=context["execution_id"],
-            model=model,
-            usage=response_dict.get("usage"),
-            vector_length=len(response_dict["data"][0]["embedding"]),
+        # Calculate and log metrics
+        response_dict["metrics"] = _calculate_embedding_metrics(
+            usage=response_dict.get("usage", {}),
+            context={
+                "model": model,
+                "response_time": timer.elapsed,
+                "execution_id": context["execution_id"],
+                "logger": logger,
+                "vector_info": {"vector_length": len(response_dict["data"][0]["embedding"])},
+            },
+            operation_type="Embedding generation",
         )
 
         return response_dict
@@ -607,20 +828,29 @@ def embed_batch(
         # Use embedding timeout for client
         client = _get_llm_client(context["auth_config"], context["ssl_config"], "embedding")
 
-        response = client.embeddings.create(model=model, input=input_texts, **kwargs)
+        # Time the API call
+        with ResponseTimer() as timer:
+            response = client.embeddings.create(model=model, input=input_texts, **kwargs)
 
         # Convert response to dict
         response_dict = response.model_dump()
 
-        logger.info(
-            "Batch embedding generation successful",
-            execution_id=context["execution_id"],
-            model=model,
-            usage=response_dict.get("usage"),
-            vectors_generated=len(response_dict["data"]),
-            vector_length=(
-                len(response_dict["data"][0]["embedding"]) if response_dict["data"] else 0
-            ),
+        # Calculate and log metrics
+        response_dict["metrics"] = _calculate_embedding_metrics(
+            usage=response_dict.get("usage", {}),
+            context={
+                "model": model,
+                "response_time": timer.elapsed,
+                "execution_id": context["execution_id"],
+                "logger": logger,
+                "vector_info": {
+                    "vectors_generated": len(response_dict["data"]),
+                    "vector_length": (
+                        len(response_dict["data"][0]["embedding"]) if response_dict["data"] else 0
+                    ),
+                },
+            },
+            operation_type="Batch embedding generation",
         )
 
         return response_dict
@@ -704,6 +934,7 @@ def check_connection(context: Dict[str, Any]) -> Dict[str, Any]:
         return result
 
     except Exception as e:  # pylint: disable=broad-exception-caught
+        # Connection check must catch all errors to report any connectivity issues without crashing.
         result = {
             "status": "failed",
             "error": str(e),

@@ -5,10 +5,13 @@ An intelligent workflow orchestration system for managing agent-based LLM intera
 ## Features
 
 - 🔐 **Dual Authentication**: Supports both OAuth 2.0 and API key authentication
-- 🔒 **SSL/TLS Support**: Enterprise SSL certificate verification
+- 🔒 **SSL/TLS Support**: Enterprise SSL certificate verification  
 - 🎯 **Smart Conversation Processing**: Filters and manages conversation history
-- 📊 **Structured Logging**: JSON-formatted logs with execution tracking
-- 🧪 **Comprehensive Testing**: 99% test coverage with isolated test fixtures
+- 📊 **Structured Logging**: Colored console output with execution tracking
+- 🗄️ **Database Integration**: PostgreSQL connector with connection pooling
+- 📈 **Process Monitoring**: Database tracking of workflow stages and LLM calls
+- 🤖 **LLM Integration**: OpenAI API support with 3 model tiers + embeddings
+- 🧪 **Comprehensive Testing**: 93% test coverage (117 tests)
 
 ## Setup
 
@@ -61,6 +64,9 @@ Place your `.cer` file in the configured path or update `SSL_CERT_PATH` in `.env
 
 ### Unit Tests
 ```bash
+# Activate virtual environment first
+source venv/bin/activate
+
 # Run all tests
 pytest tests/
 
@@ -71,27 +77,47 @@ pytest tests/ --cov=src/aegis --cov-report=term-missing
 pytest tests/aegis/connections/test_oauth.py -xvs
 ```
 
-### Testing LLM Connector
+### Code Quality Checks
+```bash
+# Format code
+black src/ --line-length 100
+
+# Check style compliance
+flake8 src/ --max-line-length 100
+
+# Run static analysis
+pylint src/
+```
+
+### Integration Testing
+
+#### LLM Connector Integration Test
 To test the LLM connector with actual API calls:
 
 ```bash
-# Activate virtual environment
-source venv/bin/activate
-
 # Ensure API_KEY is set in .env file
-# Run the test script
-python src/aegis/connections/llm/test_connector.py
+API_KEY="your-api-key" python src/aegis/connections/llm_connector.py
 ```
 
-This test script:
-- Replicates the full workflow process (SSL → conversation processing → authentication)
-- Tests actual LLM API connection with all model tiers (small/medium/large)
-- Tests all LLM capabilities:
-  - `check_connection` - Connection verification
-  - `complete` - Standard completions (all 3 model tiers)
-  - `stream` - Streaming responses
-  - `complete_with_tools` - Function calling with tools
-- Provides detailed success/failure feedback
+This validates:
+- Connection to OpenAI API
+- All model tiers (small/medium/large)
+- Streaming responses
+- Function calling with tools
+- Embedding generation
+
+#### Workflow Execution Test
+To test the complete workflow:
+
+```bash
+python run_workflow.py
+```
+
+This executes the full pipeline:
+1. SSL configuration setup
+2. Authentication (OAuth or API key)
+3. Conversation processing
+4. Process monitoring to database (if configured)
 
 ## Project Structure
 
@@ -99,11 +125,23 @@ This test script:
 aegis/
 ├── src/
 │   └── aegis/
-│       ├── connections/     # OAuth and API connectors
+│       ├── connections/     # OAuth, LLM, and Postgres connectors
+│       │   ├── oauth_connector.py      # OAuth 2.0 authentication
+│       │   ├── llm_connector.py        # OpenAI API integration
+│       │   └── postgres_connector.py   # Database operations
 │       ├── model/           # Workflow orchestration
-│       └── utils/           # Logging, SSL, settings, conversation
-├── tests/                   # Comprehensive test suite
+│       │   ├── main.py               # Main workflow execution
+│       │   ├── agents/               # Agent implementations (future)
+│       │   └── subagents/            # Subagent implementations (future)
+│       └── utils/           # Core utilities
+│           ├── logging.py            # Structlog configuration
+│           ├── ssl.py                # SSL/TLS configuration
+│           ├── settings.py           # Environment configuration
+│           ├── conversation.py       # Message processing
+│           └── monitor.py            # Process monitoring
+├── tests/                   # Comprehensive test suite (117 tests)
 ├── .env.example            # Environment template
+├── CLAUDE.md               # Development standards and architecture
 └── requirements.txt        # Python dependencies
 ```
 

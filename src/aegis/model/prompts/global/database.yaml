@@ -1,0 +1,144 @@
+name: database
+version: "1.0.0"
+last_updated: "2025-01-22"
+
+databases:
+  - id: transcripts
+    name: Earnings Transcripts Database
+    content: |
+      Data Contains:
+      This database stores complete transcripts from quarterly earnings calls, including prepared 
+      management remarks and Q&A sessions with analysts. Each transcript is tagged with speaker 
+      identification (CEO, CFO, analysts), timestamp information, and sentiment indicators.
+      
+      Typical Usage:
+      Used to understand management's narrative around financial results, strategic priorities, 
+      and forward-looking guidance. Analysts query this database to extract management tone, 
+      identify recurring themes across quarters, and track how management discusses specific 
+      topics over time.
+      
+      Query Requirements:
+      - Fiscal Year (e.g., FY2024, FY2025)
+      - Quarter (e.g., Q1, Q2, Q3, Q4) OR multiple periods
+      - Bank(s) (e.g., RBC, TD, BMO, Scotia, CIBC, or "all peers")
+      
+      Example Queries:
+      - "What did RBC management say about net interest margins in FY2024 Q3?"
+      - "How did the CEO discuss digital transformation initiatives this quarter?"
+      - "Compare management commentary on credit losses across Canadian banks in Q2"
+      
+      Institution Coverage:
+      Available for: All Canadian banks (RBC, TD, BMO, Scotia, CIBC, NBC)
+      Not available for: US banks, Insurance companies
+
+  - id: benchmarking
+    name: Financial Benchmarking Database
+    content: |
+      Data Contains:
+      Detailed line-item financial metrics for all monitored banks and insurance companies, 
+      including income statement items, balance sheet components, capital ratios, and efficiency 
+      metrics. Data is standardized across institutions to enable direct comparisons.
+      
+      Typical Usage:
+      Used for peer comparison analysis, ranking performance across institutions, identifying 
+      industry trends, and understanding RBC's relative position on specific metrics. Enables 
+      creation of peer group averages, percentile rankings, and trend analysis across multiple 
+      periods.
+      
+      Query Requirements:
+      - Fiscal Year (e.g., FY2024, FY2025)
+      - Quarter (e.g., Q1, Q2, Q3, Q4) OR multiple periods
+      - Bank(s) (e.g., RBC, TD, BMO, Scotia, CIBC, or "peer average")
+      
+      Example Queries:
+      - "How does RBC's efficiency ratio compare to Canadian peer average in FY2025 Q1?"
+      - "Show NIM trends for all Canadian banks over the last 8 quarters"
+      - "Rank banks by ROE for the current fiscal year"
+      
+      Institution Coverage:
+      Available for: All Canadian banks, US banks (JPM, BAC, WFC, C, USB, PNC, TFC, GS, MS), 
+                     Insurance companies (MFC, SLF, GWO, IFC, FFH)
+
+  - id: reports
+    name: Shareholder Reports Database
+    content: |
+      Data Contains:
+      Complete annual and quarterly reports to shareholders, including financial statements, 
+      MD&A sections, business segment breakdowns, risk management disclosures, and supplementary 
+      financial information. Includes both narrative sections and tabular financial data.
+      
+      Typical Usage:
+      Used to access official reported figures, understand business segment performance, review 
+      risk disclosures, and analyze detailed financial statement line items. Provides the most 
+      comprehensive view of financial performance as reported to shareholders.
+      
+      Query Requirements:
+      - Fiscal Year (e.g., FY2024, FY2025)
+      - Quarter (e.g., Q1, Q2, Q3, Q4) OR Annual
+      - Bank(s) (e.g., RBC, TD, BMO, Scotia, CIBC)
+      
+      Example Queries:
+      - "What did RBC report for wealth management revenue in the annual report?"
+      - "Extract credit risk disclosures from Q3 FY2024 shareholder report"
+      - "Show business segment breakdown for Canadian Banking"
+      
+      Institution Coverage:
+      Available for: All Canadian banks (RBC, TD, BMO, Scotia, CIBC, NBC)
+      Not available for: US banks, Insurance companies
+
+  - id: pillar3
+    name: Regulatory Disclosures Database
+    content: |
+      Data Contains:
+      Basel III Pillar 3 regulatory disclosures including detailed capital adequacy metrics, 
+      risk-weighted assets by category, leverage ratios, liquidity coverage ratios (LCR), 
+      net stable funding ratios (NSFR), and other regulatory compliance metrics required by OSFI.
+      
+      Typical Usage:
+      Used to analyze regulatory capital strength, monitor compliance with Basel III requirements, 
+      compare capital efficiency across institutions, and track changes in risk-weighted assets. 
+      Critical for understanding regulatory constraints and capital allocation decisions.
+      
+      Query Requirements:
+      - Fiscal Year (e.g., FY2024, FY2025)
+      - Quarter (e.g., Q1, Q2, Q3, Q4)
+      - Bank(s) (e.g., RBC, TD, BMO, Scotia, CIBC)
+      
+      Example Queries:
+      - "What is RBC's CET1 ratio for FY2025 Q2?"
+      - "Compare Tier 1 capital ratios across Canadian banks"
+      - "Show the trend in risk-weighted assets over the past year"
+      
+      Institution Coverage:
+      Available for: All Canadian banks (RBC, TD, BMO, Scotia, CIBC, NBC)
+      Not available for: US banks, Insurance companies
+
+  - id: rts
+    name: Report to Shareholders Database
+    content: |
+      Data Contains:
+      Complete Report to Shareholders documents for Canadian banks, as well as global equivalent 
+      regulatory filings such as 10-Q (quarterly) and 10-K (annual) reports for international 
+      institutions. Contains comprehensive financial statements, MD&A, business segment analysis, 
+      and regulatory disclosures in the format required by each jurisdiction.
+      
+      Typical Usage:
+      Used to access official shareholder reports and regulatory filings across different 
+      jurisdictions. Provides standardized financial reporting that enables comparison across 
+      Canadian Report to Shareholders with US SEC filings (10-Q/10-K) and other international 
+      regulatory reports. Essential for understanding detailed financial disclosures and 
+      narrative explanations as presented to shareholders and regulators.
+      
+      Query Requirements:
+      - Fiscal Year (e.g., FY2024, FY2025)
+      - Quarter (e.g., Q1, Q2, Q3, Q4) OR Annual
+      - Bank(s) (e.g., RBC, TD, BMO, Scotia, CIBC, JPM, BAC, WFC)
+      
+      Example Queries:
+      - "What's in RBC's Q3 Report to Shareholders about credit provisions?"
+      - "Compare net interest income disclosure in TD's RTS vs JPMorgan's 10-Q"
+      - "Extract risk factor disclosures from the latest annual reports"
+      
+      Institution Coverage:
+      Available for: All Canadian banks, US banks (JPM, BAC, WFC, C, USB, PNC, TFC, GS, MS)
+      Not available for: Insurance companies

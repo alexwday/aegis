@@ -11,8 +11,8 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-from aegis.utils.logging import get_logger
-from aegis.utils.settings import config
+from ..utils.logging import get_logger
+from ..utils.settings import config
 
 
 def get_oauth_token(execution_id: str, ssl_config: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -167,45 +167,89 @@ def setup_authentication(execution_id: str, ssl_config: Dict[str, Any]) -> Dict[
     Setup authentication configuration based on AUTH_METHOD.
 
     Uses AUTH_METHOD environment variable to determine whether to use
-    OAuth or API key authentication. Returns configuration dict similar
-    to SSL setup pattern. Handles errors gracefully by returning empty
-    config rather than raising exceptions.
+    OAuth or API key authentication. Returns status with success/failure
+    similar to SSL setup pattern.
 
     Args:
         execution_id: Unique identifier for this execution for logging.
         ssl_config: SSL configuration from workflow setup.
 
     Returns:
-        Authentication configuration dict with method and credentials.
+        Authentication configuration with status:
+        - "success": bool - Whether authentication setup succeeded
+        - "method": str - Authentication method (oauth/api_key)
+        - "token": str or None - Authentication token if successful
+        - "header": dict - Authorization header if successful
+        - "error": str or None - Error message if setup failed
+        - "decision_details": str - Human-readable description
 
-        # Returns: {"method": "oauth", "token": "abc123",
-        #          "header": {"Authorization": "Bearer abc123"}}
-        # Or: {"method": "api_key", "token": "xyz789",
-        #      "header": {"Authorization": "Bearer xyz789"}}
-        # Or: {"method": None, "token": None, "header": {}} if not configured or error
+        # Returns: {"success": True, "method": "oauth", "token": "abc123",
+        #          "header": {"Authorization": "Bearer abc123"}, "error": None,
+        #          "decision_details": "Authentication method: oauth"}
     """
     logger = get_logger()
 
-    # Check configured authentication method
-    auth_method = config.auth_method
-    # Initialize result with placeholder values
-    result = {
-        "method": "placeholder",
-        "token": "invalid-auth-method",
-        "header": {"Authorization": "Bearer invalid-auth-method"},
-    }
+    try:
+        # Check configured authentication method
+        auth_method = config.auth_method
 
-    if auth_method == "oauth":
-        result = _handle_oauth_auth(execution_id, ssl_config, logger)
-    elif auth_method == "api_key":
-        result = _handle_api_key_auth(execution_id, logger)
-    else:
-        logger.warning(
-            "Invalid AUTH_METHOD configuration - using placeholder",
-            execution_id=execution_id,
-            auth_method=auth_method,
-        )
-    return result
+        if auth_method == "oauth":
+            result = _handle_oauth_auth(execution_id, ssl_config, logger)
+        elif auth_method == "api_key":
+            result = _handle_api_key_auth(execution_id, logger)
+        else:
+            error_msg = f"Invalid AUTH_METHOD: {auth_method}"
+            logger.error(error_msg, execution_id=execution_id)
+            return {
+                "success": False,
+                "status": "Failure",
+                "method": auth_method,
+                "token": None,
+                "header": {},
+                "error": error_msg,
+                "decision_details": f"Authentication failed: {error_msg}",
+            }
+
+        # Check if we got a valid token
+        if result.get("token") and result["token"] not in [
+            "placeholder-token",
+            "invalid-auth-method",
+        ]:
+            return {
+                "success": True,
+                "status": "Success",
+                "method": result["method"],
+                "token": result["token"],
+                "header": result["header"],
+                "error": None,
+                "decision_details": f"Authentication method: {result['method']}",
+            }
+
+        error_msg = result.get("error", "Failed to obtain authentication token")
+        return {
+            "success": False,
+            "status": "Failure",
+            "method": auth_method,
+            "token": None,
+            "header": {},
+            "error": error_msg,
+            "decision_details": f"Authentication failed: {error_msg}",
+        }
+
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        # Must catch all exceptions to ensure auth failures don't crash the workflow.
+        # Returns error details for logging while allowing the system to continue.
+        error_msg = f"Unexpected error during authentication: {str(e)}"
+        logger.error(error_msg, execution_id=execution_id)
+        return {
+            "success": False,
+            "status": "Failure",
+            "method": config.auth_method,
+            "token": None,
+            "header": {},
+            "error": error_msg,
+            "decision_details": f"Authentication failed: {str(e)}",
+        }
 
 
 def _handle_oauth_auth(execution_id: str, ssl_config: Dict[str, Any], logger) -> Dict[str, Any]:
@@ -262,15 +306,13 @@ def _handle_oauth_auth(execution_id: str, ssl_config: Dict[str, Any], logger) ->
         }
 
     except (ValueError, requests.exceptions.RequestException) as e:
-        logger.warning(
-            "OAuth authentication error - using placeholder",
-            execution_id=execution_id,
-            error=str(e),
-        )
+        error_msg = f"OAuth authentication error: {str(e)}"
+        logger.error(error_msg, execution_id=execution_id)
         return {
-            "method": "placeholder",
-            "token": "oauth-error",
-            "header": {"Authorization": "Bearer oauth-error"},
+            "method": "oauth",
+            "token": None,
+            "header": {},
+            "error": error_msg,
         }
 
 
@@ -287,14 +329,13 @@ def _handle_api_key_auth(execution_id: str, logger) -> Dict[str, Any]:
     """
     # Validate API key configuration
     if not config.api_key:
-        logger.warning(
-            "API key authentication selected but API_KEY not configured - using placeholder",
-            execution_id=execution_id,
-        )
+        error_msg = "API_KEY not configured"
+        logger.error(error_msg, execution_id=execution_id)
         return {
-            "method": "placeholder",
-            "token": "no-api-key",
-            "header": {"Authorization": "Bearer no-api-key"},
+            "method": "api_key",
+            "token": None,
+            "header": {},
+            "error": error_msg,
         }
 
     logger.info("API key authentication configured", execution_id=execution_id)

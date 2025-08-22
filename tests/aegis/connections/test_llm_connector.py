@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from aegis.connections.llm import (
+from aegis.connections import (
     complete,
     stream,
     complete_with_tools,
@@ -16,22 +16,67 @@ from aegis.connections.llm import (
     embed_batch,
 )
 from aegis.utils.settings import config
+from aegis.connections.llm_connector import _get_model_config
 
 
 @pytest.fixture(autouse=True)
 def reset_llm_cache():
     """Clear the client cache before each test."""
-    from aegis.connections.llm import llm_connector
+    from aegis.connections import llm_connector
 
     llm_connector._client_cache.clear()
     yield
     llm_connector._client_cache.clear()
 
 
+class TestModelParameters:
+    """Test cases for model parameter determination."""
+
+    def test_get_model_config_small_model(self):
+        """Test parameter determination for small model."""
+        model, temp, tokens, tier = _get_model_config(config.llm.small.model, None, None)
+        assert model == config.llm.small.model
+        assert temp == config.llm.small.temperature
+        assert tokens == config.llm.small.max_tokens
+        assert tier == "small"
+
+    def test_get_model_config_medium_model(self):
+        """Test parameter determination for medium model."""
+        model, temp, tokens, tier = _get_model_config(config.llm.medium.model, None, None)
+        assert model == config.llm.medium.model
+        assert temp == config.llm.medium.temperature
+        assert tokens == config.llm.medium.max_tokens
+        assert tier == "medium"
+
+    def test_get_model_config_large_model(self):
+        """Test parameter determination for large model."""
+        model, temp, tokens, tier = _get_model_config(config.llm.large.model, None, None)
+        assert model == config.llm.large.model
+        assert temp == config.llm.large.temperature
+        assert tokens == config.llm.large.max_tokens
+        assert tier == "large"
+
+    def test_get_model_config_unknown_model(self):
+        """Test parameter determination for unknown model - should use medium defaults."""
+        model, temp, tokens, tier = _get_model_config("unknown-model-xyz", None, None)
+        assert model == "unknown-model-xyz"
+        assert temp == config.llm.medium.temperature
+        assert tokens == config.llm.medium.max_tokens
+        assert tier == "medium"
+
+    def test_get_model_config_with_custom_values(self):
+        """Test parameter determination with custom temperature and tokens."""
+        model, temp, tokens, tier = _get_model_config(config.llm.small.model, 0.9, 2000)
+        assert model == config.llm.small.model
+        assert temp == 0.9
+        assert tokens == 2000
+        assert tier == "small"
+
+
 class TestLLMComplete:
     """Test cases for non-streaming completion."""
 
-    @mock.patch("aegis.connections.llm.llm_connector.OpenAI")
+    @mock.patch("aegis.connections.llm_connector.OpenAI")
     def test_complete_success(self, mock_openai_class):
         """Test successful completion request."""
         # Setup mock response
@@ -79,7 +124,7 @@ class TestLLMComplete:
             model=config.llm.small.model, messages=messages, temperature=0.5, max_tokens=100
         )
 
-    @mock.patch("aegis.connections.llm.llm_connector.OpenAI")
+    @mock.patch("aegis.connections.llm_connector.OpenAI")
     def test_complete_uses_default_model(self, mock_openai_class):
         """Test completion uses medium model by default."""
         # Setup mock
@@ -115,7 +160,7 @@ class TestLLMComplete:
         assert call_args.kwargs["temperature"] == config.llm.medium.temperature
         assert call_args.kwargs["max_tokens"] == config.llm.medium.max_tokens
 
-    @mock.patch("aegis.connections.llm.llm_connector.OpenAI")
+    @mock.patch("aegis.connections.llm_connector.OpenAI")
     def test_complete_error_handling(self, mock_openai_class):
         """Test completion handles API errors properly."""
         # Setup mock to raise error
@@ -144,7 +189,7 @@ class TestLLMComplete:
 class TestLLMStream:
     """Test cases for streaming completion."""
 
-    @mock.patch("aegis.connections.llm.llm_connector.OpenAI")
+    @mock.patch("aegis.connections.llm_connector.OpenAI")
     def test_stream_success(self, mock_openai_class):
         """Test successful streaming request."""
         # Setup mock streaming response
@@ -197,7 +242,7 @@ class TestLLMStream:
 class TestLLMTools:
     """Test cases for tool/function calling."""
 
-    @mock.patch("aegis.connections.llm.llm_connector.OpenAI")
+    @mock.patch("aegis.connections.llm_connector.OpenAI")
     def test_complete_with_tools_success(self, mock_openai_class):
         """Test successful completion with tools."""
         # Setup mock response with tool call
@@ -266,7 +311,7 @@ class TestLLMTools:
         call_args = mock_client.chat.completions.create.call_args
         assert call_args.kwargs["tools"] == tools
 
-    @mock.patch("aegis.connections.llm.llm_connector.OpenAI")
+    @mock.patch("aegis.connections.llm_connector.OpenAI")
     def test_complete_with_tools_defaults_to_large_model(self, mock_openai_class):
         """Test tool completion defaults to large model."""
         # Setup mock
@@ -305,7 +350,7 @@ class TestLLMTools:
 class TestLLMConnection:
     """Test cases for connection testing."""
 
-    @mock.patch("aegis.connections.llm.llm_connector.complete")
+    @mock.patch("aegis.connections.llm_connector.complete")
     def test_connection_success(self, mock_complete):
         """Test successful connection test."""
         # Setup mock response
@@ -328,7 +373,7 @@ class TestLLMConnection:
         assert result["auth_method"] == "api_key"
         assert result["model"] == config.llm.small.model
 
-    @mock.patch("aegis.connections.llm.llm_connector.complete")
+    @mock.patch("aegis.connections.llm_connector.complete")
     def test_connection_failure(self, mock_complete):
         """Test failed connection test."""
         # Setup mock to raise error
@@ -352,8 +397,8 @@ class TestLLMConnection:
 class TestClientCaching:
     """Test cases for client caching."""
 
-    @mock.patch("aegis.connections.llm.llm_connector.OpenAI")
-    @mock.patch("aegis.connections.llm.llm_connector.httpx.Client")
+    @mock.patch("aegis.connections.llm_connector.OpenAI")
+    @mock.patch("aegis.connections.llm_connector.httpx.Client")
     def test_client_caching(self, mock_httpx_client, mock_openai_class):
         """Test that clients are cached and reused."""
         # Setup mocks
@@ -400,8 +445,8 @@ class TestClientCaching:
 class TestSSLConfiguration:
     """Test cases for SSL configuration."""
 
-    @mock.patch("aegis.connections.llm.llm_connector.OpenAI")
-    @mock.patch("aegis.connections.llm.llm_connector.httpx.Client")
+    @mock.patch("aegis.connections.llm_connector.OpenAI")
+    @mock.patch("aegis.connections.llm_connector.httpx.Client")
     def test_ssl_with_custom_cert(self, mock_httpx_client, mock_openai_class):
         """Test SSL configuration with custom certificate."""
         # Setup mocks
@@ -430,8 +475,8 @@ class TestSSLConfiguration:
         call_args = mock_httpx_client.call_args
         assert call_args.kwargs["verify"] == "/path/to/cert.pem"
 
-    @mock.patch("aegis.connections.llm.llm_connector.OpenAI")
-    @mock.patch("aegis.connections.llm.llm_connector.httpx.Client")
+    @mock.patch("aegis.connections.llm_connector.OpenAI")
+    @mock.patch("aegis.connections.llm_connector.httpx.Client")
     def test_ssl_disabled(self, mock_httpx_client, mock_openai_class):
         """Test SSL configuration when disabled."""
         # Setup mocks
@@ -464,7 +509,7 @@ class TestSSLConfiguration:
 class TestEmbeddings:
     """Test cases for embedding generation."""
 
-    @mock.patch("aegis.connections.llm.llm_connector.OpenAI")
+    @mock.patch("aegis.connections.llm_connector.OpenAI")
     def test_embed_success(self, mock_openai_class):
         """Test successful single embedding generation."""
         # Setup mock response
@@ -515,7 +560,7 @@ class TestEmbeddings:
             dimensions=config.llm.embedding.dimensions,
         )
 
-    @mock.patch("aegis.connections.llm.llm_connector.OpenAI")
+    @mock.patch("aegis.connections.llm_connector.OpenAI")
     def test_embed_with_custom_dimensions(self, mock_openai_class):
         """Test embedding generation with custom dimensions."""
         # Setup mock response
@@ -561,7 +606,7 @@ class TestEmbeddings:
         call_args = mock_client.embeddings.create.call_args
         assert call_args.kwargs["dimensions"] == 256
 
-    @mock.patch("aegis.connections.llm.llm_connector.OpenAI")
+    @mock.patch("aegis.connections.llm_connector.OpenAI")
     def test_embed_batch_success(self, mock_openai_class):
         """Test successful batch embedding generation."""
         # Setup mock response
@@ -611,7 +656,7 @@ class TestEmbeddings:
             dimensions=config.llm.embedding.dimensions,
         )
 
-    @mock.patch("aegis.connections.llm.llm_connector.OpenAI")
+    @mock.patch("aegis.connections.llm_connector.OpenAI")
     def test_embed_error_handling(self, mock_openai_class):
         """Test embedding handles API errors properly."""
         # Setup mock to raise error
@@ -636,7 +681,7 @@ class TestEmbeddings:
                 embedding_params={},
             )
 
-    @mock.patch("aegis.connections.llm.llm_connector.OpenAI")
+    @mock.patch("aegis.connections.llm_connector.OpenAI")
     def test_embed_batch_error_handling(self, mock_openai_class):
         """Test batch embedding handles API errors properly."""
         # Setup mock to raise error
@@ -661,7 +706,7 @@ class TestEmbeddings:
                 embedding_params={},
             )
 
-    @mock.patch("aegis.connections.llm.llm_connector.OpenAI")
+    @mock.patch("aegis.connections.llm_connector.OpenAI")
     def test_embed_uses_embedding_timeout(self, mock_openai_class):
         """Test that embedding uses the correct timeout configuration."""
         # Setup mock
@@ -677,7 +722,7 @@ class TestEmbeddings:
         mock_openai_class.return_value = mock_client
 
         # Mock httpx.Client to verify timeout
-        with mock.patch("aegis.connections.llm.llm_connector.httpx.Client") as mock_httpx:
+        with mock.patch("aegis.connections.llm_connector.httpx.Client") as mock_httpx:
             test_text = "Test"
             auth_config = {"token": "test-token", "method": "api_key"}
             ssl_config = {"verify": False, "cert_path": None}

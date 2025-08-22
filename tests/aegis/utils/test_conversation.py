@@ -189,8 +189,9 @@ class TestValidationErrors:
     )
     def test_input_validation_errors(self, invalid_input, error_match):
         """Test various input validation errors."""
-        with pytest.raises(ValueError, match=error_match):
-            process_conversation(invalid_input, "test-id")
+        result = process_conversation(invalid_input, "test-id")
+        assert result["success"] is False
+        assert error_match in result["error"]
 
     @pytest.mark.parametrize(
         "invalid_message,error_match",
@@ -206,14 +207,15 @@ class TestValidationErrors:
     def test_message_validation_errors(self, invalid_message, error_match):
         """Test various message validation errors."""
         conversation_input = {"messages": invalid_message}
-        with pytest.raises(ValueError, match=error_match):
-            process_conversation(conversation_input, "test-id")
+        result = process_conversation(conversation_input, "test-id")
+        assert result["success"] is False
+        assert error_match in result["error"]
 
 
 class TestLogging:
     """Test cases for logging in conversation processing."""
 
-    @mock.patch("aegis.utils.conversation.conversation_setup.get_logger")
+    @mock.patch("aegis.utils.conversation.get_logger")
     def test_logs_processing_success(self, mock_get_logger):
         """Test that successful processing is logged."""
         mock_logger = mock.Mock()
@@ -230,7 +232,7 @@ class TestLogging:
             "Conversation processed", message_count=1, latest_role="user"
         )
 
-    @mock.patch("aegis.utils.conversation.conversation_setup.get_logger")
+    @mock.patch("aegis.utils.conversation.get_logger")
     def test_logs_processing_error(self, mock_get_logger):
         """Test that processing errors are logged."""
         mock_logger = mock.Mock()
@@ -239,8 +241,8 @@ class TestLogging:
         conversation_input = {"messages": "invalid"}
         execution_id = "test-error-123"
 
-        with pytest.raises(ValueError):
-            process_conversation(conversation_input, execution_id)
+        result = process_conversation(conversation_input, execution_id)
+        assert result["success"] is False
 
         # Verify error was logged
         mock_logger.error.assert_called_once()

@@ -8,8 +8,6 @@ import os
 import tempfile
 from unittest import mock
 
-import pytest
-
 from aegis.utils.ssl import setup_ssl
 from aegis.utils.settings import config
 
@@ -28,7 +26,11 @@ class TestSSLSetup:
 
         result = setup_ssl()
 
-        assert result == {"verify": False, "cert_path": None}
+        assert result["success"] is True
+        assert result["verify"] is False
+        assert result["cert_path"] is None
+        assert result["status"] == "Success"
+        assert result["error"] is None
 
     def test_ssl_enabled_with_cert(self):
         """Test SSL setup with custom certificate."""
@@ -44,7 +46,11 @@ class TestSSLSetup:
 
             result = setup_ssl()
 
-            assert result == {"verify": True, "cert_path": cert_path}
+            assert result["success"] is True
+            assert result["verify"] is True
+            assert result["cert_path"] == cert_path
+            assert result["status"] == "Success"
+            assert result["error"] is None
         finally:
             # Clean up
             os.unlink(cert_path)
@@ -56,15 +62,24 @@ class TestSSLSetup:
 
         result = setup_ssl()
 
-        assert result == {"verify": True, "cert_path": None}
+        assert result["success"] is True
+        assert result["verify"] is True
+        assert result["cert_path"] is None
+        assert result["status"] == "enabled"
+        assert result["error"] is None
 
     def test_ssl_enabled_cert_not_found(self):
         """Test SSL setup with missing certificate file."""
         config.ssl_verify = True
         config.ssl_cert_path = "/nonexistent/path/to/cert.cer"
 
-        with pytest.raises(FileNotFoundError, match="SSL certificate file not found"):
-            setup_ssl()
+        result = setup_ssl()
+
+        assert result["success"] is False
+        assert result["verify"] is False
+        assert result["cert_path"] is None
+        assert result["status"] == "Failure"
+        assert "SSL certificate file not found" in result["error"]
 
     def test_ssl_path_expansion(self):
         """Test that user home path is expanded."""
@@ -82,15 +97,35 @@ class TestSSLSetup:
             # Mock expanduser to return our temp file
             with mock.patch("os.path.expanduser", return_value=cert_path):
                 result = setup_ssl()
-                assert result == {"verify": True, "cert_path": cert_path}
+                assert result["success"] is True
+                assert result["verify"] is True
+                assert result["cert_path"] == cert_path
+                assert result["status"] == "Success"
+                assert result["error"] is None
         finally:
             os.unlink(cert_path)
+
+    def test_ssl_setup_with_exception(self):
+        """Test SSL setup handles unexpected exceptions."""
+        config.ssl_verify = True
+        config.ssl_cert_path = "test.cer"
+
+        # Mock os.path.exists to raise an exception
+        with mock.patch("os.path.exists", side_effect=Exception("Unexpected error")):
+            result = setup_ssl()
+
+            # Should handle exception gracefully
+            assert result["success"] is False
+            assert result["verify"] is False
+            assert result["cert_path"] is None
+            assert result["status"] == "Failure"
+            assert "Unexpected error" in result["error"]
 
 
 class TestLogging:
     """Test cases for SSL logging."""
 
-    @mock.patch("aegis.utils.ssl.ssl_setup.get_logger")
+    @mock.patch("aegis.utils.ssl.get_logger")
     def test_logs_ssl_disabled(self, mock_get_logger):
         """Test that SSL disabled state is logged."""
         mock_logger = mock.Mock()
@@ -102,7 +137,7 @@ class TestLogging:
 
         mock_logger.debug.assert_called_once_with("SSL verification disabled")
 
-    @mock.patch("aegis.utils.ssl.ssl_setup.get_logger")
+    @mock.patch("aegis.utils.ssl.get_logger")
     def test_logs_ssl_with_cert(self, mock_get_logger):
         """Test that custom certificate usage is logged."""
         mock_logger = mock.Mock()

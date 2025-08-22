@@ -50,6 +50,8 @@ class LLMModelConfig:
     max_tokens: int
     timeout: int
     max_retries: int
+    cost_per_1k_input: float
+    cost_per_1k_output: float
 
 
 @dataclass
@@ -60,6 +62,7 @@ class LLMEmbeddingConfig:
     dimensions: int
     timeout: int
     max_retries: int
+    cost_per_1k_input: float
 
 
 @dataclass
@@ -74,6 +77,7 @@ class LLMConfig:
 
 
 class Config:  # pylint: disable=too-many-instance-attributes
+    # Config class needs many attributes to centralize all app settings in one place.
     """
     Centralized configuration management from environment variables.
 
@@ -140,6 +144,7 @@ class Config:  # pylint: disable=too-many-instance-attributes
         self.log_level = os.getenv("LOG_LEVEL", "INFO")
         self.auth_method = os.getenv("AUTH_METHOD", "api_key").lower()
         self.api_key = os.getenv("API_KEY", "")
+        self.environment = os.getenv("ENVIRONMENT", "local")  # local, dev, sai, or prod
 
         # Conversation Configuration
         self.conversation = ConversationConfig(
@@ -166,6 +171,13 @@ class Config:  # pylint: disable=too-many-instance-attributes
             retry_delay=int(os.getenv("OAUTH_RETRY_DELAY", "1")),
         )
 
+        # PostgreSQL Configuration
+        self.postgres_host = os.getenv("POSTGRES_HOST", "localhost")
+        self.postgres_port = os.getenv("POSTGRES_PORT", "5432")
+        self.postgres_database = os.getenv("POSTGRES_DATABASE", "")
+        self.postgres_user = os.getenv("POSTGRES_USER", "")
+        self.postgres_password = os.getenv("POSTGRES_PASSWORD", "")
+
         # LLM Configuration
         self.llm = LLMConfig(
             base_url=os.getenv("LLM_BASE_URL", "https://api.openai.com/v1"),
@@ -175,6 +187,8 @@ class Config:  # pylint: disable=too-many-instance-attributes
                 max_tokens=int(os.getenv("LLM_MAX_TOKENS_SMALL", "1000")),
                 timeout=int(os.getenv("LLM_TIMEOUT_SMALL", "30")),
                 max_retries=int(os.getenv("LLM_MAX_RETRIES_SMALL", "3")),
+                cost_per_1k_input=float(os.getenv("LLM_COST_INPUT_SMALL", "0.0001")),
+                cost_per_1k_output=float(os.getenv("LLM_COST_OUTPUT_SMALL", "0.0002")),
             ),
             medium=LLMModelConfig(
                 model=os.getenv("LLM_MODEL_MEDIUM", "gpt-4.1-mini-2025-04-14"),
@@ -182,6 +196,8 @@ class Config:  # pylint: disable=too-many-instance-attributes
                 max_tokens=int(os.getenv("LLM_MAX_TOKENS_MEDIUM", "2000")),
                 timeout=int(os.getenv("LLM_TIMEOUT_MEDIUM", "60")),
                 max_retries=int(os.getenv("LLM_MAX_RETRIES_MEDIUM", "3")),
+                cost_per_1k_input=float(os.getenv("LLM_COST_INPUT_MEDIUM", "0.0003")),
+                cost_per_1k_output=float(os.getenv("LLM_COST_OUTPUT_MEDIUM", "0.0006")),
             ),
             large=LLMModelConfig(
                 model=os.getenv("LLM_MODEL_LARGE", "gpt-4.1-2025-04-14"),
@@ -189,12 +205,15 @@ class Config:  # pylint: disable=too-many-instance-attributes
                 max_tokens=int(os.getenv("LLM_MAX_TOKENS_LARGE", "4000")),
                 timeout=int(os.getenv("LLM_TIMEOUT_LARGE", "120")),
                 max_retries=int(os.getenv("LLM_MAX_RETRIES_LARGE", "3")),
+                cost_per_1k_input=float(os.getenv("LLM_COST_INPUT_LARGE", "0.0010")),
+                cost_per_1k_output=float(os.getenv("LLM_COST_OUTPUT_LARGE", "0.0020")),
             ),
             embedding=LLMEmbeddingConfig(
                 model=os.getenv("LLM_EMBEDDING_MODEL", "text-embedding-3-large"),
                 dimensions=int(os.getenv("LLM_EMBEDDING_DIMENSIONS", "3072")),
                 timeout=int(os.getenv("LLM_EMBEDDING_TIMEOUT", "30")),
                 max_retries=int(os.getenv("LLM_EMBEDDING_MAX_RETRIES", "3")),
+                cost_per_1k_input=float(os.getenv("LLM_EMBEDDING_COST_INPUT", "0.00002")),
             ),
         )
 
@@ -204,6 +223,7 @@ class Config:  # pylint: disable=too-many-instance-attributes
     def _create_legacy_attributes(self) -> None:
         """Create legacy attributes for backward compatibility."""
         # pylint: disable=attribute-defined-outside-init
+        # Dynamic attributes needed for backward compatibility with existing code.
         # OAuth attributes
         self.oauth_endpoint = self.oauth.endpoint
         self.oauth_client_id = self.oauth.client_id
@@ -220,7 +240,7 @@ class Config:  # pylint: disable=too-many-instance-attributes
         self.include_system_messages = self.conversation.include_system_messages
         self.allowed_roles = self.conversation.allowed_roles
         self.max_history_length = self.conversation.max_history_length
-        # pylint: enable=attribute-defined-outside-init
+        # pylint: enable=attribute-defined-outside-init  # Re-enable after dynamic attributes
 
     def get(self, key: str, default: Optional[str] = None) -> Optional[str]:
         """

@@ -1,0 +1,35 @@
+name: banks
+version: "1.0.0"
+last_updated: "2025-01-22"
+
+content: |
+  Monitored Financial Institutions:
+  
+  Canadian Banks:
+  - RBC (Royal Bank of Canada) - Ticker: RY
+  - TD (Toronto-Dominion Bank) - Ticker: TD
+  - BMO (Bank of Montreal) - Ticker: BMO
+  - Scotia (Bank of Nova Scotia / Scotiabank) - Ticker: BNS
+  - CIBC (Canadian Imperial Bank of Commerce) - Ticker: CM
+  - NBC (National Bank of Canada) - Ticker: NA
+  
+  US Banks:
+  - JPM (JPMorgan Chase) - Ticker: JPM
+  - BAC (Bank of America) - Ticker: BAC
+  - WFC (Wells Fargo) - Ticker: WFC
+  - C (Citigroup) - Ticker: C
+  - USB (U.S. Bancorp) - Ticker: USB
+  - PNC (PNC Financial Services) - Ticker: PNC
+  - TFC (Truist Financial) - Ticker: TFC
+  - GS (Goldman Sachs) - Ticker: GS
+  - MS (Morgan Stanley) - Ticker: MS
+  
+  Insurance Companies:
+  - MFC (Manulife Financial) - Ticker: MFC
+  - SLF (Sun Life Financial) - Ticker: SLF
+  - GWO (Great-West Lifeco) - Ticker: GWO
+  - IFC (Intact Financial) - Ticker: IFC
+  - FFH (Fairfax Financial) - Ticker: FFH
+  
+  Note: When users reference banks, they may use full names, abbreviations, or ticker symbols. 
+  All variations should be recognized (e.g., "Royal Bank", "RBC", "RY" all refer to the same institution).
