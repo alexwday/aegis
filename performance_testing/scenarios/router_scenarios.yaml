@@ -1,0 +1,193 @@
+test_suite:
+  name: "Router Agent Performance Test Suite"
+  description: "Comprehensive performance and accuracy tests for the router agent to validate routing decisions between direct_response and research_workflow"
+  version: "1.0"
+  
+  # Default performance thresholds for all scenarios
+  default_thresholds:
+    max_latency_ms: 2000  # Realistic for API calls
+  scenarios:
+    # Direct Response Scenarios
+    - id: "greeting_simple"
+      name: "Simple Greeting"
+      description: "Router should identify basic greetings as direct response"
+      message: "Hello Aegis"
+      expected:
+        route: "direct_response"
+      reasoning: "Simple greetings are conversational and don't require data research"
+      tags: ["greeting", "direct"]
+    
+    - id: "greeting_morning"
+      name: "Morning Greeting"
+      description: "Router should identify time-based greetings as direct response"
+      message: "Good morning! How are you today?"
+      expected:
+        route: "direct_response"
+      reasoning: "Greetings with time references are still conversational interactions"
+      tags: ["greeting", "direct"]
+    
+    - id: "gratitude"
+      name: "Thank You Message"
+      description: "Router should identify gratitude as direct response"
+      message: "Thank you for your help with the analysis"
+      expected:
+        route: "direct_response"
+      reasoning: "Expressions of gratitude don't require data lookup"
+      tags: ["gratitude", "direct"]
+    
+    - id: "capability_question"
+      name: "Capability Question"
+      description: "Router should handle questions about capabilities directly"
+      message: "What kind of financial data can you help me with?"
+      expected:
+        route: "direct_response"
+      reasoning: "Questions about system capabilities are answered from knowledge, not data"
+      tags: ["capability", "direct"]
+    
+    - id: "clarification_response"
+      name: "User Clarification"
+      description: "Router should handle user clarifications directly"
+      conversation:
+        - role: "assistant"
+          content: "Which bank's efficiency ratio would you like to see?"
+        - role: "user"
+          content: "I meant RBC, the Royal Bank of Canada"
+      expected:
+        route: "direct_response"
+      reasoning: "Simple clarifications don't immediately trigger research"
+      tags: ["clarification", "direct"]
+    
+  # Research Workflow Scenarios
+    - id: "efficiency_ratio_request"
+      name: "RBC Efficiency Ratio Request"
+      description: "Router should identify specific data requests as research workflow"
+      message: "Show me RBC's efficiency ratio for Q3 2024"
+      expected:
+        route: "research_workflow"
+      reasoning: "Specific financial metrics require database queries and research"
+      tags: ["data", "research", "rbc", "metrics"]
+    
+    - id: "comparison_request"
+      name: "Bank Comparison Request"
+      description: "Router should route comparative analysis to research"
+      message: "Compare the ROE of TD Bank and BMO for the last quarter"
+      expected:
+        route: "research_workflow"
+      reasoning: "Comparative analysis requires fetching data from multiple sources"
+      tags: ["comparison", "research", "metrics"]
+    
+    - id: "trend_analysis"
+      name: "Trend Analysis Request"
+      description: "Router should route trend requests to research"
+      message: "What's the trend in CIBC's net interest margin over the past year?"
+      expected:
+        route: "research_workflow"
+      reasoning: "Trend analysis requires historical data retrieval"
+      tags: ["trend", "research", "historical"]
+    
+    - id: "financial_statement"
+      name: "Financial Statement Request"
+      description: "Router should route financial statement requests to research"
+      message: "Can you pull up Scotiabank's latest income statement?"
+      expected:
+        route: "research_workflow"
+      reasoning: "Financial statements require document retrieval from databases"
+      tags: ["statements", "research", "documents"]
+    
+    - id: "benchmark_request"
+      name: "Benchmark Data Request"
+      description: "Router should route benchmark requests to research"
+      message: "How does National Bank's performance compare to industry benchmarks?"
+      expected:
+        route: "research_workflow"
+      reasoning: "Benchmark comparisons require both specific data and industry data"
+      tags: ["benchmark", "research", "comparison"]
+    
+  # Edge Cases and Ambiguous Scenarios
+    - id: "vague_numbers"
+      name: "Vague Numbers Request"
+      description: "Router should handle vague requests with lower confidence"
+      message: "Show me the numbers"
+      expected:
+        route: "research_workflow"
+      reasoning: "Vague requests likely need data but require clarification"
+      tags: ["ambiguous", "vague"]
+    
+    - id: "mixed_greeting_data"
+      name: "Greeting with Data Request"
+      description: "Router should identify data requests even with greetings"
+      message: "Hi there! Can you show me TD Bank's Q2 revenue figures?"
+      expected:
+        route: "research_workflow"
+      reasoning: "Presence of specific data request overrides greeting for routing"
+      tags: ["mixed", "greeting", "data"]
+    
+    - id: "contextual_followup"
+      name: "Contextual Follow-up"
+      description: "Router should consider conversation context for follow-ups"
+      conversation:
+        - role: "user"
+          content: "Show me RBC's efficiency ratio"
+        - role: "assistant"
+          content: "RBC's efficiency ratio for Q3 2024 is 54.2%"
+        - role: "user"
+          content: "What about TD Bank?"
+      expected:
+        route: "research_workflow"
+      reasoning: "Follow-up implies same type of data request for different entity"
+      tags: ["followup", "contextual", "research"]
+    
+    - id: "calculation_request"
+      name: "Calculation Request"
+      description: "Router should identify calculation requests as research"
+      message: "Calculate the 5-year average ROA for Canadian Imperial Bank"
+      expected:
+        route: "research_workflow"
+      reasoning: "Calculations require data retrieval before computation"
+      tags: ["calculation", "research", "metrics"]
+    
+    - id: "report_generation"
+      name: "Report Generation Request"
+      description: "Router should route report requests to research"
+      message: "Generate a quarterly performance summary for all major Canadian banks"
+      expected:
+        route: "research_workflow"
+      reasoning: "Report generation requires extensive data gathering and processing"
+      tags: ["report", "research", "comprehensive"]
+    
+  # Performance Stress Tests
+    - id: "long_conversation"
+      name: "Long Conversation Context"
+      description: "Router should handle long conversation history efficiently"
+      conversation:
+        - role: "user"
+          content: "Hello, I need help with bank analysis"
+        - role: "assistant"
+          content: "I'd be happy to help with bank analysis. What would you like to know?"
+        - role: "user"
+          content: "I'm interested in Canadian banks"
+        - role: "assistant"
+          content: "Canadian banks are a great topic. Any specific metrics or banks?"
+        - role: "user"
+          content: "Yes, I want to look at profitability"
+        - role: "assistant"
+          content: "Profitability metrics include ROE, ROA, and net margins. Which interests you?"
+        - role: "user"
+          content: "Let's look at ROE for the big five banks"
+      expected:
+        route: "research_workflow"
+      reasoning: "Despite long context, final request clearly needs data"
+      tags: ["performance", "long_context"]
+      thresholds:
+        max_latency_ms: 2500  # Allow more time for longer context
+    
+    - id: "complex_query"
+      name: "Complex Multi-part Query"
+      description: "Router should handle complex queries requiring research"
+      message: "I need a comprehensive analysis of RBC including efficiency ratio, ROE, net interest margin, and how these compare to last year's figures, plus any notable trends"
+      expected:
+        route: "research_workflow"
+      reasoning: "Complex multi-metric requests clearly require extensive research"
+      tags: ["complex", "research", "comprehensive"]
+      thresholds:
+        max_latency_ms: 2500  # Complex queries may take longer to process

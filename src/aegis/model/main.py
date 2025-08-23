@@ -11,6 +11,7 @@ from typing import Any, Dict, Generator, List, Optional, Union
 
 from ..connections.oauth_connector import setup_authentication
 from ..utils.conversation import process_conversation
+from ..utils.database_filter import filter_databases, get_database_prompt
 from ..utils.logging import setup_logging, get_logger
 from ..utils.monitor import (
     add_monitor_entry,
@@ -18,6 +19,7 @@ from ..utils.monitor import (
     post_monitor_entries,
 )
 from ..utils.ssl import setup_ssl
+from .agents import route_query
 
 
 def model(
@@ -152,24 +154,23 @@ def model(
     logger.info("model.stage.filter_processing.started", execution_id=execution_id)
     filter_start = datetime.now(timezone.utc)
 
-    # Log the database filters for future use
+    # Apply database filters
+    filtered_databases = filter_databases(db_names)
+    database_prompt = get_database_prompt(db_names)
+
     filter_metadata = {
         "db_names_requested": db_names,
         "filter_count": len(db_names) if db_names else 0,
+        "databases_available": list(filtered_databases.keys()),
+        "databases_count": len(filtered_databases),
     }
-
-    # Future: Apply filters to available databases
-    # if db_names:
-    #     available_databases = get_all_databases()
-    #     filtered_databases = {k: v for k, v in available_databases.items() if k in db_names}
-    #     filter_metadata["db_names_applied"] = list(filtered_databases.keys())
 
     logger.info(
         "model.stage.filter_processing.completed",
         execution_id=execution_id,
         status="Success",
-        filter_count=filter_metadata["filter_count"],
-        db_names=db_names,
+        databases_available=len(filtered_databases),
+        db_names=list(filtered_databases.keys()),
     )
 
     add_monitor_entry(
@@ -177,21 +178,79 @@ def model(
         stage_start_time=filter_start,
         stage_end_time=datetime.now(timezone.utc),
         status="Success",
-        decision_details=f"Processed {filter_metadata['filter_count']} database filters",
+        decision_details=f"Filtered to {len(filtered_databases)} databases",
         custom_metadata=filter_metadata,
     )
 
-    # Future: Router agent will determine path
-    # Future: Agents will process the request
-    # Future: Subagents will be called in parallel
-    # Future: Response will be synthesized and streamed
+    # Stage 5: Router agent determines path
+    logger.info("model.stage.router.started", execution_id=execution_id)
+    router_start = datetime.now(timezone.utc)
 
-    # Placeholder response for now
-    yield {
-        "type": "agent",
-        "name": "aegis",
-        "content": "Model setup complete. Agents not yet implemented.\n",
+    # Build context for router with filtered databases
+    router_context = {
+        "execution_id": execution_id,
+        "auth_config": auth_config,
+        "ssl_config": ssl_config,
+        "database_prompt": database_prompt,  # Pass filtered database prompt
+        "available_databases": list(filtered_databases.keys()),
     }
+
+    # Get routing decision
+    routing_decision = route_query(
+        conversation_history=processed_conversation.get("messages", []),
+        latest_message=processed_conversation.get("latest_message", {}).get("content", ""),
+        context=router_context,
+    )
+
+    logger.info(
+        "model.stage.router.completed",
+        execution_id=execution_id,
+        route=routing_decision.get("route"),
+        confidence=routing_decision.get("confidence"),
+    )
+
+    add_monitor_entry(
+        stage_name="Router",
+        stage_start_time=router_start,
+        stage_end_time=datetime.now(timezone.utc),
+        status=routing_decision.get("status", "Success"),
+        decision_details=routing_decision.get("rationale", "Routing decision made"),
+        error_message=routing_decision.get("error"),
+        custom_metadata={
+            "route": routing_decision.get("route"),
+            "confidence": routing_decision.get("confidence"),
+        },
+    )
+
+    # Stage 6: Execute based on routing decision
+    if routing_decision.get("route") == "direct_response":
+        # Direct response path - answer from conversation history
+        yield {
+            "type": "agent",
+            "name": "aegis",
+            "content": f"[Router: Direct Response - {routing_decision.get('rationale')}]\n",
+        }
+        yield {
+            "type": "agent",
+            "name": "aegis",
+            "content": "Response agent would generate answer from conversation history.\n",
+        }
+    else:
+        # Research workflow path - need to fetch data
+        yield {
+            "type": "agent",
+            "name": "aegis",
+            "content": f"[Router: Research Workflow - {routing_decision.get('rationale')}]\n",
+        }
+        yield {
+            "type": "agent",
+            "name": "aegis",
+            "content": "Clarifier, Planner, and Subagents would execute here.\n",
+        }
+
+    # Future: Implement actual agents
+    # - Response agent for direct responses
+    # - Clarifier → Planner → Subagents → Summarizer for research
 
     # Post monitoring data to database
     entries_posted = post_monitor_entries(execution_id)

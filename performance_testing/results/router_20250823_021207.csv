@@ -1,0 +1,29 @@
+SUMMARY
+Metric,Value
+Total Tests,17
+Passed,16
+Failed,1
+Success Rate (%),94.12
+Mean Latency (seconds),0.60
+Total Tokens,"41,607"
+Total Cost ($),0.0125
+
+DETAILED RESULTS
+scenario_id,scenario_name,success,latency_seconds,tokens_used,cost,error
+greeting_simple,Simple Greeting,True,0.78,"2,419",0.0007,
+greeting_morning,Morning Greeting,True,0.60,"2,425",0.0007,
+gratitude,Thank You Message,True,0.64,"2,427",0.0007,
+capability_question,Capability Question,True,0.59,"2,431",0.0007,
+clarification_response,User Clarification,False,0.62,"2,456",0.0007,"Expected route 'direct_response', got 'research_workflow'"
+efficiency_ratio_request,RBC Efficiency Ratio Request,True,0.61,"2,435",0.0007,
+comparison_request,Bank Comparison Request,True,0.52,"2,439",0.0007,
+trend_analysis,Trend Analysis Request,True,0.64,"2,439",0.0007,
+financial_statement,Financial Statement Request,True,0.69,"2,435",0.0007,
+benchmark_request,Benchmark Data Request,True,0.72,"2,431",0.0007,
+vague_numbers,Vague Numbers Request,True,0.51,"2,419",0.0007,
+mixed_greeting_data,Greeting with Data Request,True,0.51,"2,439",0.0007,
+contextual_followup,Contextual Follow-up,True,0.66,"2,475",0.0007,
+calculation_request,Calculation Request,True,0.61,"2,435",0.0007,
+report_generation,Report Generation Request,True,0.45,"2,431",0.0007,
+long_conversation,Long Conversation Context,True,0.51,"2,598",0.0008,
+complex_query,Complex Multi-part Query,True,0.51,"2,473",0.0007,
