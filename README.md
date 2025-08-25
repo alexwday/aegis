@@ -78,23 +78,71 @@ psql --version
 3. Open PostgreSQL.app and click "Initialize"
 4. Add to PATH: `sudo mkdir -p /etc/paths.d && echo /Applications/Postgres.app/Contents/Versions/latest/bin | sudo tee /etc/paths.d/postgresapp`
 
+### Configure PostgreSQL for Custom Port (IMPORTANT: Do this first!)
+
+We need PostgreSQL to run on port 34532 instead of the default 5432.
+
+```bash
+# Find your postgresql.conf location
+# For Homebrew, try:
+psql -d postgres -c "SHOW config_file;" 2>/dev/null || psql -p 5432 -d postgres -c "SHOW config_file;"
+
+# If the above doesn't work, the config file is usually at:
+# Homebrew (Intel Mac): /usr/local/var/postgresql@15/postgresql.conf
+# Homebrew (M1/M2 Mac): /opt/homebrew/var/postgresql@15/postgresql.conf
+# PostgreSQL.app: ~/Library/Application Support/Postgres/var-15/postgresql.conf
+```
+
+Edit the configuration file:
+```bash
+# For Homebrew on M1/M2 Macs:
+nano /opt/homebrew/var/postgresql@15/postgresql.conf
+
+# For Homebrew on Intel Macs:
+nano /usr/local/var/postgresql@15/postgresql.conf
+```
+
+Find and change the port setting (usually around line 63):
+```
+port = 34532                # (change from 5432 to 34532)
+```
+
+Restart PostgreSQL:
+```bash
+# For Homebrew:
+brew services restart postgresql@15
+
+# For PostgreSQL.app:
+# Click on the elephant icon in menu bar and select "Restart"
+```
+
+Verify the port change:
+```bash
+# This should now work:
+psql -p 34532 -d postgres -c "SELECT 1;"
+```
+
 ### Creating the Database and User
 
 ```bash
-# Connect to PostgreSQL as the default superuser
-psql -U postgres
+# Connect to PostgreSQL on the new port
+# Note: Homebrew typically creates a superuser with your Mac username, not "postgres"
+psql -p 34532 -d postgres
 
-# Or if using PostgreSQL.app or brew without postgres user:
-psql -d postgres
+# If you get an error about role "postgres" not existing, try:
+psql -p 34532 -d postgres -U $(whoami)
 ```
 
 Run the following SQL commands in the PostgreSQL prompt:
 
 ```sql
--- Create the database
+-- First, check if the database already exists
+\l
+
+-- Create the database (if it doesn't exist)
 CREATE DATABASE "finance-dev";
 
--- Create the user with password
+-- Create the user with password (if it doesn't exist)
 CREATE USER financeuser WITH PASSWORD 'financepass123';
 
 -- Grant all privileges on the database
@@ -110,34 +158,10 @@ GRANT ALL ON SCHEMA public TO financeuser;
 \q
 ```
 
-### Configure PostgreSQL for Custom Port
-
-Edit the PostgreSQL configuration to use port 34532:
-
+Verify the setup:
 ```bash
-# Find your postgresql.conf location
-psql -U postgres -c "SHOW config_file;"
-
-# Edit the configuration file (path may vary)
-# For Homebrew installation:
-nano /opt/homebrew/var/postgresql@15/postgresql.conf
-
-# For PostgreSQL.app:
-nano ~/Library/Application\ Support/Postgres/var-15/postgresql.conf
-```
-
-Find and change the port setting:
-```
-port = 34532
-```
-
-Restart PostgreSQL:
-```bash
-# For Homebrew:
-brew services restart postgresql@15
-
-# For PostgreSQL.app:
-# Click on the elephant icon in menu bar and select "Restart"
+# This should connect successfully:
+PGPASSWORD=financepass123 psql -U financeuser -p 34532 -d finance-dev -c "SELECT 1;"
 ```
 
 ## Database Configuration
