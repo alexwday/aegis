@@ -238,7 +238,7 @@ def _stream_response(
             # Capture usage data if present (usually in final chunk)
             if chunk.get("usage"):
                 final_usage = chunk["usage"]
-        
+
         # After streaming completes, always send final chunk
         logger.info(
             "response.streamed",

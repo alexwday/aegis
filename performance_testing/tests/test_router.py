@@ -10,8 +10,10 @@ import sys
 import uuid
 from pathlib import Path
 
-# Add parent directory to path to import aegis modules
-sys.path.insert(0, str(Path(__file__).parent.parent))
+# Add directories to path to import modules
+project_root = Path(__file__).parent.parent.parent  # Go up to aegis project root
+sys.path.insert(0, str(project_root))  # For src.aegis imports
+sys.path.insert(0, str(Path(__file__).parent.parent))  # For performance_tester import
 
 from performance_tester import (  # noqa: E402
     MetricsCollector,
@@ -137,7 +139,7 @@ def main():
     print("=" * 60 + "\n")
 
     # Load scenarios
-    scenario_file = Path(__file__).parent / "scenarios" / "router_scenarios.yaml"
+    scenario_file = Path(__file__).parent.parent / "scenarios" / "router_scenarios.yaml"
 
     try:
         print(f"Loading scenarios from: {scenario_file}")

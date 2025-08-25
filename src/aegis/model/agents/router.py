@@ -44,7 +44,7 @@ def route_query(
     try:
         # Load base router prompt with project context
         router_data = load_yaml("aegis/router.yaml")
-        
+
         # Extract version info for tracking
         prompt_version = router_data.get("version", "unknown")
         prompt_last_updated = router_data.get("last_updated", "unknown")
@@ -190,8 +190,10 @@ def route_query(
             "cost": 0,
             "response_time_ms": 0,
             "error": str(e),
-            "prompt_version": prompt_version if 'prompt_version' in locals() else "unknown",
-            "prompt_last_updated": prompt_last_updated if 'prompt_last_updated' in locals() else "unknown",
+            "prompt_version": prompt_version if "prompt_version" in locals() else "unknown",
+            "prompt_last_updated": (
+                prompt_last_updated if "prompt_last_updated" in locals() else "unknown"
+            ),
         }
 
     # Default to research workflow if no tool response

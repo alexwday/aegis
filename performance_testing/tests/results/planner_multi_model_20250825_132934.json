@@ -1,0 +1,3112 @@
+{
+  "metadata": {
+    "name": "Planner Agent Test Suite",
+    "description": "Test scenarios for the Planner agent - database selection and query intent generation",
+    "version": "1.0.0",
+    "default_thresholds": {
+      "max_latency_ms": 5000,
+      "min_confidence": 0.8,
+      "max_tokens": 800,
+      "max_cost": 0.15
+    },
+    "model_comparison": {
+      "small": {
+        "total_tests": 17,
+        "passed": 6,
+        "failed": 11,
+        "success_rate": 35.294117647058826,
+        "latency": {
+          "mean": 1880.8807765736299,
+          "median": 1626.1260509490967,
+          "min": 1131.9169998168945,
+          "max": 3727.558135986328,
+          "stdev": 737.6891163327335
+        },
+        "tokens": {
+          "total": 51088,
+          "mean": 3005.176470588235
+        },
+        "cost": {
+          "total": 0.005403,
+          "mean": 0.0003178235294117647
+        },
+        "duration_seconds": 31.97836
+      },
+      "medium": {
+        "total_tests": 17,
+        "passed": 13,
+        "failed": 4,
+        "success_rate": 76.47058823529412,
+        "latency": {
+          "mean": 2053.6147285910215,
+          "median": 1821.8262195587158,
+          "min": 943.7570571899414,
+          "max": 6352.303981781006,
+          "stdev": 1263.902924713211
+        },
+        "tokens": {
+          "total": 49900,
+          "mean": 2935.294117647059
+        },
+        "cost": {
+          "total": 0.015502,
+          "mean": 0.0009118823529411764
+        },
+        "duration_seconds": 34.914685
+      },
+      "large": {
+        "total_tests": 17,
+        "passed": 8,
+        "failed": 9,
+        "success_rate": 47.05882352941176,
+        "latency": {
+          "mean": 3181.7845737232883,
+          "median": 2902.1780490875244,
+          "min": 1216.9508934020996,
+          "max": 9675.336837768555,
+          "stdev": 2115.9512739618767
+        },
+        "tokens": {
+          "total": 50396,
+          "mean": 2964.470588235294
+        },
+        "cost": {
+          "total": 0.052673,
+          "mean": 0.0030984117647058825
+        },
+        "duration_seconds": 54.093617
+      }
+    }
+  },
+  "summary": {
+    "total_tests": 51,
+    "passed": 27,
+    "failed": 24,
+    "success_rate": 52.94117647058824,
+    "latency": {
+      "mean": 2372.093359629313,
+      "median": 1868.013858795166,
+      "min": 943.7570571899414,
+      "max": 9675.336837768555,
+      "stdev": 1567.6324901449657
+    },
+    "tokens": {
+      "total": 151384,
+      "mean": 2968.3137254901962
+    },
+    "cost": {
+      "total": 0.073578,
+      "mean": 0.0014427058823529412
+    }
+  },
+  "results": [
+    {
+      "scenario_id": "planner_001",
+      "scenario_name": "Management Commentary - Digital Transformation",
+      "success": true,
+      "actual_output": {
+        "status": "success",
+        "databases": [
+          {
+            "database_id": "transcripts",
+            "query_intent": "Extract RBC management's discussion and commentary on digital transformation from Q1 FY2025 earnings call transcripts, including management remarks, guidance, and insights."
+          }
+        ],
+        "tokens_used": 3622,
+        "cost": 0.000412
+      },
+      "expected_output": {
+        "status": "success",
+        "clarifier_banks": {
+          "status": "success",
+          "bank_ids": [
+            1
+          ],
+          "banks_detail": {
+            "1": {
+              "name": "Royal Bank of Canada",
+              "symbol": "RY"
+            }
+          }
+        },
+        "clarifier_periods": {
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2025,
+              "quarters": [
+                "Q1"
+              ]
+            }
+          }
+        },
+        "databases": [
+          "transcripts"
+        ]
+      },
+      "latency_ms": 3727.558135986328,
+      "tokens_used": 3622,
+      "cost": 0.000412,
+      "confidence": null,
+      "error": null,
+      "model_used": "small",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "[\n  {\n    \"role\": \"user\",\n    \"content\": \"What did RBC management say about digital transformation in Q1 2025?\"\n  }\n]",
+      "timestamp": "2025-08-25T13:27:37.710991"
+    },
+    {
+      "scenario_id": "planner_002",
+      "scenario_name": "Efficiency Ratio Comparison",
+      "success": false,
+      "actual_output": {
+        "status": "success",
+        "databases": [
+          {
+            "database_id": "benchmarking",
+            "query_intent": "Calculate the efficiency ratio for RBC and TD for Q2 FY2025 and compare the results."
+          }
+        ],
+        "tokens_used": 3271,
+        "cost": 0.000338
+      },
+      "expected_output": {
+        "status": "success",
+        "clarifier_banks": {
+          "status": "success",
+          "bank_ids": [
+            1,
+            2
+          ],
+          "banks_detail": {
+            "1": {
+              "name": "Royal Bank of Canada",
+              "symbol": "RY"
+            },
+            "2": {
+              "name": "Toronto-Dominion Bank",
+              "symbol": "TD"
+            }
+          }
+        },
+        "clarifier_periods": {
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2025,
+              "quarters": [
+                "Q2"
+              ]
+            }
+          }
+        },
+        "databases": [
+          "benchmarking",
+          "rts"
+        ]
+      },
+      "latency_ms": 1432.7800273895264,
+      "tokens_used": 3271,
+      "cost": 0.000338,
+      "confidence": null,
+      "error": "Expected databases ['benchmarking', 'rts'], got ['benchmarking']",
+      "model_used": "small",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "[\n  {\n    \"role\": \"user\",\n    \"content\": \"Compare the efficiency ratios between RBC and TD for Q2 2025\"\n  }\n]",
+      "timestamp": "2025-08-25T13:27:39.144053"
+    },
+    {
+      "scenario_id": "planner_003",
+      "scenario_name": "Capital Ratios Query",
+      "success": false,
+      "actual_output": {
+        "status": "success",
+        "databases": [
+          {
+            "database_id": "benchmarking",
+            "query_intent": "Retrieve the CET1 capital ratios for the Big Six Canadian banks (Royal Bank of Canada, Toronto-Dominion Bank, Bank of Montreal, Bank of Nova Scotia, Canadian Imperial Bank of Commerce, National Bank of Canada) for Q3 FY2024, and compare their rankings."
+          }
+        ],
+        "tokens_used": 3488,
+        "cost": 0.000367
+      },
+      "expected_output": {
+        "status": "success",
+        "clarifier_banks": {
+          "status": "success",
+          "bank_ids": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "banks_detail": {
+            "1": {
+              "name": "Royal Bank of Canada",
+              "symbol": "RY"
+            },
+            "2": {
+              "name": "Toronto-Dominion Bank",
+              "symbol": "TD"
+            },
+            "3": {
+              "name": "Bank of Montreal",
+              "symbol": "BMO"
+            },
+            "4": {
+              "name": "Bank of Nova Scotia",
+              "symbol": "BNS"
+            },
+            "5": {
+              "name": "Canadian Imperial Bank of Commerce",
+              "symbol": "CM"
+            },
+            "6": {
+              "name": "National Bank of Canada",
+              "symbol": "NA"
+            }
+          }
+        },
+        "clarifier_periods": {
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2024,
+              "quarters": [
+                "Q3"
+              ]
+            }
+          }
+        },
+        "databases": [
+          "benchmarking",
+          "pillar3"
+        ]
+      },
+      "latency_ms": 2375.7688999176025,
+      "tokens_used": 3488,
+      "cost": 0.000367,
+      "confidence": null,
+      "error": "Expected databases ['benchmarking', 'pillar3'], got ['benchmarking']",
+      "model_used": "small",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "[\n  {\n    \"role\": \"user\",\n    \"content\": \"What are the CET1 ratios for the Big Six banks in Q3 2024?\"\n  }\n]",
+      "timestamp": "2025-08-25T13:27:41.520103"
+    },
+    {
+      "scenario_id": "planner_004",
+      "scenario_name": "Comprehensive Credit Analysis",
+      "success": false,
+      "actual_output": {
+        "status": "success",
+        "databases": [
+          {
+            "database_id": "transcripts",
+            "query_intent": "Extract RBC's management commentary and discussion from Q1 FY2025 earnings call transcripts regarding credit performance, including management explanations, guidance, and insights."
+          }
+        ],
+        "tokens_used": 3478,
+        "cost": 0.000382
+      },
+      "expected_output": {
+        "status": "success",
+        "clarifier_banks": {
+          "status": "success",
+          "bank_ids": [
+            1
+          ],
+          "banks_detail": {
+            "1": {
+              "name": "Royal Bank of Canada",
+              "symbol": "RY"
+            }
+          }
+        },
+        "clarifier_periods": {
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2025,
+              "quarters": [
+                "Q1"
+              ]
+            }
+          }
+        },
+        "databases": [
+          "benchmarking",
+          "rts",
+          "transcripts"
+        ]
+      },
+      "latency_ms": 3128.2973289489746,
+      "tokens_used": 3478,
+      "cost": 0.000382,
+      "confidence": null,
+      "error": "Expected databases ['benchmarking', 'rts', 'transcripts'], got ['transcripts']",
+      "model_used": "small",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "[\n  {\n    \"role\": \"user\",\n    \"content\": \"Analyze RBC's credit performance in Q1 2025 - what did management say and what are the actual numbers?\"\n  }\n]",
+      "timestamp": "2025-08-25T13:27:44.648720"
+    },
+    {
+      "scenario_id": "planner_005",
+      "scenario_name": "NIM Trend Analysis",
+      "success": false,
+      "actual_output": {
+        "status": "success",
+        "databases": [
+          {
+            "database_id": "benchmarking",
+            "query_intent": "Calculate the Net Interest Margin (NIM) trend for TD Bank across Q1, Q2, Q3, and Q4 FY2024 by extracting the NIM data from the benchmarking database for each quarter and comparing the values to show the trend."
+          }
+        ],
+        "tokens_used": 3402,
+        "cost": 0.000357
+      },
+      "expected_output": {
+        "status": "success",
+        "clarifier_banks": {
+          "status": "success",
+          "bank_ids": [
+            2
+          ],
+          "banks_detail": {
+            "2": {
+              "name": "Toronto-Dominion Bank",
+              "symbol": "TD"
+            }
+          }
+        },
+        "clarifier_periods": {
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2024,
+              "quarters": [
+                "Q1",
+                "Q2",
+                "Q3",
+                "Q4"
+              ]
+            }
+          }
+        },
+        "databases": [
+          "benchmarking",
+          "rts"
+        ]
+      },
+      "latency_ms": 1492.583990097046,
+      "tokens_used": 3402,
+      "cost": 0.000357,
+      "confidence": null,
+      "error": "Expected databases ['benchmarking', 'rts'], got ['benchmarking']",
+      "model_used": "small",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "[\n  {\n    \"role\": \"user\",\n    \"content\": \"Show me the NIM trend for TD Bank from Q1 to Q4 2024\"\n  }\n]",
+      "timestamp": "2025-08-25T13:27:46.141554"
+    },
+    {
+      "scenario_id": "planner_006",
+      "scenario_name": "Business Segment Analysis",
+      "success": false,
+      "actual_output": {
+        "status": "success",
+        "databases": [
+          {
+            "database_id": "benchmarking",
+            "query_intent": "Calculate the performance metrics (such as revenue, net income, and segment-specific performance indicators) for RBC's wealth management segment in Q2 FY2025, and compare these metrics to Q1 FY2025."
+          }
+        ],
+        "tokens_used": 3209,
+        "cost": 0.000329
+      },
+      "expected_output": {
+        "status": "success",
+        "clarifier_banks": {
+          "status": "success",
+          "bank_ids": [
+            1
+          ],
+          "banks_detail": {
+            "1": {
+              "name": "Royal Bank of Canada",
+              "symbol": "RY"
+            }
+          }
+        },
+        "clarifier_periods": {
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2025,
+              "quarters": [
+                "Q2"
+              ]
+            }
+          }
+        },
+        "databases": [
+          "benchmarking",
+          "rts"
+        ]
+      },
+      "latency_ms": 1422.111988067627,
+      "tokens_used": 3209,
+      "cost": 0.000329,
+      "confidence": null,
+      "error": "Expected databases ['benchmarking', 'rts'], got ['benchmarking']",
+      "model_used": "small",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "[\n  {\n    \"role\": \"user\",\n    \"content\": \"What's the performance of RBC's wealth management segment in Q2 2025?\"\n  }\n]",
+      "timestamp": "2025-08-25T13:27:47.563839"
+    },
+    {
+      "scenario_id": "planner_007",
+      "scenario_name": "Forward Guidance Query",
+      "success": true,
+      "actual_output": {
+        "status": "success",
+        "databases": [
+          {
+            "database_id": "transcripts",
+            "query_intent": "Extract BMO's management guidance for fiscal year 2025 from their latest earnings call transcript, including any forward-looking statements, outlook, and strategic initiatives discussed."
+          }
+        ],
+        "tokens_used": 2150,
+        "cost": 0.000227
+      },
+      "expected_output": {
+        "status": "success",
+        "clarifier_banks": {
+          "status": "success",
+          "bank_ids": [
+            3
+          ],
+          "banks_detail": {
+            "3": {
+              "name": "Bank of Montreal",
+              "symbol": "BMO"
+            }
+          }
+        },
+        "clarifier_periods": {
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2025,
+              "quarters": [
+                "Q3"
+              ]
+            }
+          }
+        },
+        "databases": [
+          "transcripts"
+        ]
+      },
+      "latency_ms": 1929.0719032287598,
+      "tokens_used": 2150,
+      "cost": 0.000227,
+      "confidence": null,
+      "error": null,
+      "model_used": "small",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "[\n  {\n    \"role\": \"user\",\n    \"content\": \"What guidance did BMO provide for fiscal 2025 in their latest call?\"\n  }\n]",
+      "timestamp": "2025-08-25T13:27:49.493058"
+    },
+    {
+      "scenario_id": "planner_008",
+      "scenario_name": "Credit Risk Analysis",
+      "success": false,
+      "actual_output": {
+        "status": "success",
+        "databases": [
+          {
+            "database_id": "benchmarking",
+            "query_intent": "Extract Scotia's credit risk metrics such as loan loss provisions, non-performing loans, and risk-weighted assets for Q1 FY2025, and compare these metrics to previous quarters. Additionally, identify any trend or changes in credit risk profile."
+          },
+          {
+            "database_id": "transcripts",
+            "query_intent": "Find all management commentary and discussions related to Scotia's credit risk metrics, risk management strategies, and outlook for Q1 FY2025 earnings call, including explanations, guidance, and management's views on credit risk."
+          }
+        ],
+        "tokens_used": 3332,
+        "cost": 0.000354
+      },
+      "expected_output": {
+        "status": "success",
+        "clarifier_banks": {
+          "status": "success",
+          "bank_ids": [
+            4
+          ],
+          "banks_detail": {
+            "4": {
+              "name": "Bank of Nova Scotia",
+              "symbol": "BNS"
+            }
+          }
+        },
+        "clarifier_periods": {
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2025,
+              "quarters": [
+                "Q1"
+              ]
+            }
+          }
+        },
+        "databases": [
+          "benchmarking",
+          "pillar3",
+          "rts",
+          "transcripts"
+        ]
+      },
+      "latency_ms": 2408.751964569092,
+      "tokens_used": 3332,
+      "cost": 0.000354,
+      "confidence": null,
+      "error": "Expected databases ['benchmarking', 'pillar3', 'rts', 'transcripts'], got ['benchmarking', 'transcripts']",
+      "model_used": "small",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "[\n  {\n    \"role\": \"user\",\n    \"content\": \"Analyze Scotia's credit risk metrics and management commentary for Q1 2025\"\n  }\n]",
+      "timestamp": "2025-08-25T13:27:51.902011"
+    },
+    {
+      "scenario_id": "planner_009",
+      "scenario_name": "ROE Ranking Query",
+      "success": false,
+      "actual_output": {
+        "status": "success",
+        "databases": [
+          {
+            "database_id": "benchmarking",
+            "query_intent": "Retrieve the ROE (Return on Equity) for all Canadian banks (Royal Bank of Canada, Toronto-Dominion Bank, Bank of Montreal, Bank of Nova Scotia, Canadian Imperial Bank of Commerce, National Bank of Canada) for Q2 FY2025 and rank them from highest to lowest."
+          }
+        ],
+        "tokens_used": 3484,
+        "cost": 0.000367
+      },
+      "expected_output": {
+        "status": "success",
+        "clarifier_banks": {
+          "status": "success",
+          "bank_ids": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "banks_detail": {
+            "1": {
+              "name": "Royal Bank of Canada",
+              "symbol": "RY"
+            },
+            "2": {
+              "name": "Toronto-Dominion Bank",
+              "symbol": "TD"
+            },
+            "3": {
+              "name": "Bank of Montreal",
+              "symbol": "BMO"
+            },
+            "4": {
+              "name": "Bank of Nova Scotia",
+              "symbol": "BNS"
+            },
+            "5": {
+              "name": "Canadian Imperial Bank of Commerce",
+              "symbol": "CM"
+            },
+            "6": {
+              "name": "National Bank of Canada",
+              "symbol": "NA"
+            }
+          }
+        },
+        "clarifier_periods": {
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2025,
+              "quarters": [
+                "Q2"
+              ]
+            }
+          }
+        },
+        "databases": [
+          "benchmarking",
+          "rts"
+        ]
+      },
+      "latency_ms": 2504.478931427002,
+      "tokens_used": 3484,
+      "cost": 0.000367,
+      "confidence": null,
+      "error": "Expected databases ['benchmarking', 'rts'], got ['benchmarking']",
+      "model_used": "small",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "[\n  {\n    \"role\": \"user\",\n    \"content\": \"Rank all Canadian banks by ROE for Q2 2025\"\n  }\n]",
+      "timestamp": "2025-08-25T13:27:54.406665"
+    },
+    {
+      "scenario_id": "planner_010",
+      "scenario_name": "Detailed Earnings Query",
+      "success": false,
+      "actual_output": {
+        "status": "no_databases",
+        "reason": "The user explicitly requests a report to shareholders, which is not covered by the available databases (transcripts or pre-generated reports).",
+        "databases": [],
+        "tokens_used": 2151,
+        "cost": 0.000227
+      },
+      "expected_output": {
+        "status": "success",
+        "clarifier_banks": {
+          "status": "success",
+          "bank_ids": [
+            5
+          ],
+          "banks_detail": {
+            "5": {
+              "name": "Canadian Imperial Bank of Commerce",
+              "symbol": "CM"
+            }
+          }
+        },
+        "clarifier_periods": {
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2025,
+              "quarters": [
+                "Q3"
+              ]
+            }
+          }
+        },
+        "databases": [
+          "rts"
+        ]
+      },
+      "latency_ms": 1826.0021209716797,
+      "tokens_used": 2151,
+      "cost": 0.000227,
+      "confidence": null,
+      "error": "Expected status 'success', got 'no_databases' | Expected databases ['rts'], got []",
+      "model_used": "small",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "[\n  {\n    \"role\": \"user\",\n    \"content\": \"Get CIBC's detailed earnings breakdown from their Q3 2025 report to shareholders\"\n  }\n]",
+      "timestamp": "2025-08-25T13:27:56.232868"
+    },
+    {
+      "scenario_id": "planner_011",
+      "scenario_name": "Transcript Call Summary Request",
+      "success": true,
+      "actual_output": {
+        "status": "success",
+        "databases": [
+          {
+            "database_id": "reports",
+            "query_intent": "Extract the transcript call summary report for RBC for Q2 FY2025, including all key themes and analysis from the earnings call."
+          }
+        ],
+        "tokens_used": 3248,
+        "cost": 0.000337
+      },
+      "expected_output": {
+        "status": "success",
+        "clarifier_banks": {
+          "status": "success",
+          "bank_ids": [
+            1
+          ],
+          "banks_detail": {
+            "1": {
+              "name": "Royal Bank of Canada",
+              "symbol": "RY"
+            }
+          }
+        },
+        "clarifier_periods": {
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2025,
+              "quarters": [
+                "Q2"
+              ]
+            }
+          }
+        },
+        "databases": [
+          "reports"
+        ]
+      },
+      "latency_ms": 1131.9169998168945,
+      "tokens_used": 3248,
+      "cost": 0.000337,
+      "confidence": null,
+      "error": null,
+      "model_used": "small",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "[\n  {\n    \"role\": \"user\",\n    \"content\": \"Show me the transcript call summary report for RBC's Q2 2025\"\n  }\n]",
+      "timestamp": "2025-08-25T13:27:57.364982"
+    },
+    {
+      "scenario_id": "planner_012",
+      "scenario_name": "Key Themes Analysis",
+      "success": true,
+      "actual_output": {
+        "status": "success",
+        "databases": [
+          {
+            "database_id": "reports",
+            "query_intent": "Retrieve the 'Transcript Key Themes' report for TD Bank for the latest available period, which is FY2025 Q3, to identify the key themes discussed during the earnings call."
+          }
+        ],
+        "tokens_used": 2151,
+        "cost": 0.000228
+      },
+      "expected_output": {
+        "status": "success",
+        "clarifier_banks": {
+          "status": "success",
+          "bank_ids": [
+            2
+          ],
+          "banks_detail": {
+            "2": {
+              "name": "Toronto-Dominion Bank",
+              "symbol": "TD"
+            }
+          }
+        },
+        "clarifier_periods": {
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2025,
+              "quarters": [
+                "Q3"
+              ]
+            }
+          }
+        },
+        "databases": [
+          "reports"
+        ]
+      },
+      "latency_ms": 1626.1260509490967,
+      "tokens_used": 2151,
+      "cost": 0.000228,
+      "confidence": null,
+      "error": null,
+      "model_used": "small",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "[\n  {\n    \"role\": \"user\",\n    \"content\": \"What are the key themes from TD's latest earnings calls?\"\n  }\n]",
+      "timestamp": "2025-08-25T13:27:58.991270"
+    },
+    {
+      "scenario_id": "planner_013",
+      "scenario_name": "NIM Analysis with Context",
+      "success": false,
+      "actual_output": {
+        "status": "success",
+        "databases": [
+          {
+            "database_id": "benchmarking",
+            "query_intent": "Calculate RBC's Net Interest Margin (NIM) for Q1 FY2025 and compare it to Q4 FY2024, including trend analysis. Additionally, extract management commentary from RBC's Q1 FY2025 earnings call explaining the changes in NIM, focusing on strategic discussions and guidance."
+          }
+        ],
+        "tokens_used": 3292,
+        "cost": 0.000345
+      },
+      "expected_output": {
+        "status": "success",
+        "clarifier_banks": {
+          "status": "success",
+          "bank_ids": [
+            1
+          ],
+          "banks_detail": {
+            "1": {
+              "name": "Royal Bank of Canada",
+              "symbol": "RY"
+            }
+          }
+        },
+        "clarifier_periods": {
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2025,
+              "quarters": [
+                "Q1"
+              ]
+            }
+          }
+        },
+        "databases": [
+          "benchmarking",
+          "rts",
+          "transcripts"
+        ]
+      },
+      "latency_ms": 1275.5019664764404,
+      "tokens_used": 3292,
+      "cost": 0.000345,
+      "confidence": null,
+      "error": "Expected databases ['benchmarking', 'rts', 'transcripts'], got ['benchmarking']",
+      "model_used": "small",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "[\n  {\n    \"role\": \"user\",\n    \"content\": \"What's RBC's NIM for Q1 2025 and how did management explain the changes?\"\n  }\n]",
+      "timestamp": "2025-08-25T13:28:00.266953"
+    },
+    {
+      "scenario_id": "planner_014",
+      "scenario_name": "US Bank 10-Q Analysis",
+      "success": false,
+      "actual_output": {
+        "status": "no_databases",
+        "reason": "The user is requesting specific 10-Q filing details, which are source documents and not covered by the available databases (transcripts, reports, key themes, readthroughs, blackline). Therefore, no databases are needed.",
+        "databases": [],
+        "tokens_used": 2097,
+        "cost": 0.000217
+      },
+      "expected_output": {
+        "status": "success",
+        "clarifier_banks": {
+          "status": "success",
+          "bank_ids": [
+            10
+          ],
+          "banks_detail": {
+            "10": {
+              "name": "JPMorgan Chase",
+              "symbol": "JPM"
+            }
+          }
+        },
+        "clarifier_periods": {
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2025,
+              "quarters": [
+                "Q2"
+              ]
+            }
+          }
+        },
+        "databases": [
+          "rts"
+        ]
+      },
+      "latency_ms": 1205.2319049835205,
+      "tokens_used": 2097,
+      "cost": 0.000217,
+      "confidence": null,
+      "error": "Expected status 'success', got 'no_databases' | Expected databases ['rts'], got []",
+      "model_used": "small",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "[\n  {\n    \"role\": \"user\",\n    \"content\": \"Get JPMorgan's Q2 2025 10-Q filing details\"\n  }\n]",
+      "timestamp": "2025-08-25T13:28:01.472373"
+    },
+    {
+      "scenario_id": "planner_015",
+      "scenario_name": "Simple Line Item Query",
+      "success": false,
+      "actual_output": {
+        "status": "success",
+        "databases": [
+          {
+            "database_id": "reports",
+            "query_intent": "Retrieve Scotia's net income for Q3 FY2025 from the pre-generated reports database, specifically from the 'Transcript Call Summaries' or 'RTS Blackline' reports, and compare it to previous quarters if available."
+          }
+        ],
+        "tokens_used": 2169,
+        "cost": 0.000232
+      },
+      "expected_output": {
+        "status": "success",
+        "clarifier_banks": {
+          "status": "success",
+          "bank_ids": [
+            4
+          ],
+          "banks_detail": {
+            "4": {
+              "name": "Bank of Nova Scotia",
+              "symbol": "BNS"
+            }
+          }
+        },
+        "clarifier_periods": {
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2025,
+              "quarters": [
+                "Q3"
+              ]
+            }
+          }
+        },
+        "databases": [
+          "benchmarking",
+          "rts"
+        ]
+      },
+      "latency_ms": 1277.8146266937256,
+      "tokens_used": 2169,
+      "cost": 0.000232,
+      "confidence": null,
+      "error": "Expected databases ['benchmarking', 'rts'], got ['reports']",
+      "model_used": "small",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "[\n  {\n    \"role\": \"user\",\n    \"content\": \"What was Scotia's net income for Q3 2025?\"\n  }\n]",
+      "timestamp": "2025-08-25T13:28:02.750377"
+    },
+    {
+      "scenario_id": "planner_016",
+      "scenario_name": "CM Readthrough Report Request",
+      "success": true,
+      "actual_output": {
+        "status": "success",
+        "databases": [
+          {
+            "database_id": "reports",
+            "query_intent": "Retrieve the 'CM readthrough' pre-generated report for RBC for Q2 FY2025, including all relevant analysis and key themes from the Capital Markets division."
+          }
+        ],
+        "tokens_used": 3276,
+        "cost": 0.000343
+      },
+      "expected_output": {
+        "status": "success",
+        "clarifier_banks": {
+          "status": "success",
+          "bank_ids": [
+            1
+          ],
+          "banks_detail": {
+            "1": {
+              "name": "Royal Bank of Canada",
+              "symbol": "RY"
+            }
+          }
+        },
+        "clarifier_periods": {
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2025,
+              "quarters": [
+                "Q2"
+              ]
+            }
+          }
+        },
+        "databases": [
+          "reports"
+        ]
+      },
+      "latency_ms": 1220.3340530395508,
+      "tokens_used": 3276,
+      "cost": 0.000343,
+      "confidence": null,
+      "error": null,
+      "model_used": "small",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "[\n  {\n    \"role\": \"user\",\n    \"content\": \"Get me the CM readthrough report for RBC Q2 2025\"\n  }\n]",
+      "timestamp": "2025-08-25T13:28:03.970810"
+    },
+    {
+      "scenario_id": "planner_017",
+      "scenario_name": "RTS Blackline Report Request",
+      "success": true,
+      "actual_output": {
+        "status": "success",
+        "databases": [
+          {
+            "database_id": "reports",
+            "query_intent": "Retrieve the RTS Blackline report for TD's Q1 FY2025 to analyze the comparison of shareholder reports and identify changes or discrepancies in the financial disclosures and narrative sections."
+          }
+        ],
+        "tokens_used": 3268,
+        "cost": 0.000341
+      },
+      "expected_output": {
+        "status": "success",
+        "clarifier_banks": {
+          "status": "success",
+          "bank_ids": [
+            2
+          ],
+          "banks_detail": {
+            "2": {
+              "name": "Toronto-Dominion Bank",
+              "symbol": "TD"
+            }
+          }
+        },
+        "clarifier_periods": {
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2025,
+              "quarters": [
+                "Q1"
+              ]
+            }
+          }
+        },
+        "databases": [
+          "reports"
+        ]
+      },
+      "latency_ms": 1990.6423091888428,
+      "tokens_used": 3268,
+      "cost": 0.000341,
+      "confidence": null,
+      "error": null,
+      "model_used": "small",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "[\n  {\n    \"role\": \"user\",\n    \"content\": \"Show the RTS blackline comparison for TD's Q1 2025\"\n  }\n]",
+      "timestamp": "2025-08-25T13:28:05.961574"
+    },
+    {
+      "scenario_id": "planner_001",
+      "scenario_name": "Management Commentary - Digital Transformation",
+      "success": true,
+      "actual_output": {
+        "status": "success",
+        "databases": [
+          {
+            "database_id": "transcripts",
+            "query_intent": "Find all mentions and discussions by Royal Bank of Canada (RBC) management about digital transformation initiatives, strategies, investments, and progress in the Q1 2025 earnings call transcript, including any forward guidance, outlook, or explanations provided during the prepared remarks and Q&A sessions."
+          }
+        ],
+        "tokens_used": 3205,
+        "cost": 0.000986
+      },
+      "expected_output": {
+        "status": "success",
+        "clarifier_banks": {
+          "status": "success",
+          "bank_ids": [
+            1
+          ],
+          "banks_detail": {
+            "1": {
+              "name": "Royal Bank of Canada",
+              "symbol": "RY"
+            }
+          }
+        },
+        "clarifier_periods": {
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2025,
+              "quarters": [
+                "Q1"
+              ]
+            }
+          }
+        },
+        "databases": [
+          "transcripts"
+        ]
+      },
+      "latency_ms": 1513.8180255889893,
+      "tokens_used": 3205,
+      "cost": 0.000986,
+      "confidence": null,
+      "error": null,
+      "model_used": "medium",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "[\n  {\n    \"role\": \"user\",\n    \"content\": \"What did RBC management say about digital transformation in Q1 2025?\"\n  }\n]",
+      "timestamp": "2025-08-25T13:28:07.476470"
+    },
+    {
+      "scenario_id": "planner_002",
+      "scenario_name": "Efficiency Ratio Comparison",
+      "success": true,
+      "actual_output": {
+        "status": "success",
+        "databases": [
+          {
+            "database_id": "benchmarking",
+            "query_intent": "Extract the efficiency ratios for Royal Bank of Canada (RBC) and Toronto-Dominion Bank (TD) for Q2 FY2025 and provide a direct comparison between the two banks."
+          },
+          {
+            "database_id": "rts",
+            "query_intent": "Extract the efficiency ratios for Royal Bank of Canada (RBC) and Toronto-Dominion Bank (TD) for Q2 FY2025 from the report to shareholders documents and provide a direct comparison between the two banks."
+          }
+        ],
+        "tokens_used": 3278,
+        "cost": 0.001019
+      },
+      "expected_output": {
+        "status": "success",
+        "clarifier_banks": {
+          "status": "success",
+          "bank_ids": [
+            1,
+            2
+          ],
+          "banks_detail": {
+            "1": {
+              "name": "Royal Bank of Canada",
+              "symbol": "RY"
+            },
+            "2": {
+              "name": "Toronto-Dominion Bank",
+              "symbol": "TD"
+            }
+          }
+        },
+        "clarifier_periods": {
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2025,
+              "quarters": [
+                "Q2"
+              ]
+            }
+          }
+        },
+        "databases": [
+          "benchmarking",
+          "rts"
+        ]
+      },
+      "latency_ms": 2008.5728168487549,
+      "tokens_used": 3278,
+      "cost": 0.001019,
+      "confidence": null,
+      "error": null,
+      "model_used": "medium",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "[\n  {\n    \"role\": \"user\",\n    \"content\": \"Compare the efficiency ratios between RBC and TD for Q2 2025\"\n  }\n]",
+      "timestamp": "2025-08-25T13:28:09.485319"
+    },
+    {
+      "scenario_id": "planner_003",
+      "scenario_name": "Capital Ratios Query",
+      "success": true,
+      "actual_output": {
+        "status": "success",
+        "databases": [
+          {
+            "database_id": "benchmarking",
+            "query_intent": "Extract the CET1 ratios for the Big Six Canadian banks (Royal Bank of Canada, Toronto-Dominion Bank, Bank of Montreal, Bank of Nova Scotia, Canadian Imperial Bank of Commerce, National Bank of Canada) for Q3 FY2024, including all relevant capital adequacy metrics."
+          },
+          {
+            "database_id": "pillar3",
+            "query_intent": "Extract the CET1 ratios and related Basel III regulatory capital adequacy metrics for the Big Six Canadian banks (Royal Bank of Canada, Toronto-Dominion Bank, Bank of Montreal, Bank of Nova Scotia, Canadian Imperial Bank of Commerce, National Bank of Canada) for Q3 FY2024, including risk-weighted assets and leverage ratios."
+          }
+        ],
+        "tokens_used": 3468,
+        "cost": 0.00109
+      },
+      "expected_output": {
+        "status": "success",
+        "clarifier_banks": {
+          "status": "success",
+          "bank_ids": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "banks_detail": {
+            "1": {
+              "name": "Royal Bank of Canada",
+              "symbol": "RY"
+            },
+            "2": {
+              "name": "Toronto-Dominion Bank",
+              "symbol": "TD"
+            },
+            "3": {
+              "name": "Bank of Montreal",
+              "symbol": "BMO"
+            },
+            "4": {
+              "name": "Bank of Nova Scotia",
+              "symbol": "BNS"
+            },
+            "5": {
+              "name": "Canadian Imperial Bank of Commerce",
+              "symbol": "CM"
+            },
+            "6": {
+              "name": "National Bank of Canada",
+              "symbol": "NA"
+            }
+          }
+        },
+        "clarifier_periods": {
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2024,
+              "quarters": [
+                "Q3"
+              ]
+            }
+          }
+        },
+        "databases": [
+          "benchmarking",
+          "pillar3"
+        ]
+      },
+      "latency_ms": 2315.0253295898438,
+      "tokens_used": 3468,
+      "cost": 0.00109,
+      "confidence": null,
+      "error": null,
+      "model_used": "medium",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "[\n  {\n    \"role\": \"user\",\n    \"content\": \"What are the CET1 ratios for the Big Six banks in Q3 2024?\"\n  }\n]",
+      "timestamp": "2025-08-25T13:28:11.800585"
+    },
+    {
+      "scenario_id": "planner_004",
+      "scenario_name": "Comprehensive Credit Analysis",
+      "success": true,
+      "actual_output": {
+        "status": "success",
+        "databases": [
+          {
+            "database_id": "transcripts",
+            "query_intent": "Find all mentions and discussions by RBC management about credit performance in Q1 FY2025 earnings call, including explanations, outlook, and any forward guidance provided."
+          },
+          {
+            "database_id": "benchmarking",
+            "query_intent": "Extract RBC's key credit performance metrics for Q1 FY2025, including loan loss provisions, net impaired loans, and credit loss ratios."
+          },
+          {
+            "database_id": "rts",
+            "query_intent": "Provide RBC's detailed credit performance line items and analysis from the Q1 FY2025 report to shareholders, including loan loss provisions, net impaired loans, and credit loss ratios."
+          }
+        ],
+        "tokens_used": 3281,
+        "cost": 0.001027
+      },
+      "expected_output": {
+        "status": "success",
+        "clarifier_banks": {
+          "status": "success",
+          "bank_ids": [
+            1
+          ],
+          "banks_detail": {
+            "1": {
+              "name": "Royal Bank of Canada",
+              "symbol": "RY"
+            }
+          }
+        },
+        "clarifier_periods": {
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2025,
+              "quarters": [
+                "Q1"
+              ]
+            }
+          }
+        },
+        "databases": [
+          "benchmarking",
+          "rts",
+          "transcripts"
+        ]
+      },
+      "latency_ms": 2730.884075164795,
+      "tokens_used": 3281,
+      "cost": 0.001027,
+      "confidence": null,
+      "error": null,
+      "model_used": "medium",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "[\n  {\n    \"role\": \"user\",\n    \"content\": \"Analyze RBC's credit performance in Q1 2025 - what did management say and what are the actual numbers?\"\n  }\n]",
+      "timestamp": "2025-08-25T13:28:14.531649"
+    },
+    {
+      "scenario_id": "planner_005",
+      "scenario_name": "NIM Trend Analysis",
+      "success": true,
+      "actual_output": {
+        "status": "success",
+        "databases": [
+          {
+            "database_id": "benchmarking",
+            "query_intent": "Extract the net interest margin (NIM) trend for Toronto-Dominion Bank (TD) for Q1, Q2, Q3, and Q4 of fiscal year 2024, showing the quarter-over-quarter changes and overall trend throughout the year."
+          },
+          {
+            "database_id": "rts",
+            "query_intent": "Provide detailed financial data and official reported net interest margin (NIM) figures for Toronto-Dominion Bank (TD) for Q1, Q2, Q3, and Q4 of fiscal year 2024 to complement benchmarking data and ensure accuracy in the NIM trend analysis."
+          }
+        ],
+        "tokens_used": 3383,
+        "cost": 0.001059
+      },
+      "expected_output": {
+        "status": "success",
+        "clarifier_banks": {
+          "status": "success",
+          "bank_ids": [
+            2
+          ],
+          "banks_detail": {
+            "2": {
+              "name": "Toronto-Dominion Bank",
+              "symbol": "TD"
+            }
+          }
+        },
+        "clarifier_periods": {
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2024,
+              "quarters": [
+                "Q1",
+                "Q2",
+                "Q3",
+                "Q4"
+              ]
+            }
+          }
+        },
+        "databases": [
+          "benchmarking",
+          "rts"
+        ]
+      },
+      "latency_ms": 6352.303981781006,
+      "tokens_used": 3383,
+      "cost": 0.001059,
+      "confidence": null,
+      "error": null,
+      "model_used": "medium",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "[\n  {\n    \"role\": \"user\",\n    \"content\": \"Show me the NIM trend for TD Bank from Q1 to Q4 2024\"\n  }\n]",
+      "timestamp": "2025-08-25T13:28:20.884090"
+    },
+    {
+      "scenario_id": "planner_006",
+      "scenario_name": "Business Segment Analysis",
+      "success": true,
+      "actual_output": {
+        "status": "success",
+        "databases": [
+          {
+            "database_id": "benchmarking",
+            "query_intent": "Extract RBC's wealth management segment financial performance metrics including revenue, net income, assets under management, and other relevant line items for Q2 FY2025."
+          },
+          {
+            "database_id": "rts",
+            "query_intent": "Provide the detailed report to shareholders for RBC for Q2 FY2025 focusing on the wealth management segment performance, including narrative analysis, segment revenue, expenses, and profitability."
+          }
+        ],
+        "tokens_used": 3227,
+        "cost": 0.000999
+      },
+      "expected_output": {
+        "status": "success",
+        "clarifier_banks": {
+          "status": "success",
+          "bank_ids": [
+            1
+          ],
+          "banks_detail": {
+            "1": {
+              "name": "Royal Bank of Canada",
+              "symbol": "RY"
+            }
+          }
+        },
+        "clarifier_periods": {
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2025,
+              "quarters": [
+                "Q2"
+              ]
+            }
+          }
+        },
+        "databases": [
+          "benchmarking",
+          "rts"
+        ]
+      },
+      "latency_ms": 1868.013858795166,
+      "tokens_used": 3227,
+      "cost": 0.000999,
+      "confidence": null,
+      "error": null,
+      "model_used": "medium",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "[\n  {\n    \"role\": \"user\",\n    \"content\": \"What's the performance of RBC's wealth management segment in Q2 2025?\"\n  }\n]",
+      "timestamp": "2025-08-25T13:28:22.752180"
+    },
+    {
+      "scenario_id": "planner_007",
+      "scenario_name": "Forward Guidance Query",
+      "success": true,
+      "actual_output": {
+        "status": "success",
+        "databases": [
+          {
+            "database_id": "transcripts",
+            "query_intent": "Extract all management commentary and guidance provided by Bank of Montreal (BMO) for fiscal year 2025 from the Q3 FY2025 earnings call transcript, including any forward-looking statements, outlook, and strategic initiatives discussed by management."
+          }
+        ],
+        "tokens_used": 2100,
+        "cost": 0.000652
+      },
+      "expected_output": {
+        "status": "success",
+        "clarifier_banks": {
+          "status": "success",
+          "bank_ids": [
+            3
+          ],
+          "banks_detail": {
+            "3": {
+              "name": "Bank of Montreal",
+              "symbol": "BMO"
+            }
+          }
+        },
+        "clarifier_periods": {
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2025,
+              "quarters": [
+                "Q3"
+              ]
+            }
+          }
+        },
+        "databases": [
+          "transcripts"
+        ]
+      },
+      "latency_ms": 1332.5390815734863,
+      "tokens_used": 2100,
+      "cost": 0.000652,
+      "confidence": null,
+      "error": null,
+      "model_used": "medium",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "[\n  {\n    \"role\": \"user\",\n    \"content\": \"What guidance did BMO provide for fiscal 2025 in their latest call?\"\n  }\n]",
+      "timestamp": "2025-08-25T13:28:24.084882"
+    },
+    {
+      "scenario_id": "planner_008",
+      "scenario_name": "Credit Risk Analysis",
+      "success": false,
+      "actual_output": {
+        "status": "success",
+        "databases": [
+          {
+            "database_id": "benchmarking",
+            "query_intent": "Extract Bank of Nova Scotia's credit risk metrics for Q1 FY2025, including key credit risk line items such as loan loss provisions, impaired loans, and allowance for credit losses, and provide trend analysis if available."
+          },
+          {
+            "database_id": "pillar3",
+            "query_intent": "Provide Bank of Nova Scotia's Basel III regulatory credit risk disclosures for Q1 FY2025, including risk-weighted assets by credit risk category, CET1 capital ratio, Tier 1 capital ratio, total capital ratio, and any other relevant credit risk regulatory metrics."
+          },
+          {
+            "database_id": "transcripts",
+            "query_intent": "Find all management commentary and discussion related to credit risk for Bank of Nova Scotia in the Q1 FY2025 earnings call transcript, including explanations of credit risk trends, outlook, provisioning, and any strategic initiatives mentioned by management."
+          }
+        ],
+        "tokens_used": 3316,
+        "cost": 0.001052
+      },
+      "expected_output": {
+        "status": "success",
+        "clarifier_banks": {
+          "status": "success",
+          "bank_ids": [
+            4
+          ],
+          "banks_detail": {
+            "4": {
+              "name": "Bank of Nova Scotia",
+              "symbol": "BNS"
+            }
+          }
+        },
+        "clarifier_periods": {
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2025,
+              "quarters": [
+                "Q1"
+              ]
+            }
+          }
+        },
+        "databases": [
+          "benchmarking",
+          "pillar3",
+          "rts",
+          "transcripts"
+        ]
+      },
+      "latency_ms": 2879.425048828125,
+      "tokens_used": 3316,
+      "cost": 0.001052,
+      "confidence": null,
+      "error": "Expected databases ['benchmarking', 'pillar3', 'rts', 'transcripts'], got ['benchmarking', 'pillar3', 'transcripts']",
+      "model_used": "medium",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "[\n  {\n    \"role\": \"user\",\n    \"content\": \"Analyze Scotia's credit risk metrics and management commentary for Q1 2025\"\n  }\n]",
+      "timestamp": "2025-08-25T13:28:26.964544"
+    },
+    {
+      "scenario_id": "planner_009",
+      "scenario_name": "ROE Ranking Query",
+      "success": true,
+      "actual_output": {
+        "status": "success",
+        "databases": [
+          {
+            "database_id": "benchmarking",
+            "query_intent": "Extract the Return on Equity (ROE) metric for all major Canadian banks (Royal Bank of Canada, Toronto-Dominion Bank, Bank of Montreal, Bank of Nova Scotia, Canadian Imperial Bank of Commerce, National Bank of Canada) for Q2 FY2025 and rank them from highest to lowest ROE."
+          },
+          {
+            "database_id": "rts",
+            "query_intent": "Provide the official reported Return on Equity (ROE) figures for all major Canadian banks (Royal Bank of Canada, Toronto-Dominion Bank, Bank of Montreal, Bank of Nova Scotia, Canadian Imperial Bank of Commerce, National Bank of Canada) for Q2 FY2025 to support and verify the benchmarking data."
+          }
+        ],
+        "tokens_used": 3460,
+        "cost": 0.001087
+      },
+      "expected_output": {
+        "status": "success",
+        "clarifier_banks": {
+          "status": "success",
+          "bank_ids": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "banks_detail": {
+            "1": {
+              "name": "Royal Bank of Canada",
+              "symbol": "RY"
+            },
+            "2": {
+              "name": "Toronto-Dominion Bank",
+              "symbol": "TD"
+            },
+            "3": {
+              "name": "Bank of Montreal",
+              "symbol": "BMO"
+            },
+            "4": {
+              "name": "Bank of Nova Scotia",
+              "symbol": "BNS"
+            },
+            "5": {
+              "name": "Canadian Imperial Bank of Commerce",
+              "symbol": "CM"
+            },
+            "6": {
+              "name": "National Bank of Canada",
+              "symbol": "NA"
+            }
+          }
+        },
+        "clarifier_periods": {
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2025,
+              "quarters": [
+                "Q2"
+              ]
+            }
+          }
+        },
+        "databases": [
+          "benchmarking",
+          "rts"
+        ]
+      },
+      "latency_ms": 2238.7819290161133,
+      "tokens_used": 3460,
+      "cost": 0.001087,
+      "confidence": null,
+      "error": null,
+      "model_used": "medium",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "[\n  {\n    \"role\": \"user\",\n    \"content\": \"Rank all Canadian banks by ROE for Q2 2025\"\n  }\n]",
+      "timestamp": "2025-08-25T13:28:29.203481"
+    },
+    {
+      "scenario_id": "planner_010",
+      "scenario_name": "Detailed Earnings Query",
+      "success": false,
+      "actual_output": {
+        "status": "no_databases",
+        "reason": "The user requested CIBC's detailed earnings breakdown from their Q3 2025 report to shareholders. The available databases include 'reports' and 'transcripts' for CIBC Q3 2025, but neither contains the 'report to shareholders' documents or detailed earnings breakdown line items. The 'reports' database only contains specific pre-generated reports, and 'transcripts' contain management commentary, not detailed line item earnings breakdowns. Therefore, no suitable database is available to fulfill this request.",
+        "databases": [],
+        "tokens_used": 2144,
+        "cost": 0.000677
+      },
+      "expected_output": {
+        "status": "success",
+        "clarifier_banks": {
+          "status": "success",
+          "bank_ids": [
+            5
+          ],
+          "banks_detail": {
+            "5": {
+              "name": "Canadian Imperial Bank of Commerce",
+              "symbol": "CM"
+            }
+          }
+        },
+        "clarifier_periods": {
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2025,
+              "quarters": [
+                "Q3"
+              ]
+            }
+          }
+        },
+        "databases": [
+          "rts"
+        ]
+      },
+      "latency_ms": 1729.6578884124756,
+      "tokens_used": 2144,
+      "cost": 0.000677,
+      "confidence": null,
+      "error": "Expected status 'success', got 'no_databases' | Expected databases ['rts'], got []",
+      "model_used": "medium",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "[\n  {\n    \"role\": \"user\",\n    \"content\": \"Get CIBC's detailed earnings breakdown from their Q3 2025 report to shareholders\"\n  }\n]",
+      "timestamp": "2025-08-25T13:28:30.933353"
+    },
+    {
+      "scenario_id": "planner_011",
+      "scenario_name": "Transcript Call Summary Request",
+      "success": true,
+      "actual_output": {
+        "status": "success",
+        "databases": [
+          {
+            "database_id": "reports",
+            "query_intent": "Retrieve the transcript call summary report for Royal Bank of Canada (RBC) for Q2 FY2025."
+          }
+        ],
+        "tokens_used": 3172,
+        "cost": 0.000966
+      },
+      "expected_output": {
+        "status": "success",
+        "clarifier_banks": {
+          "status": "success",
+          "bank_ids": [
+            1
+          ],
+          "banks_detail": {
+            "1": {
+              "name": "Royal Bank of Canada",
+              "symbol": "RY"
+            }
+          }
+        },
+        "clarifier_periods": {
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2025,
+              "quarters": [
+                "Q2"
+              ]
+            }
+          }
+        },
+        "databases": [
+          "reports"
+        ]
+      },
+      "latency_ms": 1210.845947265625,
+      "tokens_used": 3172,
+      "cost": 0.000966,
+      "confidence": null,
+      "error": null,
+      "model_used": "medium",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "[\n  {\n    \"role\": \"user\",\n    \"content\": \"Show me the transcript call summary report for RBC's Q2 2025\"\n  }\n]",
+      "timestamp": "2025-08-25T13:28:32.144378"
+    },
+    {
+      "scenario_id": "planner_012",
+      "scenario_name": "Key Themes Analysis",
+      "success": true,
+      "actual_output": {
+        "status": "success",
+        "databases": [
+          {
+            "database_id": "reports",
+            "query_intent": "Extract the key themes from Toronto-Dominion Bank (TD) earnings calls for Q3 FY2025."
+          }
+        ],
+        "tokens_used": 2067,
+        "cost": 0.000635
+      },
+      "expected_output": {
+        "status": "success",
+        "clarifier_banks": {
+          "status": "success",
+          "bank_ids": [
+            2
+          ],
+          "banks_detail": {
+            "2": {
+              "name": "Toronto-Dominion Bank",
+              "symbol": "TD"
+            }
+          }
+        },
+        "clarifier_periods": {
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2025,
+              "quarters": [
+                "Q3"
+              ]
+            }
+          }
+        },
+        "databases": [
+          "reports"
+        ]
+      },
+      "latency_ms": 943.7570571899414,
+      "tokens_used": 2067,
+      "cost": 0.000635,
+      "confidence": null,
+      "error": null,
+      "model_used": "medium",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "[\n  {\n    \"role\": \"user\",\n    \"content\": \"What are the key themes from TD's latest earnings calls?\"\n  }\n]",
+      "timestamp": "2025-08-25T13:28:33.088301"
+    },
+    {
+      "scenario_id": "planner_013",
+      "scenario_name": "NIM Analysis with Context",
+      "success": true,
+      "actual_output": {
+        "status": "success",
+        "databases": [
+          {
+            "database_id": "benchmarking",
+            "query_intent": "Extract RBC's net interest margin (NIM) for Q1 FY2025 with detailed financial line item data."
+          },
+          {
+            "database_id": "rts",
+            "query_intent": "Provide RBC's report to shareholders for Q1 FY2025 including narrative and tabular financial data relevant to net interest margin (NIM) and any explanations of changes."
+          },
+          {
+            "database_id": "transcripts",
+            "query_intent": "Find all management commentary and explanations by RBC management regarding changes in net interest margin (NIM) during the Q1 FY2025 earnings call, including any discussion of reasons, outlook, or strategic factors affecting NIM."
+          }
+        ],
+        "tokens_used": 3280,
+        "cost": 0.001029
+      },
+      "expected_output": {
+        "status": "success",
+        "clarifier_banks": {
+          "status": "success",
+          "bank_ids": [
+            1
+          ],
+          "banks_detail": {
+            "1": {
+              "name": "Royal Bank of Canada",
+              "symbol": "RY"
+            }
+          }
+        },
+        "clarifier_periods": {
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2025,
+              "quarters": [
+                "Q1"
+              ]
+            }
+          }
+        },
+        "databases": [
+          "benchmarking",
+          "rts",
+          "transcripts"
+        ]
+      },
+      "latency_ms": 2589.221954345703,
+      "tokens_used": 3280,
+      "cost": 0.001029,
+      "confidence": null,
+      "error": null,
+      "model_used": "medium",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "[\n  {\n    \"role\": \"user\",\n    \"content\": \"What's RBC's NIM for Q1 2025 and how did management explain the changes?\"\n  }\n]",
+      "timestamp": "2025-08-25T13:28:35.677702"
+    },
+    {
+      "scenario_id": "planner_014",
+      "scenario_name": "US Bank 10-Q Analysis",
+      "success": false,
+      "actual_output": {
+        "status": "no_databases",
+        "reason": "The user requested JPMorgan's Q2 2025 10-Q filing details, which is a specific regulatory filing document. The available databases are 'reports' and 'transcripts' for Citigroup (C) Q2 2025 only, and do not include JPMorgan or 10-Q filings. Therefore, no databases are available to fulfill this request.",
+        "databases": [],
+        "tokens_used": 2109,
+        "cost": 0.000659
+      },
+      "expected_output": {
+        "status": "success",
+        "clarifier_banks": {
+          "status": "success",
+          "bank_ids": [
+            10
+          ],
+          "banks_detail": {
+            "10": {
+              "name": "JPMorgan Chase",
+              "symbol": "JPM"
+            }
+          }
+        },
+        "clarifier_periods": {
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2025,
+              "quarters": [
+                "Q2"
+              ]
+            }
+          }
+        },
+        "databases": [
+          "rts"
+        ]
+      },
+      "latency_ms": 1821.8262195587158,
+      "tokens_used": 2109,
+      "cost": 0.000659,
+      "confidence": null,
+      "error": "Expected status 'success', got 'no_databases' | Expected databases ['rts'], got []",
+      "model_used": "medium",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "[\n  {\n    \"role\": \"user\",\n    \"content\": \"Get JPMorgan's Q2 2025 10-Q filing details\"\n  }\n]",
+      "timestamp": "2025-08-25T13:28:37.499766"
+    },
+    {
+      "scenario_id": "planner_015",
+      "scenario_name": "Simple Line Item Query",
+      "success": false,
+      "actual_output": {
+        "status": "success",
+        "databases": [
+          {
+            "database_id": "reports",
+            "query_intent": "Extract Bank of Nova Scotia's net income for Q3 FY2025 from the pre-generated reports database."
+          }
+        ],
+        "tokens_used": 2068,
+        "cost": 0.000634
+      },
+      "expected_output": {
+        "status": "success",
+        "clarifier_banks": {
+          "status": "success",
+          "bank_ids": [
+            4
+          ],
+          "banks_detail": {
+            "4": {
+              "name": "Bank of Nova Scotia",
+              "symbol": "BNS"
+            }
+          }
+        },
+        "clarifier_periods": {
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2025,
+              "quarters": [
+                "Q3"
+              ]
+            }
+          }
+        },
+        "databases": [
+          "benchmarking",
+          "rts"
+        ]
+      },
+      "latency_ms": 1022.2411155700684,
+      "tokens_used": 2068,
+      "cost": 0.000634,
+      "confidence": null,
+      "error": "Expected databases ['benchmarking', 'rts'], got ['reports']",
+      "model_used": "medium",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "[\n  {\n    \"role\": \"user\",\n    \"content\": \"What was Scotia's net income for Q3 2025?\"\n  }\n]",
+      "timestamp": "2025-08-25T13:28:38.522168"
+    },
+    {
+      "scenario_id": "planner_016",
+      "scenario_name": "CM Readthrough Report Request",
+      "success": true,
+      "actual_output": {
+        "status": "success",
+        "databases": [
+          {
+            "database_id": "reports",
+            "query_intent": "Retrieve the CM readthrough report for Royal Bank of Canada (RBC) for Q2 FY2025."
+          }
+        ],
+        "tokens_used": 3170,
+        "cost": 0.000965
+      },
+      "expected_output": {
+        "status": "success",
+        "clarifier_banks": {
+          "status": "success",
+          "bank_ids": [
+            1
+          ],
+          "banks_detail": {
+            "1": {
+              "name": "Royal Bank of Canada",
+              "symbol": "RY"
+            }
+          }
+        },
+        "clarifier_periods": {
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2025,
+              "quarters": [
+                "Q2"
+              ]
+            }
+          }
+        },
+        "databases": [
+          "reports"
+        ]
+      },
+      "latency_ms": 1144.8369026184082,
+      "tokens_used": 3170,
+      "cost": 0.000965,
+      "confidence": null,
+      "error": null,
+      "model_used": "medium",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "[\n  {\n    \"role\": \"user\",\n    \"content\": \"Get me the CM readthrough report for RBC Q2 2025\"\n  }\n]",
+      "timestamp": "2025-08-25T13:28:39.667227"
+    },
+    {
+      "scenario_id": "planner_017",
+      "scenario_name": "RTS Blackline Report Request",
+      "success": true,
+      "actual_output": {
+        "status": "success",
+        "databases": [
+          {
+            "database_id": "reports",
+            "query_intent": "Retrieve the RTS blackline comparison report for Toronto-Dominion Bank (TD) for Q1 FY2025."
+          }
+        ],
+        "tokens_used": 3172,
+        "cost": 0.000966
+      },
+      "expected_output": {
+        "status": "success",
+        "clarifier_banks": {
+          "status": "success",
+          "bank_ids": [
+            2
+          ],
+          "banks_detail": {
+            "2": {
+              "name": "Toronto-Dominion Bank",
+              "symbol": "TD"
+            }
+          }
+        },
+        "clarifier_periods": {
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2025,
+              "quarters": [
+                "Q1"
+              ]
+            }
+          }
+        },
+        "databases": [
+          "reports"
+        ]
+      },
+      "latency_ms": 1209.6991539001465,
+      "tokens_used": 3172,
+      "cost": 0.000966,
+      "confidence": null,
+      "error": null,
+      "model_used": "medium",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "[\n  {\n    \"role\": \"user\",\n    \"content\": \"Show the RTS blackline comparison for TD's Q1 2025\"\n  }\n]",
+      "timestamp": "2025-08-25T13:28:40.877069"
+    },
+    {
+      "scenario_id": "planner_001",
+      "scenario_name": "Management Commentary - Digital Transformation",
+      "success": true,
+      "actual_output": {
+        "status": "success",
+        "databases": [
+          {
+            "database_id": "transcripts",
+            "query_intent": "Extract all management commentary and discussion related to digital transformation initiatives from Royal Bank of Canada's (RBC) Q1 FY2025 earnings call transcript. Include any mentions of technology investments, digital strategy, progress updates, and management's outlook or guidance on digital transformation."
+          }
+        ],
+        "tokens_used": 3201,
+        "cost": 0.00328
+      },
+      "expected_output": {
+        "status": "success",
+        "clarifier_banks": {
+          "status": "success",
+          "bank_ids": [
+            1
+          ],
+          "banks_detail": {
+            "1": {
+              "name": "Royal Bank of Canada",
+              "symbol": "RY"
+            }
+          }
+        },
+        "clarifier_periods": {
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2025,
+              "quarters": [
+                "Q1"
+              ]
+            }
+          }
+        },
+        "databases": [
+          "transcripts"
+        ]
+      },
+      "latency_ms": 1905.9839248657227,
+      "tokens_used": 3201,
+      "cost": 0.00328,
+      "confidence": null,
+      "error": null,
+      "model_used": "large",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "[\n  {\n    \"role\": \"user\",\n    \"content\": \"What did RBC management say about digital transformation in Q1 2025?\"\n  }\n]",
+      "timestamp": "2025-08-25T13:28:42.783878"
+    },
+    {
+      "scenario_id": "planner_002",
+      "scenario_name": "Efficiency Ratio Comparison",
+      "success": false,
+      "actual_output": {
+        "status": "success",
+        "databases": [
+          {
+            "database_id": "benchmarking",
+            "query_intent": "Extract the efficiency ratios for Royal Bank of Canada (RBC) and Toronto-Dominion Bank (TD) for Q2 FY2025 and prepare the data for a direct comparison between the two banks."
+          }
+        ],
+        "tokens_used": 3309,
+        "cost": 0.00346
+      },
+      "expected_output": {
+        "status": "success",
+        "clarifier_banks": {
+          "status": "success",
+          "bank_ids": [
+            1,
+            2
+          ],
+          "banks_detail": {
+            "1": {
+              "name": "Royal Bank of Canada",
+              "symbol": "RY"
+            },
+            "2": {
+              "name": "Toronto-Dominion Bank",
+              "symbol": "TD"
+            }
+          }
+        },
+        "clarifier_periods": {
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2025,
+              "quarters": [
+                "Q2"
+              ]
+            }
+          }
+        },
+        "databases": [
+          "benchmarking",
+          "rts"
+        ]
+      },
+      "latency_ms": 2902.1780490875244,
+      "tokens_used": 3309,
+      "cost": 0.00346,
+      "confidence": null,
+      "error": "Expected databases ['benchmarking', 'rts'], got ['benchmarking']",
+      "model_used": "large",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "[\n  {\n    \"role\": \"user\",\n    \"content\": \"Compare the efficiency ratios between RBC and TD for Q2 2025\"\n  }\n]",
+      "timestamp": "2025-08-25T13:28:45.686219"
+    },
+    {
+      "scenario_id": "planner_003",
+      "scenario_name": "Capital Ratios Query",
+      "success": false,
+      "actual_output": {
+        "status": "success",
+        "databases": [
+          {
+            "database_id": "benchmarking",
+            "query_intent": "Extract the Common Equity Tier 1 (CET1) ratios for the Big Six Canadian banks (Royal Bank of Canada, Toronto-Dominion Bank, Bank of Montreal, Bank of Nova Scotia, Canadian Imperial Bank of Commerce, National Bank of Canada) for Q3 FY2024. Present the CET1 ratios for each bank."
+          }
+        ],
+        "tokens_used": 3508,
+        "cost": 0.003712
+      },
+      "expected_output": {
+        "status": "success",
+        "clarifier_banks": {
+          "status": "success",
+          "bank_ids": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "banks_detail": {
+            "1": {
+              "name": "Royal Bank of Canada",
+              "symbol": "RY"
+            },
+            "2": {
+              "name": "Toronto-Dominion Bank",
+              "symbol": "TD"
+            },
+            "3": {
+              "name": "Bank of Montreal",
+              "symbol": "BMO"
+            },
+            "4": {
+              "name": "Bank of Nova Scotia",
+              "symbol": "BNS"
+            },
+            "5": {
+              "name": "Canadian Imperial Bank of Commerce",
+              "symbol": "CM"
+            },
+            "6": {
+              "name": "National Bank of Canada",
+              "symbol": "NA"
+            }
+          }
+        },
+        "clarifier_periods": {
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2024,
+              "quarters": [
+                "Q3"
+              ]
+            }
+          }
+        },
+        "databases": [
+          "benchmarking",
+          "pillar3"
+        ]
+      },
+      "latency_ms": 4510.16902923584,
+      "tokens_used": 3508,
+      "cost": 0.003712,
+      "confidence": null,
+      "error": "Expected databases ['benchmarking', 'pillar3'], got ['benchmarking']",
+      "model_used": "large",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "[\n  {\n    \"role\": \"user\",\n    \"content\": \"What are the CET1 ratios for the Big Six banks in Q3 2024?\"\n  }\n]",
+      "timestamp": "2025-08-25T13:28:50.196575"
+    },
+    {
+      "scenario_id": "planner_004",
+      "scenario_name": "Comprehensive Credit Analysis",
+      "success": false,
+      "actual_output": {
+        "status": "success",
+        "databases": [
+          {
+            "database_id": "benchmarking",
+            "query_intent": "Extract all key credit performance metrics for Royal Bank of Canada (RBC) for Q1 FY2025, including but not limited to provision for credit losses (PCL), gross impaired loans, net write-offs, and any other relevant credit quality indicators. Provide the actual reported numbers for these metrics."
+          }
+        ],
+        "tokens_used": 3413,
+        "cost": 0.003688
+      },
+      "expected_output": {
+        "status": "success",
+        "clarifier_banks": {
+          "status": "success",
+          "bank_ids": [
+            1
+          ],
+          "banks_detail": {
+            "1": {
+              "name": "Royal Bank of Canada",
+              "symbol": "RY"
+            }
+          }
+        },
+        "clarifier_periods": {
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2025,
+              "quarters": [
+                "Q1"
+              ]
+            }
+          }
+        },
+        "databases": [
+          "benchmarking",
+          "rts",
+          "transcripts"
+        ]
+      },
+      "latency_ms": 2765.571117401123,
+      "tokens_used": 3413,
+      "cost": 0.003688,
+      "confidence": null,
+      "error": "Expected databases ['benchmarking', 'rts', 'transcripts'], got ['benchmarking']",
+      "model_used": "large",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "[\n  {\n    \"role\": \"user\",\n    \"content\": \"Analyze RBC's credit performance in Q1 2025 - what did management say and what are the actual numbers?\"\n  }\n]",
+      "timestamp": "2025-08-25T13:28:52.962329"
+    },
+    {
+      "scenario_id": "planner_005",
+      "scenario_name": "NIM Trend Analysis",
+      "success": false,
+      "actual_output": {
+        "status": "success",
+        "databases": [
+          {
+            "database_id": "benchmarking",
+            "query_intent": "Extract the net interest margin (NIM) for Toronto-Dominion Bank (TD) for each quarter from Q1 to Q4 of fiscal year 2024, and present the quarter-over-quarter trend."
+          }
+        ],
+        "tokens_used": 3397,
+        "cost": 0.003558
+      },
+      "expected_output": {
+        "status": "success",
+        "clarifier_banks": {
+          "status": "success",
+          "bank_ids": [
+            2
+          ],
+          "banks_detail": {
+            "2": {
+              "name": "Toronto-Dominion Bank",
+              "symbol": "TD"
+            }
+          }
+        },
+        "clarifier_periods": {
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2024,
+              "quarters": [
+                "Q1",
+                "Q2",
+                "Q3",
+                "Q4"
+              ]
+            }
+          }
+        },
+        "databases": [
+          "benchmarking",
+          "rts"
+        ]
+      },
+      "latency_ms": 3788.00106048584,
+      "tokens_used": 3397,
+      "cost": 0.003558,
+      "confidence": null,
+      "error": "Expected databases ['benchmarking', 'rts'], got ['benchmarking']",
+      "model_used": "large",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "[\n  {\n    \"role\": \"user\",\n    \"content\": \"Show me the NIM trend for TD Bank from Q1 to Q4 2024\"\n  }\n]",
+      "timestamp": "2025-08-25T13:28:56.750573"
+    },
+    {
+      "scenario_id": "planner_006",
+      "scenario_name": "Business Segment Analysis",
+      "success": true,
+      "actual_output": {
+        "status": "success",
+        "databases": [
+          {
+            "database_id": "benchmarking",
+            "query_intent": "Extract the financial performance metrics (including revenue, net income, and efficiency ratio) for Royal Bank of Canada's wealth management segment for Q2 FY2025. Provide a summary of key performance indicators for this segment in the specified period."
+          },
+          {
+            "database_id": "rts",
+            "query_intent": "Extract detailed financial results and business segment analysis for Royal Bank of Canada's wealth management segment for Q2 FY2025 from the Report to Shareholders, including revenue, net income, and any other relevant performance metrics."
+          }
+        ],
+        "tokens_used": 3250,
+        "cost": 0.003376
+      },
+      "expected_output": {
+        "status": "success",
+        "clarifier_banks": {
+          "status": "success",
+          "bank_ids": [
+            1
+          ],
+          "banks_detail": {
+            "1": {
+              "name": "Royal Bank of Canada",
+              "symbol": "RY"
+            }
+          }
+        },
+        "clarifier_periods": {
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2025,
+              "quarters": [
+                "Q2"
+              ]
+            }
+          }
+        },
+        "databases": [
+          "benchmarking",
+          "rts"
+        ]
+      },
+      "latency_ms": 4181.347131729126,
+      "tokens_used": 3250,
+      "cost": 0.003376,
+      "confidence": null,
+      "error": null,
+      "model_used": "large",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "[\n  {\n    \"role\": \"user\",\n    \"content\": \"What's the performance of RBC's wealth management segment in Q2 2025?\"\n  }\n]",
+      "timestamp": "2025-08-25T13:29:00.932037"
+    },
+    {
+      "scenario_id": "planner_007",
+      "scenario_name": "Forward Guidance Query",
+      "success": true,
+      "actual_output": {
+        "status": "success",
+        "databases": [
+          {
+            "database_id": "transcripts",
+            "query_intent": "Extract all management commentary and discussion related to guidance for fiscal 2025 provided by Bank of Montreal (BMO) during their most recent earnings call (Q3 FY2025). Include forward-looking statements, outlook, and any specific targets or expectations mentioned by management."
+          }
+        ],
+        "tokens_used": 2106,
+        "cost": 0.002186
+      },
+      "expected_output": {
+        "status": "success",
+        "clarifier_banks": {
+          "status": "success",
+          "bank_ids": [
+            3
+          ],
+          "banks_detail": {
+            "3": {
+              "name": "Bank of Montreal",
+              "symbol": "BMO"
+            }
+          }
+        },
+        "clarifier_periods": {
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2025,
+              "quarters": [
+                "Q3"
+              ]
+            }
+          }
+        },
+        "databases": [
+          "transcripts"
+        ]
+      },
+      "latency_ms": 3242.1398162841797,
+      "tokens_used": 2106,
+      "cost": 0.002186,
+      "confidence": null,
+      "error": null,
+      "model_used": "large",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "[\n  {\n    \"role\": \"user\",\n    \"content\": \"What guidance did BMO provide for fiscal 2025 in their latest call?\"\n  }\n]",
+      "timestamp": "2025-08-25T13:29:04.174400"
+    },
+    {
+      "scenario_id": "planner_008",
+      "scenario_name": "Credit Risk Analysis",
+      "success": true,
+      "actual_output": {
+        "status": "success",
+        "databases": [
+          {
+            "database_id": "benchmarking",
+            "query_intent": "Extract all key credit risk metrics for Bank of Nova Scotia (BNS) for Q1 FY2025, including but not limited to provision for credit losses (PCL), gross impaired loans, net impaired loans, allowance for credit losses, and any other relevant credit quality indicators. Present these metrics and highlight any notable changes versus the prior quarter."
+          },
+          {
+            "database_id": "rts",
+            "query_intent": "Extract all relevant credit risk metrics and disclosures for Bank of Nova Scotia (BNS) for Q1 FY2025 from the Report to Shareholders, including provision for credit losses, impaired loans, allowance for credit losses, and any narrative or tabular analysis related to credit quality. Ensure all segment/platform-level credit risk data is included."
+          },
+          {
+            "database_id": "pillar3",
+            "query_intent": "Extract Bank of Nova Scotia's (BNS) Pillar 3 regulatory credit risk disclosures for Q1 FY2025, including risk-weighted assets (RWA) for credit risk, credit risk exposure by asset class, and any other Basel III credit risk metrics. Highlight any significant changes or trends compared to the previous quarter."
+          },
+          {
+            "database_id": "transcripts",
+            "query_intent": "Extract all management commentary and discussion related to credit risk for Bank of Nova Scotia (BNS) from the Q1 FY2025 earnings call transcript. Include management's explanations of credit quality trends, outlook for credit risk, drivers of changes in credit metrics, and any forward-looking statements or analyst Q&A on credit risk."
+          }
+        ],
+        "tokens_used": 3468,
+        "cost": 0.003811
+      },
+      "expected_output": {
+        "status": "success",
+        "clarifier_banks": {
+          "status": "success",
+          "bank_ids": [
+            4
+          ],
+          "banks_detail": {
+            "4": {
+              "name": "Bank of Nova Scotia",
+              "symbol": "BNS"
+            }
+          }
+        },
+        "clarifier_periods": {
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2025,
+              "quarters": [
+                "Q1"
+              ]
+            }
+          }
+        },
+        "databases": [
+          "benchmarking",
+          "pillar3",
+          "rts",
+          "transcripts"
+        ]
+      },
+      "latency_ms": 9675.336837768555,
+      "tokens_used": 3468,
+      "cost": 0.003811,
+      "confidence": null,
+      "error": null,
+      "model_used": "large",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "[\n  {\n    \"role\": \"user\",\n    \"content\": \"Analyze Scotia's credit risk metrics and management commentary for Q1 2025\"\n  }\n]",
+      "timestamp": "2025-08-25T13:29:13.849897"
+    },
+    {
+      "scenario_id": "planner_009",
+      "scenario_name": "ROE Ranking Query",
+      "success": false,
+      "actual_output": {
+        "status": "success",
+        "databases": [
+          {
+            "database_id": "benchmarking",
+            "query_intent": "Extract return on equity (ROE) for all major Canadian banks (Royal Bank of Canada, Toronto-Dominion Bank, Bank of Montreal, Bank of Nova Scotia, Canadian Imperial Bank of Commerce, National Bank of Canada) for Q2 FY2025 and provide the values for each bank."
+          }
+        ],
+        "tokens_used": 3486,
+        "cost": 0.003676
+      },
+      "expected_output": {
+        "status": "success",
+        "clarifier_banks": {
+          "status": "success",
+          "bank_ids": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "banks_detail": {
+            "1": {
+              "name": "Royal Bank of Canada",
+              "symbol": "RY"
+            },
+            "2": {
+              "name": "Toronto-Dominion Bank",
+              "symbol": "TD"
+            },
+            "3": {
+              "name": "Bank of Montreal",
+              "symbol": "BMO"
+            },
+            "4": {
+              "name": "Bank of Nova Scotia",
+              "symbol": "BNS"
+            },
+            "5": {
+              "name": "Canadian Imperial Bank of Commerce",
+              "symbol": "CM"
+            },
+            "6": {
+              "name": "National Bank of Canada",
+              "symbol": "NA"
+            }
+          }
+        },
+        "clarifier_periods": {
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2025,
+              "quarters": [
+                "Q2"
+              ]
+            }
+          }
+        },
+        "databases": [
+          "benchmarking",
+          "rts"
+        ]
+      },
+      "latency_ms": 5605.209112167358,
+      "tokens_used": 3486,
+      "cost": 0.003676,
+      "confidence": null,
+      "error": "Expected databases ['benchmarking', 'rts'], got ['benchmarking']",
+      "model_used": "large",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "[\n  {\n    \"role\": \"user\",\n    \"content\": \"Rank all Canadian banks by ROE for Q2 2025\"\n  }\n]",
+      "timestamp": "2025-08-25T13:29:19.455292"
+    },
+    {
+      "scenario_id": "planner_010",
+      "scenario_name": "Detailed Earnings Query",
+      "success": false,
+      "actual_output": {
+        "status": "no_databases",
+        "reason": "The user is requesting a detailed earnings breakdown from CIBC's Q3 2025 report to shareholders. However, the available databases are 'transcripts' (for management commentary) and 'reports' (for specific pre-generated reports, none of which are the report to shareholders itself). Neither database provides the full report to shareholders or a detailed earnings breakdown as a source document. Therefore, no available database can fulfill this request.",
+        "databases": [],
+        "tokens_used": 2130,
+        "cost": 0.00223
+      },
+      "expected_output": {
+        "status": "success",
+        "clarifier_banks": {
+          "status": "success",
+          "bank_ids": [
+            5
+          ],
+          "banks_detail": {
+            "5": {
+              "name": "Canadian Imperial Bank of Commerce",
+              "symbol": "CM"
+            }
+          }
+        },
+        "clarifier_periods": {
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2025,
+              "quarters": [
+                "Q3"
+              ]
+            }
+          }
+        },
+        "databases": [
+          "rts"
+        ]
+      },
+      "latency_ms": 2958.019733428955,
+      "tokens_used": 2130,
+      "cost": 0.00223,
+      "confidence": null,
+      "error": "Expected status 'success', got 'no_databases' | Expected databases ['rts'], got []",
+      "model_used": "large",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "[\n  {\n    \"role\": \"user\",\n    \"content\": \"Get CIBC's detailed earnings breakdown from their Q3 2025 report to shareholders\"\n  }\n]",
+      "timestamp": "2025-08-25T13:29:22.413531"
+    },
+    {
+      "scenario_id": "planner_011",
+      "scenario_name": "Transcript Call Summary Request",
+      "success": true,
+      "actual_output": {
+        "status": "success",
+        "databases": [
+          {
+            "database_id": "reports",
+            "query_intent": "Retrieve the Transcript Call Summary report for Royal Bank of Canada (RBC) for Q2 FY2025."
+          }
+        ],
+        "tokens_used": 3172,
+        "cost": 0.00322
+      },
+      "expected_output": {
+        "status": "success",
+        "clarifier_banks": {
+          "status": "success",
+          "bank_ids": [
+            1
+          ],
+          "banks_detail": {
+            "1": {
+              "name": "Royal Bank of Canada",
+              "symbol": "RY"
+            }
+          }
+        },
+        "clarifier_periods": {
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2025,
+              "quarters": [
+                "Q2"
+              ]
+            }
+          }
+        },
+        "databases": [
+          "reports"
+        ]
+      },
+      "latency_ms": 1274.3470668792725,
+      "tokens_used": 3172,
+      "cost": 0.00322,
+      "confidence": null,
+      "error": null,
+      "model_used": "large",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "[\n  {\n    \"role\": \"user\",\n    \"content\": \"Show me the transcript call summary report for RBC's Q2 2025\"\n  }\n]",
+      "timestamp": "2025-08-25T13:29:23.687952"
+    },
+    {
+      "scenario_id": "planner_012",
+      "scenario_name": "Key Themes Analysis",
+      "success": true,
+      "actual_output": {
+        "status": "success",
+        "databases": [
+          {
+            "database_id": "reports",
+            "query_intent": "Extract the 'key themes' pre-generated report for Toronto-Dominion Bank (TD) for Q3 FY2025, summarizing the main topics and themes discussed in the latest earnings call."
+          }
+        ],
+        "tokens_used": 2084,
+        "cost": 0.002149
+      },
+      "expected_output": {
+        "status": "success",
+        "clarifier_banks": {
+          "status": "success",
+          "bank_ids": [
+            2
+          ],
+          "banks_detail": {
+            "2": {
+              "name": "Toronto-Dominion Bank",
+              "symbol": "TD"
+            }
+          }
+        },
+        "clarifier_periods": {
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2025,
+              "quarters": [
+                "Q3"
+              ]
+            }
+          }
+        },
+        "databases": [
+          "reports"
+        ]
+      },
+      "latency_ms": 1837.0897769927979,
+      "tokens_used": 2084,
+      "cost": 0.002149,
+      "confidence": null,
+      "error": null,
+      "model_used": "large",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "[\n  {\n    \"role\": \"user\",\n    \"content\": \"What are the key themes from TD's latest earnings calls?\"\n  }\n]",
+      "timestamp": "2025-08-25T13:29:25.525216"
+    },
+    {
+      "scenario_id": "planner_013",
+      "scenario_name": "NIM Analysis with Context",
+      "success": false,
+      "actual_output": {
+        "status": "success",
+        "databases": [
+          {
+            "database_id": "benchmarking",
+            "query_intent": "Extract Royal Bank of Canada's (RBC) net interest margin (NIM) for Q1 FY2025."
+          }
+        ],
+        "tokens_used": 3330,
+        "cost": 0.00353
+      },
+      "expected_output": {
+        "status": "success",
+        "clarifier_banks": {
+          "status": "success",
+          "bank_ids": [
+            1
+          ],
+          "banks_detail": {
+            "1": {
+              "name": "Royal Bank of Canada",
+              "symbol": "RY"
+            }
+          }
+        },
+        "clarifier_periods": {
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2025,
+              "quarters": [
+                "Q1"
+              ]
+            }
+          }
+        },
+        "databases": [
+          "benchmarking",
+          "rts",
+          "transcripts"
+        ]
+      },
+      "latency_ms": 3789.106845855713,
+      "tokens_used": 3330,
+      "cost": 0.00353,
+      "confidence": null,
+      "error": "Expected databases ['benchmarking', 'rts', 'transcripts'], got ['benchmarking']",
+      "model_used": "large",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "[\n  {\n    \"role\": \"user\",\n    \"content\": \"What's RBC's NIM for Q1 2025 and how did management explain the changes?\"\n  }\n]",
+      "timestamp": "2025-08-25T13:29:29.314491"
+    },
+    {
+      "scenario_id": "planner_014",
+      "scenario_name": "US Bank 10-Q Analysis",
+      "success": false,
+      "actual_output": {
+        "status": "no_databases",
+        "reason": "There are no available databases containing 10-Q filings or report to shareholders for JPMorgan for Q2 2025. The available databases only cover Citigroup for Q2 2025 and do not include 10-Q filings. Therefore, no databases can be queried to answer this request.",
+        "databases": [],
+        "tokens_used": 2094,
+        "cost": 0.002167
+      },
+      "expected_output": {
+        "status": "success",
+        "clarifier_banks": {
+          "status": "success",
+          "bank_ids": [
+            10
+          ],
+          "banks_detail": {
+            "10": {
+              "name": "JPMorgan Chase",
+              "symbol": "JPM"
+            }
+          }
+        },
+        "clarifier_periods": {
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2025,
+              "quarters": [
+                "Q2"
+              ]
+            }
+          }
+        },
+        "databases": [
+          "rts"
+        ]
+      },
+      "latency_ms": 1227.992057800293,
+      "tokens_used": 2094,
+      "cost": 0.002167,
+      "confidence": null,
+      "error": "Expected status 'success', got 'no_databases' | Expected databases ['rts'], got []",
+      "model_used": "large",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "[\n  {\n    \"role\": \"user\",\n    \"content\": \"Get JPMorgan's Q2 2025 10-Q filing details\"\n  }\n]",
+      "timestamp": "2025-08-25T13:29:30.542659"
+    },
+    {
+      "scenario_id": "planner_015",
+      "scenario_name": "Simple Line Item Query",
+      "success": false,
+      "actual_output": {
+        "status": "success",
+        "databases": [
+          {
+            "database_id": "transcripts",
+            "query_intent": "Search the Q3 FY2025 earnings call transcript for Bank of Nova Scotia (Scotia) for any management commentary or discussion that mentions or explains the net income for the quarter, including any context, reasoning, or factors impacting the result."
+          }
+        ],
+        "tokens_used": 2096,
+        "cost": 0.002171
+      },
+      "expected_output": {
+        "status": "success",
+        "clarifier_banks": {
+          "status": "success",
+          "bank_ids": [
+            4
+          ],
+          "banks_detail": {
+            "4": {
+              "name": "Bank of Nova Scotia",
+              "symbol": "BNS"
+            }
+          }
+        },
+        "clarifier_periods": {
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2025,
+              "quarters": [
+                "Q3"
+              ]
+            }
+          }
+        },
+        "databases": [
+          "benchmarking",
+          "rts"
+        ]
+      },
+      "latency_ms": 1792.3312187194824,
+      "tokens_used": 2096,
+      "cost": 0.002171,
+      "confidence": null,
+      "error": "Expected databases ['benchmarking', 'rts'], got ['transcripts']",
+      "model_used": "large",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "[\n  {\n    \"role\": \"user\",\n    \"content\": \"What was Scotia's net income for Q3 2025?\"\n  }\n]",
+      "timestamp": "2025-08-25T13:29:32.335300"
+    },
+    {
+      "scenario_id": "planner_016",
+      "scenario_name": "CM Readthrough Report Request",
+      "success": true,
+      "actual_output": {
+        "status": "success",
+        "databases": [
+          {
+            "database_id": "reports",
+            "query_intent": "Retrieve the 'Transcripts CM Readthrough' (Capital Markets division analysis report) for Royal Bank of Canada (RBC) for Q2 FY2025."
+          }
+        ],
+        "tokens_used": 3180,
+        "cost": 0.003238
+      },
+      "expected_output": {
+        "status": "success",
+        "clarifier_banks": {
+          "status": "success",
+          "bank_ids": [
+            1
+          ],
+          "banks_detail": {
+            "1": {
+              "name": "Royal Bank of Canada",
+              "symbol": "RY"
+            }
+          }
+        },
+        "clarifier_periods": {
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2025,
+              "quarters": [
+                "Q2"
+              ]
+            }
+          }
+        },
+        "databases": [
+          "reports"
+        ]
+      },
+      "latency_ms": 1216.9508934020996,
+      "tokens_used": 3180,
+      "cost": 0.003238,
+      "confidence": null,
+      "error": null,
+      "model_used": "large",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "[\n  {\n    \"role\": \"user\",\n    \"content\": \"Get me the CM readthrough report for RBC Q2 2025\"\n  }\n]",
+      "timestamp": "2025-08-25T13:29:33.552416"
+    },
+    {
+      "scenario_id": "planner_017",
+      "scenario_name": "RTS Blackline Report Request",
+      "success": true,
+      "actual_output": {
+        "status": "success",
+        "databases": [
+          {
+            "database_id": "reports",
+            "query_intent": "Retrieve the RTS blackline comparison report for Toronto-Dominion Bank (TD) for Q1 FY2025."
+          }
+        ],
+        "tokens_used": 3172,
+        "cost": 0.003221
+      },
+      "expected_output": {
+        "status": "success",
+        "clarifier_banks": {
+          "status": "success",
+          "bank_ids": [
+            2
+          ],
+          "banks_detail": {
+            "2": {
+              "name": "Toronto-Dominion Bank",
+              "symbol": "TD"
+            }
+          }
+        },
+        "clarifier_periods": {
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2025,
+              "quarters": [
+                "Q1"
+              ]
+            }
+          }
+        },
+        "databases": [
+          "reports"
+        ]
+      },
+      "latency_ms": 1418.5640811920166,
+      "tokens_used": 3172,
+      "cost": 0.003221,
+      "confidence": null,
+      "error": null,
+      "model_used": "large",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "[\n  {\n    \"role\": \"user\",\n    \"content\": \"Show the RTS blackline comparison for TD's Q1 2025\"\n  }\n]",
+      "timestamp": "2025-08-25T13:29:34.971264"
+    }
+  ],
+  "generated_at": "2025-08-25T13:29:34.973443"
+}

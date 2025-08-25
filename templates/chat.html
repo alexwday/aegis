@@ -402,25 +402,26 @@
 
         /* Subagent styles */
         .subagent-container {
-            margin-top: 10px;
-            background: #f9f9f9;
-            border-radius: 8px;
+            margin-top: 15px;
+            background: #f7f8fa;
+            border-radius: 6px;
             overflow: hidden;
-            border: 1px solid #e0e0e0;
+            border: 1px solid #e3e5e8;
         }
 
         .subagent-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 10px 15px;
-            background: linear-gradient(135deg, #667eea20 0%, #764ba220 100%);
+            padding: 8px 12px;
+            background: #f0f2f5;
             cursor: pointer;
             transition: background 0.3s;
+            border-bottom: 1px solid #e3e5e8;
         }
 
         .subagent-header:hover {
-            background: linear-gradient(135deg, #667eea30 0%, #764ba230 100%);
+            background: #e8ebef;
         }
 
         .subagent-title {
@@ -435,10 +436,11 @@
         .subagent-badge {
             background: #667eea;
             color: white;
-            padding: 2px 8px;
-            border-radius: 12px;
-            font-size: 11px;
+            padding: 2px 6px;
+            border-radius: 10px;
+            font-size: 10px;
             text-transform: uppercase;
+            font-weight: 500;
         }
 
         .subagent-toggle {
@@ -447,17 +449,17 @@
         }
 
         .subagent-content {
-            padding: 15px;
-            font-size: 14px;
-            line-height: 1.6;
-            color: #444;
+            padding: 10px 12px;
+            font-size: 13px;
+            line-height: 1.5;
+            color: #555;
             background: white;
             position: relative;
             transition: max-height 0.3s ease-out;
         }
 
         .subagent-content.collapsed {
-            max-height: 6em;
+            max-height: 3em;
             overflow: hidden;
         }
 
@@ -731,7 +733,7 @@
             return { messageDiv, bubbleDiv };
         }
 
-        function addSubagentContainer(name, messageWrapper) {
+        function addSubagentContainer(name, bubbleDiv) {
             const container = document.createElement('div');
             container.className = 'subagent-container';
             container.id = `subagent-${name}`;
@@ -762,7 +764,7 @@
             container.appendChild(header);
             container.appendChild(content);
             
-            messageWrapper.appendChild(container);
+            bubbleDiv.appendChild(container);
             
             return content;
         }
@@ -833,13 +835,43 @@
                     
                     hideTypingIndicator();
                     
-                    // Create assistant message container
-                    const { messageDiv, bubbleDiv } = addMessage('assistant', '', true);
+                    // Create assistant message container (empty initially)
+                    const messageDiv = document.createElement('div');
+                    messageDiv.className = 'message assistant';
+                    
+                    const wrapperDiv = document.createElement('div');
+                    wrapperDiv.className = 'message-wrapper';
+                    
+                    const labelDiv = document.createElement('div');
+                    labelDiv.className = 'message-label';
+                    labelDiv.textContent = 'AEGIS - Finance Assist';
+                    
+                    const bubbleDiv = document.createElement('div');
+                    bubbleDiv.className = 'message-bubble';
+                    
+                    wrapperDiv.appendChild(labelDiv);
+                    wrapperDiv.appendChild(bubbleDiv);
+                    messageDiv.appendChild(wrapperDiv);
+                    
+                    chatMessages.appendChild(messageDiv);
+                    messageCount++;
+                    messageCountElement.textContent = `Messages: ${messageCount}`;
                     const messageWrapper = messageDiv.querySelector('.message-wrapper');
                     
                     let assistantContent = '';
                     let subagentContainers = {};
                     let subagentStreaming = {};
+                    
+                    // Create a container for the main content
+                    const mainContentDiv = document.createElement('div');
+                    mainContentDiv.className = 'main-content';
+                    bubbleDiv.appendChild(mainContentDiv);
+                    
+                    // Create a separate container for dropdowns inside the bubble
+                    const dropdownContainer = document.createElement('div');
+                    dropdownContainer.className = 'dropdown-container';
+                    dropdownContainer.style.marginTop = '10px';
+                    bubbleDiv.appendChild(dropdownContainer);
                     
                     const reader = response.body.getReader();
                     const decoder = new TextDecoder();
@@ -868,24 +900,21 @@
                                                 }
                                             }
                                         } else if (parsed.error) {
-                                            bubbleDiv.innerHTML = `<span style="color: red;">Error: ${parsed.error}</span>`;
+                                            currentBubbleDiv.innerHTML = `<span style="color: red;">Error: ${parsed.error}</span>`;
                                         } else if (parsed.type === 'summarizer_start') {
-                                            // Start a new message bubble for the summarizer
-                                            // This ensures it appears below the dropdowns
-                                            const newMessage = addMessage('assistant', '', true);
-                                            bubbleDiv = newMessage.bubbleDiv;
-                                            messageWrapper = newMessage.messageDiv.querySelector('.message-wrapper');
-                                            assistantContent = '';  // Reset content for new message
+                                            // Signal that summarizer is starting but keep same message bubble
+                                            // This ensures dropdowns remain visible below the summary
+                                            // Just add a separator before summarizer content
                                         } else if (parsed.type === 'agent') {
-                                            // Main agent response
+                                            // Main agent response - always goes to main content div
                                             assistantContent += parsed.content || '';
-                                            bubbleDiv.innerHTML = marked.parse(assistantContent);
+                                            mainContentDiv.innerHTML = marked.parse(assistantContent);
                                             chatMessages.scrollTop = chatMessages.scrollHeight;
                                         } else if (parsed.type === 'subagent_start') {
-                                            // Create subagent container
+                                            // Create subagent container in the persistent dropdown container
                                             const name = parsed.name;
                                             if (!subagentContainers[name]) {
-                                                const contentDiv = addSubagentContainer(name, messageWrapper);
+                                                const contentDiv = addSubagentContainer(name, dropdownContainer);
                                                 subagentContainers[name] = contentDiv;
                                                 subagentStreaming[name] = true;
                                                 
@@ -896,10 +925,10 @@
                                                 }
                                             }
                                         } else if (parsed.type === 'subagent') {
-                                            // Subagent response
+                                            // Subagent response - goes in persistent dropdown container
                                             const name = parsed.name;
                                             if (!subagentContainers[name]) {
-                                                const contentDiv = addSubagentContainer(name, messageWrapper);
+                                                const contentDiv = addSubagentContainer(name, dropdownContainer);
                                                 subagentContainers[name] = contentDiv;
                                             }
                                             

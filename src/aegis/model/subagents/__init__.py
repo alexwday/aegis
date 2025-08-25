@@ -23,7 +23,7 @@ SUBAGENT_MAPPING = {
 __all__ = [
     "SUBAGENT_MAPPING",
     "benchmarking_agent",
-    "reports_agent", 
+    "reports_agent",
     "rts_agent",
     "transcripts_agent",
     "pillar3_agent",

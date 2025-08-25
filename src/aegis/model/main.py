@@ -238,14 +238,14 @@ def model(
         # Direct response path - use response agent
         logger.info("model.stage.response_agent.started", execution_id=execution_id)
         response_start = datetime.now(timezone.utc)
-        
+
         # Build context for response agent
         response_context = {
             "execution_id": execution_id,
             "auth_config": auth_config,
             "ssl_config": ssl_config,
         }
-        
+
         # Stream response from response agent
         for chunk in generate_response(
             conversation_history=processed_conversation.get("messages", []),
@@ -270,7 +270,7 @@ def model(
                     cost=chunk.get("cost"),
                     response_time_ms=chunk.get("response_time_ms"),
                 )
-                
+
                 add_monitor_entry(
                     stage_name="Response_Agent",
                     stage_start_time=response_start,
@@ -288,18 +288,18 @@ def model(
     else:
         # Research workflow path - need to fetch data
         logger.info("model.stage.research_workflow.started", execution_id=execution_id)
-        
+
         # Stage 6a: Clarifier - extract banks and periods
         logger.info("model.stage.clarifier.started", execution_id=execution_id)
         clarifier_start = datetime.now(timezone.utc)
-        
+
         # Build context for clarifier
         clarifier_context = {
             "execution_id": execution_id,
             "auth_config": auth_config,
             "ssl_config": ssl_config,
         }
-        
+
         # Run clarifier with available databases and full conversation
         clarifier_result = clarify_query(
             query=processed_conversation.get("latest_message", {}).get("content", ""),
@@ -307,14 +307,14 @@ def model(
             available_databases=list(filtered_databases.keys()),
             messages=processed_conversation.get("messages", []),
         )
-        
+
         logger.info(
             "model.stage.clarifier.completed",
             execution_id=execution_id,
             status=clarifier_result.get("status"),
             needs_clarification=clarifier_result.get("status") == "needs_clarification",
         )
-        
+
         add_monitor_entry(
             stage_name="Clarifier",
             stage_start_time=clarifier_start,
@@ -323,31 +323,54 @@ def model(
             decision_details=clarifier_result.get("clarification", "Banks and periods extracted"),
             error_message=clarifier_result.get("error"),
             custom_metadata={
-                "banks": clarifier_result.get("banks", {}).get("bank_ids") if clarifier_result.get("banks") else None,
-                "periods": clarifier_result.get("periods", {}).get("periods") if clarifier_result.get("periods") else None,
+                "banks": (
+                    clarifier_result.get("banks", {}).get("bank_ids")
+                    if clarifier_result.get("banks")
+                    else None
+                ),
+                "periods": (
+                    clarifier_result.get("periods", {}).get("periods")
+                    if clarifier_result.get("periods")
+                    else None
+                ),
             },
         )
-        
-        # Check if clarification is needed
-        if clarifier_result.get("status") == "needs_clarification":
+
+        # Check if there was an error or clarification is needed
+        if clarifier_result.get("status") == "error":
+            # Handle error from clarifier (e.g., API quota exceeded)
+            error_msg = clarifier_result.get(
+                "error", "An error occurred while processing your request"
+            )
+            yield {
+                "type": "agent",
+                "name": "aegis",
+                "content": (
+                    f"\n⚠️ Error: {error_msg}\n\n"
+                    "Please try again later or contact support if the issue persists."
+                ),
+            }
+        elif clarifier_result.get("status") == "needs_clarification":
             # Format and stream clarification request back to user
             clarifications = clarifier_result.get("clarifications", [])
-            
+
             if clarifications:
                 # Add space before clarifications
                 yield {
-                    "type": "agent", 
+                    "type": "agent",
                     "name": "aegis",
                     "content": "\n",
                 }
-                
+
                 # Stream opening statement for clarifications
                 yield {
                     "type": "agent",
                     "name": "aegis",
-                    "content": "**I need some additional information to complete your request:**\n\n",
+                    "content": (
+                        "**I need some additional information to complete your request:**\n\n"
+                    ),
                 }
-                
+
                 # Stream each clarification as a numbered list
                 for i, clarification in enumerate(clarifications, 1):
                     yield {
@@ -355,12 +378,15 @@ def model(
                         "name": "aegis",
                         "content": f"{i}. {clarification}\n",
                     }
-                
+
                 # Add closing guidance with extra spacing
                 yield {
                     "type": "agent",
                     "name": "aegis",
-                    "content": "\nPlease provide these details so I can retrieve the specific data you need.",
+                    "content": (
+                        "\nPlease provide these details so I can retrieve "
+                        "the specific data you need."
+                    ),
                 }
             else:
                 # Fallback if no clarifications provided
@@ -373,31 +399,31 @@ def model(
             # Continue with research workflow - we have both banks and periods
             banks_detail = clarifier_result.get("banks", {}).get("banks_detail", {})
             periods = clarifier_result.get("periods", {}).get("periods", {})
-            
+
             # Stream progress update with specific banks
             bank_names = [info["name"] for info in banks_detail.values()]
-            
+
             # Don't send status messages here - let subagents and summarizer handle all output
             # This ensures summarizer appears after dropdowns, not before
-            
+
             # Stage: Planner
             logger.info("model.stage.planner.started", execution_id=execution_id)
             planner_start = datetime.now(timezone.utc)
-            
+
             from src.aegis.model.agents.planner import plan_database_queries
-            
+
             # Build planner context
             planner_context = {
                 "execution_id": execution_id,
                 "auth_config": auth_config,
                 "ssl_config": ssl_config,
             }
-            
+
             # Extract query intent from clarifier's banks result
             query_intent = None
             if clarifier_result.get("banks") and clarifier_result["banks"].get("query_intent"):
                 query_intent = clarifier_result["banks"]["query_intent"]
-            
+
             # Call planner with clarifier results including intent
             planner_result = plan_database_queries(
                 query=processed_conversation.get("latest_message", {}).get("content", ""),
@@ -408,65 +434,78 @@ def model(
                 available_databases=list(filtered_databases.keys()),
                 query_intent=query_intent,
             )
-            
+
             # Stream planner output
             if planner_result.get("status") == "success":
                 databases = planner_result.get("databases", [])
-                
+
                 # Send initial status message BEFORE subagents start
                 if databases:
                     # Format period description based on type
                     period_desc = ""
                     if periods and "apply_all" in periods:
                         period_info = periods["apply_all"]
-                        period_desc = f"{', '.join(period_info['quarters'])} {period_info['fiscal_year']}"
+                        period_desc = (
+                            f"{', '.join(period_info['quarters'])} {period_info['fiscal_year']}"
+                        )
                     elif periods and "bank_specific" in periods:
                         period_desc = "bank-specific periods"
-                    
+
                     # Send status message
                     yield {
                         "type": "agent",
                         "name": "aegis",
-                        "content": f"Retrieving {period_desc} data for {', '.join(bank_names) if bank_names else 'selected banks'}...\n\n",
+                        "content": (
+                            f"Retrieving {period_desc} data for "
+                            f"{', '.join(bank_names) if bank_names else 'selected banks'}...\n\n"
+                        ),
                     }
-                
+
                 # Import subagent mapping
                 from .subagents import SUBAGENT_MAPPING
-                
+
                 # Create a queue for collecting subagent outputs
                 output_queue = Queue()
                 # Collect all database responses for summarization
                 database_responses = []
-                
+
                 def run_subagent(db_plan, queue, response_collector):
                     """Run a single subagent and put outputs in the queue."""
                     try:
                         database_id = db_plan.get("database_id")
                         query_intent = db_plan.get("query_intent", "")
-                        
+
                         # Get the appropriate subagent function
                         subagent_func = SUBAGENT_MAPPING.get(database_id)
-                        
+
                         if not subagent_func:
-                            queue.put({
-                                "type": "subagent",
-                                "name": database_id,
-                                "content": f"⚠️ No subagent found for database: {database_id}\n",
-                            })
+                            queue.put(
+                                {
+                                    "type": "subagent",
+                                    "name": database_id,
+                                    "content": (
+                                        f"⚠️ No subagent found for database: {database_id}\n"
+                                    ),
+                                }
+                            )
                             return
-                        
+
                         # Get basic intent from clarifier
                         basic_intent = ""
-                        if clarifier_result.get("banks") and clarifier_result["banks"].get("query_intent"):
+                        if clarifier_result.get("banks") and clarifier_result["banks"].get(
+                            "query_intent"
+                        ):
                             basic_intent = clarifier_result["banks"]["query_intent"]
-                        
+
                         # Collect the full response for this database
                         full_response = ""
-                        
+
                         # Call the subagent with all required parameters
                         for chunk in subagent_func(
                             conversation=processed_conversation.get("messages", []),
-                            latest_message=processed_conversation.get("latest_message", {}).get("content", ""),
+                            latest_message=processed_conversation.get("latest_message", {}).get(
+                                "content", ""
+                            ),
                             banks=clarifier_result.get("banks", {}),
                             periods=clarifier_result.get("periods", {}),
                             basic_intent=basic_intent,  # From clarifier
@@ -478,67 +517,74 @@ def model(
                             # Collect content for summarization
                             if chunk.get("type") == "subagent" and chunk.get("content"):
                                 full_response += chunk["content"]
-                        
+
                         # Store the complete response for summarization
-                        response_collector.append({
-                            "database_id": database_id,
-                            "full_intent": query_intent,
-                            "response": full_response,
-                        })
-                        
+                        response_collector.append(
+                            {
+                                "database_id": database_id,
+                                "full_intent": query_intent,
+                                "response": full_response,
+                            }
+                        )
+
                     except Exception as e:
                         logger.error(f"subagent.{database_id}.error", error=str(e))
-                        queue.put({
-                            "type": "subagent",
-                            "name": database_id,
-                            "content": f"⚠️ Error in {database_id}: {str(e)}\n",
-                        })
+                        queue.put(
+                            {
+                                "type": "subagent",
+                                "name": database_id,
+                                "content": f"⚠️ Error in {database_id}: {str(e)}\n",
+                            }
+                        )
                         # Still add error response for summarization
-                        response_collector.append({
-                            "database_id": database_id,
-                            "full_intent": query_intent if 'query_intent' in locals() else "",
-                            "response": f"Error retrieving data: {str(e)}",
-                        })
+                        response_collector.append(
+                            {
+                                "database_id": database_id,
+                                "full_intent": query_intent if "query_intent" in locals() else "",
+                                "response": f"Error retrieving data: {str(e)}",
+                            }
+                        )
                     finally:
                         # Signal this subagent is done
                         queue.put({"type": "done", "database_id": database_id})
-                
-                # Send start signals for all subagents first (creates dropdowns immediately)
+
+                # Send ALL subagent_start signals at once (creates all dropdowns immediately)
+                # This ensures dropdowns appear simultaneously in the UI
                 for db_plan in databases:
                     database_id = db_plan.get("database_id")
                     yield {
                         "type": "subagent_start",
                         "name": database_id,
                     }
-                
-                # Start threads for each subagent
+
+                # Now start threads for each subagent to run concurrently
                 threads = []
                 active_subagents = set()
-                
+
                 for db_plan in databases:
                     database_id = db_plan.get("database_id")
                     active_subagents.add(database_id)
-                    
+
                     thread = threading.Thread(
                         target=run_subagent,
                         args=(db_plan, output_queue, database_responses),
-                        daemon=True
+                        daemon=True,
                     )
                     thread.start()
                     threads.append(thread)
-                    
+
                     logger.info(
                         f"subagent.{database_id}.started",
                         execution_id=execution_id,
                         database_id=database_id,
                     )
-                
+
                 # Stream outputs from all subagents as they arrive
                 while active_subagents:
                     try:
                         # Get next message from any subagent
                         msg = output_queue.get(timeout=0.1)
-                        
+
                         if msg.get("type") == "done":
                             # A subagent finished
                             database_id = msg.get("database_id")
@@ -551,15 +597,15 @@ def model(
                         else:
                             # Stream the message
                             yield msg
-                    except:
+                    except Exception:
                         # Timeout - check if threads are still alive
                         if not any(t.is_alive() for t in threads):
                             break
-                
+
                 # Wait for all threads to complete
                 for thread in threads:
                     thread.join(timeout=1.0)
-                
+
                 # After all subagents complete, synthesize the responses
                 if database_responses:
                     logger.info(
@@ -567,60 +613,74 @@ def model(
                         execution_id=execution_id,
                         database_count=len(database_responses),
                     )
-                    
+
                     summarizer_start = datetime.now(timezone.utc)
-                    
+
+                    # Signal that summarizer is starting (UI will handle appropriately)
+                    yield {
+                        "type": "summarizer_start",
+                        "name": "aegis",
+                    }
+
                     # Add a visual separator before the summary
                     yield {
                         "type": "agent",
                         "name": "aegis",
-                        "content": "\n\n---\n\n",
+                        "content": "\n\n---\n\n**Summary:**\n\n",
                     }
-                    
+
                     # Stream the synthesized response (continues in same bubble as "Retrieving...")
                     for chunk in synthesize_responses(
                         conversation_history=processed_conversation.get("messages", []),
-                        latest_message=processed_conversation.get("latest_message", {}).get("content", ""),
+                        latest_message=processed_conversation.get("latest_message", {}).get(
+                            "content", ""
+                        ),
                         database_responses=database_responses,
                         context=planner_context,
                     ):
                         yield chunk
-                    
+
                     logger.info(
                         "model.stage.summarizer.completed",
                         execution_id=execution_id,
                         status="Success",
                     )
-                    
+
                     add_monitor_entry(
                         stage_name="Summarizer",
                         stage_start_time=summarizer_start,
                         stage_end_time=datetime.now(timezone.utc),
                         status="Success",
-                        decision_details=f"Synthesized {len(database_responses)} database responses",
+                        decision_details=(
+                            f"Synthesized {len(database_responses)} database responses"
+                        ),
                     )
-                
+
             elif planner_result.get("status") == "no_databases":
                 # No databases needed
                 yield {
                     "type": "agent",
                     "name": "aegis",
-                    "content": f"\n{planner_result.get('reason', 'No database queries needed for this request.')}\n",
+                    "content": "\n{}\n".format(
+                        planner_result.get("reason", "No database queries needed.")
+                    ),
                 }
             else:
                 # Error case
                 yield {
                     "type": "agent",
                     "name": "aegis",
-                    "content": f"\n⚠️ Error in planning: {planner_result.get('error', 'Unknown error')}\n",
+                    "content": (
+                        f"\n⚠️ Error in planning: {planner_result.get('error', 'Unknown error')}\n"
+                    ),
                 }
-            
+
             logger.info(
                 "model.stage.planner.completed",
                 execution_id=execution_id,
                 status="Success",
             )
-            
+
             add_monitor_entry(
                 stage_name="Planner",
                 stage_start_time=planner_start,

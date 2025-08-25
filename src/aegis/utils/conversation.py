@@ -89,7 +89,7 @@ def process_conversation(  # pylint: disable=too-many-branches
 
         # Keep only the most recent messages based on config
         if len(processed_messages) > config.max_history_length:
-            processed_messages = processed_messages[-config.max_history_length :]
+            processed_messages = processed_messages[-config.max_history_length :]  # noqa: E203
 
         # Extract the latest message (what we need to respond to)
         latest_message = processed_messages[-1]

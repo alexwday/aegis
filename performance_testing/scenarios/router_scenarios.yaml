@@ -126,9 +126,9 @@ test_suite:
         - role: "user"
           content: "Sorry, I meant to ask about TD Bank, not RBC"
       expected:
-        route: "direct_response"
+        route: "research_workflow"
       reasoning: "Correcting a conversational statement with no prior data context"
-      tags: ["correction", "direct"]
+      tags: ["correction", "research"]
     
     - id: "error_correction_data"
       name: "Data Request Error Correction"

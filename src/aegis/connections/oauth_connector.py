@@ -314,6 +314,17 @@ def _handle_oauth_auth(execution_id: str, ssl_config: Dict[str, Any], logger) ->
             "header": {},
             "error": error_msg,
         }
+    except Exception as e:
+        logger.warning(
+            "Failed to obtain OAuth token - using placeholder",
+            execution_id=execution_id,
+            error=str(e),
+        )
+        return {
+            "method": "placeholder",
+            "token": "oauth-failed",
+            "header": {"Authorization": "Bearer oauth-failed"},
+        }
 
 
 def _handle_api_key_auth(execution_id: str, logger) -> Dict[str, Any]:

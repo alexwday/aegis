@@ -22,14 +22,14 @@ def rts_agent(
 ) -> Generator[Dict[str, str], None, None]:
     """
     Stream real-time system data response.
-    
+
     This placeholder generates test real-time financial data including:
     - Current trading metrics
     - Intraday performance
     - Real-time positions
     - Market data
     - Live risk metrics
-    
+
     Args:
         conversation: Full conversation history
         latest_message: Latest user message
@@ -39,26 +39,26 @@ def rts_agent(
         full_intent: Full query intent from planner
         database_id: Database ID (should be "rts")
         context: Runtime context with auth, SSL config, execution_id
-        
+
     Yields:
         Dictionary with type="subagent", name="rts", content=chunk
     """
     logger = get_logger()
     execution_id = context.get("execution_id")
-    
+
     subagent_name = "RTS"
     subagent_description = """The RTS (Real-Time System) database provides:
     - Live trading data and market metrics
     - Current day performance and volumes
     - Real-time positions and exposures
     - Intraday P&L and risk metrics
-    - Market share and flow data
+
     - Current pricing and spreads
-    
+
     This data includes up-to-the-minute financial metrics, trading volumes,
     market positions, and live performance indicators that update throughout
     the trading day."""
-    
+
     try:
         logger.info(
             f"subagent.{database_id}.starting",
@@ -66,13 +66,13 @@ def rts_agent(
             subagent=subagent_name,
             bank_count=len(banks.get("bank_ids", [])),
         )
-        
+
         # Extract bank details for the prompt
         banks_detail = banks.get("banks_detail", {})
         bank_names = []
         for bank_id, bank_info in banks_detail.items():
             bank_names.append(f"{bank_info['name']} ({bank_info['symbol']})")
-        
+
         # Format periods for the prompt
         period_description = ""
         if "periods" in periods:
@@ -85,12 +85,15 @@ def rts_agent(
                 for bid, p in period_data["bank_specific"].items():
                     if bid in banks_detail:
                         bank_name = banks_detail[bid]["name"]
-                        period_parts.append(f"{bank_name}: {', '.join(p['quarters'])} {p['fiscal_year']}")
+                        period_parts.append(
+                            f"{bank_name}: {', '.join(p['quarters'])} {p['fiscal_year']}"
+                        )
                 period_description = "; ".join(period_parts)
-        
+
         # Build the prompt for GPT to generate placeholder data
         system_prompt = f"""You are a placeholder {subagent_name} subagent for the Aegis system.
-This is a TEST implementation. Generate a plausible, realistic response based on the context provided.
+This is a TEST implementation. Generate a plausible, realistic response based on the context
+provided.
 
 Subagent Role: {subagent_description}
 
@@ -107,32 +110,32 @@ Generate a response that:
 4. Includes specific (but fictional) numbers, percentages, or details
 5. Formats the response appropriately for the data type
 
-Remember: This is test data for development purposes. Make it realistic but clearly indicate it's placeholder data at the end."""
-
+Remember: This is test data for development purposes. Make it realistic but clearly indicate \
+it's placeholder data at the end."""
         user_prompt = f"""Based on the query: "{full_intent}"
 
-Generate a {subagent_name} response with placeholder data that would realistically come from this database.
-
+Generate a {subagent_name} response with placeholder data that would realistically come from \
+this database.
 Latest user message: {latest_message}"""
 
         # Create messages for streaming
         messages = [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt}
+            {"role": "user", "content": user_prompt},
         ]
-        
+
         # Stream the response from GPT
         total_content = ""
         chunk_count = 0
         final_usage = None
-        
+
         for chunk in stream(
             messages=messages,
             context=context,
             llm_params={
                 "temperature": 0.7,
                 "max_tokens": 500,
-            }
+            },
         ):
             # Handle OpenAI streaming chunk format (same as response agent)
             if chunk.get("choices") and chunk["choices"][0].get("delta"):
@@ -141,18 +144,18 @@ Latest user message: {latest_message}"""
                     content = delta["content"]
                     total_content += content
                     chunk_count += 1
-                    
+
                     # Yield the chunk with subagent schema
                     yield {
                         "type": "subagent",
                         "name": database_id,
                         "content": content,
                     }
-            
+
             # Capture usage data if present (usually in final chunk)
             if chunk.get("usage"):
                 final_usage = chunk["usage"]
-        
+
         # Log completion metrics
         logger.info(
             f"subagent.{database_id}.completed",
@@ -162,7 +165,7 @@ Latest user message: {latest_message}"""
             total_chars=len(total_content),
             chunk_count=chunk_count,
         )
-        
+
         # Add a small disclaimer at the end
         disclaimer = f"\n\n*[{subagent_name} placeholder data - test mode]*"
         yield {
@@ -170,7 +173,7 @@ Latest user message: {latest_message}"""
             "name": database_id,
             "content": disclaimer,
         }
-        
+
     except Exception as e:
         logger.error(
             f"subagent.{database_id}.error",
@@ -178,7 +181,7 @@ Latest user message: {latest_message}"""
             subagent=subagent_name,
             error=str(e),
         )
-        
+
         # Yield error message
         yield {
             "type": "subagent",

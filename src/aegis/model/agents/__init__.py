@@ -9,7 +9,7 @@ from .summarizer import synthesize_responses
 
 __all__ = [
     "route_query",
-    "generate_response", 
+    "generate_response",
     "clarify_query",
     "extract_banks",
     "extract_periods",

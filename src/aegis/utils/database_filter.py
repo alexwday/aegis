@@ -71,7 +71,9 @@ def filter_databases(db_names: Optional[List[str]] = None) -> Dict[str, Dict]:
 
     # If no filter, return all
     if not db_names:
-        logger.info("No database filter applied - returning all databases", available=len(all_databases))
+        logger.info(
+            "No database filter applied - returning all databases", available=len(all_databases)
+        )
         return all_databases
 
     # Filter to requested databases
