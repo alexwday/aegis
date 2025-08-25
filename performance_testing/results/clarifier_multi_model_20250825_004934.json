@@ -1,0 +1,6901 @@
+{
+  "metadata": {
+    "name": "Clarifier Agent Test Suite",
+    "description": "Test scenarios for the Clarifier agent - bank and period extraction",
+    "version": "1.0.0",
+    "default_thresholds": {
+      "max_latency_ms": 5000,
+      "min_confidence": 0.8,
+      "max_tokens": 500,
+      "max_cost": 0.1
+    },
+    "model_comparison": {
+      "small": {
+        "total_tests": 30,
+        "passed": 17,
+        "failed": 13,
+        "success_rate": 56.666666666666664,
+        "latency": {
+          "mean": 1423.848072687785,
+          "median": 1361.6493940353394,
+          "min": 919.9352264404297,
+          "max": 3072.0531940460205,
+          "stdev": 388.233679170321
+        },
+        "tokens": {
+          "total": 116762,
+          "mean": 3892.0666666666666
+        },
+        "cost": {
+          "total": 0.011946,
+          "mean": 0.0003982
+        },
+        "duration_seconds": 42.721396
+      },
+      "medium": {
+        "total_tests": 30,
+        "passed": 26,
+        "failed": 4,
+        "success_rate": 86.66666666666667,
+        "latency": {
+          "mean": 2006.7169666290283,
+          "median": 1900.965929031372,
+          "min": 1431.8201541900635,
+          "max": 3239.5219802856445,
+          "stdev": 477.6860202622977
+        },
+        "tokens": {
+          "total": 106947,
+          "mean": 3564.9
+        },
+        "cost": {
+          "total": 0.032541,
+          "mean": 0.0010847
+        },
+        "duration_seconds": 60.207391
+      },
+      "large": {
+        "total_tests": 30,
+        "passed": 25,
+        "failed": 5,
+        "success_rate": 83.33333333333334,
+        "latency": {
+          "mean": 5832.056744893392,
+          "median": 7679.625988006592,
+          "min": 1244.7669506072998,
+          "max": 10036.835193634033,
+          "stdev": 3099.8001065695385
+        },
+        "tokens": {
+          "total": 117216,
+          "mean": 3907.2
+        },
+        "cost": {
+          "total": 0.118784,
+          "mean": 0.003959466666666666
+        },
+        "duration_seconds": 174.967608
+      }
+    }
+  },
+  "summary": {
+    "total_tests": 90,
+    "passed": 68,
+    "failed": 22,
+    "success_rate": 75.55555555555556,
+    "latency": {
+      "mean": 3087.540594736735,
+      "median": 1720.728039741516,
+      "min": 919.9352264404297,
+      "max": 10036.835193634033,
+      "stdev": 2668.3645484573635
+    },
+    "tokens": {
+      "total": 340925,
+      "mean": 3788.0555555555557
+    },
+    "cost": {
+      "total": 0.163271,
+      "mean": 0.0018141222222222222
+    }
+  },
+  "results": [
+    {
+      "scenario_id": "clarifier_001",
+      "scenario_name": "Clear Bank and Period - RBC Q3 2024",
+      "success": true,
+      "actual_output": {
+        "status": "success",
+        "banks": {
+          "status": "success",
+          "decision": "banks_selected",
+          "bank_ids": [
+            1
+          ],
+          "banks_detail": {
+            "1": {
+              "id": 1,
+              "name": "Royal Bank of Canada",
+              "symbol": "RY",
+              "aliases": [
+                "RBC",
+                "Royal Bank",
+                "Royal",
+                "RY"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            }
+          },
+          "tokens_used": 1408,
+          "cost": 0.000142
+        },
+        "periods": {
+          "status": "success",
+          "decision": "periods_selected",
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2024,
+              "quarters": [
+                "Q3"
+              ]
+            }
+          },
+          "tokens_used": 2561,
+          "cost": 0.000262
+        },
+        "tokens_used": 3969,
+        "cost": 0.00040400000000000006
+      },
+      "expected_output": {
+        "status": "success",
+        "bank_ids": [
+          1
+        ],
+        "period_year": 2024,
+        "period_quarters": [
+          "Q3"
+        ]
+      },
+      "latency_ms": 1372.269868850708,
+      "tokens_used": 3969,
+      "cost": 0.00040400000000000006,
+      "confidence": null,
+      "error": null,
+      "model_used": "small",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "Show me RBC's Q3 2024 financial results",
+      "timestamp": "2025-08-25T00:44:58.203747"
+    },
+    {
+      "scenario_id": "clarifier_002",
+      "scenario_name": "Multiple Banks - Big Six Q2 2024",
+      "success": true,
+      "actual_output": {
+        "status": "success",
+        "banks": {
+          "status": "success",
+          "decision": "banks_selected",
+          "bank_ids": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "banks_detail": {
+            "1": {
+              "id": 1,
+              "name": "Royal Bank of Canada",
+              "symbol": "RY",
+              "aliases": [
+                "RBC",
+                "Royal Bank",
+                "Royal",
+                "RY"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            },
+            "2": {
+              "id": 2,
+              "name": "Toronto-Dominion Bank",
+              "symbol": "TD",
+              "aliases": [
+                "TD",
+                "TD Bank",
+                "Toronto Dominion",
+                "TD Canada Trust"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            },
+            "3": {
+              "id": 3,
+              "name": "Bank of Montreal",
+              "symbol": "BMO",
+              "aliases": [
+                "BMO",
+                "Bank of Montreal",
+                "Montreal Bank"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            },
+            "4": {
+              "id": 4,
+              "name": "Bank of Nova Scotia",
+              "symbol": "BNS",
+              "aliases": [
+                "Scotia",
+                "Scotiabank",
+                "BNS",
+                "Nova Scotia Bank"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            },
+            "5": {
+              "id": 5,
+              "name": "Canadian Imperial Bank of Commerce",
+              "symbol": "CM",
+              "aliases": [
+                "CIBC",
+                "CM",
+                "Imperial Bank",
+                "Canadian Imperial"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            },
+            "6": {
+              "id": 6,
+              "name": "National Bank of Canada",
+              "symbol": "NA",
+              "aliases": [
+                "NBC",
+                "National Bank",
+                "National",
+                "NA"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            }
+          },
+          "tokens_used": 1462,
+          "cost": 0.000153
+        },
+        "periods": {
+          "status": "success",
+          "decision": "periods_selected",
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2024,
+              "quarters": [
+                "Q2"
+              ]
+            }
+          },
+          "tokens_used": 3759,
+          "cost": 0.000383
+        },
+        "tokens_used": 5221,
+        "cost": 0.000536
+      },
+      "expected_output": {
+        "status": "success",
+        "bank_ids": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6
+        ],
+        "period_year": 2024,
+        "period_quarters": [
+          "Q2"
+        ]
+      },
+      "latency_ms": 1506.9379806518555,
+      "tokens_used": 5221,
+      "cost": 0.000536,
+      "confidence": null,
+      "error": null,
+      "model_used": "small",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "Compare the Big Six banks performance in Q2 2024",
+      "timestamp": "2025-08-25T00:44:59.710930"
+    },
+    {
+      "scenario_id": "clarifier_003",
+      "scenario_name": "Ambiguous Bank - No Period",
+      "success": true,
+      "actual_output": {
+        "status": "needs_clarification",
+        "clarifications": [
+          "Which banks would you like to see the latest financial metrics for? Please specify the bank names or categories.",
+          "What time period would you like to see the latest financial metrics for?"
+        ],
+        "tokens_used": 3567,
+        "cost": 0.000363
+      },
+      "expected_output": {
+        "status": "needs_clarification",
+        "needs_clarification": true
+      },
+      "latency_ms": 1238.3921146392822,
+      "tokens_used": 3567,
+      "cost": 0.000363,
+      "confidence": null,
+      "error": null,
+      "model_used": "small",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "What are the latest financial metrics?",
+      "timestamp": "2025-08-25T00:45:00.949452"
+    },
+    {
+      "scenario_id": "clarifier_004",
+      "scenario_name": "Clear Bank - Missing Period",
+      "success": true,
+      "actual_output": {
+        "status": "needs_clarification",
+        "banks": {
+          "status": "success",
+          "decision": "banks_selected",
+          "bank_ids": [
+            2
+          ],
+          "banks_detail": {
+            "2": {
+              "id": 2,
+              "name": "Toronto-Dominion Bank",
+              "symbol": "TD",
+              "aliases": [
+                "TD",
+                "TD Bank",
+                "Toronto Dominion",
+                "TD Canada Trust"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            }
+          },
+          "tokens_used": 1403,
+          "cost": 0.000142
+        },
+        "clarifications": [
+          "What time period would you like to query?"
+        ],
+        "tokens_used": 3946,
+        "cost": 0.000401
+      },
+      "expected_output": {
+        "status": "needs_clarification",
+        "bank_ids": [
+          2
+        ],
+        "needs_clarification": true
+      },
+      "latency_ms": 1025.9618759155273,
+      "tokens_used": 3946,
+      "cost": 0.000401,
+      "confidence": null,
+      "error": null,
+      "model_used": "small",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "Show me TD Bank's revenue",
+      "timestamp": "2025-08-25T00:45:01.975615"
+    },
+    {
+      "scenario_id": "clarifier_005",
+      "scenario_name": "Latest Period Request",
+      "success": false,
+      "actual_output": {
+        "status": "needs_clarification",
+        "banks": {
+          "status": "success",
+          "decision": "banks_selected",
+          "bank_ids": [
+            3
+          ],
+          "banks_detail": {
+            "3": {
+              "id": 3,
+              "name": "Bank of Montreal",
+              "symbol": "BMO",
+              "aliases": [
+                "BMO",
+                "Bank of Montreal",
+                "Montreal Bank"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            }
+          },
+          "tokens_used": 1405,
+          "cost": 0.000142
+        },
+        "clarifications": [
+          "What time period would you like to see BMO's latest quarterly results for?"
+        ],
+        "tokens_used": 3946,
+        "cost": 0.000401
+      },
+      "expected_output": {
+        "status": "success",
+        "bank_ids": [
+          3
+        ],
+        "period_year": 2025,
+        "period_quarters": [
+          "Q3"
+        ]
+      },
+      "latency_ms": 1123.7890720367432,
+      "tokens_used": 3946,
+      "cost": 0.000401,
+      "confidence": null,
+      "error": "Expected status 'success', got 'needs_clarification'",
+      "model_used": "small",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "Give me BMO's latest quarterly results",
+      "timestamp": "2025-08-25T00:45:03.099606"
+    },
+    {
+      "scenario_id": "clarifier_006",
+      "scenario_name": "YTD Period Request",
+      "success": false,
+      "actual_output": {
+        "status": "needs_clarification",
+        "banks": {
+          "status": "success",
+          "decision": "banks_selected",
+          "bank_ids": [
+            4
+          ],
+          "banks_detail": {
+            "4": {
+              "id": 4,
+              "name": "Bank of Nova Scotia",
+              "symbol": "BNS",
+              "aliases": [
+                "Scotia",
+                "Scotiabank",
+                "BNS",
+                "Nova Scotia Bank"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            }
+          },
+          "tokens_used": 1455,
+          "cost": 0.000152
+        },
+        "clarifications": [
+          "What time period would you like to see Scotia's YTD 2025 performance for?"
+        ],
+        "tokens_used": 4006,
+        "cost": 0.000412
+      },
+      "expected_output": {
+        "status": "success",
+        "bank_ids": [
+          4
+        ],
+        "period_year": 2025,
+        "period_quarters": [
+          "Q1",
+          "Q2",
+          "Q3"
+        ]
+      },
+      "latency_ms": 1626.619815826416,
+      "tokens_used": 4006,
+      "cost": 0.000412,
+      "confidence": null,
+      "error": "Expected status 'success', got 'needs_clarification'",
+      "model_used": "small",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "Show Scotia's YTD 2025 performance",
+      "timestamp": "2025-08-25T00:45:04.726423"
+    },
+    {
+      "scenario_id": "clarifier_007",
+      "scenario_name": "Bank Alias - National Bank",
+      "success": false,
+      "actual_output": {
+        "status": "needs_clarification",
+        "banks": {
+          "status": "success",
+          "decision": "banks_selected",
+          "bank_ids": [
+            6
+          ],
+          "banks_detail": {
+            "6": {
+              "id": 6,
+              "name": "National Bank of Canada",
+              "symbol": "NA",
+              "aliases": [
+                "NBC",
+                "National Bank",
+                "National",
+                "NA"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            }
+          },
+          "tokens_used": 1410,
+          "cost": 0.000143
+        },
+        "clarifications": [
+          "What is National Bank's Q1 2024 net income?"
+        ],
+        "tokens_used": 3970,
+        "cost": 0.000406
+      },
+      "expected_output": {
+        "status": "success",
+        "bank_ids": [
+          6
+        ],
+        "period_year": 2024,
+        "period_quarters": [
+          "Q1"
+        ]
+      },
+      "latency_ms": 1240.3037548065186,
+      "tokens_used": 3970,
+      "cost": 0.000406,
+      "confidence": null,
+      "error": "Expected status 'success', got 'needs_clarification'",
+      "model_used": "small",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "What is National Bank's Q1 2024 net income?",
+      "timestamp": "2025-08-25T00:45:05.966871"
+    },
+    {
+      "scenario_id": "clarifier_008",
+      "scenario_name": "Multiple Specific Banks",
+      "success": true,
+      "actual_output": {
+        "status": "success",
+        "banks": {
+          "status": "success",
+          "decision": "banks_selected",
+          "bank_ids": [
+            1,
+            2
+          ],
+          "banks_detail": {
+            "1": {
+              "id": 1,
+              "name": "Royal Bank of Canada",
+              "symbol": "RY",
+              "aliases": [
+                "RBC",
+                "Royal Bank",
+                "Royal",
+                "RY"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            },
+            "2": {
+              "id": 2,
+              "name": "Toronto-Dominion Bank",
+              "symbol": "TD",
+              "aliases": [
+                "TD",
+                "TD Bank",
+                "Toronto Dominion",
+                "TD Canada Trust"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            }
+          },
+          "tokens_used": 1454,
+          "cost": 0.000152
+        },
+        "periods": {
+          "status": "success",
+          "decision": "periods_selected",
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2023,
+              "quarters": [
+                "Q4"
+              ]
+            }
+          },
+          "tokens_used": 2805,
+          "cost": 0.000287
+        },
+        "tokens_used": 4259,
+        "cost": 0.000439
+      },
+      "expected_output": {
+        "status": "success",
+        "bank_ids": [
+          1,
+          2
+        ],
+        "period_year": 2023,
+        "period_quarters": [
+          "Q4"
+        ]
+      },
+      "latency_ms": 1840.9948348999023,
+      "tokens_used": 4259,
+      "cost": 0.000439,
+      "confidence": null,
+      "error": null,
+      "model_used": "small",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "Compare RBC and TD performance in Q4 2023",
+      "timestamp": "2025-08-25T00:45:07.808113"
+    },
+    {
+      "scenario_id": "clarifier_009",
+      "scenario_name": "Full Year Period",
+      "success": false,
+      "actual_output": {
+        "status": "needs_clarification",
+        "banks": {
+          "status": "success",
+          "decision": "banks_selected",
+          "bank_ids": [
+            5
+          ],
+          "banks_detail": {
+            "5": {
+              "id": 5,
+              "name": "Canadian Imperial Bank of Commerce",
+              "symbol": "CM",
+              "aliases": [
+                "CIBC",
+                "CM",
+                "Imperial Bank",
+                "Canadian Imperial"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            }
+          },
+          "tokens_used": 1407,
+          "cost": 0.000142
+        },
+        "clarifications": [
+          "The user requested CIBC's full year 2023 results. Please clarify if they mean all quarters of FY2023 or a specific period within that year."
+        ],
+        "tokens_used": 4013,
+        "cost": 0.000414
+      },
+      "expected_output": {
+        "status": "success",
+        "bank_ids": [
+          5
+        ],
+        "period_year": 2023,
+        "period_quarters": [
+          "Q1",
+          "Q2",
+          "Q3",
+          "Q4"
+        ]
+      },
+      "latency_ms": 1351.0289192199707,
+      "tokens_used": 4013,
+      "cost": 0.000414,
+      "confidence": null,
+      "error": "Expected status 'success', got 'needs_clarification'",
+      "model_used": "small",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "Show CIBC's full year 2023 results",
+      "timestamp": "2025-08-25T00:45:09.159357"
+    },
+    {
+      "scenario_id": "clarifier_010",
+      "scenario_name": "Clear Period - Ambiguous Bank",
+      "success": true,
+      "actual_output": {
+        "status": "needs_clarification",
+        "clarifications": [
+          "Which banks would you like to see the efficiency ratio for?"
+        ],
+        "tokens_used": 3606,
+        "cost": 0.00037
+      },
+      "expected_output": {
+        "status": "needs_clarification",
+        "needs_clarification": true
+      },
+      "latency_ms": 1517.8799629211426,
+      "tokens_used": 3606,
+      "cost": 0.00037,
+      "confidence": null,
+      "error": null,
+      "model_used": "small",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "What was the efficiency ratio in Q2 2024?",
+      "timestamp": "2025-08-25T00:45:10.677434"
+    },
+    {
+      "scenario_id": "clarifier_011",
+      "scenario_name": "Recent Performance Request",
+      "success": false,
+      "actual_output": {
+        "status": "needs_clarification",
+        "banks": {
+          "status": "success",
+          "decision": "banks_selected",
+          "bank_ids": [
+            2
+          ],
+          "banks_detail": {
+            "2": {
+              "id": 2,
+              "name": "Toronto-Dominion Bank",
+              "symbol": "TD",
+              "aliases": [
+                "TD",
+                "TD Bank",
+                "Toronto Dominion",
+                "TD Canada Trust"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            }
+          },
+          "tokens_used": 1403,
+          "cost": 0.000142
+        },
+        "clarifications": [
+          "What time period would you like to see TD's recent performance for?"
+        ],
+        "tokens_used": 3931,
+        "cost": 0.000398
+      },
+      "expected_output": {
+        "status": "success",
+        "bank_ids": [
+          2
+        ],
+        "period_year": 2025,
+        "period_quarters": [
+          "Q3"
+        ]
+      },
+      "latency_ms": 919.9352264404297,
+      "tokens_used": 3931,
+      "cost": 0.000398,
+      "confidence": null,
+      "error": "Expected status 'success', got 'needs_clarification'",
+      "model_used": "small",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "Show me TD's recent performance",
+      "timestamp": "2025-08-25T00:45:11.597544"
+    },
+    {
+      "scenario_id": "clarifier_012",
+      "scenario_name": "Future Period Request",
+      "success": true,
+      "actual_output": {
+        "status": "needs_clarification",
+        "banks": {
+          "status": "success",
+          "decision": "banks_selected",
+          "bank_ids": [
+            1
+          ],
+          "banks_detail": {
+            "1": {
+              "id": 1,
+              "name": "Royal Bank of Canada",
+              "symbol": "RY",
+              "aliases": [
+                "RBC",
+                "Royal Bank",
+                "Royal",
+                "RY"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            }
+          },
+          "tokens_used": 1409,
+          "cost": 0.000142
+        },
+        "clarifications": [
+          "Q1 2026 hasn't occurred yet. Would you like to see the latest available quarters?"
+        ],
+        "tokens_used": 3957,
+        "cost": 0.000402
+      },
+      "expected_output": {
+        "status": "needs_clarification",
+        "bank_ids": [
+          1
+        ],
+        "needs_clarification": true
+      },
+      "latency_ms": 1255.5131912231445,
+      "tokens_used": 3957,
+      "cost": 0.000402,
+      "confidence": null,
+      "error": null,
+      "model_used": "small",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "What will RBC's Q1 2026 results be?",
+      "timestamp": "2025-08-25T00:45:12.853259"
+    },
+    {
+      "scenario_id": "clarifier_013",
+      "scenario_name": "Ambiguous Last Year",
+      "success": true,
+      "actual_output": {
+        "status": "needs_clarification",
+        "banks": {
+          "status": "success",
+          "decision": "banks_selected",
+          "bank_ids": [
+            3
+          ],
+          "banks_detail": {
+            "3": {
+              "id": 3,
+              "name": "Bank of Montreal",
+              "symbol": "BMO",
+              "aliases": [
+                "BMO",
+                "Bank of Montreal",
+                "Montreal Bank"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            }
+          },
+          "tokens_used": 1404,
+          "cost": 0.000142
+        },
+        "clarifications": [
+          "What specific period would you like to compare for BMO's last year performance?"
+        ],
+        "tokens_used": 3944,
+        "cost": 0.000401
+      },
+      "expected_output": {
+        "status": "needs_clarification",
+        "bank_ids": [
+          3
+        ],
+        "needs_clarification": true
+      },
+      "latency_ms": 1201.6539573669434,
+      "tokens_used": 3944,
+      "cost": 0.000401,
+      "confidence": null,
+      "error": null,
+      "model_used": "small",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "Compare BMO's last year performance",
+      "timestamp": "2025-08-25T00:45:14.055129"
+    },
+    {
+      "scenario_id": "clarifier_014",
+      "scenario_name": "QoQ Growth Request",
+      "success": false,
+      "actual_output": {
+        "status": "needs_clarification",
+        "banks": {
+          "status": "success",
+          "decision": "banks_selected",
+          "bank_ids": [
+            4
+          ],
+          "banks_detail": {
+            "4": {
+              "id": 4,
+              "name": "Bank of Nova Scotia",
+              "symbol": "BNS",
+              "aliases": [
+                "Scotia",
+                "Scotiabank",
+                "BNS",
+                "Nova Scotia Bank"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            }
+          },
+          "tokens_used": 1403,
+          "cost": 0.000142
+        },
+        "clarifications": [
+          "Banks report quarterly. QoQ (quarter over quarter) growth refers to the change from the previous quarter to the current quarter. Given the current fiscal quarter is FY2025 Q4, the previous quarter is FY2025 Q3. Would you like to see the QoQ growth for FY2025 Q4 compared to FY2025 Q3?"
+        ],
+        "tokens_used": 3987,
+        "cost": 0.00040899999999999997
+      },
+      "expected_output": {
+        "status": "success",
+        "bank_ids": [
+          4
+        ],
+        "period_year": 2025,
+        "period_quarters": [
+          "Q2",
+          "Q3"
+        ]
+      },
+      "latency_ms": 1128.9708614349365,
+      "tokens_used": 3987,
+      "cost": 0.00040899999999999997,
+      "confidence": null,
+      "error": "Expected status 'success', got 'needs_clarification'",
+      "model_used": "small",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "Show Scotia's QoQ growth",
+      "timestamp": "2025-08-25T00:45:15.184323"
+    },
+    {
+      "scenario_id": "clarifier_015",
+      "scenario_name": "Current Quarter Unreported",
+      "success": true,
+      "actual_output": {
+        "status": "needs_clarification",
+        "banks": {
+          "status": "success",
+          "decision": "banks_selected",
+          "bank_ids": [
+            5
+          ],
+          "banks_detail": {
+            "5": {
+              "id": 5,
+              "name": "Canadian Imperial Bank of Commerce",
+              "symbol": "CM",
+              "aliases": [
+                "CIBC",
+                "CM",
+                "Imperial Bank",
+                "Canadian Imperial"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            }
+          },
+          "tokens_used": 1454,
+          "cost": 0.000152
+        },
+        "clarifications": [
+          "How is CIBC doing this quarter?"
+        ],
+        "tokens_used": 3971,
+        "cost": 0.000406
+      },
+      "expected_output": {
+        "status": "needs_clarification",
+        "bank_ids": [
+          5
+        ],
+        "needs_clarification": true
+      },
+      "latency_ms": 1408.2658290863037,
+      "tokens_used": 3971,
+      "cost": 0.000406,
+      "confidence": null,
+      "error": null,
+      "model_used": "small",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "How is CIBC doing this quarter?",
+      "timestamp": "2025-08-25T00:45:16.592865"
+    },
+    {
+      "scenario_id": "clarifier_016",
+      "scenario_name": "TTM Request",
+      "success": false,
+      "actual_output": {
+        "status": "needs_clarification",
+        "banks": {
+          "status": "success",
+          "decision": "banks_selected",
+          "bank_ids": [
+            1
+          ],
+          "banks_detail": {
+            "1": {
+              "id": 1,
+              "name": "Royal Bank of Canada",
+              "symbol": "RY",
+              "aliases": [
+                "RBC",
+                "Royal Bank",
+                "Royal",
+                "RY"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            }
+          },
+          "tokens_used": 1402,
+          "cost": 0.000142
+        },
+        "clarifications": [
+          "The user mentioned 'TTM revenue'. TTM stands for trailing twelve months, which typically includes the last four reported quarters. To clarify, do you want the most recent four quarters available for RBC?"
+        ],
+        "tokens_used": 4017,
+        "cost": 0.00041600000000000003
+      },
+      "expected_output": {
+        "status": "success",
+        "bank_ids": [
+          1
+        ],
+        "period_years": [
+          2024,
+          2025
+        ],
+        "period_quarters_2024": [
+          "Q4"
+        ],
+        "period_quarters_2025": [
+          "Q1",
+          "Q2",
+          "Q3"
+        ]
+      },
+      "latency_ms": 1558.9170455932617,
+      "tokens_used": 4017,
+      "cost": 0.00041600000000000003,
+      "confidence": null,
+      "error": "Expected status 'success', got 'needs_clarification'",
+      "model_used": "small",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "RBC's TTM revenue",
+      "timestamp": "2025-08-25T00:45:18.151965"
+    },
+    {
+      "scenario_id": "clarifier_017",
+      "scenario_name": "Since Temporal Reference",
+      "success": false,
+      "actual_output": {
+        "status": "needs_clarification",
+        "banks": {
+          "status": "success",
+          "decision": "banks_selected",
+          "bank_ids": [
+            2
+          ],
+          "banks_detail": {
+            "2": {
+              "id": 2,
+              "name": "Toronto-Dominion Bank",
+              "symbol": "TD",
+              "aliases": [
+                "TD",
+                "TD Bank",
+                "Toronto Dominion",
+                "TD Canada Trust"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            }
+          },
+          "tokens_used": 1406,
+          "cost": 0.000142
+        },
+        "clarifications": [
+          "What time period would you like to see TD's performance for?"
+        ],
+        "tokens_used": 3952,
+        "cost": 0.000401
+      },
+      "expected_output": {
+        "status": "success",
+        "bank_ids": [
+          2
+        ],
+        "period_years": [
+          2024,
+          2025
+        ],
+        "period_quarters_2024": [
+          "Q1",
+          "Q2",
+          "Q3",
+          "Q4"
+        ],
+        "period_quarters_2025": [
+          "Q1",
+          "Q2",
+          "Q3"
+        ]
+      },
+      "latency_ms": 1331.3817977905273,
+      "tokens_used": 3952,
+      "cost": 0.000401,
+      "confidence": null,
+      "error": "Expected status 'success', got 'needs_clarification'",
+      "model_used": "small",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "TD's performance since Q1 2024",
+      "timestamp": "2025-08-25T00:45:19.483522"
+    },
+    {
+      "scenario_id": "clarifier_018",
+      "scenario_name": "Cross-Year Comparison",
+      "success": true,
+      "actual_output": {
+        "status": "success",
+        "banks": {
+          "status": "success",
+          "decision": "banks_selected",
+          "bank_ids": [
+            6
+          ],
+          "banks_detail": {
+            "6": {
+              "id": 6,
+              "name": "National Bank of Canada",
+              "symbol": "NA",
+              "aliases": [
+                "NBC",
+                "National Bank",
+                "National",
+                "NA"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            }
+          },
+          "tokens_used": 1411,
+          "cost": 0.000143
+        },
+        "periods": {
+          "status": "success",
+          "decision": "periods_selected",
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2024,
+              "quarters": [
+                "Q4"
+              ]
+            }
+          },
+          "tokens_used": 2557,
+          "cost": 0.000262
+        },
+        "tokens_used": 3968,
+        "cost": 0.00040500000000000003
+      },
+      "expected_output": {
+        "status": "success",
+        "bank_ids": [
+          6
+        ],
+        "period_years": [
+          2023,
+          2024
+        ],
+        "period_quarters_2023": [
+          "Q4"
+        ],
+        "period_quarters_2024": [
+          "Q4"
+        ]
+      },
+      "latency_ms": 1125.765085220337,
+      "tokens_used": 3968,
+      "cost": 0.00040500000000000003,
+      "confidence": null,
+      "error": null,
+      "model_used": "small",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "Compare National Bank Q4 2024 vs Q4 2023",
+      "timestamp": "2025-08-25T00:45:20.609489"
+    },
+    {
+      "scenario_id": "clarifier_019",
+      "scenario_name": "Previous Quarter Request",
+      "success": false,
+      "actual_output": {
+        "status": "needs_clarification",
+        "banks": {
+          "status": "success",
+          "decision": "banks_selected",
+          "bank_ids": [
+            3
+          ],
+          "banks_detail": {
+            "3": {
+              "id": 3,
+              "name": "Bank of Montreal",
+              "symbol": "BMO",
+              "aliases": [
+                "BMO",
+                "Bank of Montreal",
+                "Montreal Bank"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            }
+          },
+          "tokens_used": 1403,
+          "cost": 0.000142
+        },
+        "clarifications": [
+          "BMO's previous quarter results. Could you specify which fiscal year and quarter you are referring to?"
+        ],
+        "tokens_used": 3930,
+        "cost": 0.000398
+      },
+      "expected_output": {
+        "status": "success",
+        "bank_ids": [
+          3
+        ],
+        "period_year": 2025,
+        "period_quarters": [
+          "Q3"
+        ]
+      },
+      "latency_ms": 1022.5949287414551,
+      "tokens_used": 3930,
+      "cost": 0.000398,
+      "confidence": null,
+      "error": "Expected status 'success', got 'needs_clarification'",
+      "model_used": "small",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "BMO's previous quarter results",
+      "timestamp": "2025-08-25T00:45:21.632275"
+    },
+    {
+      "scenario_id": "clarifier_020",
+      "scenario_name": "Monthly to Quarterly Mapping",
+      "success": true,
+      "actual_output": {
+        "status": "needs_clarification",
+        "banks": {
+          "status": "success",
+          "decision": "banks_selected",
+          "bank_ids": [
+            1
+          ],
+          "banks_detail": {
+            "1": {
+              "id": 1,
+              "name": "Royal Bank of Canada",
+              "symbol": "RY",
+              "aliases": [
+                "RBC",
+                "Royal Bank",
+                "Royal",
+                "RY"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            }
+          },
+          "tokens_used": 1403,
+          "cost": 0.000142
+        },
+        "clarifications": [
+          "Banks report quarterly. June falls in Q3 (May-July). Did you mean Q3 for a specific year?"
+        ],
+        "tokens_used": 3983,
+        "cost": 0.00040899999999999997
+      },
+      "expected_output": {
+        "status": "needs_clarification",
+        "bank_ids": [
+          1
+        ],
+        "needs_clarification": true
+      },
+      "latency_ms": 1536.5042686462402,
+      "tokens_used": 3983,
+      "cost": 0.00040899999999999997,
+      "confidence": null,
+      "error": null,
+      "model_used": "small",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "Show me RBC's June performance",
+      "timestamp": "2025-08-25T00:45:23.168982"
+    },
+    {
+      "scenario_id": "clarifier_021",
+      "scenario_name": "Partial Bank Name",
+      "success": false,
+      "actual_output": {
+        "status": "needs_clarification",
+        "clarifications": [
+          "Did you mean Royal Bank of Canada, Royal Bank, or another bank with 'Royal' in the name?"
+        ],
+        "tokens_used": 3628,
+        "cost": 0.000375
+      },
+      "expected_output": {
+        "status": "success",
+        "bank_ids": [
+          1
+        ],
+        "period_year": 2024,
+        "period_quarters": [
+          "Q2"
+        ]
+      },
+      "latency_ms": 1433.0828189849854,
+      "tokens_used": 3628,
+      "cost": 0.000375,
+      "confidence": null,
+      "error": "Expected status 'success', got 'needs_clarification' | Expected banks [1], got None",
+      "model_used": "small",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "Show Royal's Q2 2024 metrics",
+      "timestamp": "2025-08-25T00:45:24.602236"
+    },
+    {
+      "scenario_id": "clarifier_022",
+      "scenario_name": "Informal Bank Reference",
+      "success": true,
+      "actual_output": {
+        "status": "needs_clarification",
+        "clarifications": [
+          "Did you mean a specific bank with 'green bank', or are you referring to a bank known for environmental initiatives? Please specify the bank name or provide more details.",
+          "Banks report quarterly. 'Last quarter' refers to the most recent reported quarter. Given the current fiscal context (Q4 2025), the last reported quarter is Q3 2025. Would you like to see data for Q3 2025?"
+        ],
+        "tokens_used": 3625,
+        "cost": 0.000374
+      },
+      "expected_output": {
+        "status": "needs_clarification",
+        "needs_clarification": true
+      },
+      "latency_ms": 1331.2578201293945,
+      "tokens_used": 3625,
+      "cost": 0.000374,
+      "confidence": null,
+      "error": null,
+      "model_used": "small",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "How did the green bank do last quarter?",
+      "timestamp": "2025-08-25T00:45:25.933680"
+    },
+    {
+      "scenario_id": "clarifier_023",
+      "scenario_name": "Multiple Banks Listed",
+      "success": true,
+      "actual_output": {
+        "status": "success",
+        "banks": {
+          "status": "success",
+          "decision": "banks_selected",
+          "bank_ids": [
+            1,
+            2,
+            3
+          ],
+          "banks_detail": {
+            "1": {
+              "id": 1,
+              "name": "Royal Bank of Canada",
+              "symbol": "RY",
+              "aliases": [
+                "RBC",
+                "Royal Bank",
+                "Royal",
+                "RY"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            },
+            "2": {
+              "id": 2,
+              "name": "Toronto-Dominion Bank",
+              "symbol": "TD",
+              "aliases": [
+                "TD",
+                "TD Bank",
+                "Toronto Dominion",
+                "TD Canada Trust"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            },
+            "3": {
+              "id": 3,
+              "name": "Bank of Montreal",
+              "symbol": "BMO",
+              "aliases": [
+                "BMO",
+                "Bank of Montreal",
+                "Montreal Bank"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            }
+          },
+          "tokens_used": 1459,
+          "cost": 0.000152
+        },
+        "periods": {
+          "status": "success",
+          "decision": "periods_selected",
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2025,
+              "quarters": [
+                "Q1"
+              ]
+            }
+          },
+          "tokens_used": 3069,
+          "cost": 0.000316
+        },
+        "tokens_used": 4528,
+        "cost": 0.000468
+      },
+      "expected_output": {
+        "status": "success",
+        "bank_ids": [
+          1,
+          2,
+          3
+        ],
+        "period_year": 2025,
+        "period_quarters": [
+          "Q1"
+        ]
+      },
+      "latency_ms": 1639.5671367645264,
+      "tokens_used": 4528,
+      "cost": 0.000468,
+      "confidence": null,
+      "error": null,
+      "model_used": "small",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "Compare RBC, TD, and BMO for Q1 2025",
+      "timestamp": "2025-08-25T00:45:27.573440"
+    },
+    {
+      "scenario_id": "clarifier_024",
+      "scenario_name": "Category With Exclusion",
+      "success": false,
+      "actual_output": {
+        "status": "needs_clarification",
+        "banks": {
+          "status": "success",
+          "decision": "banks_selected",
+          "bank_ids": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "banks_detail": {
+            "1": {
+              "id": 1,
+              "name": "Royal Bank of Canada",
+              "symbol": "RY",
+              "aliases": [
+                "RBC",
+                "Royal Bank",
+                "Royal",
+                "RY"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            },
+            "2": {
+              "id": 2,
+              "name": "Toronto-Dominion Bank",
+              "symbol": "TD",
+              "aliases": [
+                "TD",
+                "TD Bank",
+                "Toronto Dominion",
+                "TD Canada Trust"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            },
+            "3": {
+              "id": 3,
+              "name": "Bank of Montreal",
+              "symbol": "BMO",
+              "aliases": [
+                "BMO",
+                "Bank of Montreal",
+                "Montreal Bank"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            },
+            "4": {
+              "id": 4,
+              "name": "Bank of Nova Scotia",
+              "symbol": "BNS",
+              "aliases": [
+                "Scotia",
+                "Scotiabank",
+                "BNS",
+                "Nova Scotia Bank"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            },
+            "5": {
+              "id": 5,
+              "name": "Canadian Imperial Bank of Commerce",
+              "symbol": "CM",
+              "aliases": [
+                "CIBC",
+                "CM",
+                "Imperial Bank",
+                "Canadian Imperial"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            },
+            "6": {
+              "id": 6,
+              "name": "National Bank of Canada",
+              "symbol": "NA",
+              "aliases": [
+                "NBC",
+                "National Bank",
+                "National",
+                "NA"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            }
+          },
+          "tokens_used": 1461,
+          "cost": 0.000153
+        },
+        "clarifications": [
+          "Big Six except National Bank Q3 2024"
+        ],
+        "tokens_used": 5191,
+        "cost": 0.00053
+      },
+      "expected_output": {
+        "status": "success",
+        "bank_ids": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "period_year": 2024,
+        "period_quarters": [
+          "Q3"
+        ]
+      },
+      "latency_ms": 1535.672903060913,
+      "tokens_used": 5191,
+      "cost": 0.00053,
+      "confidence": null,
+      "error": "Expected status 'success', got 'needs_clarification' | Expected banks [1, 2, 3, 4, 5], got [1, 2, 3, 4, 5, 6]",
+      "model_used": "small",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "Big Six except National Bank Q3 2024",
+      "timestamp": "2025-08-25T00:45:29.109371"
+    },
+    {
+      "scenario_id": "clarifier_025",
+      "scenario_name": "Bank by Ranking",
+      "success": true,
+      "actual_output": {
+        "status": "needs_clarification",
+        "clarifications": [
+          "Did you mean one of the Big Six Canadian banks (RBC, TD, BMO, BNS, CM, NA) or another bank? Please specify.",
+          "What time period would you like to see the largest Canadian bank's latest results for?"
+        ],
+        "tokens_used": 3586,
+        "cost": 0.00036700000000000003
+      },
+      "expected_output": {
+        "status": "needs_clarification",
+        "needs_clarification": true
+      },
+      "latency_ms": 1561.8460178375244,
+      "tokens_used": 3586,
+      "cost": 0.00036700000000000003,
+      "confidence": null,
+      "error": null,
+      "model_used": "small",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "The largest Canadian bank's latest results",
+      "timestamp": "2025-08-25T00:45:30.671425"
+    },
+    {
+      "scenario_id": "clarifier_026",
+      "scenario_name": "Bank Name Typo",
+      "success": false,
+      "actual_output": {
+        "status": "needs_clarification",
+        "clarifications": [
+          "Did you mean Scotiabank, Scotia, or another bank with similar name?",
+          "What time period would you like to see Scottia's YTD performance for?"
+        ],
+        "tokens_used": 3588,
+        "cost": 0.00036700000000000003
+      },
+      "expected_output": {
+        "status": "success",
+        "bank_ids": [
+          4
+        ],
+        "period_year": 2025,
+        "period_quarters": [
+          "Q1",
+          "Q2",
+          "Q3"
+        ]
+      },
+      "latency_ms": 1097.6829528808594,
+      "tokens_used": 3588,
+      "cost": 0.00036700000000000003,
+      "confidence": null,
+      "error": "Expected status 'success', got 'needs_clarification' | Expected banks [4], got None",
+      "model_used": "small",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "Show me Scottia's YTD performance",
+      "timestamp": "2025-08-25T00:45:31.769300"
+    },
+    {
+      "scenario_id": "clarifier_027",
+      "scenario_name": "Bank Abbreviations",
+      "success": true,
+      "actual_output": {
+        "status": "success",
+        "banks": {
+          "status": "success",
+          "decision": "banks_selected",
+          "bank_ids": [
+            3,
+            2
+          ],
+          "banks_detail": {
+            "3": {
+              "id": 3,
+              "name": "Bank of Montreal",
+              "symbol": "BMO",
+              "aliases": [
+                "BMO",
+                "Bank of Montreal",
+                "Montreal Bank"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            },
+            "2": {
+              "id": 2,
+              "name": "Toronto-Dominion Bank",
+              "symbol": "TD",
+              "aliases": [
+                "TD",
+                "TD Bank",
+                "Toronto Dominion",
+                "TD Canada Trust"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            }
+          },
+          "tokens_used": 1454,
+          "cost": 0.000152
+        },
+        "periods": {
+          "status": "success",
+          "decision": "periods_selected",
+          "periods": {
+            "3": {
+              "fiscal_year": 2024,
+              "quarters": [
+                "Q4"
+              ]
+            },
+            "2": {
+              "fiscal_year": 2024,
+              "quarters": [
+                "Q4"
+              ]
+            }
+          }
+        },
+        "tokens_used": 1454,
+        "cost": 0.000152
+      },
+      "expected_output": {
+        "status": "success",
+        "bank_ids": [
+          3,
+          2
+        ],
+        "period_year": 2024,
+        "period_quarters": [
+          "Q4"
+        ]
+      },
+      "latency_ms": 1844.132900238037,
+      "tokens_used": 1454,
+      "cost": 0.000152,
+      "confidence": null,
+      "error": null,
+      "model_used": "small",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "BMO vs TD Q4 2024",
+      "timestamp": "2025-08-25T00:45:33.613676"
+    },
+    {
+      "scenario_id": "clarifier_028",
+      "scenario_name": "Non-Existent Bank",
+      "success": true,
+      "actual_output": {
+        "status": "needs_clarification",
+        "banks": {
+          "status": "success",
+          "decision": "banks_selected",
+          "bank_ids": [
+            9
+          ],
+          "banks_detail": {
+            "9": {
+              "id": 9,
+              "name": "Wells Fargo",
+              "symbol": "WFC",
+              "aliases": [
+                "Wells",
+                "WFC",
+                "Wells Fargo"
+              ],
+              "tags": [
+                "us_bank",
+                "tier1_bank"
+              ],
+              "databases": [
+                "reports",
+                "transcripts"
+              ]
+            }
+          },
+          "tokens_used": 1407,
+          "cost": 0.000142
+        },
+        "clarifications": [
+          "Wells Fargo's Canadian operations Q2 2025"
+        ],
+        "tokens_used": 3867,
+        "cost": 0.000392
+      },
+      "expected_output": {
+        "status": "needs_clarification",
+        "needs_clarification": true
+      },
+      "latency_ms": 3072.0531940460205,
+      "tokens_used": 3867,
+      "cost": 0.000392,
+      "confidence": null,
+      "error": null,
+      "model_used": "small",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "Wells Fargo's Canadian operations Q2 2025",
+      "timestamp": "2025-08-25T00:45:36.685899"
+    },
+    {
+      "scenario_id": "clarifier_029",
+      "scenario_name": "All Banks Request",
+      "success": false,
+      "actual_output": {
+        "status": "needs_clarification",
+        "clarifications": [
+          "Which banks would you like to see the efficiency ratios for?"
+        ],
+        "tokens_used": 3598,
+        "cost": 0.00036899999999999997
+      },
+      "expected_output": {
+        "status": "success",
+        "bank_ids": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6
+        ],
+        "period_year": 2024,
+        "period_quarters": [
+          "Q3"
+        ]
+      },
+      "latency_ms": 1535.8850955963135,
+      "tokens_used": 3598,
+      "cost": 0.00036899999999999997,
+      "confidence": null,
+      "error": "Expected status 'success', got 'needs_clarification' | Expected banks [1, 2, 3, 4, 5, 6], got None",
+      "model_used": "small",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "Show all banks Q3 2024 efficiency ratios",
+      "timestamp": "2025-08-25T00:45:38.221941"
+    },
+    {
+      "scenario_id": "clarifier_030",
+      "scenario_name": "Pronoun Without Antecedent",
+      "success": true,
+      "actual_output": {
+        "status": "needs_clarification",
+        "clarifications": [
+          "Which banks are you referring to? Please specify the bank names or categories.",
+          "What time period would you like to see results for?"
+        ],
+        "tokens_used": 3554,
+        "cost": 0.000361
+      },
+      "expected_output": {
+        "status": "needs_clarification",
+        "needs_clarification": true
+      },
+      "latency_ms": 1330.5809497833252,
+      "tokens_used": 3554,
+      "cost": 0.000361,
+      "confidence": null,
+      "error": null,
+      "model_used": "small",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "What were their results?",
+      "timestamp": "2025-08-25T00:45:39.552708"
+    },
+    {
+      "scenario_id": "clarifier_001",
+      "scenario_name": "Clear Bank and Period - RBC Q3 2024",
+      "success": true,
+      "actual_output": {
+        "status": "success",
+        "banks": {
+          "status": "success",
+          "decision": "banks_selected",
+          "bank_ids": [
+            1
+          ],
+          "banks_detail": {
+            "1": {
+              "id": 1,
+              "name": "Royal Bank of Canada",
+              "symbol": "RY",
+              "aliases": [
+                "RBC",
+                "Royal Bank",
+                "Royal",
+                "RY"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            }
+          },
+          "tokens_used": 1408,
+          "cost": 0.000427
+        },
+        "periods": {
+          "status": "success",
+          "decision": "periods_selected",
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2024,
+              "quarters": [
+                "Q3"
+              ]
+            }
+          },
+          "tokens_used": 2521,
+          "cost": 0.000763
+        },
+        "tokens_used": 3929,
+        "cost": 0.00119
+      },
+      "expected_output": {
+        "status": "success",
+        "bank_ids": [
+          1
+        ],
+        "period_year": 2024,
+        "period_quarters": [
+          "Q3"
+        ]
+      },
+      "latency_ms": 1465.4340744018555,
+      "tokens_used": 3929,
+      "cost": 0.00119,
+      "confidence": null,
+      "error": null,
+      "model_used": "medium",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "Show me RBC's Q3 2024 financial results",
+      "timestamp": "2025-08-25T00:45:41.018859"
+    },
+    {
+      "scenario_id": "clarifier_002",
+      "scenario_name": "Multiple Banks - Big Six Q2 2024",
+      "success": true,
+      "actual_output": {
+        "status": "success",
+        "banks": {
+          "status": "success",
+          "decision": "banks_selected",
+          "bank_ids": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "banks_detail": {
+            "1": {
+              "id": 1,
+              "name": "Royal Bank of Canada",
+              "symbol": "RY",
+              "aliases": [
+                "RBC",
+                "Royal Bank",
+                "Royal",
+                "RY"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            },
+            "2": {
+              "id": 2,
+              "name": "Toronto-Dominion Bank",
+              "symbol": "TD",
+              "aliases": [
+                "TD",
+                "TD Bank",
+                "Toronto Dominion",
+                "TD Canada Trust"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            },
+            "3": {
+              "id": 3,
+              "name": "Bank of Montreal",
+              "symbol": "BMO",
+              "aliases": [
+                "BMO",
+                "Bank of Montreal",
+                "Montreal Bank"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            },
+            "4": {
+              "id": 4,
+              "name": "Bank of Nova Scotia",
+              "symbol": "BNS",
+              "aliases": [
+                "Scotia",
+                "Scotiabank",
+                "BNS",
+                "Nova Scotia Bank"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            },
+            "5": {
+              "id": 5,
+              "name": "Canadian Imperial Bank of Commerce",
+              "symbol": "CM",
+              "aliases": [
+                "CIBC",
+                "CM",
+                "Imperial Bank",
+                "Canadian Imperial"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            },
+            "6": {
+              "id": 6,
+              "name": "National Bank of Canada",
+              "symbol": "NA",
+              "aliases": [
+                "NBC",
+                "National Bank",
+                "National",
+                "NA"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            }
+          },
+          "tokens_used": 1419,
+          "cost": 0.000433
+        },
+        "periods": {
+          "status": "success",
+          "decision": "periods_selected",
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2024,
+              "quarters": [
+                "Q2"
+              ]
+            }
+          },
+          "tokens_used": 3714,
+          "cost": 0.001121
+        },
+        "tokens_used": 5133,
+        "cost": 0.001554
+      },
+      "expected_output": {
+        "status": "success",
+        "bank_ids": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6
+        ],
+        "period_year": 2024,
+        "period_quarters": [
+          "Q2"
+        ]
+      },
+      "latency_ms": 1914.813756942749,
+      "tokens_used": 5133,
+      "cost": 0.001554,
+      "confidence": null,
+      "error": null,
+      "model_used": "medium",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "Compare the Big Six banks performance in Q2 2024",
+      "timestamp": "2025-08-25T00:45:42.933916"
+    },
+    {
+      "scenario_id": "clarifier_003",
+      "scenario_name": "Ambiguous Bank - No Period",
+      "success": true,
+      "actual_output": {
+        "status": "needs_clarification",
+        "clarifications": [
+          "Which banks would you like to see the latest financial metrics for?",
+          "The query asks for 'latest financial metrics' but does not specify a fiscal period. Would you like to see the most recently reported quarter's data or a different period?"
+        ],
+        "tokens_used": 3579,
+        "cost": 0.0010969999999999999
+      },
+      "expected_output": {
+        "status": "needs_clarification",
+        "needs_clarification": true
+      },
+      "latency_ms": 2455.902099609375,
+      "tokens_used": 3579,
+      "cost": 0.0010969999999999999,
+      "confidence": null,
+      "error": null,
+      "model_used": "medium",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "What are the latest financial metrics?",
+      "timestamp": "2025-08-25T00:45:45.390026"
+    },
+    {
+      "scenario_id": "clarifier_004",
+      "scenario_name": "Clear Bank - Missing Period",
+      "success": true,
+      "actual_output": {
+        "status": "needs_clarification",
+        "banks": {
+          "status": "success",
+          "decision": "banks_selected",
+          "bank_ids": [
+            2
+          ],
+          "banks_detail": {
+            "2": {
+              "id": 2,
+              "name": "Toronto-Dominion Bank",
+              "symbol": "TD",
+              "aliases": [
+                "TD",
+                "TD Bank",
+                "Toronto Dominion",
+                "TD Canada Trust"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            }
+          },
+          "tokens_used": 1403,
+          "cost": 0.000426
+        },
+        "clarifications": [
+          "What time period would you like to see TD Bank's revenue for?"
+        ],
+        "tokens_used": 3931,
+        "cost": 0.001193
+      },
+      "expected_output": {
+        "status": "needs_clarification",
+        "bank_ids": [
+          2
+        ],
+        "needs_clarification": true
+      },
+      "latency_ms": 2028.6569595336914,
+      "tokens_used": 3931,
+      "cost": 0.001193,
+      "confidence": null,
+      "error": null,
+      "model_used": "medium",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "Show me TD Bank's revenue",
+      "timestamp": "2025-08-25T00:45:47.418856"
+    },
+    {
+      "scenario_id": "clarifier_005",
+      "scenario_name": "Latest Period Request",
+      "success": true,
+      "actual_output": {
+        "status": "success",
+        "banks": {
+          "status": "success",
+          "decision": "banks_selected",
+          "bank_ids": [
+            3
+          ],
+          "banks_detail": {
+            "3": {
+              "id": 3,
+              "name": "Bank of Montreal",
+              "symbol": "BMO",
+              "aliases": [
+                "BMO",
+                "Bank of Montreal",
+                "Montreal Bank"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            }
+          },
+          "tokens_used": 1405,
+          "cost": 0.000426
+        },
+        "periods": {
+          "status": "success",
+          "decision": "periods_selected",
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2025,
+              "quarters": [
+                "Q3"
+              ]
+            }
+          },
+          "tokens_used": 2518,
+          "cost": 0.000763
+        },
+        "tokens_used": 3923,
+        "cost": 0.001189
+      },
+      "expected_output": {
+        "status": "success",
+        "bank_ids": [
+          3
+        ],
+        "period_year": 2025,
+        "period_quarters": [
+          "Q3"
+        ]
+      },
+      "latency_ms": 1861.6130352020264,
+      "tokens_used": 3923,
+      "cost": 0.001189,
+      "confidence": null,
+      "error": null,
+      "model_used": "medium",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "Give me BMO's latest quarterly results",
+      "timestamp": "2025-08-25T00:45:49.280659"
+    },
+    {
+      "scenario_id": "clarifier_006",
+      "scenario_name": "YTD Period Request",
+      "success": true,
+      "actual_output": {
+        "status": "success",
+        "banks": {
+          "status": "success",
+          "decision": "banks_selected",
+          "bank_ids": [
+            4
+          ],
+          "banks_detail": {
+            "4": {
+              "id": 4,
+              "name": "Bank of Nova Scotia",
+              "symbol": "BNS",
+              "aliases": [
+                "Scotia",
+                "Scotiabank",
+                "BNS",
+                "Nova Scotia Bank"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            }
+          },
+          "tokens_used": 1406,
+          "cost": 0.000427
+        },
+        "periods": {
+          "status": "success",
+          "decision": "periods_selected",
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2025,
+              "quarters": [
+                "Q1",
+                "Q2",
+                "Q3"
+              ]
+            }
+          },
+          "tokens_used": 2532,
+          "cost": 0.000769
+        },
+        "tokens_used": 3938,
+        "cost": 0.001196
+      },
+      "expected_output": {
+        "status": "success",
+        "bank_ids": [
+          4
+        ],
+        "period_year": 2025,
+        "period_quarters": [
+          "Q1",
+          "Q2",
+          "Q3"
+        ]
+      },
+      "latency_ms": 2050.3690242767334,
+      "tokens_used": 3938,
+      "cost": 0.001196,
+      "confidence": null,
+      "error": null,
+      "model_used": "medium",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "Show Scotia's YTD 2025 performance",
+      "timestamp": "2025-08-25T00:45:51.331227"
+    },
+    {
+      "scenario_id": "clarifier_007",
+      "scenario_name": "Bank Alias - National Bank",
+      "success": true,
+      "actual_output": {
+        "status": "success",
+        "banks": {
+          "status": "success",
+          "decision": "banks_selected",
+          "bank_ids": [
+            6
+          ],
+          "banks_detail": {
+            "6": {
+              "id": 6,
+              "name": "National Bank of Canada",
+              "symbol": "NA",
+              "aliases": [
+                "NBC",
+                "National Bank",
+                "National",
+                "NA"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            }
+          },
+          "tokens_used": 1410,
+          "cost": 0.000428
+        },
+        "periods": {
+          "status": "success",
+          "decision": "periods_selected",
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2024,
+              "quarters": [
+                "Q1"
+              ]
+            }
+          },
+          "tokens_used": 2516,
+          "cost": 0.000762
+        },
+        "tokens_used": 3926,
+        "cost": 0.00119
+      },
+      "expected_output": {
+        "status": "success",
+        "bank_ids": [
+          6
+        ],
+        "period_year": 2024,
+        "period_quarters": [
+          "Q1"
+        ]
+      },
+      "latency_ms": 1887.1181011199951,
+      "tokens_used": 3926,
+      "cost": 0.00119,
+      "confidence": null,
+      "error": null,
+      "model_used": "medium",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "What is National Bank's Q1 2024 net income?",
+      "timestamp": "2025-08-25T00:45:53.218613"
+    },
+    {
+      "scenario_id": "clarifier_008",
+      "scenario_name": "Multiple Specific Banks",
+      "success": true,
+      "actual_output": {
+        "status": "success",
+        "banks": {
+          "status": "success",
+          "decision": "banks_selected",
+          "bank_ids": [
+            1,
+            2
+          ],
+          "banks_detail": {
+            "1": {
+              "id": 1,
+              "name": "Royal Bank of Canada",
+              "symbol": "RY",
+              "aliases": [
+                "RBC",
+                "Royal Bank",
+                "Royal",
+                "RY"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            },
+            "2": {
+              "id": 2,
+              "name": "Toronto-Dominion Bank",
+              "symbol": "TD",
+              "aliases": [
+                "TD",
+                "TD Bank",
+                "Toronto Dominion",
+                "TD Canada Trust"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            }
+          },
+          "tokens_used": 1410,
+          "cost": 0.000428
+        },
+        "periods": {
+          "status": "success",
+          "decision": "periods_selected",
+          "periods": {
+            "1": {
+              "fiscal_year": 2023,
+              "quarters": [
+                "Q4"
+              ]
+            },
+            "2": {
+              "fiscal_year": 2023,
+              "quarters": [
+                "Q4"
+              ]
+            }
+          }
+        },
+        "tokens_used": 1410,
+        "cost": 0.000428
+      },
+      "expected_output": {
+        "status": "success",
+        "bank_ids": [
+          1,
+          2
+        ],
+        "period_year": 2023,
+        "period_quarters": [
+          "Q4"
+        ]
+      },
+      "latency_ms": 2448.072910308838,
+      "tokens_used": 1410,
+      "cost": 0.000428,
+      "confidence": null,
+      "error": null,
+      "model_used": "medium",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "Compare RBC and TD performance in Q4 2023",
+      "timestamp": "2025-08-25T00:45:55.666905"
+    },
+    {
+      "scenario_id": "clarifier_009",
+      "scenario_name": "Full Year Period",
+      "success": false,
+      "actual_output": {
+        "status": "needs_clarification",
+        "banks": {
+          "status": "success",
+          "decision": "banks_selected",
+          "bank_ids": [
+            5
+          ],
+          "banks_detail": {
+            "5": {
+              "id": 5,
+              "name": "Canadian Imperial Bank of Commerce",
+              "symbol": "CM",
+              "aliases": [
+                "CIBC",
+                "CM",
+                "Imperial Bank",
+                "Canadian Imperial"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            }
+          },
+          "tokens_used": 1407,
+          "cost": 0.000427
+        },
+        "clarifications": [
+          "You asked for CIBC's full year 2023 results. However, I only have period availability information for Canadian Imperial Bank of Commerce (CIBC) for 2024 and 2025. Could you please confirm if you want full year 2023 results despite no availability data, or if you want results for a different year?"
+        ],
+        "tokens_used": 3986,
+        "cost": 0.001226
+      },
+      "expected_output": {
+        "status": "success",
+        "bank_ids": [
+          5
+        ],
+        "period_year": 2023,
+        "period_quarters": [
+          "Q1",
+          "Q2",
+          "Q3",
+          "Q4"
+        ]
+      },
+      "latency_ms": 3239.5219802856445,
+      "tokens_used": 3986,
+      "cost": 0.001226,
+      "confidence": null,
+      "error": "Expected status 'success', got 'needs_clarification'",
+      "model_used": "medium",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "Show CIBC's full year 2023 results",
+      "timestamp": "2025-08-25T00:45:58.906630"
+    },
+    {
+      "scenario_id": "clarifier_010",
+      "scenario_name": "Clear Period - Ambiguous Bank",
+      "success": true,
+      "actual_output": {
+        "status": "needs_clarification",
+        "clarifications": [
+          "Which banks would you like to see the efficiency ratio for?"
+        ],
+        "tokens_used": 3556,
+        "cost": 0.00108
+      },
+      "expected_output": {
+        "status": "needs_clarification",
+        "needs_clarification": true
+      },
+      "latency_ms": 1866.6760921478271,
+      "tokens_used": 3556,
+      "cost": 0.00108,
+      "confidence": null,
+      "error": null,
+      "model_used": "medium",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "What was the efficiency ratio in Q2 2024?",
+      "timestamp": "2025-08-25T00:46:00.773515"
+    },
+    {
+      "scenario_id": "clarifier_011",
+      "scenario_name": "Recent Performance Request",
+      "success": true,
+      "actual_output": {
+        "status": "success",
+        "banks": {
+          "status": "success",
+          "decision": "banks_selected",
+          "bank_ids": [
+            2
+          ],
+          "banks_detail": {
+            "2": {
+              "id": 2,
+              "name": "Toronto-Dominion Bank",
+              "symbol": "TD",
+              "aliases": [
+                "TD",
+                "TD Bank",
+                "Toronto Dominion",
+                "TD Canada Trust"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            }
+          },
+          "tokens_used": 1403,
+          "cost": 0.000426
+        },
+        "periods": {
+          "status": "success",
+          "decision": "periods_selected",
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2025,
+              "quarters": [
+                "Q3"
+              ]
+            }
+          },
+          "tokens_used": 2523,
+          "cost": 0.000764
+        },
+        "tokens_used": 3926,
+        "cost": 0.00119
+      },
+      "expected_output": {
+        "status": "success",
+        "bank_ids": [
+          2
+        ],
+        "period_year": 2025,
+        "period_quarters": [
+          "Q3"
+        ]
+      },
+      "latency_ms": 1551.171064376831,
+      "tokens_used": 3926,
+      "cost": 0.00119,
+      "confidence": null,
+      "error": null,
+      "model_used": "medium",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "Show me TD's recent performance",
+      "timestamp": "2025-08-25T00:46:02.324873"
+    },
+    {
+      "scenario_id": "clarifier_012",
+      "scenario_name": "Future Period Request",
+      "success": true,
+      "actual_output": {
+        "status": "needs_clarification",
+        "banks": {
+          "status": "success",
+          "decision": "banks_selected",
+          "bank_ids": [
+            1
+          ],
+          "banks_detail": {
+            "1": {
+              "id": 1,
+              "name": "Royal Bank of Canada",
+              "symbol": "RY",
+              "aliases": [
+                "RBC",
+                "Royal Bank",
+                "Royal",
+                "RY"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            }
+          },
+          "tokens_used": 1409,
+          "cost": 0.000427
+        },
+        "clarifications": [
+          "Q1 2026 hasn't occurred yet. Would you like to see the latest available quarters for RBC instead?"
+        ],
+        "tokens_used": 3944,
+        "cost": 0.001199
+      },
+      "expected_output": {
+        "status": "needs_clarification",
+        "bank_ids": [
+          1
+        ],
+        "needs_clarification": true
+      },
+      "latency_ms": 1700.7801532745361,
+      "tokens_used": 3944,
+      "cost": 0.001199,
+      "confidence": null,
+      "error": null,
+      "model_used": "medium",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "What will RBC's Q1 2026 results be?",
+      "timestamp": "2025-08-25T00:46:04.025854"
+    },
+    {
+      "scenario_id": "clarifier_013",
+      "scenario_name": "Ambiguous Last Year",
+      "success": true,
+      "actual_output": {
+        "status": "needs_clarification",
+        "banks": {
+          "status": "success",
+          "decision": "banks_selected",
+          "bank_ids": [
+            3
+          ],
+          "banks_detail": {
+            "3": {
+              "id": 3,
+              "name": "Bank of Montreal",
+              "symbol": "BMO",
+              "aliases": [
+                "BMO",
+                "Bank of Montreal",
+                "Montreal Bank"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            }
+          },
+          "tokens_used": 1404,
+          "cost": 0.000426
+        },
+        "clarifications": [
+          "For BMO's 'last year' performance, do you mean fiscal year 2024 (Nov 1, 2023 - Oct 31, 2024) or calendar year 2024?"
+        ],
+        "tokens_used": 3954,
+        "cost": 0.001208
+      },
+      "expected_output": {
+        "status": "needs_clarification",
+        "bank_ids": [
+          3
+        ],
+        "needs_clarification": true
+      },
+      "latency_ms": 1944.9610710144043,
+      "tokens_used": 3954,
+      "cost": 0.001208,
+      "confidence": null,
+      "error": null,
+      "model_used": "medium",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "Compare BMO's last year performance",
+      "timestamp": "2025-08-25T00:46:05.971001"
+    },
+    {
+      "scenario_id": "clarifier_014",
+      "scenario_name": "QoQ Growth Request",
+      "success": true,
+      "actual_output": {
+        "status": "success",
+        "banks": {
+          "status": "success",
+          "decision": "banks_selected",
+          "bank_ids": [
+            4
+          ],
+          "banks_detail": {
+            "4": {
+              "id": 4,
+              "name": "Bank of Nova Scotia",
+              "symbol": "BNS",
+              "aliases": [
+                "Scotia",
+                "Scotiabank",
+                "BNS",
+                "Nova Scotia Bank"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            }
+          },
+          "tokens_used": 1403,
+          "cost": 0.000426
+        },
+        "periods": {
+          "status": "success",
+          "decision": "periods_selected",
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2025,
+              "quarters": [
+                "Q2",
+                "Q3"
+              ]
+            }
+          },
+          "tokens_used": 2526,
+          "cost": 0.000766
+        },
+        "tokens_used": 3929,
+        "cost": 0.001192
+      },
+      "expected_output": {
+        "status": "success",
+        "bank_ids": [
+          4
+        ],
+        "period_year": 2025,
+        "period_quarters": [
+          "Q2",
+          "Q3"
+        ]
+      },
+      "latency_ms": 1615.3068542480469,
+      "tokens_used": 3929,
+      "cost": 0.001192,
+      "confidence": null,
+      "error": null,
+      "model_used": "medium",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "Show Scotia's QoQ growth",
+      "timestamp": "2025-08-25T00:46:07.586506"
+    },
+    {
+      "scenario_id": "clarifier_015",
+      "scenario_name": "Current Quarter Unreported",
+      "success": true,
+      "actual_output": {
+        "status": "needs_clarification",
+        "banks": {
+          "status": "success",
+          "decision": "banks_selected",
+          "bank_ids": [
+            5
+          ],
+          "banks_detail": {
+            "5": {
+              "id": 5,
+              "name": "Canadian Imperial Bank of Commerce",
+              "symbol": "CM",
+              "aliases": [
+                "CIBC",
+                "CM",
+                "Imperial Bank",
+                "Canadian Imperial"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            }
+          },
+          "tokens_used": 1405,
+          "cost": 0.000426
+        },
+        "clarifications": [
+          "CIBC is not in the provided bank list. Did you mean Canadian Imperial Bank of Commerce (CIBC) or another bank? Also, 'this quarter' could mean the current fiscal quarter (FY2025 Q4) which is not yet reported. Would you like to see the latest reported quarter (FY2025 Q3) instead?"
+        ],
+        "tokens_used": 3983,
+        "cost": 0.001225
+      },
+      "expected_output": {
+        "status": "needs_clarification",
+        "bank_ids": [
+          5
+        ],
+        "needs_clarification": true
+      },
+      "latency_ms": 2478.7628650665283,
+      "tokens_used": 3983,
+      "cost": 0.001225,
+      "confidence": null,
+      "error": null,
+      "model_used": "medium",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "How is CIBC doing this quarter?",
+      "timestamp": "2025-08-25T00:46:10.065460"
+    },
+    {
+      "scenario_id": "clarifier_016",
+      "scenario_name": "TTM Request",
+      "success": true,
+      "actual_output": {
+        "status": "success",
+        "banks": {
+          "status": "success",
+          "decision": "banks_selected",
+          "bank_ids": [
+            1
+          ],
+          "banks_detail": {
+            "1": {
+              "id": 1,
+              "name": "Royal Bank of Canada",
+              "symbol": "RY",
+              "aliases": [
+                "RBC",
+                "Royal Bank",
+                "Royal",
+                "RY"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            }
+          },
+          "tokens_used": 1402,
+          "cost": 0.000425
+        },
+        "periods": {
+          "status": "success",
+          "decision": "periods_selected",
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2025,
+              "quarters": [
+                "Q4",
+                "Q1",
+                "Q2",
+                "Q3"
+              ]
+            }
+          },
+          "tokens_used": 2524,
+          "cost": 0.000767
+        },
+        "tokens_used": 3926,
+        "cost": 0.001192
+      },
+      "expected_output": {
+        "status": "success",
+        "bank_ids": [
+          1
+        ],
+        "period_years": [
+          2024,
+          2025
+        ],
+        "period_quarters_2024": [
+          "Q4"
+        ],
+        "period_quarters_2025": [
+          "Q1",
+          "Q2",
+          "Q3"
+        ]
+      },
+      "latency_ms": 2251.1327266693115,
+      "tokens_used": 3926,
+      "cost": 0.001192,
+      "confidence": null,
+      "error": null,
+      "model_used": "medium",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "RBC's TTM revenue",
+      "timestamp": "2025-08-25T00:46:12.316759"
+    },
+    {
+      "scenario_id": "clarifier_017",
+      "scenario_name": "Since Temporal Reference",
+      "success": true,
+      "actual_output": {
+        "status": "success",
+        "banks": {
+          "status": "success",
+          "decision": "banks_selected",
+          "bank_ids": [
+            2
+          ],
+          "banks_detail": {
+            "2": {
+              "id": 2,
+              "name": "Toronto-Dominion Bank",
+              "symbol": "TD",
+              "aliases": [
+                "TD",
+                "TD Bank",
+                "Toronto Dominion",
+                "TD Canada Trust"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            }
+          },
+          "tokens_used": 1406,
+          "cost": 0.000427
+        },
+        "periods": {
+          "status": "success",
+          "decision": "periods_selected",
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2024,
+              "quarters": [
+                "Q1",
+                "Q2",
+                "Q3",
+                "Q4"
+              ]
+            }
+          },
+          "tokens_used": 2535,
+          "cost": 0.00077
+        },
+        "tokens_used": 3941,
+        "cost": 0.001197
+      },
+      "expected_output": {
+        "status": "success",
+        "bank_ids": [
+          2
+        ],
+        "period_years": [
+          2024,
+          2025
+        ],
+        "period_quarters_2024": [
+          "Q1",
+          "Q2",
+          "Q3",
+          "Q4"
+        ],
+        "period_quarters_2025": [
+          "Q1",
+          "Q2",
+          "Q3"
+        ]
+      },
+      "latency_ms": 1740.675926208496,
+      "tokens_used": 3941,
+      "cost": 0.001197,
+      "confidence": null,
+      "error": null,
+      "model_used": "medium",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "TD's performance since Q1 2024",
+      "timestamp": "2025-08-25T00:46:14.057618"
+    },
+    {
+      "scenario_id": "clarifier_018",
+      "scenario_name": "Cross-Year Comparison",
+      "success": true,
+      "actual_output": {
+        "status": "success",
+        "banks": {
+          "status": "success",
+          "decision": "banks_selected",
+          "bank_ids": [
+            6
+          ],
+          "banks_detail": {
+            "6": {
+              "id": 6,
+              "name": "National Bank of Canada",
+              "symbol": "NA",
+              "aliases": [
+                "NBC",
+                "National Bank",
+                "National",
+                "NA"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            }
+          },
+          "tokens_used": 1411,
+          "cost": 0.000428
+        },
+        "periods": {
+          "status": "success",
+          "decision": "periods_selected",
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2024,
+              "quarters": [
+                "Q4"
+              ]
+            }
+          },
+          "tokens_used": 2517,
+          "cost": 0.000762
+        },
+        "tokens_used": 3928,
+        "cost": 0.00119
+      },
+      "expected_output": {
+        "status": "success",
+        "bank_ids": [
+          6
+        ],
+        "period_years": [
+          2023,
+          2024
+        ],
+        "period_quarters_2023": [
+          "Q4"
+        ],
+        "period_quarters_2024": [
+          "Q4"
+        ]
+      },
+      "latency_ms": 1434.83304977417,
+      "tokens_used": 3928,
+      "cost": 0.00119,
+      "confidence": null,
+      "error": null,
+      "model_used": "medium",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "Compare National Bank Q4 2024 vs Q4 2023",
+      "timestamp": "2025-08-25T00:46:15.492638"
+    },
+    {
+      "scenario_id": "clarifier_019",
+      "scenario_name": "Previous Quarter Request",
+      "success": false,
+      "actual_output": {
+        "status": "success",
+        "banks": {
+          "status": "success",
+          "decision": "banks_selected",
+          "bank_ids": [
+            3
+          ],
+          "banks_detail": {
+            "3": {
+              "id": 3,
+              "name": "Bank of Montreal",
+              "symbol": "BMO",
+              "aliases": [
+                "BMO",
+                "Bank of Montreal",
+                "Montreal Bank"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            }
+          },
+          "tokens_used": 1403,
+          "cost": 0.000426
+        },
+        "periods": {
+          "status": "success",
+          "decision": "periods_selected",
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2025,
+              "quarters": [
+                "Q2"
+              ]
+            }
+          },
+          "tokens_used": 2516,
+          "cost": 0.000762
+        },
+        "tokens_used": 3919,
+        "cost": 0.001188
+      },
+      "expected_output": {
+        "status": "success",
+        "bank_ids": [
+          3
+        ],
+        "period_year": 2025,
+        "period_quarters": [
+          "Q3"
+        ]
+      },
+      "latency_ms": 1432.1620464324951,
+      "tokens_used": 3919,
+      "cost": 0.001188,
+      "confidence": null,
+      "error": "Expected quarters ['Q3'], got ['Q2']",
+      "model_used": "medium",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "BMO's previous quarter results",
+      "timestamp": "2025-08-25T00:46:16.925009"
+    },
+    {
+      "scenario_id": "clarifier_020",
+      "scenario_name": "Monthly to Quarterly Mapping",
+      "success": true,
+      "actual_output": {
+        "status": "needs_clarification",
+        "banks": {
+          "status": "success",
+          "decision": "banks_selected",
+          "bank_ids": [
+            1
+          ],
+          "banks_detail": {
+            "1": {
+              "id": 1,
+              "name": "Royal Bank of Canada",
+              "symbol": "RY",
+              "aliases": [
+                "RBC",
+                "Royal Bank",
+                "Royal",
+                "RY"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            }
+          },
+          "tokens_used": 1403,
+          "cost": 0.000426
+        },
+        "clarifications": [
+          "Banks report quarterly. June is in Q3 (May-July). Did you mean Q3 for RBC's performance?"
+        ],
+        "tokens_used": 3934,
+        "cost": 0.001197
+      },
+      "expected_output": {
+        "status": "needs_clarification",
+        "bank_ids": [
+          1
+        ],
+        "needs_clarification": true
+      },
+      "latency_ms": 1534.0240001678467,
+      "tokens_used": 3934,
+      "cost": 0.001197,
+      "confidence": null,
+      "error": null,
+      "model_used": "medium",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "Show me RBC's June performance",
+      "timestamp": "2025-08-25T00:46:18.459228"
+    },
+    {
+      "scenario_id": "clarifier_021",
+      "scenario_name": "Partial Bank Name",
+      "success": true,
+      "actual_output": {
+        "status": "success",
+        "banks": {
+          "status": "success",
+          "decision": "banks_selected",
+          "bank_ids": [
+            1
+          ],
+          "banks_detail": {
+            "1": {
+              "id": 1,
+              "name": "Royal Bank of Canada",
+              "symbol": "RY",
+              "aliases": [
+                "RBC",
+                "Royal Bank",
+                "Royal",
+                "RY"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            }
+          },
+          "tokens_used": 1406,
+          "cost": 0.000427
+        },
+        "periods": {
+          "status": "success",
+          "decision": "periods_selected",
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2024,
+              "quarters": [
+                "Q2"
+              ]
+            }
+          },
+          "tokens_used": 2519,
+          "cost": 0.000763
+        },
+        "tokens_used": 3925,
+        "cost": 0.00119
+      },
+      "expected_output": {
+        "status": "success",
+        "bank_ids": [
+          1
+        ],
+        "period_year": 2024,
+        "period_quarters": [
+          "Q2"
+        ]
+      },
+      "latency_ms": 1638.9329433441162,
+      "tokens_used": 3925,
+      "cost": 0.00119,
+      "confidence": null,
+      "error": null,
+      "model_used": "medium",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "Show Royal's Q2 2024 metrics",
+      "timestamp": "2025-08-25T00:46:20.098345"
+    },
+    {
+      "scenario_id": "clarifier_022",
+      "scenario_name": "Informal Bank Reference",
+      "success": true,
+      "actual_output": {
+        "status": "needs_clarification",
+        "clarifications": [
+          "Which bank are you referring to by 'green bank'? Please specify the bank name or provide more details.",
+          "You asked about 'last quarter' for the green bank. Could you please confirm which fiscal quarter and year you mean? For reference, the latest reported quarter is Q3 2025 (May-Jul 2025)."
+        ],
+        "tokens_used": 3601,
+        "cost": 0.001109
+      },
+      "expected_output": {
+        "status": "needs_clarification",
+        "needs_clarification": true
+      },
+      "latency_ms": 2458.709955215454,
+      "tokens_used": 3601,
+      "cost": 0.001109,
+      "confidence": null,
+      "error": null,
+      "model_used": "medium",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "How did the green bank do last quarter?",
+      "timestamp": "2025-08-25T00:46:22.557220"
+    },
+    {
+      "scenario_id": "clarifier_023",
+      "scenario_name": "Multiple Banks Listed",
+      "success": true,
+      "actual_output": {
+        "status": "success",
+        "banks": {
+          "status": "success",
+          "decision": "banks_selected",
+          "bank_ids": [
+            1,
+            2,
+            3
+          ],
+          "banks_detail": {
+            "1": {
+              "id": 1,
+              "name": "Royal Bank of Canada",
+              "symbol": "RY",
+              "aliases": [
+                "RBC",
+                "Royal Bank",
+                "Royal",
+                "RY"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            },
+            "2": {
+              "id": 2,
+              "name": "Toronto-Dominion Bank",
+              "symbol": "TD",
+              "aliases": [
+                "TD",
+                "TD Bank",
+                "Toronto Dominion",
+                "TD Canada Trust"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            },
+            "3": {
+              "id": 3,
+              "name": "Bank of Montreal",
+              "symbol": "BMO",
+              "aliases": [
+                "BMO",
+                "Bank of Montreal",
+                "Montreal Bank"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            }
+          },
+          "tokens_used": 1415,
+          "cost": 0.000431
+        },
+        "periods": {
+          "status": "success",
+          "decision": "periods_selected",
+          "periods": {
+            "1": {
+              "fiscal_year": 2025,
+              "quarters": [
+                "Q1"
+              ]
+            },
+            "2": {
+              "fiscal_year": 2025,
+              "quarters": [
+                "Q1"
+              ]
+            },
+            "3": {
+              "fiscal_year": 2025,
+              "quarters": [
+                "Q1"
+              ]
+            }
+          }
+        },
+        "tokens_used": 1415,
+        "cost": 0.000431
+      },
+      "expected_output": {
+        "status": "success",
+        "bank_ids": [
+          1,
+          2,
+          3
+        ],
+        "period_year": 2025,
+        "period_quarters": [
+          "Q1"
+        ]
+      },
+      "latency_ms": 2315.2949810028076,
+      "tokens_used": 1415,
+      "cost": 0.000431,
+      "confidence": null,
+      "error": null,
+      "model_used": "medium",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "Compare RBC, TD, and BMO for Q1 2025",
+      "timestamp": "2025-08-25T00:46:24.872696"
+    },
+    {
+      "scenario_id": "clarifier_024",
+      "scenario_name": "Category With Exclusion",
+      "success": true,
+      "actual_output": {
+        "status": "success",
+        "banks": {
+          "status": "success",
+          "decision": "banks_selected",
+          "bank_ids": [
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "banks_detail": {
+            "1": {
+              "id": 1,
+              "name": "Royal Bank of Canada",
+              "symbol": "RY",
+              "aliases": [
+                "RBC",
+                "Royal Bank",
+                "Royal",
+                "RY"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            },
+            "2": {
+              "id": 2,
+              "name": "Toronto-Dominion Bank",
+              "symbol": "TD",
+              "aliases": [
+                "TD",
+                "TD Bank",
+                "Toronto Dominion",
+                "TD Canada Trust"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            },
+            "3": {
+              "id": 3,
+              "name": "Bank of Montreal",
+              "symbol": "BMO",
+              "aliases": [
+                "BMO",
+                "Bank of Montreal",
+                "Montreal Bank"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            },
+            "4": {
+              "id": 4,
+              "name": "Bank of Nova Scotia",
+              "symbol": "BNS",
+              "aliases": [
+                "Scotia",
+                "Scotiabank",
+                "BNS",
+                "Nova Scotia Bank"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            },
+            "5": {
+              "id": 5,
+              "name": "Canadian Imperial Bank of Commerce",
+              "symbol": "CM",
+              "aliases": [
+                "CIBC",
+                "CM",
+                "Imperial Bank",
+                "Canadian Imperial"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            }
+          },
+          "tokens_used": 1415,
+          "cost": 0.000432
+        },
+        "periods": {
+          "status": "success",
+          "decision": "periods_selected",
+          "periods": {
+            "1": {
+              "fiscal_year": 2024,
+              "quarters": [
+                "Q3"
+              ]
+            },
+            "2": {
+              "fiscal_year": 2024,
+              "quarters": [
+                "Q3"
+              ]
+            },
+            "3": {
+              "fiscal_year": 2024,
+              "quarters": [
+                "Q3"
+              ]
+            },
+            "4": {
+              "fiscal_year": 2024,
+              "quarters": [
+                "Q3"
+              ]
+            },
+            "5": {
+              "fiscal_year": 2024,
+              "quarters": [
+                "Q3"
+              ]
+            }
+          }
+        },
+        "tokens_used": 1415,
+        "cost": 0.000432
+      },
+      "expected_output": {
+        "status": "success",
+        "bank_ids": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "period_year": 2024,
+        "period_quarters": [
+          "Q3"
+        ]
+      },
+      "latency_ms": 3214.522123336792,
+      "tokens_used": 1415,
+      "cost": 0.000432,
+      "confidence": null,
+      "error": null,
+      "model_used": "medium",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "Big Six except National Bank Q3 2024",
+      "timestamp": "2025-08-25T00:46:28.087406"
+    },
+    {
+      "scenario_id": "clarifier_025",
+      "scenario_name": "Bank by Ranking",
+      "success": true,
+      "actual_output": {
+        "status": "needs_clarification",
+        "clarifications": [
+          "Which Canadian bank are you referring to as the largest? It could be Royal Bank of Canada (RBC), Toronto-Dominion Bank (TD), or another. Please specify.",
+          "Which fiscal period would you like to see for the largest Canadian bank's latest results? For example, the latest reported quarter or year-to-date?"
+        ],
+        "tokens_used": 3597,
+        "cost": 0.001108
+      },
+      "expected_output": {
+        "status": "needs_clarification",
+        "needs_clarification": true
+      },
+      "latency_ms": 2469.1500663757324,
+      "tokens_used": 3597,
+      "cost": 0.001108,
+      "confidence": null,
+      "error": null,
+      "model_used": "medium",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "The largest Canadian bank's latest results",
+      "timestamp": "2025-08-25T00:46:30.556747"
+    },
+    {
+      "scenario_id": "clarifier_026",
+      "scenario_name": "Bank Name Typo",
+      "success": true,
+      "actual_output": {
+        "status": "success",
+        "banks": {
+          "status": "success",
+          "decision": "banks_selected",
+          "bank_ids": [
+            4
+          ],
+          "banks_detail": {
+            "4": {
+              "id": 4,
+              "name": "Bank of Nova Scotia",
+              "symbol": "BNS",
+              "aliases": [
+                "Scotia",
+                "Scotiabank",
+                "BNS",
+                "Nova Scotia Bank"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            }
+          },
+          "tokens_used": 1405,
+          "cost": 0.000426
+        },
+        "periods": {
+          "status": "success",
+          "decision": "periods_selected",
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2025,
+              "quarters": [
+                "Q1",
+                "Q2",
+                "Q3"
+              ]
+            }
+          },
+          "tokens_used": 2531,
+          "cost": 0.000768
+        },
+        "tokens_used": 3936,
+        "cost": 0.001194
+      },
+      "expected_output": {
+        "status": "success",
+        "bank_ids": [
+          4
+        ],
+        "period_year": 2025,
+        "period_quarters": [
+          "Q1",
+          "Q2",
+          "Q3"
+        ]
+      },
+      "latency_ms": 1625.0908374786377,
+      "tokens_used": 3936,
+      "cost": 0.001194,
+      "confidence": null,
+      "error": null,
+      "model_used": "medium",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "Show me Scottia's YTD performance",
+      "timestamp": "2025-08-25T00:46:32.182019"
+    },
+    {
+      "scenario_id": "clarifier_027",
+      "scenario_name": "Bank Abbreviations",
+      "success": true,
+      "actual_output": {
+        "status": "success",
+        "banks": {
+          "status": "success",
+          "decision": "banks_selected",
+          "bank_ids": [
+            3,
+            2
+          ],
+          "banks_detail": {
+            "3": {
+              "id": 3,
+              "name": "Bank of Montreal",
+              "symbol": "BMO",
+              "aliases": [
+                "BMO",
+                "Bank of Montreal",
+                "Montreal Bank"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            },
+            "2": {
+              "id": 2,
+              "name": "Toronto-Dominion Bank",
+              "symbol": "TD",
+              "aliases": [
+                "TD",
+                "TD Bank",
+                "Toronto Dominion",
+                "TD Canada Trust"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            }
+          },
+          "tokens_used": 1408,
+          "cost": 0.000428
+        },
+        "periods": {
+          "status": "success",
+          "decision": "periods_selected",
+          "periods": {
+            "3": {
+              "fiscal_year": 2024,
+              "quarters": [
+                "Q4"
+              ]
+            },
+            "2": {
+              "fiscal_year": 2024,
+              "quarters": [
+                "Q4"
+              ]
+            }
+          }
+        },
+        "tokens_used": 1408,
+        "cost": 0.000428
+      },
+      "expected_output": {
+        "status": "success",
+        "bank_ids": [
+          3,
+          2
+        ],
+        "period_year": 2024,
+        "period_quarters": [
+          "Q4"
+        ]
+      },
+      "latency_ms": 2148.007869720459,
+      "tokens_used": 1408,
+      "cost": 0.000428,
+      "confidence": null,
+      "error": null,
+      "model_used": "medium",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "BMO vs TD Q4 2024",
+      "timestamp": "2025-08-25T00:46:34.330235"
+    },
+    {
+      "scenario_id": "clarifier_028",
+      "scenario_name": "Non-Existent Bank",
+      "success": false,
+      "actual_output": {
+        "status": "success",
+        "banks": {
+          "status": "success",
+          "decision": "banks_selected",
+          "bank_ids": [
+            9
+          ],
+          "banks_detail": {
+            "9": {
+              "id": 9,
+              "name": "Wells Fargo",
+              "symbol": "WFC",
+              "aliases": [
+                "Wells",
+                "WFC",
+                "Wells Fargo"
+              ],
+              "tags": [
+                "us_bank",
+                "tier1_bank"
+              ],
+              "databases": [
+                "reports",
+                "transcripts"
+              ]
+            }
+          },
+          "tokens_used": 1407,
+          "cost": 0.000427
+        },
+        "periods": {
+          "status": "success",
+          "decision": "periods_selected",
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2025,
+              "quarters": [
+                "Q2"
+              ]
+            }
+          },
+          "tokens_used": 2442,
+          "cost": 0.00074
+        },
+        "tokens_used": 3849,
+        "cost": 0.001167
+      },
+      "expected_output": {
+        "status": "needs_clarification",
+        "needs_clarification": true
+      },
+      "latency_ms": 1846.6112613677979,
+      "tokens_used": 3849,
+      "cost": 0.001167,
+      "confidence": null,
+      "error": "Expected status 'needs_clarification', got 'success' | Expected needs_clarification=True, got False",
+      "model_used": "medium",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "Wells Fargo's Canadian operations Q2 2025",
+      "timestamp": "2025-08-25T00:46:36.177053"
+    },
+    {
+      "scenario_id": "clarifier_029",
+      "scenario_name": "All Banks Request",
+      "success": false,
+      "actual_output": {
+        "status": "needs_clarification",
+        "clarifications": [
+          "Which banks would you like to see the efficiency ratio for?"
+        ],
+        "tokens_used": 3552,
+        "cost": 0.001078
+      },
+      "expected_output": {
+        "status": "success",
+        "bank_ids": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6
+        ],
+        "period_year": 2024,
+        "period_quarters": [
+          "Q3"
+        ]
+      },
+      "latency_ms": 1431.8201541900635,
+      "tokens_used": 3552,
+      "cost": 0.001078,
+      "confidence": null,
+      "error": "Expected status 'success', got 'needs_clarification' | Expected banks [1, 2, 3, 4, 5, 6], got None",
+      "model_used": "medium",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "Show all banks Q3 2024 efficiency ratios",
+      "timestamp": "2025-08-25T00:46:37.609059"
+    },
+    {
+      "scenario_id": "clarifier_030",
+      "scenario_name": "Pronoun Without Antecedent",
+      "success": true,
+      "actual_output": {
+        "status": "needs_clarification",
+        "clarifications": [
+          "Which banks are you referring to? Please specify the bank names or categories.",
+          "What time period would you like to see results for?"
+        ],
+        "tokens_used": 3554,
+        "cost": 0.001083
+      },
+      "expected_output": {
+        "status": "needs_clarification",
+        "needs_clarification": true
+      },
+      "latency_ms": 2151.381015777588,
+      "tokens_used": 3554,
+      "cost": 0.001083,
+      "confidence": null,
+      "error": null,
+      "model_used": "medium",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "What were their results?",
+      "timestamp": "2025-08-25T00:46:39.760626"
+    },
+    {
+      "scenario_id": "clarifier_001",
+      "scenario_name": "Clear Bank and Period - RBC Q3 2024",
+      "success": true,
+      "actual_output": {
+        "status": "success",
+        "banks": {
+          "status": "success",
+          "decision": "banks_selected",
+          "bank_ids": [
+            1
+          ],
+          "banks_detail": {
+            "1": {
+              "id": 1,
+              "name": "Royal Bank of Canada",
+              "symbol": "RY",
+              "aliases": [
+                "RBC",
+                "Royal Bank",
+                "Royal",
+                "RY"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            }
+          },
+          "tokens_used": 1408,
+          "cost": 0.001424
+        },
+        "periods": {
+          "status": "success",
+          "decision": "periods_selected",
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2024,
+              "quarters": [
+                "Q3"
+              ]
+            }
+          },
+          "tokens_used": 2521,
+          "cost": 0.002545
+        },
+        "tokens_used": 3929,
+        "cost": 0.003969
+      },
+      "expected_output": {
+        "status": "success",
+        "bank_ids": [
+          1
+        ],
+        "period_year": 2024,
+        "period_quarters": [
+          "Q3"
+        ]
+      },
+      "latency_ms": 1484.4169616699219,
+      "tokens_used": 3929,
+      "cost": 0.003969,
+      "confidence": null,
+      "error": null,
+      "model_used": "large",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "Show me RBC's Q3 2024 financial results",
+      "timestamp": "2025-08-25T00:46:41.245863"
+    },
+    {
+      "scenario_id": "clarifier_002",
+      "scenario_name": "Multiple Banks - Big Six Q2 2024",
+      "success": true,
+      "actual_output": {
+        "status": "success",
+        "banks": {
+          "status": "success",
+          "decision": "banks_selected",
+          "bank_ids": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "banks_detail": {
+            "1": {
+              "id": 1,
+              "name": "Royal Bank of Canada",
+              "symbol": "RY",
+              "aliases": [
+                "RBC",
+                "Royal Bank",
+                "Royal",
+                "RY"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            },
+            "2": {
+              "id": 2,
+              "name": "Toronto-Dominion Bank",
+              "symbol": "TD",
+              "aliases": [
+                "TD",
+                "TD Bank",
+                "Toronto Dominion",
+                "TD Canada Trust"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            },
+            "3": {
+              "id": 3,
+              "name": "Bank of Montreal",
+              "symbol": "BMO",
+              "aliases": [
+                "BMO",
+                "Bank of Montreal",
+                "Montreal Bank"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            },
+            "4": {
+              "id": 4,
+              "name": "Bank of Nova Scotia",
+              "symbol": "BNS",
+              "aliases": [
+                "Scotia",
+                "Scotiabank",
+                "BNS",
+                "Nova Scotia Bank"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            },
+            "5": {
+              "id": 5,
+              "name": "Canadian Imperial Bank of Commerce",
+              "symbol": "CM",
+              "aliases": [
+                "CIBC",
+                "CM",
+                "Imperial Bank",
+                "Canadian Imperial"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            },
+            "6": {
+              "id": 6,
+              "name": "National Bank of Canada",
+              "symbol": "NA",
+              "aliases": [
+                "NBC",
+                "National Bank",
+                "National",
+                "NA"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            }
+          },
+          "tokens_used": 1419,
+          "cost": 0.001445
+        },
+        "periods": {
+          "status": "success",
+          "decision": "periods_selected",
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2024,
+              "quarters": [
+                "Q2"
+              ]
+            }
+          },
+          "tokens_used": 3714,
+          "cost": 0.003738
+        },
+        "tokens_used": 5133,
+        "cost": 0.005183
+      },
+      "expected_output": {
+        "status": "success",
+        "bank_ids": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6
+        ],
+        "period_year": 2024,
+        "period_quarters": [
+          "Q2"
+        ]
+      },
+      "latency_ms": 1244.7669506072998,
+      "tokens_used": 5133,
+      "cost": 0.005183,
+      "confidence": null,
+      "error": null,
+      "model_used": "large",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "Compare the Big Six banks performance in Q2 2024",
+      "timestamp": "2025-08-25T00:46:42.490851"
+    },
+    {
+      "scenario_id": "clarifier_003",
+      "scenario_name": "Ambiguous Bank - No Period",
+      "success": true,
+      "actual_output": {
+        "status": "needs_clarification",
+        "clarifications": [
+          "Which banks would you like to see the latest financial metrics for? Please specify the bank names.",
+          "Could you clarify which period you mean by 'latest'? Are you looking for the most recently reported quarter, or a different time frame?"
+        ],
+        "tokens_used": 3582,
+        "cost": 0.003662
+      },
+      "expected_output": {
+        "status": "needs_clarification",
+        "needs_clarification": true
+      },
+      "latency_ms": 1782.2411060333252,
+      "tokens_used": 3582,
+      "cost": 0.003662,
+      "confidence": null,
+      "error": null,
+      "model_used": "large",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "What are the latest financial metrics?",
+      "timestamp": "2025-08-25T00:46:44.273276"
+    },
+    {
+      "scenario_id": "clarifier_004",
+      "scenario_name": "Clear Bank - Missing Period",
+      "success": true,
+      "actual_output": {
+        "status": "needs_clarification",
+        "banks": {
+          "status": "success",
+          "decision": "banks_selected",
+          "bank_ids": [
+            2
+          ],
+          "banks_detail": {
+            "2": {
+              "id": 2,
+              "name": "Toronto-Dominion Bank",
+              "symbol": "TD",
+              "aliases": [
+                "TD",
+                "TD Bank",
+                "Toronto Dominion",
+                "TD Canada Trust"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            }
+          },
+          "tokens_used": 1403,
+          "cost": 0.001419
+        },
+        "clarifications": [
+          "What time period would you like to see revenue for?"
+        ],
+        "tokens_used": 3928,
+        "cost": 0.00397
+      },
+      "expected_output": {
+        "status": "needs_clarification",
+        "bank_ids": [
+          2
+        ],
+        "needs_clarification": true
+      },
+      "latency_ms": 1372.6086616516113,
+      "tokens_used": 3928,
+      "cost": 0.00397,
+      "confidence": null,
+      "error": null,
+      "model_used": "large",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "Show me TD Bank's revenue",
+      "timestamp": "2025-08-25T00:46:45.646065"
+    },
+    {
+      "scenario_id": "clarifier_005",
+      "scenario_name": "Latest Period Request",
+      "success": true,
+      "actual_output": {
+        "status": "success",
+        "banks": {
+          "status": "success",
+          "decision": "banks_selected",
+          "bank_ids": [
+            3
+          ],
+          "banks_detail": {
+            "3": {
+              "id": 3,
+              "name": "Bank of Montreal",
+              "symbol": "BMO",
+              "aliases": [
+                "BMO",
+                "Bank of Montreal",
+                "Montreal Bank"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            }
+          },
+          "tokens_used": 1405,
+          "cost": 0.001421
+        },
+        "periods": {
+          "status": "success",
+          "decision": "periods_selected",
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2025,
+              "quarters": [
+                "Q3"
+              ]
+            }
+          },
+          "tokens_used": 2518,
+          "cost": 0.002542
+        },
+        "tokens_used": 3923,
+        "cost": 0.0039629999999999995
+      },
+      "expected_output": {
+        "status": "success",
+        "bank_ids": [
+          3
+        ],
+        "period_year": 2025,
+        "period_quarters": [
+          "Q3"
+        ]
+      },
+      "latency_ms": 1383.1710815429688,
+      "tokens_used": 3923,
+      "cost": 0.0039629999999999995,
+      "confidence": null,
+      "error": null,
+      "model_used": "large",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "Give me BMO's latest quarterly results",
+      "timestamp": "2025-08-25T00:46:47.029419"
+    },
+    {
+      "scenario_id": "clarifier_006",
+      "scenario_name": "YTD Period Request",
+      "success": true,
+      "actual_output": {
+        "status": "success",
+        "banks": {
+          "status": "success",
+          "decision": "banks_selected",
+          "bank_ids": [
+            4
+          ],
+          "banks_detail": {
+            "4": {
+              "id": 4,
+              "name": "Bank of Nova Scotia",
+              "symbol": "BNS",
+              "aliases": [
+                "Scotia",
+                "Scotiabank",
+                "BNS",
+                "Nova Scotia Bank"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            }
+          },
+          "tokens_used": 1406,
+          "cost": 0.001422
+        },
+        "periods": {
+          "status": "success",
+          "decision": "periods_selected",
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2025,
+              "quarters": [
+                "Q1",
+                "Q2",
+                "Q3"
+              ]
+            }
+          },
+          "tokens_used": 2532,
+          "cost": 0.002562
+        },
+        "tokens_used": 3938,
+        "cost": 0.003984
+      },
+      "expected_output": {
+        "status": "success",
+        "bank_ids": [
+          4
+        ],
+        "period_year": 2025,
+        "period_quarters": [
+          "Q1",
+          "Q2",
+          "Q3"
+        ]
+      },
+      "latency_ms": 1450.5000114440918,
+      "tokens_used": 3938,
+      "cost": 0.003984,
+      "confidence": null,
+      "error": null,
+      "model_used": "large",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "Show Scotia's YTD 2025 performance",
+      "timestamp": "2025-08-25T00:46:48.480125"
+    },
+    {
+      "scenario_id": "clarifier_007",
+      "scenario_name": "Bank Alias - National Bank",
+      "success": true,
+      "actual_output": {
+        "status": "success",
+        "banks": {
+          "status": "success",
+          "decision": "banks_selected",
+          "bank_ids": [
+            6
+          ],
+          "banks_detail": {
+            "6": {
+              "id": 6,
+              "name": "National Bank of Canada",
+              "symbol": "NA",
+              "aliases": [
+                "NBC",
+                "National Bank",
+                "National",
+                "NA"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            }
+          },
+          "tokens_used": 1410,
+          "cost": 0.001426
+        },
+        "periods": {
+          "status": "success",
+          "decision": "periods_selected",
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2024,
+              "quarters": [
+                "Q1"
+              ]
+            }
+          },
+          "tokens_used": 2516,
+          "cost": 0.00254
+        },
+        "tokens_used": 3926,
+        "cost": 0.003966
+      },
+      "expected_output": {
+        "status": "success",
+        "bank_ids": [
+          6
+        ],
+        "period_year": 2024,
+        "period_quarters": [
+          "Q1"
+        ]
+      },
+      "latency_ms": 1279.860019683838,
+      "tokens_used": 3926,
+      "cost": 0.003966,
+      "confidence": null,
+      "error": null,
+      "model_used": "large",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "What is National Bank's Q1 2024 net income?",
+      "timestamp": "2025-08-25T00:46:49.760193"
+    },
+    {
+      "scenario_id": "clarifier_008",
+      "scenario_name": "Multiple Specific Banks",
+      "success": false,
+      "actual_output": {
+        "status": "success",
+        "banks": {
+          "status": "success",
+          "decision": "banks_selected",
+          "bank_ids": [
+            1,
+            2
+          ],
+          "banks_detail": {
+            "1": {
+              "id": 1,
+              "name": "Royal Bank of Canada",
+              "symbol": "RY",
+              "aliases": [
+                "RBC",
+                "Royal Bank",
+                "Royal",
+                "RY"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            },
+            "2": {
+              "id": 2,
+              "name": "Toronto-Dominion Bank",
+              "symbol": "TD",
+              "aliases": [
+                "TD",
+                "TD Bank",
+                "Toronto Dominion",
+                "TD Canada Trust"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            }
+          },
+          "tokens_used": 1410,
+          "cost": 0.001428
+        },
+        "periods": {
+          "status": "success",
+          "decision": "periods_selected",
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2024,
+              "quarters": [
+                "Q4"
+              ]
+            }
+          },
+          "tokens_used": 2765,
+          "cost": 0.002789
+        },
+        "tokens_used": 4175,
+        "cost": 0.004217
+      },
+      "expected_output": {
+        "status": "success",
+        "bank_ids": [
+          1,
+          2
+        ],
+        "period_year": 2023,
+        "period_quarters": [
+          "Q4"
+        ]
+      },
+      "latency_ms": 1364.879846572876,
+      "tokens_used": 4175,
+      "cost": 0.004217,
+      "confidence": null,
+      "error": "Expected year 2023, got 2024",
+      "model_used": "large",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "Compare RBC and TD performance in Q4 2023",
+      "timestamp": "2025-08-25T00:46:51.125289"
+    },
+    {
+      "scenario_id": "clarifier_009",
+      "scenario_name": "Full Year Period",
+      "success": true,
+      "actual_output": {
+        "status": "success",
+        "banks": {
+          "status": "success",
+          "decision": "banks_selected",
+          "bank_ids": [
+            5
+          ],
+          "banks_detail": {
+            "5": {
+              "id": 5,
+              "name": "Canadian Imperial Bank of Commerce",
+              "symbol": "CM",
+              "aliases": [
+                "CIBC",
+                "CM",
+                "Imperial Bank",
+                "Canadian Imperial"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            }
+          },
+          "tokens_used": 1407,
+          "cost": 0.001423
+        },
+        "periods": {
+          "status": "success",
+          "decision": "periods_selected",
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2023,
+              "quarters": [
+                "Q1",
+                "Q2",
+                "Q3",
+                "Q4"
+              ]
+            }
+          },
+          "tokens_used": 2529,
+          "cost": 0.002562
+        },
+        "tokens_used": 3936,
+        "cost": 0.003985
+      },
+      "expected_output": {
+        "status": "success",
+        "bank_ids": [
+          5
+        ],
+        "period_year": 2023,
+        "period_quarters": [
+          "Q1",
+          "Q2",
+          "Q3",
+          "Q4"
+        ]
+      },
+      "latency_ms": 1436.8600845336914,
+      "tokens_used": 3936,
+      "cost": 0.003985,
+      "confidence": null,
+      "error": null,
+      "model_used": "large",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "Show CIBC's full year 2023 results",
+      "timestamp": "2025-08-25T00:46:52.562347"
+    },
+    {
+      "scenario_id": "clarifier_010",
+      "scenario_name": "Clear Period - Ambiguous Bank",
+      "success": true,
+      "actual_output": {
+        "status": "needs_clarification",
+        "clarifications": [
+          "Which banks would you like to see the efficiency ratio for?"
+        ],
+        "tokens_used": 3561,
+        "cost": 0.00361
+      },
+      "expected_output": {
+        "status": "needs_clarification",
+        "needs_clarification": true
+      },
+      "latency_ms": 7779.603958129883,
+      "tokens_used": 3561,
+      "cost": 0.00361,
+      "confidence": null,
+      "error": null,
+      "model_used": "large",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "What was the efficiency ratio in Q2 2024?",
+      "timestamp": "2025-08-25T00:47:00.342106"
+    },
+    {
+      "scenario_id": "clarifier_011",
+      "scenario_name": "Recent Performance Request",
+      "success": true,
+      "actual_output": {
+        "status": "success",
+        "banks": {
+          "status": "success",
+          "decision": "banks_selected",
+          "bank_ids": [
+            2
+          ],
+          "banks_detail": {
+            "2": {
+              "id": 2,
+              "name": "Toronto-Dominion Bank",
+              "symbol": "TD",
+              "aliases": [
+                "TD",
+                "TD Bank",
+                "Toronto Dominion",
+                "TD Canada Trust"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            }
+          },
+          "tokens_used": 1403,
+          "cost": 0.001419
+        },
+        "periods": {
+          "status": "success",
+          "decision": "periods_selected",
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2025,
+              "quarters": [
+                "Q3"
+              ]
+            }
+          },
+          "tokens_used": 2523,
+          "cost": 0.002547
+        },
+        "tokens_used": 3926,
+        "cost": 0.003966
+      },
+      "expected_output": {
+        "status": "success",
+        "bank_ids": [
+          2
+        ],
+        "period_year": 2025,
+        "period_quarters": [
+          "Q3"
+        ]
+      },
+      "latency_ms": 7579.648017883301,
+      "tokens_used": 3926,
+      "cost": 0.003966,
+      "confidence": null,
+      "error": null,
+      "model_used": "large",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "Show me TD's recent performance",
+      "timestamp": "2025-08-25T00:47:07.921949"
+    },
+    {
+      "scenario_id": "clarifier_012",
+      "scenario_name": "Future Period Request",
+      "success": true,
+      "actual_output": {
+        "status": "needs_clarification",
+        "banks": {
+          "status": "success",
+          "decision": "banks_selected",
+          "bank_ids": [
+            1
+          ],
+          "banks_detail": {
+            "1": {
+              "id": 1,
+              "name": "Royal Bank of Canada",
+              "symbol": "RY",
+              "aliases": [
+                "RBC",
+                "Royal Bank",
+                "Royal",
+                "RY"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            }
+          },
+          "tokens_used": 1409,
+          "cost": 0.001425
+        },
+        "clarifications": [
+          "Q1 2026 is a future period and has not occurred yet. Would you like to see the latest available reported quarter instead?"
+        ],
+        "tokens_used": 3949,
+        "cost": 0.004007
+      },
+      "expected_output": {
+        "status": "needs_clarification",
+        "bank_ids": [
+          1
+        ],
+        "needs_clarification": true
+      },
+      "latency_ms": 7984.980821609497,
+      "tokens_used": 3949,
+      "cost": 0.004007,
+      "confidence": null,
+      "error": null,
+      "model_used": "large",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "What will RBC's Q1 2026 results be?",
+      "timestamp": "2025-08-25T00:47:15.907135"
+    },
+    {
+      "scenario_id": "clarifier_013",
+      "scenario_name": "Ambiguous Last Year",
+      "success": false,
+      "actual_output": {
+        "status": "success",
+        "banks": {
+          "status": "success",
+          "decision": "banks_selected",
+          "bank_ids": [
+            3
+          ],
+          "banks_detail": {
+            "3": {
+              "id": 3,
+              "name": "Bank of Montreal",
+              "symbol": "BMO",
+              "aliases": [
+                "BMO",
+                "Bank of Montreal",
+                "Montreal Bank"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            }
+          },
+          "tokens_used": 1404,
+          "cost": 0.00142
+        },
+        "periods": {
+          "status": "success",
+          "decision": "periods_selected",
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2024,
+              "quarters": [
+                "Q1",
+                "Q2",
+                "Q3",
+                "Q4"
+              ]
+            }
+          },
+          "tokens_used": 2526,
+          "cost": 0.002559
+        },
+        "tokens_used": 3930,
+        "cost": 0.003979
+      },
+      "expected_output": {
+        "status": "needs_clarification",
+        "bank_ids": [
+          3
+        ],
+        "needs_clarification": true
+      },
+      "latency_ms": 7781.94260597229,
+      "tokens_used": 3930,
+      "cost": 0.003979,
+      "confidence": null,
+      "error": "Expected status 'needs_clarification', got 'success' | Expected needs_clarification=True, got False",
+      "model_used": "large",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "Compare BMO's last year performance",
+      "timestamp": "2025-08-25T00:47:23.689275"
+    },
+    {
+      "scenario_id": "clarifier_014",
+      "scenario_name": "QoQ Growth Request",
+      "success": true,
+      "actual_output": {
+        "status": "success",
+        "banks": {
+          "status": "success",
+          "decision": "banks_selected",
+          "bank_ids": [
+            4
+          ],
+          "banks_detail": {
+            "4": {
+              "id": 4,
+              "name": "Bank of Nova Scotia",
+              "symbol": "BNS",
+              "aliases": [
+                "Scotia",
+                "Scotiabank",
+                "BNS",
+                "Nova Scotia Bank"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            }
+          },
+          "tokens_used": 1403,
+          "cost": 0.001419
+        },
+        "periods": {
+          "status": "success",
+          "decision": "periods_selected",
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2025,
+              "quarters": [
+                "Q2",
+                "Q3"
+              ]
+            }
+          },
+          "tokens_used": 2526,
+          "cost": 0.002553
+        },
+        "tokens_used": 3929,
+        "cost": 0.003972
+      },
+      "expected_output": {
+        "status": "success",
+        "bank_ids": [
+          4
+        ],
+        "period_year": 2025,
+        "period_quarters": [
+          "Q2",
+          "Q3"
+        ]
+      },
+      "latency_ms": 7886.250972747803,
+      "tokens_used": 3929,
+      "cost": 0.003972,
+      "confidence": null,
+      "error": null,
+      "model_used": "large",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "Show Scotia's QoQ growth",
+      "timestamp": "2025-08-25T00:47:31.575715"
+    },
+    {
+      "scenario_id": "clarifier_015",
+      "scenario_name": "Current Quarter Unreported",
+      "success": true,
+      "actual_output": {
+        "status": "needs_clarification",
+        "banks": {
+          "status": "success",
+          "decision": "banks_selected",
+          "bank_ids": [
+            5
+          ],
+          "banks_detail": {
+            "5": {
+              "id": 5,
+              "name": "Canadian Imperial Bank of Commerce",
+              "symbol": "CM",
+              "aliases": [
+                "CIBC",
+                "CM",
+                "Imperial Bank",
+                "Canadian Imperial"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            }
+          },
+          "tokens_used": 1405,
+          "cost": 0.001421
+        },
+        "clarifications": [
+          "CIBC's results for the current quarter (Q4 2025) have not been reported yet. Would you like to see the latest available quarter, which is Q3 2025?"
+        ],
+        "tokens_used": 3953,
+        "cost": 0.0040230000000000005
+      },
+      "expected_output": {
+        "status": "needs_clarification",
+        "bank_ids": [
+          5
+        ],
+        "needs_clarification": true
+      },
+      "latency_ms": 8191.451072692871,
+      "tokens_used": 3953,
+      "cost": 0.0040230000000000005,
+      "confidence": null,
+      "error": null,
+      "model_used": "large",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "How is CIBC doing this quarter?",
+      "timestamp": "2025-08-25T00:47:39.767392"
+    },
+    {
+      "scenario_id": "clarifier_016",
+      "scenario_name": "TTM Request",
+      "success": true,
+      "actual_output": {
+        "status": "success",
+        "banks": {
+          "status": "success",
+          "decision": "banks_selected",
+          "bank_ids": [
+            1
+          ],
+          "banks_detail": {
+            "1": {
+              "id": 1,
+              "name": "Royal Bank of Canada",
+              "symbol": "RY",
+              "aliases": [
+                "RBC",
+                "Royal Bank",
+                "Royal",
+                "RY"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            }
+          },
+          "tokens_used": 1402,
+          "cost": 0.001418
+        },
+        "periods": {
+          "status": "success",
+          "decision": "periods_selected",
+          "periods": {
+            "apply_all": {
+              "fiscal_year": null,
+              "quarters": []
+            }
+          },
+          "tokens_used": 2537,
+          "cost": 0.002583
+        },
+        "tokens_used": 3939,
+        "cost": 0.004000999999999999
+      },
+      "expected_output": {
+        "status": "success",
+        "bank_ids": [
+          1
+        ],
+        "period_years": [
+          2024,
+          2025
+        ],
+        "period_quarters_2024": [
+          "Q4"
+        ],
+        "period_quarters_2025": [
+          "Q1",
+          "Q2",
+          "Q3"
+        ]
+      },
+      "latency_ms": 7885.008811950684,
+      "tokens_used": 3939,
+      "cost": 0.004000999999999999,
+      "confidence": null,
+      "error": null,
+      "model_used": "large",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "RBC's TTM revenue",
+      "timestamp": "2025-08-25T00:47:47.652598"
+    },
+    {
+      "scenario_id": "clarifier_017",
+      "scenario_name": "Since Temporal Reference",
+      "success": true,
+      "actual_output": {
+        "status": "success",
+        "banks": {
+          "status": "success",
+          "decision": "banks_selected",
+          "bank_ids": [
+            2
+          ],
+          "banks_detail": {
+            "2": {
+              "id": 2,
+              "name": "Toronto-Dominion Bank",
+              "symbol": "TD",
+              "aliases": [
+                "TD",
+                "TD Bank",
+                "Toronto Dominion",
+                "TD Canada Trust"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            }
+          },
+          "tokens_used": 1406,
+          "cost": 0.001422
+        },
+        "periods": {
+          "status": "success",
+          "decision": "periods_selected",
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2024,
+              "quarters": [
+                "Q1",
+                "Q2",
+                "Q3",
+                "Q4"
+              ]
+            }
+          },
+          "tokens_used": 2535,
+          "cost": 0.002568
+        },
+        "tokens_used": 3941,
+        "cost": 0.0039900000000000005
+      },
+      "expected_output": {
+        "status": "success",
+        "bank_ids": [
+          2
+        ],
+        "period_years": [
+          2024,
+          2025
+        ],
+        "period_quarters_2024": [
+          "Q1",
+          "Q2",
+          "Q3",
+          "Q4"
+        ],
+        "period_quarters_2025": [
+          "Q1",
+          "Q2",
+          "Q3"
+        ]
+      },
+      "latency_ms": 7472.76496887207,
+      "tokens_used": 3941,
+      "cost": 0.0039900000000000005,
+      "confidence": null,
+      "error": null,
+      "model_used": "large",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "TD's performance since Q1 2024",
+      "timestamp": "2025-08-25T00:47:55.125590"
+    },
+    {
+      "scenario_id": "clarifier_018",
+      "scenario_name": "Cross-Year Comparison",
+      "success": true,
+      "actual_output": {
+        "status": "success",
+        "banks": {
+          "status": "success",
+          "decision": "banks_selected",
+          "bank_ids": [
+            6
+          ],
+          "banks_detail": {
+            "6": {
+              "id": 6,
+              "name": "National Bank of Canada",
+              "symbol": "NA",
+              "aliases": [
+                "NBC",
+                "National Bank",
+                "National",
+                "NA"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            }
+          },
+          "tokens_used": 1411,
+          "cost": 0.001427
+        },
+        "periods": {
+          "status": "success",
+          "decision": "periods_selected",
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2024,
+              "quarters": [
+                "Q4"
+              ]
+            }
+          },
+          "tokens_used": 2517,
+          "cost": 0.002541
+        },
+        "tokens_used": 3928,
+        "cost": 0.003968
+      },
+      "expected_output": {
+        "status": "success",
+        "bank_ids": [
+          6
+        ],
+        "period_years": [
+          2023,
+          2024
+        ],
+        "period_quarters_2023": [
+          "Q4"
+        ],
+        "period_quarters_2024": [
+          "Q4"
+        ]
+      },
+      "latency_ms": 7886.760950088501,
+      "tokens_used": 3928,
+      "cost": 0.003968,
+      "confidence": null,
+      "error": null,
+      "model_used": "large",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "Compare National Bank Q4 2024 vs Q4 2023",
+      "timestamp": "2025-08-25T00:48:03.012565"
+    },
+    {
+      "scenario_id": "clarifier_019",
+      "scenario_name": "Previous Quarter Request",
+      "success": true,
+      "actual_output": {
+        "status": "success",
+        "banks": {
+          "status": "success",
+          "decision": "banks_selected",
+          "bank_ids": [
+            3
+          ],
+          "banks_detail": {
+            "3": {
+              "id": 3,
+              "name": "Bank of Montreal",
+              "symbol": "BMO",
+              "aliases": [
+                "BMO",
+                "Bank of Montreal",
+                "Montreal Bank"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            }
+          },
+          "tokens_used": 1403,
+          "cost": 0.001419
+        },
+        "periods": {
+          "status": "success",
+          "decision": "periods_selected",
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2025,
+              "quarters": [
+                "Q3"
+              ]
+            }
+          },
+          "tokens_used": 2516,
+          "cost": 0.00254
+        },
+        "tokens_used": 3919,
+        "cost": 0.003959
+      },
+      "expected_output": {
+        "status": "success",
+        "bank_ids": [
+          3
+        ],
+        "period_year": 2025,
+        "period_quarters": [
+          "Q3"
+        ]
+      },
+      "latency_ms": 7809.120178222656,
+      "tokens_used": 3919,
+      "cost": 0.003959,
+      "confidence": null,
+      "error": null,
+      "model_used": "large",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "BMO's previous quarter results",
+      "timestamp": "2025-08-25T00:48:10.821876"
+    },
+    {
+      "scenario_id": "clarifier_020",
+      "scenario_name": "Monthly to Quarterly Mapping",
+      "success": true,
+      "actual_output": {
+        "status": "needs_clarification",
+        "banks": {
+          "status": "success",
+          "decision": "banks_selected",
+          "bank_ids": [
+            1
+          ],
+          "banks_detail": {
+            "1": {
+              "id": 1,
+              "name": "Royal Bank of Canada",
+              "symbol": "RY",
+              "aliases": [
+                "RBC",
+                "Royal Bank",
+                "Royal",
+                "RY"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            }
+          },
+          "tokens_used": 1403,
+          "cost": 0.001419
+        },
+        "clarifications": [
+          "Banks report quarterly. June falls in Q3 (May-July). Did you mean Q3?"
+        ],
+        "tokens_used": 3930,
+        "cost": 0.003981
+      },
+      "expected_output": {
+        "status": "needs_clarification",
+        "bank_ids": [
+          1
+        ],
+        "needs_clarification": true
+      },
+      "latency_ms": 7817.368984222412,
+      "tokens_used": 3930,
+      "cost": 0.003981,
+      "confidence": null,
+      "error": null,
+      "model_used": "large",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "Show me RBC's June performance",
+      "timestamp": "2025-08-25T00:48:18.639440"
+    },
+    {
+      "scenario_id": "clarifier_021",
+      "scenario_name": "Partial Bank Name",
+      "success": true,
+      "actual_output": {
+        "status": "success",
+        "banks": {
+          "status": "success",
+          "decision": "banks_selected",
+          "bank_ids": [
+            1
+          ],
+          "banks_detail": {
+            "1": {
+              "id": 1,
+              "name": "Royal Bank of Canada",
+              "symbol": "RY",
+              "aliases": [
+                "RBC",
+                "Royal Bank",
+                "Royal",
+                "RY"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            }
+          },
+          "tokens_used": 1406,
+          "cost": 0.001422
+        },
+        "periods": {
+          "status": "success",
+          "decision": "periods_selected",
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2024,
+              "quarters": [
+                "Q2"
+              ]
+            }
+          },
+          "tokens_used": 2519,
+          "cost": 0.002543
+        },
+        "tokens_used": 3925,
+        "cost": 0.003965
+      },
+      "expected_output": {
+        "status": "success",
+        "bank_ids": [
+          1
+        ],
+        "period_year": 2024,
+        "period_quarters": [
+          "Q2"
+        ]
+      },
+      "latency_ms": 7923.407793045044,
+      "tokens_used": 3925,
+      "cost": 0.003965,
+      "confidence": null,
+      "error": null,
+      "model_used": "large",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "Show Royal's Q2 2024 metrics",
+      "timestamp": "2025-08-25T00:48:26.563012"
+    },
+    {
+      "scenario_id": "clarifier_022",
+      "scenario_name": "Informal Bank Reference",
+      "success": true,
+      "actual_output": {
+        "status": "needs_clarification",
+        "clarifications": [
+          "'Green bank' could refer to TD (Toronto-Dominion Bank), which is often associated with the color green, but it could also refer to other banks with green branding. Can you confirm if you mean TD or another bank?",
+          "Could you specify which fiscal quarter you are referring to? 'Last quarter' could mean different periods depending on reporting lags and availability. Please clarify the exact quarter you want to see."
+        ],
+        "tokens_used": 3626,
+        "cost": 0.003746
+      },
+      "expected_output": {
+        "status": "needs_clarification",
+        "needs_clarification": true
+      },
+      "latency_ms": 7838.564872741699,
+      "tokens_used": 3626,
+      "cost": 0.003746,
+      "confidence": null,
+      "error": null,
+      "model_used": "large",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "How did the green bank do last quarter?",
+      "timestamp": "2025-08-25T00:48:34.401781"
+    },
+    {
+      "scenario_id": "clarifier_023",
+      "scenario_name": "Multiple Banks Listed",
+      "success": true,
+      "actual_output": {
+        "status": "success",
+        "banks": {
+          "status": "success",
+          "decision": "banks_selected",
+          "bank_ids": [
+            1,
+            2,
+            3
+          ],
+          "banks_detail": {
+            "1": {
+              "id": 1,
+              "name": "Royal Bank of Canada",
+              "symbol": "RY",
+              "aliases": [
+                "RBC",
+                "Royal Bank",
+                "Royal",
+                "RY"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            },
+            "2": {
+              "id": 2,
+              "name": "Toronto-Dominion Bank",
+              "symbol": "TD",
+              "aliases": [
+                "TD",
+                "TD Bank",
+                "Toronto Dominion",
+                "TD Canada Trust"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            },
+            "3": {
+              "id": 3,
+              "name": "Bank of Montreal",
+              "symbol": "BMO",
+              "aliases": [
+                "BMO",
+                "Bank of Montreal",
+                "Montreal Bank"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            }
+          },
+          "tokens_used": 1415,
+          "cost": 0.001435
+        },
+        "periods": {
+          "status": "success",
+          "decision": "periods_selected",
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2025,
+              "quarters": [
+                "Q1"
+              ]
+            }
+          },
+          "tokens_used": 3005,
+          "cost": 0.003029
+        },
+        "tokens_used": 4420,
+        "cost": 0.004464
+      },
+      "expected_output": {
+        "status": "success",
+        "bank_ids": [
+          1,
+          2,
+          3
+        ],
+        "period_year": 2025,
+        "period_quarters": [
+          "Q1"
+        ]
+      },
+      "latency_ms": 8136.054992675781,
+      "tokens_used": 4420,
+      "cost": 0.004464,
+      "confidence": null,
+      "error": null,
+      "model_used": "large",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "Compare RBC, TD, and BMO for Q1 2025",
+      "timestamp": "2025-08-25T00:48:42.538020"
+    },
+    {
+      "scenario_id": "clarifier_024",
+      "scenario_name": "Category With Exclusion",
+      "success": true,
+      "actual_output": {
+        "status": "success",
+        "banks": {
+          "status": "success",
+          "decision": "banks_selected",
+          "bank_ids": [
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "banks_detail": {
+            "1": {
+              "id": 1,
+              "name": "Royal Bank of Canada",
+              "symbol": "RY",
+              "aliases": [
+                "RBC",
+                "Royal Bank",
+                "Royal",
+                "RY"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            },
+            "2": {
+              "id": 2,
+              "name": "Toronto-Dominion Bank",
+              "symbol": "TD",
+              "aliases": [
+                "TD",
+                "TD Bank",
+                "Toronto Dominion",
+                "TD Canada Trust"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            },
+            "3": {
+              "id": 3,
+              "name": "Bank of Montreal",
+              "symbol": "BMO",
+              "aliases": [
+                "BMO",
+                "Bank of Montreal",
+                "Montreal Bank"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            },
+            "4": {
+              "id": 4,
+              "name": "Bank of Nova Scotia",
+              "symbol": "BNS",
+              "aliases": [
+                "Scotia",
+                "Scotiabank",
+                "BNS",
+                "Nova Scotia Bank"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            },
+            "5": {
+              "id": 5,
+              "name": "Canadian Imperial Bank of Commerce",
+              "symbol": "CM",
+              "aliases": [
+                "CIBC",
+                "CM",
+                "Imperial Bank",
+                "Canadian Imperial"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            }
+          },
+          "tokens_used": 1415,
+          "cost": 0.001439
+        },
+        "periods": {
+          "status": "success",
+          "decision": "periods_selected",
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2024,
+              "quarters": [
+                "Q3"
+              ]
+            }
+          },
+          "tokens_used": 3482,
+          "cost": 0.003506
+        },
+        "tokens_used": 4897,
+        "cost": 0.004945
+      },
+      "expected_output": {
+        "status": "success",
+        "bank_ids": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "period_year": 2024,
+        "period_quarters": [
+          "Q3"
+        ]
+      },
+      "latency_ms": 10036.835193634033,
+      "tokens_used": 4897,
+      "cost": 0.004945,
+      "confidence": null,
+      "error": null,
+      "model_used": "large",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "Big Six except National Bank Q3 2024",
+      "timestamp": "2025-08-25T00:48:52.575058"
+    },
+    {
+      "scenario_id": "clarifier_025",
+      "scenario_name": "Bank by Ranking",
+      "success": false,
+      "actual_output": {
+        "status": "success",
+        "banks": {
+          "status": "success",
+          "decision": "banks_selected",
+          "bank_ids": [
+            1
+          ],
+          "banks_detail": {
+            "1": {
+              "id": 1,
+              "name": "Royal Bank of Canada",
+              "symbol": "RY",
+              "aliases": [
+                "RBC",
+                "Royal Bank",
+                "Royal",
+                "RY"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            }
+          },
+          "tokens_used": 1404,
+          "cost": 0.00142
+        },
+        "periods": {
+          "status": "success",
+          "decision": "periods_selected",
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2025,
+              "quarters": [
+                "Q3"
+              ]
+            }
+          },
+          "tokens_used": 2517,
+          "cost": 0.002541
+        },
+        "tokens_used": 3921,
+        "cost": 0.003961
+      },
+      "expected_output": {
+        "status": "needs_clarification",
+        "needs_clarification": true
+      },
+      "latency_ms": 3787.9979610443115,
+      "tokens_used": 3921,
+      "cost": 0.003961,
+      "confidence": null,
+      "error": "Expected status 'needs_clarification', got 'success' | Expected needs_clarification=True, got False",
+      "model_used": "large",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "The largest Canadian bank's latest results",
+      "timestamp": "2025-08-25T00:48:56.363255"
+    },
+    {
+      "scenario_id": "clarifier_026",
+      "scenario_name": "Bank Name Typo",
+      "success": false,
+      "actual_output": {
+        "status": "needs_clarification",
+        "clarifications": [
+          "Did you mean Scotiabank (Bank of Nova Scotia) when you said 'Scottia'? Please confirm.",
+          "For Scotia's year-to-date (YTD) performance, can you confirm if you want results from Q1 2025 (Nov 2024) up to the latest reported quarter? Also, please specify which quarters you want included if you have a preference."
+        ],
+        "tokens_used": 3615,
+        "cost": 0.003726
+      },
+      "expected_output": {
+        "status": "success",
+        "bank_ids": [
+          4
+        ],
+        "period_year": 2025,
+        "period_quarters": [
+          "Q1",
+          "Q2",
+          "Q3"
+        ]
+      },
+      "latency_ms": 6173.5429763793945,
+      "tokens_used": 3615,
+      "cost": 0.003726,
+      "confidence": null,
+      "error": "Expected status 'success', got 'needs_clarification' | Expected banks [4], got None",
+      "model_used": "large",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "Show me Scottia's YTD performance",
+      "timestamp": "2025-08-25T00:49:02.536988"
+    },
+    {
+      "scenario_id": "clarifier_027",
+      "scenario_name": "Bank Abbreviations",
+      "success": true,
+      "actual_output": {
+        "status": "success",
+        "banks": {
+          "status": "success",
+          "decision": "banks_selected",
+          "bank_ids": [
+            3,
+            2
+          ],
+          "banks_detail": {
+            "3": {
+              "id": 3,
+              "name": "Bank of Montreal",
+              "symbol": "BMO",
+              "aliases": [
+                "BMO",
+                "Bank of Montreal",
+                "Montreal Bank"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            },
+            "2": {
+              "id": 2,
+              "name": "Toronto-Dominion Bank",
+              "symbol": "TD",
+              "aliases": [
+                "TD",
+                "TD Bank",
+                "Toronto Dominion",
+                "TD Canada Trust"
+              ],
+              "tags": [
+                "canadian_big_six",
+                "tier1_bank",
+                "canadian"
+              ],
+              "databases": [
+                "benchmarking",
+                "pillar3",
+                "reports",
+                "rts",
+                "transcripts"
+              ]
+            }
+          },
+          "tokens_used": 1408,
+          "cost": 0.001426
+        },
+        "periods": {
+          "status": "success",
+          "decision": "periods_selected",
+          "periods": {
+            "apply_all": {
+              "fiscal_year": 2024,
+              "quarters": [
+                "Q4"
+              ]
+            }
+          },
+          "tokens_used": 2763,
+          "cost": 0.002787
+        },
+        "tokens_used": 4171,
+        "cost": 0.004213
+      },
+      "expected_output": {
+        "status": "success",
+        "bank_ids": [
+          3,
+          2
+        ],
+        "period_year": 2024,
+        "period_quarters": [
+          "Q4"
+        ]
+      },
+      "latency_ms": 7971.305847167969,
+      "tokens_used": 4171,
+      "cost": 0.004213,
+      "confidence": null,
+      "error": null,
+      "model_used": "large",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "BMO vs TD Q4 2024",
+      "timestamp": "2025-08-25T00:49:10.508520"
+    },
+    {
+      "scenario_id": "clarifier_028",
+      "scenario_name": "Non-Existent Bank",
+      "success": true,
+      "actual_output": {
+        "status": "needs_clarification",
+        "clarifications": [
+          "Please provide more details about your query."
+        ],
+        "tokens_used": 2134,
+        "cost": 0.002151
+      },
+      "expected_output": {
+        "status": "needs_clarification",
+        "needs_clarification": true
+      },
+      "latency_ms": 9714.783906936646,
+      "tokens_used": 2134,
+      "cost": 0.002151,
+      "confidence": null,
+      "error": null,
+      "model_used": "large",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "Wells Fargo's Canadian operations Q2 2025",
+      "timestamp": "2025-08-25T00:49:20.223505"
+    },
+    {
+      "scenario_id": "clarifier_029",
+      "scenario_name": "All Banks Request",
+      "success": false,
+      "actual_output": {
+        "status": "needs_clarification",
+        "clarifications": [
+          "Which banks would you like to see the efficiency ratio for? Please specify the bank names or categories (e.g., Big Six, US banks)."
+        ],
+        "tokens_used": 3574,
+        "cost": 0.00364
+      },
+      "expected_output": {
+        "status": "success",
+        "bank_ids": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6
+        ],
+        "period_year": 2024,
+        "period_quarters": [
+          "Q3"
+        ]
+      },
+      "latency_ms": 7165.977716445923,
+      "tokens_used": 3574,
+      "cost": 0.00364,
+      "confidence": null,
+      "error": "Expected status 'success', got 'needs_clarification' | Expected banks [1, 2, 3, 4, 5, 6], got None",
+      "model_used": "large",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "Show all banks Q3 2024 efficiency ratios",
+      "timestamp": "2025-08-25T00:49:27.389675"
+    },
+    {
+      "scenario_id": "clarifier_030",
+      "scenario_name": "Pronoun Without Antecedent",
+      "success": true,
+      "actual_output": {
+        "status": "needs_clarification",
+        "clarifications": [
+          "Which banks are you referring to? Please specify the bank names or categories.",
+          "What time period would you like to see results for?"
+        ],
+        "tokens_used": 3558,
+        "cost": 0.003618
+      },
+      "expected_output": {
+        "status": "needs_clarification",
+        "needs_clarification": true
+      },
+      "latency_ms": 7339.025020599365,
+      "tokens_used": 3558,
+      "cost": 0.003618,
+      "confidence": null,
+      "error": null,
+      "model_used": "large",
+      "prompt_version": null,
+      "prompt_last_updated": null,
+      "test_query": "What were their results?",
+      "timestamp": "2025-08-25T00:49:34.728879"
+    }
+  ],
+  "generated_at": "2025-08-25T00:49:34.731739"
+}

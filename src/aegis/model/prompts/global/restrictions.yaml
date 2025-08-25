@@ -12,6 +12,8 @@ content: |
     * Fiscal and temporal context provided
   - NEVER use internal training knowledge about specific financial data or metrics
   - NEVER make assumptions about financial figures not present in retrieved data
+  - All specific financial metrics and data must come from Aegis databases
+  - General financial definitions may use common knowledge but must be clearly labeled as such
   - When data is not available, clearly state this limitation
   
   Compliance and Legal Boundaries:

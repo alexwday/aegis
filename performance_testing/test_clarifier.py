@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 """
-Performance testing script for the Router agent.
+Performance testing script for the Clarifier agent.
 
-This script loads and tests the router agent in the same way that main.py does,
+This script loads and tests the clarifier agent in the same way that main.py does,
 using the same SSL, OAuth, and configuration setup.
 """
 
@@ -21,19 +21,19 @@ from performance_tester import (  # noqa: E402
     run_agent_test,
 )
 from src.aegis.connections.oauth_connector import setup_authentication  # noqa: E402
-from src.aegis.model.agents.router import route_query  # noqa: E402
-from src.aegis.utils.database_filter import filter_databases, get_database_prompt  # noqa: E402
+from src.aegis.model.agents.clarifier import clarify_query  # noqa: E402
+from src.aegis.utils.database_filter import filter_databases  # noqa: E402
 from src.aegis.utils.logging import setup_logging, get_logger  # noqa: E402
 from src.aegis.utils.ssl import setup_ssl  # noqa: E402
 
 
-def setup_router_context():
+def setup_clarifier_context():
     """
-    Set up the router context exactly as main.py does.
+    Set up the clarifier context exactly as main.py does.
 
     Returns:
         Dictionary containing execution_id, auth_config, ssl_config,
-        database_prompt, and available_databases
+        and available_databases
     """
     # Initialize logging
     setup_logging()
@@ -41,12 +41,12 @@ def setup_router_context():
 
     # Generate execution ID
     execution_id = str(uuid.uuid4())
-    logger.info("test_router.context_setup.started", execution_id=execution_id)
+    logger.info("test_clarifier.context_setup.started", execution_id=execution_id)
 
     # Setup SSL configuration
     ssl_config = setup_ssl()
     logger.info(
-        "test_router.ssl_setup.completed",
+        "test_clarifier.ssl_setup.completed",
         execution_id=execution_id,
         status=ssl_config.get("status", "Unknown"),
     )
@@ -54,17 +54,16 @@ def setup_router_context():
     # Setup authentication (requires execution_id and ssl_config)
     auth_config = setup_authentication(execution_id, ssl_config)
     logger.info(
-        "test_router.auth_setup.completed",
+        "test_clarifier.auth_setup.completed",
         execution_id=execution_id,
         auth_method=auth_config.get("auth_method", "Unknown"),
     )
 
     # Get filtered databases (no filter applied for testing)
     filtered_databases = filter_databases(None)
-    database_prompt = get_database_prompt(filtered_databases)
 
     logger.info(
-        "test_router.database_setup.completed",
+        "test_clarifier.database_setup.completed",
         execution_id=execution_id,
         database_count=len(filtered_databases),
     )
@@ -74,48 +73,62 @@ def setup_router_context():
         "execution_id": execution_id,
         "auth_config": auth_config,
         "ssl_config": ssl_config,
-        "database_prompt": database_prompt,
         "available_databases": list(filtered_databases.keys()),
     }
 
-    logger.info("test_router.context_setup.completed", execution_id=execution_id)
+    logger.info("test_clarifier.context_setup.completed", execution_id=execution_id)
 
     return context
 
 
-def test_router_with_scenario(scenario, context, model_tier=None):
+def test_clarifier_with_scenario(scenario, context, model_tier=None):
     """
-    Test the router with a single scenario.
+    Test the clarifier with a single scenario.
+    
+    Note: The clarifier agent has a different signature than router,
+    it only takes the query (not conversation history), so we need a wrapper.
 
     Args:
         scenario: Scenario object to test
-        context: Router context from setup_router_context()
-        model_tier: Optional model tier ('small', 'medium', 'large')
+        context: Clarifier context from setup_clarifier_context()
+        model_tier: Optional model tier (not used by clarifier, but kept for consistency)
 
     Returns:
         TestResult object with the test outcome
     """
     logger = get_logger()
     logger.info(
-        "test_router.scenario.started",
+        "test_clarifier.scenario.started",
         execution_id=context["execution_id"],
         scenario_id=scenario.id,
         scenario_name=scenario.name,
-        model_tier=model_tier or "default",
     )
 
-    # Use the common test runner with our router function
-    result = run_agent_test(route_query, scenario, context, model_tier)
+    # The clarifier expects just the query, not conversation history
+    # Extract the latest message from the scenario
+    messages = scenario.get_messages()
+    query = messages[-1]["content"] if messages else ""
+    
+    # Create a wrapper function that matches the expected signature
+    def clarifier_wrapper(conversation_history, latest_message, context):
+        # The clarifier only uses the latest_message as the query
+        return clarify_query(
+            query=latest_message,
+            context=context,
+            available_databases=context.get("available_databases"),
+        )
+    
+    # Use the common test runner with our wrapper function
+    result = run_agent_test(clarifier_wrapper, scenario, context, model_tier)
 
     logger.info(
-        "test_router.scenario.completed",
+        "test_clarifier.scenario.completed",
         execution_id=context["execution_id"],
         scenario_id=scenario.id,
         success=result.success,
         latency_ms=result.latency_ms,
         tokens_used=result.tokens_used,
         cost=result.cost,
-        model_used=result.model_used,
     )
 
     return result
@@ -123,9 +136,9 @@ def test_router_with_scenario(scenario, context, model_tier=None):
 
 def main():
     """
-    Main entry point for router performance testing.
+    Main entry point for clarifier performance testing.
 
-    Loads scenarios from router_scenarios.yaml, runs all tests with small,
+    Loads scenarios from clarifier_scenarios.yaml and runs tests with small,
     medium, and large models, then generates comprehensive comparison reports.
     """
     # Initialize logging
@@ -133,11 +146,11 @@ def main():
     logger = get_logger()
 
     print("\n" + "=" * 60)
-    print("ROUTER AGENT MULTI-MODEL PERFORMANCE TESTING")
+    print("CLARIFIER AGENT MULTI-MODEL PERFORMANCE TESTING")
     print("=" * 60 + "\n")
 
     # Load scenarios
-    scenario_file = Path(__file__).parent / "scenarios" / "router_scenarios.yaml"
+    scenario_file = Path(__file__).parent / "scenarios" / "clarifier_scenarios.yaml"
 
     try:
         print(f"Loading scenarios from: {scenario_file}")
@@ -150,17 +163,17 @@ def main():
         print(f"✗ Failed to load scenarios: {e}")
         sys.exit(1)
 
-    # Setup router context once (same for all tests)
-    print("Setting up router context (SSL, Auth, Databases)...")
+    # Setup clarifier context once (same for all tests)
+    print("Setting up clarifier context (SSL, Auth, Databases)...")
     try:
-        context = setup_router_context()
-        print("✓ Router context initialized")
+        context = setup_clarifier_context()
+        print("✓ Clarifier context initialized")
         print(f"  Execution ID: {context['execution_id']}")
         print(f"  Auth Method: {context['auth_config'].get('auth_method', 'Unknown')}")
         print(f"  Available Databases: {len(context['available_databases'])}")
         print()
     except Exception as e:
-        print(f"✗ Failed to setup router context: {e}")
+        print(f"✗ Failed to setup clarifier context: {e}")
         sys.exit(1)
 
     # Test with each model tier
@@ -186,17 +199,52 @@ def main():
 
             try:
                 # Test the scenario with this model
-                result = test_router_with_scenario(scenario, context, model_tier)
+                result = test_clarifier_with_scenario(scenario, context, model_tier)
                 collector.add_result(result)
 
-                # Print result
+                # Print result with details
                 if result.success:
                     print(
                         f"    ✓ PASS (latency: {result.latency_ms/1000:.2f}s, "
                         f"tokens: {result.tokens_used:,})"
                     )
+                    # Show what was validated
+                    if isinstance(result.expected_output, dict):
+                        if 'bank_ids' in result.expected_output:
+                            print(f"      Banks: Expected {result.expected_output.get('bank_ids')} ✓")
+                        if 'period_year' in result.expected_output:
+                            print(f"      Year: Expected {result.expected_output.get('period_year')} ✓")
+                        if 'period_quarters' in result.expected_output:
+                            print(f"      Quarters: Expected {result.expected_output.get('period_quarters')} ✓")
                 else:
                     print(f"    ✗ FAIL: {result.error}")
+                    # Show what was expected vs actual
+                    if isinstance(result.expected_output, dict) and isinstance(result.actual_output, dict):
+                        if 'bank_ids' in result.expected_output:
+                            actual_banks = None
+                            if result.actual_output.get('banks') and result.actual_output['banks'].get('bank_ids'):
+                                actual_banks = result.actual_output['banks']['bank_ids']
+                            print(f"      Banks: Expected {result.expected_output.get('bank_ids')}, Got {actual_banks}")
+                        if 'period_year' in result.expected_output or 'period_quarters' in result.expected_output:
+                            actual_year = None
+                            actual_quarters = None
+                            if result.actual_output.get('periods') and result.actual_output['periods'].get('periods'):
+                                periods_data = result.actual_output['periods']['periods']
+                                # Check for apply_all structure
+                                if 'apply_all' in periods_data:
+                                    actual_year = periods_data['apply_all'].get('fiscal_year')
+                                    actual_quarters = periods_data['apply_all'].get('quarters')
+                                # Check for bank-specific structure
+                                elif periods_data:
+                                    # Get first bank's period data
+                                    first_bank_id = list(periods_data.keys())[0]
+                                    if isinstance(periods_data[first_bank_id], dict):
+                                        actual_year = periods_data[first_bank_id].get('fiscal_year')
+                                        actual_quarters = periods_data[first_bank_id].get('quarters')
+                            if 'period_year' in result.expected_output:
+                                print(f"      Year: Expected {result.expected_output.get('period_year')}, Got {actual_year}")
+                            if 'period_quarters' in result.expected_output:
+                                print(f"      Quarters: Expected {result.expected_output.get('period_quarters')}, Got {actual_quarters}")
 
             except Exception as e:
                 # Create failed result for unexpected errors
@@ -283,7 +331,7 @@ def main():
     # Use absolute path for results directory
     import os
     results_dir = os.path.join(os.path.dirname(__file__), "results")
-    generator = ReportGenerator("router_multi_model", results_dir=results_dir)
+    generator = ReportGenerator("clarifier_multi_model", results_dir=results_dir)
 
     try:
         report_paths = generator.generate_all_reports(
@@ -296,7 +344,7 @@ def main():
 
     except Exception as e:
         print(f"✗ Failed to generate reports: {e}")
-        logger.error("test_router.report_generation.failed", error=str(e))
+        logger.error("test_clarifier.report_generation.failed", error=str(e))
 
     # Overall result
     print("\n" + "=" * 60)

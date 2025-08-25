@@ -33,7 +33,9 @@ def route_query(
             "rationale": "Explanation of decision",
             "confidence": 0.0-1.0,
             "status": "Success" or "Error",
-            "error": Optional error message
+            "error": Optional error message,
+            "prompt_version": Prompt version string,
+            "prompt_last_updated": Prompt last updated date
         }
     """
     logger = get_logger()
@@ -42,6 +44,10 @@ def route_query(
     try:
         # Load base router prompt with project context
         router_data = load_yaml("aegis/router.yaml")
+        
+        # Extract version info for tracking
+        prompt_version = router_data.get("version", "unknown")
+        prompt_last_updated = router_data.get("last_updated", "unknown")
         prompt_parts = []
 
         # Add project context
@@ -108,18 +114,24 @@ def route_query(
         tools = [{"type": "function", "function": tool_def}]
 
         # Call LLM with tool
-        # Router uses medium model for fast binary decisions
-        # Get medium model from config
+        # Router uses medium model for fast, accurate binary decisions
+        # Get model based on override or default to medium
         from ...utils.settings import config
 
-        medium_model = config.llm.medium.model
+        model_tier_override = context.get("model_tier_override")
+        if model_tier_override == "small":
+            model = config.llm.small.model
+        elif model_tier_override == "large":
+            model = config.llm.large.model
+        else:
+            model = config.llm.medium.model  # Default to medium
 
         response = complete_with_tools(
             messages=messages,
             tools=tools,
             context=context,
             llm_params={
-                "model": medium_model,  # Use medium model for speed
+                "model": model,
                 "temperature": 0.1,  # Very low temperature for deterministic binary routing
                 "max_tokens": 50,  # Binary response needs minimal tokens
             },
@@ -163,6 +175,9 @@ def route_query(
                     "tokens_used": usage.get("total_tokens", 0),
                     "cost": metrics.get("total_cost", 0),
                     "response_time_ms": metrics.get("response_time", 0) * 1000,
+                    "model_used": model,
+                    "prompt_version": prompt_version,
+                    "prompt_last_updated": prompt_last_updated,
                 }
 
     except Exception as e:
@@ -175,6 +190,8 @@ def route_query(
             "cost": 0,
             "response_time_ms": 0,
             "error": str(e),
+            "prompt_version": prompt_version if 'prompt_version' in locals() else "unknown",
+            "prompt_last_updated": prompt_last_updated if 'prompt_last_updated' in locals() else "unknown",
         }
 
     # Default to research workflow if no tool response
@@ -186,4 +203,6 @@ def route_query(
         "tokens_used": usage.get("total_tokens", 0),
         "cost": metrics.get("total_cost", 0),
         "response_time_ms": metrics.get("response_time", 0) * 1000,
+        "prompt_version": prompt_version,
+        "prompt_last_updated": prompt_last_updated,
     }

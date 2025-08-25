@@ -27,13 +27,21 @@ content: |
       - Aegis system questions (capabilities, usage, help)
       - Reformatting data that EXISTS in conversation history
       - Empty/malicious/nonsensical input
+      - General definitions and explanations of financial concepts (ROE, efficiency ratio, etc.)
+        Note: Direct response provides general knowledge only, not proprietary data
+      - Acknowledgments after receiving data
+      - Conversational corrections without prior data context
+      - General explanations of available metric types (not specific values)
       
-      Return 1 (research_workflow) for EVERYTHING ELSE:
-      - ANY financial data request
-      - ANY entity mention needing data (RBC, TD, etc.)
-      - ANY vague/ambiguous request
-      - ANY mixed request with data component
-      - When uncertain, return 1
+      Return 1 (research_workflow) for:
+      - ANY request for specific financial data or metrics
+      - ANY entity mention needing current data (RBC's metrics, TD's performance)
+      - User providing clarification after assistant asks which data to fetch
+      - Follow-up requests for different data
+      - Vague requests that likely need data ("show me the numbers")
+      - Corrections after data context established (changing which bank/metric to fetch)
+      - Peer-to-peer comparisons (no industry benchmarks available)
+      - When uncertain about data needs, return 1
     </critical_rules>
     
     <constraints>
@@ -43,26 +51,42 @@ content: |
     </constraints>
     
     <examples>
-      Query: "What is ROE?" → 1 (needs research)
+      Query: "What is ROE?" → 0 (general definition from general knowledge)
+      Query: "What does efficiency ratio mean?" → 0 (general concept explanation)
       Query: "Hello" → 0 (greeting)
       Query: "Show me RBC's efficiency ratio" → 1 (data request)
+      Query: "What's RBC's ROE?" → 1 (specific metric request)
       Query: "Thanks" → 0 (acknowledgment)
-      Query: "RBC" → 1 (entity needs clarification)
+      Query: "RBC" → 1 (entity needs clarification for data)
       Query: "What can Aegis do?" → 0 (system capabilities)
-      Query: "Tell me about TD" → 1 (vague, needs clarification)
+      Query: "Tell me about TD's performance" → 1 (needs current data)
       Query: "" → 0 (empty)
       Query: "How do I use this?" → 0 (Aegis usage)
-      Query: "Compare BMO and TD" → 1 (data needed)
-      With history: "Format that as a table" (after data shown) → 0 (reformat existing)
-      With history: "What about Q3?" (after Q2 discussed) → 1 (new data needed)
+      Query: "Compare BMO and TD revenue" → 1 (data needed)
+      Query: "Show me the numbers" → 1 (vague but likely needs data)
+      
+      With conversation history:
+      Assistant: "Which bank's efficiency ratio?" User: "RBC" → 1 (clarification for data fetch)
+      User: "Show me TD's ROE" Assistant: "[shows data]" User: "Perfect, thanks" → 0 (acknowledgment)
+      User: "I meant TD not RBC" (pure conversation, no prior data) → 0 (conversational correction)
+      User: "I meant TD not RBC" (after data shown for RBC) → 1 (data correction, fetch TD data)
+      "Format that as a table" (after data shown) → 0 (reformat existing)
+      "What about BMO?" (after TD data shown) → 1 (new data needed)
+      "And what about the other one?" (no clear context) → 0 (needs clarification)
     </examples>
     
     <decision_tree>
       1. Empty/malicious/nonsense? → 0
-      2. Pure greeting/thanks? → 0  
+      2. Pure greeting/thanks/acknowledgment? → 0  
       3. About Aegis itself? → 0
-      4. Reformatting existing data? → 0
-      5. Everything else → 1
+      4. General definition or concept explanation? → 0
+      5. Reformatting existing data? → 0
+      6. Correction without prior data context? → 0
+      7. Vague reference needing clarification? → 0
+      8. Assistant asked for data clarification & user provides it? → 1
+      9. Correction after data context established? → 1
+      10. Any specific data/metric request? → 1
+      11. Everything else → 1
     </decision_tree>
   </prompt>
 

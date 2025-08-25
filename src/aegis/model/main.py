@@ -19,7 +19,7 @@ from ..utils.monitor import (
     post_monitor_entries,
 )
 from ..utils.ssl import setup_ssl
-from .agents import route_query
+from .agents import route_query, generate_response, clarify_query
 
 
 def model(
@@ -224,33 +224,159 @@ def model(
 
     # Stage 6: Execute based on routing decision
     if routing_decision.get("route") == "direct_response":
-        # Direct response path - answer from conversation history
-        yield {
-            "type": "agent",
-            "name": "aegis",
-            "content": f"[Router: Direct Response - {routing_decision.get('rationale')}]\n",
+        # Direct response path - use response agent
+        logger.info("model.stage.response_agent.started", execution_id=execution_id)
+        response_start = datetime.now(timezone.utc)
+        
+        # Build context for response agent
+        response_context = {
+            "execution_id": execution_id,
+            "auth_config": auth_config,
+            "ssl_config": ssl_config,
         }
-        yield {
-            "type": "agent",
-            "name": "aegis",
-            "content": "Response agent would generate answer from conversation history.\n",
-        }
+        
+        # Stream response from response agent
+        for chunk in generate_response(
+            conversation_history=processed_conversation.get("messages", []),
+            latest_message=processed_conversation.get("latest_message", {}).get("content", ""),
+            context=response_context,
+            streaming=True,
+        ):
+            if chunk["type"] == "chunk":
+                # Stream content chunks
+                yield {
+                    "type": "agent",
+                    "name": "aegis",
+                    "content": chunk["content"],
+                }
+            elif chunk["type"] == "final":
+                # Log final metrics
+                logger.info(
+                    "model.stage.response_agent.completed",
+                    execution_id=execution_id,
+                    status=chunk.get("status"),
+                    tokens_used=chunk.get("tokens_used"),
+                    cost=chunk.get("cost"),
+                    response_time_ms=chunk.get("response_time_ms"),
+                )
+                
+                add_monitor_entry(
+                    stage_name="Response_Agent",
+                    stage_start_time=response_start,
+                    stage_end_time=datetime.now(timezone.utc),
+                    status=chunk.get("status", "Success"),
+                    decision_details="Direct response generated",
+                    error_message=chunk.get("error"),
+                    custom_metadata={
+                        "tokens_used": chunk.get("tokens_used"),
+                        "cost": chunk.get("cost"),
+                        "model_used": chunk.get("model_used"),
+                        "response_time_ms": chunk.get("response_time_ms"),
+                    },
+                )
     else:
         # Research workflow path - need to fetch data
-        yield {
-            "type": "agent",
-            "name": "aegis",
-            "content": f"[Router: Research Workflow - {routing_decision.get('rationale')}]\n",
+        logger.info("model.stage.research_workflow.started", execution_id=execution_id)
+        
+        # Stage 6a: Clarifier - extract banks and periods
+        logger.info("model.stage.clarifier.started", execution_id=execution_id)
+        clarifier_start = datetime.now(timezone.utc)
+        
+        # Build context for clarifier
+        clarifier_context = {
+            "execution_id": execution_id,
+            "auth_config": auth_config,
+            "ssl_config": ssl_config,
         }
-        yield {
-            "type": "agent",
-            "name": "aegis",
-            "content": "Clarifier, Planner, and Subagents would execute here.\n",
-        }
-
-    # Future: Implement actual agents
-    # - Response agent for direct responses
-    # - Clarifier → Planner → Subagents → Summarizer for research
+        
+        # Run clarifier with available databases
+        clarifier_result = clarify_query(
+            query=processed_conversation.get("latest_message", {}).get("content", ""),
+            context=clarifier_context,
+            available_databases=list(filtered_databases.keys()),
+        )
+        
+        logger.info(
+            "model.stage.clarifier.completed",
+            execution_id=execution_id,
+            status=clarifier_result.get("status"),
+            needs_clarification=clarifier_result.get("status") == "needs_clarification",
+        )
+        
+        add_monitor_entry(
+            stage_name="Clarifier",
+            stage_start_time=clarifier_start,
+            stage_end_time=datetime.now(timezone.utc),
+            status=clarifier_result.get("status", "Unknown"),
+            decision_details=clarifier_result.get("clarification", "Banks and periods extracted"),
+            error_message=clarifier_result.get("error"),
+            custom_metadata={
+                "banks": clarifier_result.get("banks", {}).get("bank_ids") if clarifier_result.get("banks") else None,
+                "periods": clarifier_result.get("periods", {}).get("periods") if clarifier_result.get("periods") else None,
+            },
+        )
+        
+        # Check if clarification is needed
+        if clarifier_result.get("status") == "needs_clarification":
+            # Format and stream clarification request back to user
+            clarifications = clarifier_result.get("clarifications", [])
+            
+            if clarifications:
+                # Stream opening statement for clarifications
+                yield {
+                    "type": "agent",
+                    "name": "aegis",
+                    "content": "I need some additional information to complete your research request:\n\n",
+                }
+                
+                # Stream each clarification as a numbered list
+                for i, clarification in enumerate(clarifications, 1):
+                    yield {
+                        "type": "agent",
+                        "name": "aegis",
+                        "content": f"{i}. {clarification}\n",
+                    }
+                
+                # Add closing guidance
+                yield {
+                    "type": "agent",
+                    "name": "aegis",
+                    "content": "\nPlease provide these details so I can retrieve the specific data you need.",
+                }
+            else:
+                # Fallback if no clarifications provided
+                yield {
+                    "type": "agent",
+                    "name": "aegis",
+                    "content": "Please provide more details about your query.",
+                }
+        else:
+            # Continue with research workflow - we have both banks and periods
+            banks_detail = clarifier_result.get("banks", {}).get("banks_detail", {})
+            periods = clarifier_result.get("periods", {}).get("periods", {})
+            
+            # Stream progress update with specific banks
+            bank_names = [info["name"] for info in banks_detail.values()]
+            
+            # Format period description
+            if periods and "apply_all" in periods:
+                period_info = periods["apply_all"]
+                period_desc = f"{', '.join(period_info['quarters'])} {period_info['fiscal_year']}"
+            else:
+                period_desc = "the specified periods"
+            
+            yield {
+                "type": "agent",
+                "name": "aegis",
+                "content": f"Retrieving {period_desc} data for {', '.join(bank_names) if bank_names else 'selected banks'}...\n",
+            }
+            
+            # TODO: Implement Planner → Subagents → Summarizer
+            yield {
+                "type": "agent", 
+                "name": "aegis",
+                "content": "\n[Planner and Subagents would execute here with the extracted banks and periods]\n",
+            }
 
     # Post monitoring data to database
     entries_posted = post_monitor_entries(execution_id)

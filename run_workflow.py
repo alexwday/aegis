@@ -7,24 +7,44 @@ Usage:
 """
 
 import json
+import os
 import sys
+
+# Set log level to reduce verbosity (optional - comment out for full logs)
+# os.environ["LOG_LEVEL"] = "WARNING"  # Uncomment to hide logs
+# os.environ["LOG_LEVEL"] = "INFO"     # Uncomment for normal logs
+# os.environ["LOG_LEVEL"] = "DEBUG"    # Uncomment for detailed logs
 
 from src.aegis.model.main import model
 
 
 def main():
     """Run a test workflow with streaming output."""
-    # Sample conversation
+    # Sample conversation - modify this to test different scenarios
+    
+    # Test 1: Direct response (greeting)
+    # conversation = {
+    #     "messages": [
+    #         {"role": "user", "content": "Hello Aegis"},
+    #     ]
+    # }
+    
+    # Test 2: Direct response (concept explanation)
     conversation = {
         "messages": [
-            {"role": "user", "content": "Hello, I need help with my project"},
-            {"role": "assistant", "content": "I'd be happy to help! What specific aspect of your project do you need assistance with?"},
-            {"role": "user", "content": "Can you help me understand the Q3 revenue figures?"},
+            {"role": "user", "content": "What is efficiency ratio?"},
         ]
     }
     
-    # Optional database filters
-    db_names = ["internal_capm", "internal_wiki"]
+    # Test 3: Research workflow (data request)
+    # conversation = {
+    #     "messages": [
+    #         {"role": "user", "content": "Show me RBC's Q3 revenue"},
+    #     ]
+    # }
+    
+    # Optional database filters (None for now)
+    db_names = None
     
     print("🚀 Running Aegis Model...")
     print("-" * 50)
@@ -35,9 +55,8 @@ def main():
     print("\n📡 Streaming output:\n")
     
     try:
-        # Track subagents for final summary
+        # Track subagents for summary
         subagents_seen = set()
-        agent_messages = []
         
         # Stream responses
         for message in model(conversation, db_names):
@@ -47,17 +66,18 @@ def main():
             
             if msg_type == "agent":
                 # Main agent response
-                print(f"[AEGIS] {msg_content}", end="")
-                agent_messages.append(msg_content)
+                print(msg_content, end="", flush=True)
             else:
                 # Subagent response
-                print(f"  [{msg_name.upper()}] {msg_content}", end="")
+                print(f"\n  [{msg_name.upper()}] {msg_content}", end="", flush=True)
                 subagents_seen.add(msg_name)
         
         print("\n" + "-" * 50)
         print("✅ Streaming completed successfully!")
-        print(f"📊 Subagents used: {', '.join(sorted(subagents_seen)) if subagents_seen else 'None'}")
-        print(f"📝 Main agent messages: {len(agent_messages)}")
+        if subagents_seen:
+            print(f"📊 Subagents used: {', '.join(sorted(subagents_seen))}")
+        else:
+            print("📊 Response type: Direct response (no data retrieval needed)")
         
     except Exception as e:
         print(f"\n❌ Model failed: {e}")

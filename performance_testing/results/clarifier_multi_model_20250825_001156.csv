@@ -1,0 +1,42 @@
+SUMMARY
+Metric,Value
+Total Tests,30
+Passed,28
+Failed,2
+Success Rate (%),93.33
+Mean Latency (seconds),1.65
+Total Tokens,"100,067"
+Total Cost ($),0.0476
+
+DETAILED RESULTS
+scenario_id,scenario_name,model,success,latency_seconds,tokens_used,cost,prompt_version,prompt_last_updated,error
+clarifier_001,Clear Bank and Period - RBC Q3 2024,small,True,2.01,"3,373",0.0003,N/A,N/A,
+clarifier_002,Multiple Banks - Big Six Q2 2024,small,True,2.15,"4,613",0.0005,N/A,N/A,
+clarifier_003,Ambiguous Bank - No Period,small,True,1.23,"2,957",0.0003,N/A,N/A,
+clarifier_004,Clear Bank - Missing Period,small,True,1.23,"3,321",0.0003,N/A,N/A,
+clarifier_005,Latest Period Request,small,False,1.23,"3,323",0.0003,N/A,N/A,"Expected status 'success', got 'needs_clarification'"
+clarifier_006,YTD Period Request,small,False,1.08,"3,345",0.0003,N/A,N/A,"Expected status 'success', got 'needs_clarification'"
+clarifier_007,Bank Alias - National Bank,small,True,1.48,"3,364",0.0003,N/A,N/A,
+clarifier_008,Multiple Specific Banks,small,True,2.72,"3,652",0.0004,N/A,N/A,
+clarifier_009,Full Year Period,small,True,1.68,"3,378",0.0003,N/A,N/A,
+clarifier_010,Clear Period - Ambiguous Bank,small,True,1.84,"2,999",0.0003,N/A,N/A,
+clarifier_001,Clear Bank and Period - RBC Q3 2024,medium,True,1.50,"3,322",0.0010,N/A,N/A,
+clarifier_002,Multiple Banks - Big Six Q2 2024,medium,True,1.67,"4,526",0.0014,N/A,N/A,
+clarifier_003,Ambiguous Bank - No Period,medium,True,1.45,"2,952",0.0009,N/A,N/A,
+clarifier_004,Clear Bank - Missing Period,medium,True,1.41,"3,324",0.0010,N/A,N/A,
+clarifier_005,Latest Period Request,medium,True,1.34,"3,316",0.0010,N/A,N/A,
+clarifier_006,YTD Period Request,medium,True,1.73,"3,331",0.0010,N/A,N/A,
+clarifier_007,Bank Alias - National Bank,medium,True,2.00,"3,319",0.0010,N/A,N/A,
+clarifier_008,Multiple Specific Banks,medium,True,2.12,"1,410",0.0004,N/A,N/A,
+clarifier_009,Full Year Period,medium,True,1.51,"3,329",0.0010,N/A,N/A,
+clarifier_010,Clear Period - Ambiguous Bank,medium,True,1.54,"2,949",0.0009,N/A,N/A,
+clarifier_001,Clear Bank and Period - RBC Q3 2024,large,True,1.65,"3,322",0.0034,N/A,N/A,
+clarifier_002,Multiple Banks - Big Six Q2 2024,large,True,1.73,"4,526",0.0046,N/A,N/A,
+clarifier_003,Ambiguous Bank - No Period,large,True,2.35,"2,975",0.0031,N/A,N/A,
+clarifier_004,Clear Bank - Missing Period,large,True,1.64,"3,324",0.0034,N/A,N/A,
+clarifier_005,Latest Period Request,large,True,1.33,"3,316",0.0034,N/A,N/A,
+clarifier_006,YTD Period Request,large,True,1.64,"3,331",0.0034,N/A,N/A,
+clarifier_007,Bank Alias - National Bank,large,True,1.43,"3,319",0.0034,N/A,N/A,
+clarifier_008,Multiple Specific Banks,large,True,1.74,"3,568",0.0036,N/A,N/A,
+clarifier_009,Full Year Period,large,True,1.55,"3,329",0.0034,N/A,N/A,
+clarifier_010,Clear Period - Ambiguous Bank,large,True,1.54,"2,954",0.0030,N/A,N/A,
