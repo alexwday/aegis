@@ -46,8 +46,10 @@ source venv/bin/activate
 # Upgrade pip
 pip install --upgrade pip
 
-# Install required packages
-pip install -r requirements.txt
+# Install the package in development mode
+pip install -e .
+
+# This installs all dependencies and makes 'aegis' importable
 ```
 
 ## PostgreSQL Setup
@@ -268,30 +270,15 @@ SERVER_PORT=8000
 
 ## Testing the Installation
 
-### 1. Set Python Path (IMPORTANT)
-
-Before running any Python commands, you need to add the project directory to Python's path:
+### 1. Test Database Connection
 
 ```bash
 # Activate virtual environment if not already active
 source venv/bin/activate
 
-# Add the project directory to PYTHONPATH
-export PYTHONPATH="${PYTHONPATH}:$(pwd)"
-
-# Verify it's set correctly (should show your aegis directory path)
-echo $PYTHONPATH
-```
-
-**Note:** You'll need to set PYTHONPATH each time you open a new terminal, or add it to your shell profile (~/.zshrc or ~/.bash_profile).
-
-### 2. Test Database Connection
-
-```bash
-# Make sure PYTHONPATH is set (see step 1 above)
 # Test database connection
 python -c "
-from src.aegis.connections.postgres.connector import get_db_connection
+from aegis.connections.postgres.connector import get_db_connection
 try:
     with get_db_connection() as conn:
         result = conn.execute('SELECT 1')
@@ -301,15 +288,14 @@ except Exception as e:
 "
 ```
 
-### 3. Test LLM Connection
+### 2. Test LLM Connection
 
 ```bash
-# Make sure PYTHONPATH is set (see step 1 above)
-# Test LLM connectivity
+# Test LLM connectivity (replace with your actual API key)
 API_KEY="your_api_key_here" python -c "
-from src.aegis.connections.llm.connector import check_connection
-from src.aegis.connections.auth.connector import setup_authentication
-from src.aegis.utils.ssl.setup import setup_ssl
+from aegis.connections.llm.connector import check_connection
+from aegis.connections.auth.connector import setup_authentication
+from aegis.utils.ssl.setup import setup_ssl
 
 auth_config = setup_authentication()
 ssl_config = setup_ssl()
@@ -324,13 +310,12 @@ print(f'✅ LLM connection: {result}')
 "
 ```
 
-### 4. Test the Model via Command Line
+### 3. Test the Model via Command Line
 
 ```bash
-# Make sure PYTHONPATH is set (see step 1 above)
 # Simple test query
 python -c "
-from src.aegis.model.main import model
+from aegis.model.main import model
 
 messages = [{'role': 'user', 'content': 'Hello Aegis, can you help me understand RBC financial data?'}]
 
@@ -342,15 +327,14 @@ print()
 "
 ```
 
-### 5. Run the Test Suite
+### 4. Run the Test Suite
 
 ```bash
-# Make sure PYTHONPATH is set (see step 1 above)
 # Run all tests
 python -m pytest tests/ -v
 
 # Run with coverage
-python -m pytest tests/ --cov=src/aegis --cov-report=term-missing
+python -m pytest tests/ --cov=aegis --cov-report=term-missing
 ```
 
 ## Running the Application
@@ -361,11 +345,8 @@ python -m pytest tests/ --cov=src/aegis --cov-report=term-missing
 # Activate virtual environment
 source venv/bin/activate
 
-# Set Python path
-export PYTHONPATH="${PYTHONPATH}:$(pwd)"
-
 # Start the web server
-python web_interface.py
+python run_web.py
 ```
 
 Open your browser and navigate to:
@@ -385,14 +366,11 @@ The web interface provides:
 # Activate virtual environment
 source venv/bin/activate
 
-# Set Python path
-export PYTHONPATH="${PYTHONPATH}:$(pwd)"
-
 # Run interactive Python session
 python
 
 # In the Python interpreter:
-from src.aegis.model.main import model
+from aegis.model.main import model
 
 # Create a conversation
 messages = [
@@ -411,7 +389,7 @@ Create a file `test_aegis.py`:
 
 ```python
 #!/usr/bin/env python
-from src.aegis.model.main import model
+from aegis.model.main import model
 import json
 
 def test_query(query):
