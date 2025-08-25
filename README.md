@@ -93,12 +93,41 @@ psql -d postgres -c "SHOW config_file;" 2>/dev/null || psql -p 5432 -d postgres 
 # PostgreSQL.app: ~/Library/Application Support/Postgres/var-15/postgresql.conf
 ```
 
-Edit the configuration file:
+Edit the configuration file using one of these methods:
+
+**Option 1: Using sed (easiest - automatic replacement):**
 ```bash
 # For Homebrew on M1/M2 Macs:
-nano /opt/homebrew/var/postgresql@15/postgresql.conf
+sed -i '' 's/^#*port = 5432/port = 34532/' /opt/homebrew/var/postgresql@15/postgresql.conf
 
 # For Homebrew on Intel Macs:
+sed -i '' 's/^#*port = 5432/port = 34532/' /usr/local/var/postgresql@15/postgresql.conf
+```
+
+**Option 2: Using VS Code (if installed):**
+```bash
+# For M1/M2 Macs:
+code /opt/homebrew/var/postgresql@15/postgresql.conf
+
+# For Intel Macs:
+code /usr/local/var/postgresql@15/postgresql.conf
+```
+
+**Option 3: Using TextEdit (GUI):**
+```bash
+# For M1/M2 Macs:
+open -a TextEdit /opt/homebrew/var/postgresql@15/postgresql.conf
+
+# For Intel Macs:
+open -a TextEdit /usr/local/var/postgresql@15/postgresql.conf
+```
+
+**Option 4: Using nano (if you prefer):**
+```bash
+# For M1/M2 Macs:
+nano /opt/homebrew/var/postgresql@15/postgresql.conf
+
+# For Intel Macs:
 nano /usr/local/var/postgresql@15/postgresql.conf
 ```
 
@@ -106,6 +135,8 @@ Find and change the port setting (usually around line 63):
 ```
 port = 34532                # (change from 5432 to 34532)
 ```
+
+Note: If the line starts with '#', remove the '#' to uncomment it.
 
 Restart PostgreSQL:
 ```bash
