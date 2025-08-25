@@ -56,12 +56,22 @@ def filter_databases(db_names: Optional[List[str]] = None) -> Dict[str, Dict]:
     """
     logger = get_logger()
 
+    # Log what we received
+    logger.info(
+        "filter_databases.called",
+        db_names=db_names,
+        db_names_count=len(db_names) if db_names else 0,
+        db_names_type=type(db_names).__name__,
+        is_none=db_names is None,
+        is_empty=not db_names if db_names is not None else None,
+    )
+
     # Load all databases
     all_databases = get_available_databases()
 
     # If no filter, return all
     if not db_names:
-        logger.debug("No database filter applied", available=len(all_databases))
+        logger.info("No database filter applied - returning all databases", available=len(all_databases))
         return all_databases
 
     # Filter to requested databases

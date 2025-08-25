@@ -1,0 +1,1030 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aegis Chat Interface</title>
+    <!-- Include marked.js for markdown rendering -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .chat-container {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 1400px;  /* Increased from 800px */
+            height: 85vh;  /* Slightly taller */
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .chat-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .chat-header h1 {
+            font-size: 24px;
+            font-weight: 600;
+        }
+
+        .header-buttons {
+            display: flex;
+            gap: 10px;
+        }
+
+        .header-btn {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.3s;
+            font-size: 14px;
+        }
+
+        .header-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+
+        .message {
+            display: flex;
+            margin-bottom: 16px;
+            animation: fadeIn 0.3s ease-in;
+            width: 100%;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message.user {
+            justify-content: flex-end;
+        }
+        
+        .message.assistant {
+            justify-content: flex-start;
+        }
+        
+        .message-wrapper {
+            max-width: 85%;  /* Increased from 70% for wider messages */
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .message.user .message-wrapper {
+            align-items: flex-end;
+        }
+        
+        .message.assistant .message-wrapper {
+            align-items: flex-start;
+        }
+
+        .message-bubble {
+            padding: 12px 16px;
+            border-radius: 18px;
+            word-wrap: break-word;
+            white-space: pre-wrap;
+            word-break: break-word;
+            overflow-wrap: break-word;
+            width: fit-content;
+            max-width: 100%;
+        }
+        
+        /* Markdown styles for message bubbles */
+        .message-bubble h1, .message-bubble h2, .message-bubble h3 {
+            margin-top: 0.5em;
+            margin-bottom: 0.3em;
+        }
+        
+        .message-bubble h1 { font-size: 1.4em; }
+        .message-bubble h2 { font-size: 1.2em; }
+        .message-bubble h3 { font-size: 1.1em; }
+        
+        .message-bubble p {
+            margin: 0.5em 0;
+        }
+        
+        .message-bubble ul, .message-bubble ol {
+            margin: 0.5em 0;
+            padding-left: 1.5em;
+        }
+        
+        .message-bubble li {
+            margin: 0.2em 0;
+        }
+        
+        .message-bubble code {
+            background: rgba(0, 0, 0, 0.1);
+            padding: 0.1em 0.3em;
+            border-radius: 3px;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 0.9em;
+        }
+        
+        .message-bubble pre {
+            background: rgba(0, 0, 0, 0.1);
+            padding: 0.5em;
+            border-radius: 5px;
+            overflow-x: auto;
+            margin: 0.5em 0;
+        }
+        
+        .message-bubble pre code {
+            background: none;
+            padding: 0;
+        }
+        
+        .message-bubble strong {
+            font-weight: 600;
+        }
+        
+        .message-bubble em {
+            font-style: italic;
+        }
+        
+        .message-bubble blockquote {
+            border-left: 3px solid rgba(0, 0, 0, 0.3);
+            padding-left: 0.5em;
+            margin: 0.5em 0;
+            color: rgba(0, 0, 0, 0.7);
+        }
+        
+        .message-bubble table {
+            border-collapse: collapse;
+            margin: 0.5em 0;
+        }
+        
+        .message-bubble th, .message-bubble td {
+            border: 1px solid rgba(0, 0, 0, 0.2);
+            padding: 0.3em 0.5em;
+        }
+        
+        .message-bubble th {
+            background: rgba(0, 0, 0, 0.05);
+        }
+        
+        .message.user .message-bubble code {
+            background: rgba(255, 255, 255, 0.2);
+        }
+        
+        .message.user .message-bubble pre {
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .message.user .message-bubble {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-bottom-right-radius: 4px;
+            display: inline-block;
+            text-align: left;
+        }
+
+        .message.assistant .message-bubble {
+            background: white;
+            color: #333;
+            border-bottom-left-radius: 4px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+        }
+
+        .message-label {
+            font-size: 11px;
+            color: #666;
+            margin-bottom: 4px;
+            padding: 0 8px;
+        }
+
+        .typing-indicator {
+            display: none;
+            padding: 12px 16px;
+            background: white;
+            border-radius: 18px;
+            border-bottom-left-radius: 4px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+            width: fit-content;
+        }
+
+        .typing-indicator.active {
+            display: inline-block;
+        }
+
+        .typing-indicator span {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #999;
+            margin: 0 2px;
+            animation: typing 1.4s infinite;
+        }
+
+        .typing-indicator span:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+
+        .typing-indicator span:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+
+        @keyframes typing {
+            0%, 60%, 100% {
+                transform: translateY(0);
+            }
+            30% {
+                transform: translateY(-10px);
+            }
+        }
+
+        .chat-input-container {
+            padding: 20px;
+            background: white;
+            border-top: 1px solid #e0e0e0;
+        }
+
+        .chat-input-form {
+            display: flex;
+            gap: 10px;
+        }
+
+        .chat-input {
+            flex: 1;
+            padding: 14px 20px;  /* Slightly more padding for wider input */
+            border: 2px solid #e0e0e0;
+            border-radius: 25px;
+            font-size: 16px;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+
+        .chat-input:focus {
+            border-color: #667eea;
+        }
+
+        .send-button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 500;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .send-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .send-button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .error-message {
+            background: #ff6b6b;
+            color: white;
+            padding: 10px 16px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            animation: fadeIn 0.3s ease-in;
+        }
+
+        .status-bar {
+            padding: 8px 20px;
+            background: #f0f0f0;
+            font-size: 12px;
+            color: #666;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #4caf50;
+        }
+
+        .status-dot.error {
+            background: #ff6b6b;
+        }
+
+        /* Subagent styles */
+        .subagent-container {
+            margin-top: 10px;
+            background: #f9f9f9;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid #e0e0e0;
+        }
+
+        .subagent-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 15px;
+            background: linear-gradient(135deg, #667eea20 0%, #764ba220 100%);
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .subagent-header:hover {
+            background: linear-gradient(135deg, #667eea30 0%, #764ba230 100%);
+        }
+
+        .subagent-title {
+            font-weight: 600;
+            font-size: 14px;
+            color: #333;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .subagent-badge {
+            background: #667eea;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            text-transform: uppercase;
+        }
+
+        .subagent-toggle {
+            font-size: 12px;
+            color: #666;
+            transition: transform 0.3s;
+        }
+
+        .subagent-toggle.collapsed {
+            transform: rotate(-90deg);
+        }
+
+        .subagent-content {
+            padding: 15px;
+            background: white;
+            border-top: 1px solid #e0e0e0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-size: 14px;
+            line-height: 1.6;
+            position: relative;
+            transition: max-height 0.3s ease;
+        }
+        
+        /* Markdown styles for subagent content */
+        .subagent-content h1, .subagent-content h2, .subagent-content h3 {
+            margin-top: 0.5em;
+            margin-bottom: 0.3em;
+            color: #333;
+        }
+        
+        .subagent-content h1 { font-size: 1.3em; }
+        .subagent-content h2 { font-size: 1.15em; }
+        .subagent-content h3 { font-size: 1.05em; }
+        
+        .subagent-content p {
+            margin: 0.5em 0;
+        }
+        
+        .subagent-content ul, .subagent-content ol {
+            margin: 0.5em 0;
+            padding-left: 1.5em;
+        }
+        
+        .subagent-content li {
+            margin: 0.3em 0;
+        }
+        
+        .subagent-content code {
+            background: #f5f5f5;
+            padding: 0.1em 0.3em;
+            border-radius: 3px;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 0.9em;
+            color: #d14;
+        }
+        
+        .subagent-content pre {
+            background: #f5f5f5;
+            padding: 0.8em;
+            border-radius: 5px;
+            overflow-x: auto;
+            margin: 0.5em 0;
+        }
+        
+        .subagent-content pre code {
+            background: none;
+            padding: 0;
+            color: inherit;
+        }
+        
+        .subagent-content strong {
+            font-weight: 600;
+            color: #222;
+        }
+        
+        .subagent-content em {
+            font-style: italic;
+        }
+        
+        .subagent-content blockquote {
+            border-left: 3px solid #667eea;
+            padding-left: 0.8em;
+            margin: 0.5em 0;
+            color: #666;
+        }
+        
+        .subagent-content table {
+            border-collapse: collapse;
+            margin: 0.5em 0;
+            width: 100%;
+        }
+        
+        .subagent-content th, .subagent-content td {
+            border: 1px solid #ddd;
+            padding: 0.4em 0.6em;
+            text-align: left;
+        }
+        
+        .subagent-content th {
+            background: #f5f5f5;
+            font-weight: 600;
+        }
+
+        .subagent-content.collapsed {
+            max-height: 6em; /* Increased to show 4 lines instead of 3 */
+            overflow: hidden;
+        }
+
+        .subagent-content.collapsed::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 2em;
+            background: linear-gradient(to bottom, transparent, white);
+            pointer-events: none;
+        }
+
+        .subagent-content.expanded {
+            max-height: 600px;  /* Increased from 400px for more content visibility */
+            overflow-y: auto;
+        }
+
+        .subagent-streaming {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background: #4caf50;
+            border-radius: 50%;
+            margin-left: 8px;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% {
+                box-shadow: 0 0 0 0 rgba(76, 175, 80, 0.7);
+            }
+            70% {
+                box-shadow: 0 0 0 10px rgba(76, 175, 80, 0);
+            }
+            100% {
+                box-shadow: 0 0 0 0 rgba(76, 175, 80, 0);
+            }
+        }
+
+        @media (max-width: 768px) {
+            .chat-container {
+                height: 100vh;
+                max-width: 100%;
+                border-radius: 0;
+            }
+
+            .message-wrapper {
+                max-width: 90%;  /* Even wider on mobile since screen is smaller */
+            }
+        }
+        
+        @media (min-width: 1600px) {
+            .chat-container {
+                max-width: 1600px;  /* Even wider on large screens */
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="chat-container">
+        <div class="chat-header">
+            <h1>🛡️ Aegis Assistant</h1>
+            <div class="header-buttons">
+                <button class="header-btn" onclick="resetConversation()">Reset</button>
+                <button class="header-btn" onclick="toggleStreaming()">
+                    <span id="streaming-toggle">Streaming: ON</span>
+                </button>
+            </div>
+        </div>
+        
+        <div class="chat-messages" id="chatMessages">
+            <div class="message assistant">
+                <div class="message-wrapper">
+                    <div class="message-label">Assistant</div>
+                    <div class="message-bubble">Hello! I'm Aegis, your financial data assistant. How can I help you today?</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="typing-indicator" id="typingIndicator">
+            <span></span>
+            <span></span>
+            <span></span>
+        </div>
+        
+        <div class="status-bar">
+            <div class="connection-status">
+                <span class="status-dot" id="statusDot"></span>
+                <span id="statusText">Connected</span>
+            </div>
+            <div id="messageCount">Messages: 1</div>
+        </div>
+        
+        <div class="chat-input-container">
+            <form class="chat-input-form" id="chatForm">
+                <input 
+                    type="text" 
+                    class="chat-input" 
+                    id="chatInput" 
+                    placeholder="Type your message here..."
+                    autocomplete="off"
+                    required
+                />
+                <button type="submit" class="send-button" id="sendButton">Send</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // Configure marked.js for safe markdown rendering
+        marked.setOptions({
+            breaks: true,  // Convert \n to <br>
+            gfm: true,     // GitHub Flavored Markdown
+            sanitize: false, // We'll trust our own content
+            smartLists: true,
+            smartypants: true,
+            highlight: function(code, lang) {
+                // Basic syntax highlighting for code blocks
+                if (lang) {
+                    return `<code class="language-${lang}">${escapeHtml(code)}</code>`;
+                }
+                return `<code>${escapeHtml(code)}</code>`;
+            }
+        });
+        
+        function escapeHtml(text) {
+            const map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            };
+            return text.replace(/[&<>"']/g, m => map[m]);
+        }
+        
+        let messageCount = 1;
+        let isStreaming = true;
+        let isProcessing = false;
+
+        const chatMessages = document.getElementById('chatMessages');
+        const chatForm = document.getElementById('chatForm');
+        const chatInput = document.getElementById('chatInput');
+        const sendButton = document.getElementById('sendButton');
+        const typingIndicator = document.getElementById('typingIndicator');
+        const statusDot = document.getElementById('statusDot');
+        const statusText = document.getElementById('statusText');
+        const messageCountElement = document.getElementById('messageCount');
+
+        chatForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            if (isProcessing) return;
+            
+            const message = chatInput.value.trim();
+            if (!message) return;
+            
+            // Add user message to chat
+            addMessage(message, 'user');
+            chatInput.value = '';
+            
+            // Send to backend
+            if (isStreaming) {
+                await sendMessageStreaming(message);
+            } else {
+                await sendMessage(message);
+            }
+        });
+
+        function addMessage(content, role) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${role}`;
+            
+            const messageWrapper = document.createElement('div');
+            messageWrapper.className = 'message-wrapper';
+            
+            const labelDiv = document.createElement('div');
+            labelDiv.className = 'message-label';
+            labelDiv.textContent = role === 'user' ? 'You' : 'Assistant';
+            
+            const bubbleDiv = document.createElement('div');
+            bubbleDiv.className = 'message-bubble';
+            
+            // Render markdown for all messages
+            if (role === 'assistant') {
+                // Parse and render markdown for assistant messages
+                bubbleDiv.innerHTML = marked.parse(content.trim());
+            } else {
+                // For user messages, use plain text for security
+                bubbleDiv.textContent = content.trim();
+            }
+            
+            messageWrapper.appendChild(labelDiv);
+            messageWrapper.appendChild(bubbleDiv);
+            messageDiv.appendChild(messageWrapper);
+            
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+            
+            messageCount++;
+            updateMessageCount();
+            
+            return bubbleDiv;
+        }
+
+        async function sendMessage(message) {
+            isProcessing = true;
+            setStatus('Processing...', false);
+            showTypingIndicator(true);
+            sendButton.disabled = true;
+            
+            try {
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ message }),
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showTypingIndicator(false);
+                    addMessage(data.response || 'No response received', 'assistant');
+                    setStatus('Connected', true);
+                } else {
+                    showError(data.error || 'An error occurred');
+                    setStatus('Error', false, true);
+                }
+            } catch (error) {
+                showError('Failed to connect to server: ' + error.message);
+                setStatus('Disconnected', false, true);
+            } finally {
+                isProcessing = false;
+                showTypingIndicator(false);
+                sendButton.disabled = false;
+                chatInput.focus();
+            }
+        }
+
+        async function sendMessageStreaming(message) {
+            isProcessing = true;
+            setStatus('Streaming...', false);
+            showTypingIndicator(true);
+            sendButton.disabled = true;
+            
+            try {
+                const response = await fetch('/api/chat/stream', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ message }),
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                
+                showTypingIndicator(false);
+                
+                // Create message bubble for main agent streaming content
+                const messageDiv = document.createElement('div');
+                messageDiv.className = 'message assistant';
+                
+                const messageWrapper = document.createElement('div');
+                messageWrapper.className = 'message-wrapper';
+                
+                const labelDiv = document.createElement('div');
+                labelDiv.className = 'message-label';
+                labelDiv.textContent = 'Assistant';
+                
+                const bubbleDiv = document.createElement('div');
+                bubbleDiv.className = 'message-bubble';
+                
+                messageWrapper.appendChild(labelDiv);
+                messageWrapper.appendChild(bubbleDiv);
+                messageDiv.appendChild(messageWrapper);
+                
+                chatMessages.appendChild(messageDiv);
+                
+                let fullResponse = '';
+                const subagentContainers = {};  // Track subagent UI elements
+                let summarizerBubble = null;  // Track summarizer message bubble
+                let summarizerContent = '';  // Track summarizer content
+                let inSummarizerMode = false;  // Track if we're in summarizer mode
+                
+                // Read the stream
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    
+                    const chunk = decoder.decode(value);
+                    const lines = chunk.split('\n');
+                    
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            try {
+                                const data = JSON.parse(line.slice(6));
+                                
+                                if (data.type === 'agent') {
+                                    // Check if this is the summarizer separator
+                                    if (data.content === '\n---\n\n') {
+                                        // Start summarizer mode - create new message bubble
+                                        inSummarizerMode = true;
+                                        
+                                        // Create new message for summarizer
+                                        const summarizerDiv = document.createElement('div');
+                                        summarizerDiv.className = 'message assistant';
+                                        
+                                        const summarizerWrapper = document.createElement('div');
+                                        summarizerWrapper.className = 'message-wrapper';
+                                        
+                                        const summarizerLabel = document.createElement('div');
+                                        summarizerLabel.className = 'message-label';
+                                        summarizerLabel.textContent = 'Assistant';
+                                        
+                                        summarizerBubble = document.createElement('div');
+                                        summarizerBubble.className = 'message-bubble';
+                                        
+                                        summarizerWrapper.appendChild(summarizerLabel);
+                                        summarizerWrapper.appendChild(summarizerBubble);
+                                        summarizerDiv.appendChild(summarizerWrapper);
+                                        
+                                        chatMessages.appendChild(summarizerDiv);
+                                        summarizerContent = '';
+                                    } else if (inSummarizerMode && summarizerBubble) {
+                                        // Append to summarizer bubble
+                                        summarizerContent += data.content;
+                                        summarizerBubble.innerHTML = marked.parse(summarizerContent);
+                                        chatMessages.scrollTop = chatMessages.scrollHeight;
+                                    } else {
+                                        // Regular agent response (initial message)
+                                        fullResponse += data.content;
+                                        bubbleDiv.innerHTML = marked.parse(fullResponse);
+                                        chatMessages.scrollTop = chatMessages.scrollHeight;
+                                    }
+                                }
+                                else if (data.type === 'subagent_start') {
+                                    // New subagent starting - create dropdown container
+                                    const subagentDiv = createSubagentContainer(data.name);
+                                    messageWrapper.appendChild(subagentDiv.container);
+                                    subagentContainers[data.name] = subagentDiv;
+                                }
+                                else if (data.type === 'subagent') {
+                                    // Subagent content
+                                    // Create container if it doesn't exist yet
+                                    if (!subagentContainers[data.name]) {
+                                        console.log(`Creating container for subagent ${data.name}`);
+                                        const subagentDiv = createSubagentContainer(data.name);
+                                        messageWrapper.appendChild(subagentDiv.container);
+                                        subagentContainers[data.name] = subagentDiv;
+                                    }
+                                    
+                                    const container = subagentContainers[data.name];
+                                    container.content += data.content || '';
+                                    // Render markdown for subagent content
+                                    container.contentDiv.innerHTML = marked.parse(container.content);
+                                    chatMessages.scrollTop = chatMessages.scrollHeight;
+                                    
+                                    // Debug log to see what's being received
+                                    console.log(`Subagent ${data.name}: received ${data.content ? data.content.length : 0} chars, total: ${container.content.length}`);
+                                }
+                                else if (data.content) {
+                                    // Legacy format
+                                    fullResponse += data.content;
+                                    bubbleDiv.innerHTML = marked.parse(fullResponse);
+                                    chatMessages.scrollTop = chatMessages.scrollHeight;
+                                }
+                                
+                                if (data.done) {
+                                    // Remove streaming indicators from all subagents
+                                    Object.values(subagentContainers).forEach(container => {
+                                        const indicator = container.container.querySelector('.subagent-streaming');
+                                        if (indicator) indicator.remove();
+                                    });
+                                    setStatus('Connected', true);
+                                }
+                                if (data.error) {
+                                    showError(data.error);
+                                    setStatus('Error', false, true);
+                                }
+                            } catch (e) {
+                                console.error('Error parsing SSE data:', e);
+                            }
+                        }
+                    }
+                }
+                
+                messageCount++;
+                updateMessageCount();
+                
+            } catch (error) {
+                showError('Failed to connect to server: ' + error.message);
+                setStatus('Disconnected', false, true);
+            } finally {
+                isProcessing = false;
+                showTypingIndicator(false);
+                sendButton.disabled = false;
+                chatInput.focus();
+            }
+        }
+        
+        function createSubagentContainer(name) {
+            const container = document.createElement('div');
+            container.className = 'subagent-container';
+            
+            const header = document.createElement('div');
+            header.className = 'subagent-header';
+            
+            const titleDiv = document.createElement('div');
+            titleDiv.className = 'subagent-title';
+            
+            const badge = document.createElement('span');
+            badge.className = 'subagent-badge';
+            badge.textContent = name;
+            
+            const streamingIndicator = document.createElement('span');
+            streamingIndicator.className = 'subagent-streaming';
+            
+            titleDiv.appendChild(badge);
+            titleDiv.appendChild(streamingIndicator);
+            
+            const toggle = document.createElement('span');
+            toggle.className = 'subagent-toggle collapsed'; // Start collapsed
+            toggle.textContent = '▼';
+            
+            header.appendChild(titleDiv);
+            header.appendChild(toggle);
+            
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'subagent-content collapsed'; // Start with 3-line preview
+            
+            container.appendChild(header);
+            container.appendChild(contentDiv);
+            
+            // Toggle collapse/expand
+            header.addEventListener('click', () => {
+                if (contentDiv.classList.contains('collapsed')) {
+                    contentDiv.classList.remove('collapsed');
+                    contentDiv.classList.add('expanded');
+                    toggle.classList.remove('collapsed');
+                } else {
+                    contentDiv.classList.remove('expanded');
+                    contentDiv.classList.add('collapsed');
+                    toggle.classList.add('collapsed');
+                }
+            });
+            
+            return {
+                container: container,
+                contentDiv: contentDiv,
+                content: ''
+            };
+        }
+
+        function showTypingIndicator(show) {
+            typingIndicator.classList.toggle('active', show);
+            if (show) {
+                chatMessages.appendChild(typingIndicator);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            }
+        }
+
+        function showError(message) {
+            showTypingIndicator(false);
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'error-message';
+            errorDiv.textContent = '⚠️ ' + message;
+            chatMessages.appendChild(errorDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        function setStatus(text, connected, error = false) {
+            statusText.textContent = text;
+            statusDot.className = 'status-dot';
+            if (error) {
+                statusDot.classList.add('error');
+            }
+        }
+
+        function updateMessageCount() {
+            messageCountElement.textContent = `Messages: ${messageCount}`;
+        }
+
+        async function resetConversation() {
+            if (!confirm('Are you sure you want to reset the conversation?')) return;
+            
+            try {
+                const response = await fetch('/api/reset', {
+                    method: 'POST',
+                });
+                
+                if (response.ok) {
+                    // Clear chat messages except the initial greeting
+                    chatMessages.innerHTML = `
+                        <div class="message assistant">
+                            <div class="message-wrapper">
+                                <div class="message-label">Assistant</div>
+                                <div class="message-bubble">Hello! I'm Aegis, your financial data assistant. How can I help you today?</div>
+                            </div>
+                        </div>
+                    `;
+                    messageCount = 1;
+                    updateMessageCount();
+                    setStatus('Conversation reset', true);
+                }
+            } catch (error) {
+                showError('Failed to reset conversation');
+            }
+        }
+
+        function toggleStreaming() {
+            isStreaming = !isStreaming;
+            document.getElementById('streaming-toggle').textContent = 
+                `Streaming: ${isStreaming ? 'ON' : 'OFF'}`;
+        }
+
+        // Focus input on load
+        chatInput.focus();
+    </script>
+</body>
+</html>

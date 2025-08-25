@@ -83,7 +83,8 @@ logs/
 *.cer
 
 # Project specific
-/data/
+/data/*
+!/data/*.sql
 /output/
 /temp/
 CLAUDE.md

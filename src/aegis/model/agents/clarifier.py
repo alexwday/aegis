@@ -280,21 +280,24 @@ def extract_banks(
     query: str,
     context: Dict[str, Any],
     available_databases: Optional[List[str]] = None,
+    messages: Optional[List[Dict[str, str]]] = None,
 ) -> Dict[str, Any]:
     """
-    Extract bank IDs from user query using bank data from database.
+    Extract bank IDs and query intent from user query using bank data from database.
     
     This function identifies which banks the user is referring to, handling
     aliases, categories (e.g., "Big Six"), and database filtering.
+    Also identifies what the user is asking for (revenue, efficiency ratio, etc.)
     NEVER defaults - always clarifies when uncertain.
     
     Args:
-        query: User's query text
+        query: User's query text (latest message)
         context: Runtime context with auth, SSL config, execution_id
         available_databases: Optional list of database IDs to filter banks
+        messages: Optional full conversation history for context
         
     Returns:
-        Dictionary with extraction results
+        Dictionary with extraction results including query intent
     """
     logger = get_logger()
     execution_id = context.get("execution_id")
@@ -334,19 +337,28 @@ def extract_banks(
         
         system_prompt = "\n\n".join(prompt_parts)
         
-        # Create messages
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": f"Extract banks from this query: {query}"},
-        ]
+        # Create messages with conversation history
+        llm_messages = [{"role": "system", "content": system_prompt}]
         
-        # Define tools for bank extraction
+        # Add conversation history if provided
+        if messages:
+            # Add all messages except the latest (which is the query)
+            for msg in messages[:-1]:
+                llm_messages.append(msg)
+        
+        # Add the extraction request considering full conversation context
+        if messages and len(messages) > 1:
+            llm_messages.append({"role": "user", "content": f"Based on the conversation above and this latest message, extract the banks being discussed: {query}"})
+        else:
+            llm_messages.append({"role": "user", "content": f"Extract banks from this query: {query}"})
+        
+        # Define tools for bank and intent extraction
         tools = [
             {
                 "type": "function",
                 "function": {
                     "name": "banks_found",
-                    "description": "Return the list of bank IDs found in the query",
+                    "description": "Return the list of bank IDs found and what the user is asking for",
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -354,6 +366,10 @@ def extract_banks(
                                 "type": "array",
                                 "items": {"type": "integer"},
                                 "description": "List of bank ID numbers from the index",
+                            },
+                            "query_intent": {
+                                "type": "string",
+                                "description": "What the user is asking for (e.g., 'revenue', 'efficiency ratio', 'expenses', 'net income', 'comparison', 'performance metrics'). Leave empty if unclear what they want.",
                             }
                         },
                         "required": ["bank_ids"],
@@ -397,7 +413,7 @@ def extract_banks(
             model = config.llm.large.model  # Default to large for better reasoning
         
         response = complete_with_tools(
-            messages=messages,
+            messages=llm_messages,
             tools=tools,
             context=context,
             llm_params={
@@ -424,6 +440,7 @@ def extract_banks(
                 
                 if function_name == "banks_found":
                     bank_ids = function_args.get("bank_ids", [])
+                    query_intent = function_args.get("query_intent", "")
                     
                     # If no banks specified, need clarification
                     if not bank_ids:
@@ -459,11 +476,29 @@ def extract_banks(
                             count=len(valid_ids),
                         )
                         
+                        # Check if we need to clarify the intent
+                        if not query_intent:
+                            # We have banks but no clear intent
+                            intent_clarification = "What would you like to see for "
+                            if len(valid_ids) == 1:
+                                intent_clarification += f"{banks_detail[valid_ids[0]]['name']}?"
+                            else:
+                                bank_names = [banks_detail[bid]['name'] for bid in valid_ids[:3]]
+                                if len(valid_ids) > 3:
+                                    intent_clarification += f"{', '.join(bank_names[:2])}, and {len(valid_ids)-2} other banks?"
+                                else:
+                                    intent_clarification += f"{', '.join(bank_names[:-1])} and {bank_names[-1]}?"
+                            intent_clarification += " (e.g., revenue, efficiency ratio, expenses, net income)"
+                        else:
+                            intent_clarification = None
+                        
                         return {
                             "status": "success",
                             "decision": "banks_selected",
                             "bank_ids": valid_ids,
                             "banks_detail": banks_detail,
+                            "query_intent": query_intent,
+                            "intent_clarification": intent_clarification,
                             "tokens_used": tokens_used,
                             "cost": cost,
                         }
@@ -517,6 +552,7 @@ def extract_periods(
     bank_ids: Optional[List[int]],
     context: Dict[str, Any],
     available_databases: Optional[List[str]] = None,
+    messages: Optional[List[Dict[str, str]]] = None,
 ) -> Dict[str, Any]:
     """
     Extract fiscal periods for the identified banks or check if period clarification is needed.
@@ -609,11 +645,20 @@ def extract_periods(
         
         system_prompt = "\n\n".join(prompt_parts)
         
-        # Create messages
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": f"Extract periods from this query: {query}"},
-        ]
+        # Create messages with conversation history
+        llm_messages = [{"role": "system", "content": system_prompt}]
+        
+        # Add conversation history if provided
+        if messages:
+            # Add all messages except the latest (which is the query)
+            for msg in messages[:-1]:
+                llm_messages.append(msg)
+        
+        # Add the extraction request considering full conversation context
+        if messages and len(messages) > 1:
+            llm_messages.append({"role": "user", "content": f"Based on the conversation above and this latest message, extract the time periods being discussed: {query}"})
+        else:
+            llm_messages.append({"role": "user", "content": f"Extract periods from this query: {query}"})
         
         # Define tools for period extraction
         tools = []
@@ -725,7 +770,7 @@ def extract_periods(
             model = config.llm.large.model  # Default to large for complex period validation
         
         response = complete_with_tools(
-            messages=messages,
+            messages=llm_messages,
             tools=tools,
             context=context,
             llm_params={
@@ -857,6 +902,7 @@ def clarify_query(
     query: str,
     context: Dict[str, Any],
     available_databases: Optional[List[str]] = None,
+    messages: Optional[List[Dict[str, str]]] = None,
 ) -> Dict[str, Any]:
     """
     Main clarifier function that extracts both banks and periods.
@@ -865,9 +911,10 @@ def clarify_query(
     Returns either successful extraction results or clarification questions.
     
     Args:
-        query: User's query text
+        query: User's query text (latest message)
         context: Runtime context
         available_databases: Optional database filter
+        messages: Optional full conversation history for context
         
     Returns:
         Either successful extraction:
@@ -888,18 +935,28 @@ def clarify_query(
     
     logger.info("clarifier.starting", execution_id=execution_id)
     
-    # Stage 1: Extract banks
-    bank_result = extract_banks(query, context, available_databases)
+    # Stage 1: Extract banks and query intent
+    bank_result = extract_banks(query, context, available_databases, messages)
     
     # Stage 2: Extract or validate periods
     if bank_result["status"] == "success":
         # We have banks, extract periods for them
         bank_ids = bank_result.get("bank_ids", [])
-        period_result = extract_periods(query, bank_ids, context, available_databases)
+        period_result = extract_periods(query, bank_ids, context, available_databases, messages)
+        
+        # Check if we need any clarifications
+        clarifications = []
+        
+        # Check for intent clarification
+        if bank_result.get("intent_clarification"):
+            clarifications.append(bank_result["intent_clarification"])
         
         # Check if periods need clarification
         if period_result.get("status") == "needs_clarification":
-            # Return clarification for periods but include successfully extracted banks
+            clarifications.append(period_result.get("clarification", "What time period would you like to query?"))
+        
+        # If we have any clarifications needed, return them
+        if clarifications:
             # Include costs from both stages even when clarification is needed
             total_tokens = bank_result.get("tokens_used", 0) + period_result.get("tokens_used", 0)
             total_cost = bank_result.get("cost", 0) + period_result.get("cost", 0)
@@ -907,12 +964,13 @@ def clarify_query(
             return {
                 "status": "needs_clarification",
                 "banks": bank_result,  # Include the successfully extracted banks
-                "clarifications": [period_result.get("clarification", "What time period would you like to query?")],
+                "periods": period_result if period_result.get("status") == "success" else None,
+                "clarifications": clarifications,
                 "tokens_used": total_tokens,
                 "cost": total_cost
             }
         
-        # Both successful - return extraction results
+        # Everything successful - return extraction results
         # Combine tokens and costs from both stages
         total_tokens = bank_result.get("tokens_used", 0) + period_result.get("tokens_used", 0)
         total_cost = bank_result.get("cost", 0) + period_result.get("cost", 0)
@@ -926,7 +984,7 @@ def clarify_query(
         }
     else:
         # Banks need clarification, check if periods also need clarification
-        period_check = extract_periods(query, None, context, available_databases)
+        period_check = extract_periods(query, None, context, available_databases, messages)
         
         # Collect clarification questions
         clarifications = []

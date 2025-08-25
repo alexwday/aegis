@@ -685,18 +685,25 @@ class ReportGenerator:
         
         Architecture:
         - pdf_router_report.py: Router-specific formatting
+        - pdf_planner_report.py: Planner-specific formatting (focuses on database selection)
         - pdf_report_generic.py: Generic formatting for other agents (clarifier, response, etc.)
-        - Future: pdf_planner_report.py for planner agent (when implemented)
         """
-        # Use router-specific PDF generator for router tests
+        # Use agent-specific PDF generators
         if "router" in self.agent_name.lower():
-            from pdf_router_report import RouterPDFGenerator
+            from pdf_reports.pdf_router_report import RouterPDFGenerator
             generator = RouterPDFGenerator(self.agent_name, self.timestamp, self.results_dir)
+            return generator.generate(metadata, results, summary)
+        elif "planner" in self.agent_name.lower():
+            # Use custom planner PDF generator
+            from pdf_reports.pdf_planner_report import generate_planner_pdf_report
+            filename = f"{self.agent_name}_{self.timestamp}.pdf"
+            filepath = self.results_dir / filename
+            generate_planner_pdf_report(filepath, metadata, results, summary)
+            return filepath
         else:
-            from pdf_report_generic import GenericPDFGenerator
+            from pdf_reports.pdf_report_clarifier import GenericPDFGenerator
             generator = GenericPDFGenerator(self.agent_name, self.timestamp, self.results_dir)
-        
-        return generator.generate(metadata, results, summary)
+            return generator.generate(metadata, results, summary)
     
     def _format_output_for_display(self, output: Any) -> str:
         """Format output for display in reports."""
@@ -912,6 +919,27 @@ def run_agent_test(
                     errors.append(
                         f"Expected needs_clarification={scenario.expected['needs_clarification']}, "
                         f"got {actual_needs_clarification}"
+                    )
+            
+            # Check databases for planner agent
+            if "databases" in scenario.expected:
+                expected_databases = sorted(scenario.expected["databases"])
+                actual_databases = []
+                
+                # Extract database IDs from planner result
+                if result.get("databases"):
+                    # Planner returns list of database objects with database_id field
+                    for db in result["databases"]:
+                        if isinstance(db, dict) and "database_id" in db:
+                            actual_databases.append(db["database_id"])
+                        elif isinstance(db, str):
+                            actual_databases.append(db)
+                    actual_databases = sorted(actual_databases)
+                
+                if actual_databases != expected_databases:
+                    success = False
+                    errors.append(
+                        f"Expected databases {expected_databases}, got {actual_databases}"
                     )
 
         # Check confidence threshold if specified
