@@ -88,3 +88,6 @@ logs/
 /output/
 /temp/
 CLAUDE.md
+CLAUDE*.md
+*CLAUDE.md
+/docs/
