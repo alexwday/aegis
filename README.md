@@ -268,12 +268,27 @@ SERVER_PORT=8000
 
 ## Testing the Installation
 
-### 1. Test Database Connection
+### 1. Set Python Path (IMPORTANT)
+
+Before running any Python commands, you need to add the project directory to Python's path:
 
 ```bash
 # Activate virtual environment if not already active
 source venv/bin/activate
 
+# Add the project directory to PYTHONPATH
+export PYTHONPATH="${PYTHONPATH}:$(pwd)"
+
+# Verify it's set correctly (should show your aegis directory path)
+echo $PYTHONPATH
+```
+
+**Note:** You'll need to set PYTHONPATH each time you open a new terminal, or add it to your shell profile (~/.zshrc or ~/.bash_profile).
+
+### 2. Test Database Connection
+
+```bash
+# Make sure PYTHONPATH is set (see step 1 above)
 # Test database connection
 python -c "
 from src.aegis.connections.postgres.connector import get_db_connection
@@ -286,9 +301,10 @@ except Exception as e:
 "
 ```
 
-### 2. Test LLM Connection
+### 3. Test LLM Connection
 
 ```bash
+# Make sure PYTHONPATH is set (see step 1 above)
 # Test LLM connectivity
 API_KEY="your_api_key_here" python -c "
 from src.aegis.connections.llm.connector import check_connection
@@ -308,9 +324,10 @@ print(f'✅ LLM connection: {result}')
 "
 ```
 
-### 3. Test the Model via Command Line
+### 4. Test the Model via Command Line
 
 ```bash
+# Make sure PYTHONPATH is set (see step 1 above)
 # Simple test query
 python -c "
 from src.aegis.model.main import model
@@ -325,9 +342,10 @@ print()
 "
 ```
 
-### 4. Run the Test Suite
+### 5. Run the Test Suite
 
 ```bash
+# Make sure PYTHONPATH is set (see step 1 above)
 # Run all tests
 python -m pytest tests/ -v
 
@@ -342,6 +360,9 @@ python -m pytest tests/ --cov=src/aegis --cov-report=term-missing
 ```bash
 # Activate virtual environment
 source venv/bin/activate
+
+# Set Python path
+export PYTHONPATH="${PYTHONPATH}:$(pwd)"
 
 # Start the web server
 python web_interface.py
@@ -363,6 +384,9 @@ The web interface provides:
 ```bash
 # Activate virtual environment
 source venv/bin/activate
+
+# Set Python path
+export PYTHONPATH="${PYTHONPATH}:$(pwd)"
 
 # Run interactive Python session
 python
