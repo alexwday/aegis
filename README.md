@@ -278,10 +278,11 @@ source venv/bin/activate
 
 # Test database connection
 python -c "
-from aegis.connections.postgres.connector import get_db_connection
+from aegis.connections.postgres_connector import get_connection
+from sqlalchemy import text
 try:
-    with get_db_connection() as conn:
-        result = conn.execute('SELECT 1')
+    with get_connection() as conn:
+        result = conn.execute(text('SELECT 1'))
         print('✅ Database connection successful!')
 except Exception as e:
     print(f'❌ Database connection failed: {e}')
@@ -293,14 +294,16 @@ except Exception as e:
 ```bash
 # Test LLM connectivity (replace with your actual API key)
 API_KEY="your_api_key_here" python -c "
-from aegis.connections.llm.connector import check_connection
-from aegis.connections.auth.connector import setup_authentication
-from aegis.utils.ssl.setup import setup_ssl
+from aegis.connections.llm_connector import check_connection
+from aegis.connections.oauth_connector import setup_authentication
+from aegis.utils.ssl import setup_ssl
 
-auth_config = setup_authentication()
+execution_id = 'test-connection'
 ssl_config = setup_ssl()
+auth_config = setup_authentication(execution_id, ssl_config)
+
 context = {
-    'execution_id': 'test-connection',
+    'execution_id': execution_id,
     'auth_config': auth_config,
     'ssl_config': ssl_config
 }
