@@ -214,8 +214,7 @@ def get_filtered_database_descriptions(available_databases: List[str]) -> str:
 def plan_database_queries(
     query: str,
     conversation: List[Dict[str, str]],
-    banks: Dict[str, Any],
-    periods: Dict[str, Any],
+    bank_period_combinations: List[Dict[str, Any]],
     context: Dict[str, Any],
     available_databases: Optional[List[str]] = None,
     query_intent: Optional[str] = None,
@@ -226,8 +225,7 @@ def plan_database_queries(
     Args:
         query: User's latest message
         conversation: Full conversation history
-        banks: Output from clarifier with bank_ids and details
-        periods: Output from clarifier with period information
+        bank_period_combinations: List of bank-period combinations from clarifier
         context: Runtime context with auth, SSL config, execution_id
         available_databases: Optional list of database IDs to filter (from model input)
         query_intent: Optional query intent extracted by the clarifier
@@ -240,24 +238,99 @@ def plan_database_queries(
     execution_id = context.get("execution_id")
 
     try:
+        # Log what we received with details
         logger.info(
             "planner.starting",
             execution_id=execution_id,
-            bank_count=len(banks.get("bank_ids", [])),
-            has_periods="apply_all" in periods or len(periods) > 0,
+            combination_count=len(bank_period_combinations),
             available_databases=available_databases,
             query_intent=query_intent if query_intent else "not_specified",
         )
 
-        # Extract bank IDs from clarifier output
-        bank_ids = banks.get("bank_ids", [])
-        if not bank_ids:
-            return {"status": "error", "error": "No banks provided from clarifier"}
+        # Log sample of combinations for visibility
+        if bank_period_combinations:
+            sample_combos = bank_period_combinations[:3]  # First 3
+            logger.debug(
+                "planner.received_combinations",
+                execution_id=execution_id,
+                sample=[
+                    f"{c['bank_symbol']} {c['quarter']} {c['fiscal_year']}" for c in sample_combos
+                ],
+                showing=f"{len(sample_combos)} of {len(bank_period_combinations)} total",
+            )
 
-        # Get periods from clarifier output
-        period_info = periods.get("periods", periods)
-        if not period_info:
-            return {"status": "error", "error": "No periods provided from clarifier"}
+        # Validate we have combinations
+        if not bank_period_combinations:
+            logger.error(
+                "planner.no_combinations",
+                execution_id=execution_id,
+                error="No bank-period combinations provided from clarifier",
+            )
+            return {
+                "status": "error",
+                "error": "No bank-period combinations provided from clarifier",
+            }
+
+        # Extract unique bank IDs for availability check
+        bank_ids = list(set(combo["bank_id"] for combo in bank_period_combinations))
+
+        # Convert combinations back to period format for availability check
+        # Group by apply_all vs bank-specific
+        unique_periods = set()
+        bank_specific_periods = {}
+
+        for combo in bank_period_combinations:
+            bank_id = combo["bank_id"]
+            fiscal_year = combo["fiscal_year"]
+            quarter = combo["quarter"]
+
+            # Track all unique periods
+            unique_periods.add((fiscal_year, quarter))
+
+            # Track per-bank periods
+            if bank_id not in bank_specific_periods:
+                bank_specific_periods[bank_id] = {"fiscal_year": fiscal_year, "quarters": []}
+            if quarter not in bank_specific_periods[bank_id]["quarters"]:
+                bank_specific_periods[bank_id]["quarters"].append(quarter)
+
+        # Check if all banks have same periods (apply_all case)
+        period_info = {}
+        all_same = (
+            len(
+                set(
+                    tuple(sorted(p["quarters"])) + (p["fiscal_year"],)
+                    for p in bank_specific_periods.values()
+                )
+            )
+            == 1
+        )
+
+        if all_same and bank_specific_periods:
+            # All banks have same periods - use apply_all format
+            first_bank = next(iter(bank_specific_periods.values()))
+            period_info = {"apply_all": first_bank}
+            logger.debug(
+                "planner.period_structure",
+                execution_id=execution_id,
+                type="uniform_periods",
+                fiscal_year=first_bank["fiscal_year"],
+                quarters=first_bank["quarters"],
+                applying_to_banks=len(bank_ids),
+            )
+        else:
+            # Different periods per bank
+            period_info = {str(bid): period_data for bid, period_data in bank_specific_periods.items()}
+            logger.debug(
+                "planner.period_structure",
+                execution_id=execution_id,
+                type="bank_specific_periods",
+                unique_period_sets=len(
+                    set(
+                        tuple(sorted(p["quarters"])) + (p["fiscal_year"],)
+                        for p in bank_specific_periods.values()
+                    )
+                ),
+            )
 
         # Get filtered availability table
         availability_data = get_filtered_availability_table(
@@ -302,10 +375,11 @@ def plan_database_queries(
         # Build user message with intent if available
         user_message = f"{conversation_context}\n\nLatest query: {query}\n\n"
         if query_intent:
-            user_message += f"User is asking for: {query_intent}\n\n"
+            user_message += f"Comprehensive intent: {query_intent}\n\n"
         user_message += (
-            "Determine which databases to query and provide complete, "
-            "self-contained query intents for each database."
+            "Based on the comprehensive intent above and the availability table, "
+            "determine which databases should be queried. "
+            "Select ONLY the databases that have relevant data for this request."
         )
 
         # Create messages
@@ -320,34 +394,22 @@ def plan_database_queries(
                 "type": "function",
                 "function": {
                     "name": "databases_selected",
-                    "description": "Return the list of databases to query with their intents",
+                    "description": "Return the list of databases to query",
                     "parameters": {
                         "type": "object",
                         "properties": {
                             "databases": {
                                 "type": "array",
                                 "items": {
-                                    "type": "object",
-                                    "properties": {
-                                        "database_id": {
-                                            "type": "string",
-                                            "description": (
-                                                "The database ID "
-                                                "(e.g., 'transcripts', 'benchmarking')"
-                                            ),
-                                        },
-                                        "query_intent": {
-                                            "type": "string",
-                                            "description": (
-                                                "Complete, self-contained description "
-                                                "of what to query"
-                                            ),
-                                        },
-                                    },
-                                    "required": ["database_id", "query_intent"],
+                                    "type": "string",
+                                    "description": "The database ID (e.g., 'transcripts', 'benchmarking', 'pillar3')",
                                 },
-                                "description": "List of databases with their query intents",
-                            }
+                                "description": "List of database IDs to query",
+                            },
+                            "rationale": {
+                                "type": "string",
+                                "description": "Brief explanation of why these databases were selected",
+                            },
                         },
                         "required": ["databases"],
                     },
@@ -409,24 +471,17 @@ def plan_database_queries(
 
                 if function_name == "databases_selected":
                     databases = function_args.get("databases", [])
+                    rationale = function_args.get("rationale", "")
 
-                    # Extract database IDs safely for logging and validation
-                    database_ids = []
-                    for db in databases:
-                        if isinstance(db, dict) and "database_id" in db:
-                            database_ids.append(db["database_id"])
-                        elif isinstance(db, str):
-                            # Handle case where database is just a string ID
-                            database_ids.append(db)
-
+                    # Now databases is just a list of strings (database IDs)
                     # CRITICAL: Filter to only available databases
                     available_set = set(availability_data["available_databases"])
                     filtered_databases = []
                     rejected_databases = []
 
-                    for i, db_id in enumerate(database_ids):
+                    for db_id in databases:
                         if db_id in available_set:
-                            filtered_databases.append(databases[i])
+                            filtered_databases.append(db_id)
                         else:
                             rejected_databases.append(db_id)
 
@@ -439,24 +494,26 @@ def plan_database_queries(
                             available=list(available_set),
                         )
 
-                    # Update database_ids to only include filtered ones
-                    filtered_ids = []
-                    for db in filtered_databases:
-                        if isinstance(db, dict) and "database_id" in db:
-                            filtered_ids.append(db["database_id"])
-                        elif isinstance(db, str):
-                            filtered_ids.append(db)
-
                     logger.info(
                         "planner.databases_selected",
                         execution_id=execution_id,
                         database_count=len(filtered_databases),
-                        databases=filtered_ids,
+                        databases=filtered_databases,
+                        rationale=rationale[:200] if rationale else "No rationale provided",
                     )
+
+                    # Log the clarifier's comprehensive intent that will be used
+                    if query_intent:
+                        logger.info(
+                            "planner.using_clarifier_intent",
+                            execution_id=execution_id,
+                            comprehensive_intent=query_intent,
+                        )
 
                     return {
                         "status": "success",
                         "databases": filtered_databases,
+                        "query_intent": query_intent,  # Pass through the clarifier's intent
                         "tokens_used": tokens_used,
                         "cost": cost,
                     }
@@ -483,5 +540,6 @@ def plan_database_queries(
         }
 
     except Exception as e:
-        logger.error("planner.error", execution_id=execution_id, error=str(e))
+        import traceback
+        logger.error("planner.error", execution_id=execution_id, error=str(e), traceback=traceback.format_exc())
         return {"status": "error", "error": str(e)}

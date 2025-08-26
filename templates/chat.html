@@ -536,6 +536,8 @@
         <div class="chat-header">
             <h1>AEGIS - Finance Assist</h1>
             <div class="header-buttons">
+                <button class="header-btn" onclick="goToMonitoring()">📊 Monitoring</button>
+                <button class="header-btn" onclick="goToDatabase()">🗄️ Database</button>
                 <button class="header-btn" onclick="resetConversation()">Reset</button>
                 <button class="header-btn" onclick="toggleStreaming()">
                     <span id="streaming-toggle">Streaming: ON</span>
@@ -861,6 +863,7 @@
                     let assistantContent = '';
                     let subagentContainers = {};
                     let subagentStreaming = {};
+                    let subagentContent = {};  // Track raw content for each subagent
                     
                     // Create a container for the main content
                     const mainContentDiv = document.createElement('div');
@@ -917,6 +920,7 @@
                                                 const contentDiv = addSubagentContainer(name, dropdownContainer);
                                                 subagentContainers[name] = contentDiv;
                                                 subagentStreaming[name] = true;
+                                                subagentContent[name] = '';  // Initialize raw content tracker
                                                 
                                                 // Add streaming indicator
                                                 const statusEl = document.getElementById(`subagent-status-${name}`);
@@ -930,11 +934,13 @@
                                             if (!subagentContainers[name]) {
                                                 const contentDiv = addSubagentContainer(name, dropdownContainer);
                                                 subagentContainers[name] = contentDiv;
+                                                subagentContent[name] = '';  // Initialize if not exists
                                             }
                                             
+                                            // Accumulate raw content and re-parse entire content
+                                            subagentContent[name] += parsed.content || '';
                                             const contentDiv = subagentContainers[name];
-                                            const currentContent = contentDiv.textContent || '';
-                                            contentDiv.innerHTML = marked.parse(currentContent + (parsed.content || ''));
+                                            contentDiv.innerHTML = marked.parse(subagentContent[name]);
                                         }
                                     } catch (e) {
                                         console.error('Error parsing SSE data:', e, data);
@@ -1015,6 +1021,15 @@
         function toggleStreaming() {
             isStreaming = !isStreaming;
             document.getElementById('streaming-toggle').textContent = `Streaming: ${isStreaming ? 'ON' : 'OFF'}`;
+        }
+
+        // Navigate to monitoring dashboard
+        function goToMonitoring() {
+            window.location.href = '/monitoring';
+        }
+
+        function goToDatabase() {
+            window.location.href = '/database';
         }
 
         // Form submission

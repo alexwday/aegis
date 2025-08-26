@@ -76,23 +76,10 @@ def _format_cost_for_logging(metrics: Dict) -> Dict:
     Returns:
         Dictionary formatted for logging
     """
+    # Simplified format - single line instead of nested dicts
     log_data = {
-        "tokens": {
-            "prompt": metrics["prompt_tokens"],
-            "total": metrics["total_tokens"],
-        },
-        "cost": {
-            "prompt": f"${metrics['prompt_cost']:.6f}",
-            "total": f"${metrics['total_cost']:.6f}",
-        },
-        "response_time_seconds": metrics["response_time"],
+        "cost": f"${metrics['total_cost']:.6f}",
     }
-
-    # Add completion data if present
-    if metrics["completion_tokens"] is not None:
-        log_data["tokens"]["completion"] = metrics["completion_tokens"]
-    if metrics["completion_cost"] is not None:
-        log_data["cost"]["completion"] = f"${metrics['completion_cost']:.6f}"
 
     return log_data
 
@@ -142,10 +129,12 @@ def _calculate_and_log_metrics(
         model=context["model"],
     )
 
+    # Simplified logging - just show key metrics, not full usage details
     log_data = {
         "execution_id": context["execution_id"],
         "model": context["model"],
-        "usage": usage,
+        "tokens": usage.get("total_tokens", 0),
+        "response_time_ms": int(context["response_time"] * 1000),
         **_format_cost_for_logging(metrics),
     }
 

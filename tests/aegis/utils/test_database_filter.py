@@ -166,12 +166,12 @@ class TestGetDatabasePrompt:
     Tests for the get_database_prompt function.
     """
     
-    @patch('aegis.utils.database_filter.filter_databases')
-    def test_get_database_prompt_with_databases(self, mock_filter):
+    @patch('aegis.utils.database_filter.get_available_databases')
+    def test_get_database_prompt_with_databases(self, mock_get_available):
         """
         Test generating prompt with available databases.
         """
-        mock_filter.return_value = {
+        mock_get_available.return_value = {
             "benchmarking": {
                 "id": "benchmarking",
                 "name": "Benchmarking Database",

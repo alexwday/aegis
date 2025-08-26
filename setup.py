@@ -31,11 +31,8 @@ setup(
     ],
     python_requires=">=3.11",
     install_requires=requirements,
-    entry_points={
-        "console_scripts": [
-            "aegis-web=aegis.web_interface:main",
-        ],
-    },
+    # Entry points can be added back if needed
+    # Currently use: python run_web.py
     include_package_data=True,
     package_data={
         "aegis": [

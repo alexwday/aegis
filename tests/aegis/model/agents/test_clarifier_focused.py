@@ -561,8 +561,8 @@ class TestClarifyQuery:
             "status": "success",
             "bank_ids": [1, 2],
             "banks_detail": {
-                1: {"name": "Bank One"},
-                2: {"name": "Bank Two"},
+                1: {"name": "Bank One", "symbol": "B1"},
+                2: {"name": "Bank Two", "symbol": "B2"},
             },
             "query_intent": "revenue",
             "tokens_used": 100,
@@ -580,11 +580,15 @@ class TestClarifyQuery:
         context = {"execution_id": "test-123"}
         result = clarify_query("Show me Q3 2024 revenue for banks", context)
 
-        assert result["status"] == "success"
-        assert result["banks"]["status"] == "success"
-        assert result["periods"]["status"] == "success"
-        assert result["tokens_used"] == 150  # Combined
-        assert result["cost"] == 0.015  # Combined
+        # Now returns list of combinations on success
+        assert isinstance(result, list)
+        assert len(result) == 2  # 2 banks x 1 quarter
+        assert result[0]["bank_id"] == 1
+        assert result[0]["bank_name"] == "Bank One"
+        assert result[0]["bank_symbol"] == "B1"
+        assert result[0]["fiscal_year"] == 2024
+        assert result[0]["quarter"] == "Q3"
+        assert result[0]["query_intent"] == "revenue"
 
     @patch("aegis.model.agents.clarifier.extract_periods")
     @patch("aegis.model.agents.clarifier.extract_banks")
@@ -609,12 +613,11 @@ class TestClarifyQuery:
         context = {"execution_id": "test-123"}
         result = clarify_query("Show me data", context)
 
+        assert isinstance(result, dict)
         assert result["status"] == "needs_clarification"
         assert len(result["clarifications"]) == 2
         assert "Which banks do you mean?" in result["clarifications"]
         assert "What time period?" in result["clarifications"]
-        assert result["tokens_used"] == 150
-        assert result["cost"] == 0.015
 
     @patch("aegis.model.agents.clarifier.extract_periods")
     @patch("aegis.model.agents.clarifier.extract_banks")
@@ -625,7 +628,7 @@ class TestClarifyQuery:
         mock_extract_banks.return_value = {
             "status": "success",
             "bank_ids": [1],
-            "banks_detail": {1: {"name": "Bank One"}},
+            "banks_detail": {1: {"name": "Bank One", "symbol": "B1"}},
             "query_intent": "",
             "intent_clarification": "What would you like to see for Bank One?",
             "tokens_used": 100,
@@ -643,10 +646,10 @@ class TestClarifyQuery:
         context = {"execution_id": "test-123"}
         result = clarify_query("Bank One Q3 2024", context)
 
+        assert isinstance(result, dict)
         assert result["status"] == "needs_clarification"
         assert len(result["clarifications"]) == 1
         assert "What would you like to see for Bank One?" in result["clarifications"]
-        assert result["banks"]["status"] == "success"  # Banks were extracted
 
     @patch("aegis.model.agents.clarifier.extract_periods")
     @patch("aegis.model.agents.clarifier.extract_banks")

@@ -12,11 +12,11 @@ import importlib
 
 # List of all subagent modules
 SUBAGENT_MODULES = [
-    ("aegis.model.subagents.benchmarking", "benchmarking_agent", "benchmarking"),
-    ("aegis.model.subagents.reports", "reports_agent", "reports"),
-    ("aegis.model.subagents.rts", "rts_agent", "rts"),
-    ("aegis.model.subagents.transcripts", "transcripts_agent", "transcripts"),
-    ("aegis.model.subagents.pillar3", "pillar3_agent", "pillar3"),
+    ("aegis.model.subagents.benchmarking.main", "benchmarking_agent", "benchmarking"),
+    ("aegis.model.subagents.reports.main", "reports_agent", "reports"),
+    ("aegis.model.subagents.rts.main", "rts_agent", "rts"),
+    ("aegis.model.subagents.transcripts.main", "transcripts_agent", "transcripts"),
+    ("aegis.model.subagents.pillar3.main", "pillar3_agent", "pillar3"),
 ]
 
 
@@ -45,15 +45,22 @@ class TestAllSubagents:
             # Test inputs
             conversation = []
             latest_message = "Test query"
-            banks = {"bank_ids": [1], "bank_details": [{"id": 1, "name": "Test Bank"}]}
-            periods = {"apply_all": {"fiscal_year": 2024, "quarters": ["Q1"]}}
+            bank_period_combinations = [
+                {
+                    "bank_id": 1,
+                    "bank_name": "Test Bank",
+                    "bank_symbol": "TB",
+                    "fiscal_year": 2024,
+                    "quarter": "Q1"
+                }
+            ]
             basic_intent = "test"
             full_intent = "Test query"
             context = {"execution_id": "test-123"}
             
             # Execute
             results = list(agent_func(
-                conversation, latest_message, banks, periods,
+                conversation, latest_message, bank_period_combinations,
                 basic_intent, full_intent, db_id, context
             ))
             
@@ -78,23 +85,25 @@ class TestAllSubagents:
             module = importlib.import_module(module_path)
             agent_func = getattr(module, func_name)
             
-            # Test inputs with banks_detail to trigger the error in the try block
+            # Test inputs with bank_period_combinations to trigger the error in the try block
             conversation = []
             latest_message = "Test query"
-            banks = {
-                "bank_ids": [1],
-                "banks_detail": {
-                    "1": {"name": "Test Bank", "symbol": "TB"}
+            bank_period_combinations = [
+                {
+                    "bank_id": 1,
+                    "bank_name": "Test Bank",
+                    "bank_symbol": "TB",
+                    "fiscal_year": 2024,
+                    "quarter": "Q1"
                 }
-            }
-            periods = {"periods": {"apply_all": {"fiscal_year": 2024, "quarters": ["Q1"]}}}
+            ]
             basic_intent = "test"
             full_intent = "Test query"
             context = {"execution_id": "error-test"}
             
             # Execute - should not raise, but yield error
             results = list(agent_func(
-                conversation, latest_message, banks, periods,
+                conversation, latest_message, bank_period_combinations,
                 basic_intent, full_intent, db_id, context
             ))
             
@@ -128,14 +137,21 @@ class TestAllSubagents:
             
             conversation = []
             latest_message = "Query"
-            banks = {"bank_ids": [1]}
-            periods = {"apply_all": {"fiscal_year": 2024, "quarters": ["Q1"]}}
+            bank_period_combinations = [
+                {
+                    "bank_id": 1,
+                    "bank_name": "Test Bank",
+                    "bank_symbol": "TB",
+                    "fiscal_year": 2024,
+                    "quarter": "Q1"
+                }
+            ]
             basic_intent = "test"
             full_intent = "Test"
             context = {"execution_id": "log-test"}
             
             list(agent_func(
-                conversation, latest_message, banks, periods,
+                conversation, latest_message, bank_period_combinations,
                 basic_intent, full_intent, db_id, context
             ))
             
@@ -164,28 +180,18 @@ class TestAllSubagents:
                 {"role": "user", "content": "Follow-up"}
             ]
             latest_message = "Compare all banks"
-            banks = {
-                "bank_ids": [1, 2, 3, 4, 5],
-                "bank_details": [
-                    {"id": i, "name": f"Bank{i}", "symbol": f"B{i}"}
-                    for i in range(1, 6)
-                ]
-            }
-            periods = {
-                "periods": {
-                    "bank_specific": {
-                        "1": {"fiscal_year": 2024, "quarters": ["Q1", "Q2"]},
-                        "2": {"fiscal_year": 2024, "quarters": ["Q3"]},
-                        "3": {"fiscal_year": 2023, "quarters": ["Q4"]}
-                    }
-                }
-            }
+            bank_period_combinations = [
+                {"bank_id": 1, "bank_name": "Bank1", "bank_symbol": "B1", "fiscal_year": 2024, "quarter": "Q1"},
+                {"bank_id": 1, "bank_name": "Bank1", "bank_symbol": "B1", "fiscal_year": 2024, "quarter": "Q2"},
+                {"bank_id": 2, "bank_name": "Bank2", "bank_symbol": "B2", "fiscal_year": 2024, "quarter": "Q3"},
+                {"bank_id": 3, "bank_name": "Bank3", "bank_symbol": "B3", "fiscal_year": 2023, "quarter": "Q4"},
+            ]
             basic_intent = "comparison"
             full_intent = "Complex multi-bank comparison"
             context = {"execution_id": "complex-test"}
             
             results = list(agent_func(
-                conversation, latest_message, banks, periods,
+                conversation, latest_message, bank_period_combinations,
                 basic_intent, full_intent, db_id, context
             ))
             
@@ -209,15 +215,14 @@ class TestAllSubagents:
             # Empty inputs
             conversation = []
             latest_message = ""
-            banks = {"bank_ids": [], "bank_details": []}
-            periods = {}
+            bank_period_combinations = []
             basic_intent = ""
             full_intent = ""
             context = {"execution_id": "empty-test"}
             
             # Should not crash
             results = list(agent_func(
-                conversation, latest_message, banks, periods,
+                conversation, latest_message, bank_period_combinations,
                 basic_intent, full_intent, db_id, context
             ))
             
@@ -242,15 +247,22 @@ class TestAllSubagents:
             
             conversation = []
             latest_message = "Query"
-            banks = {"bank_ids": [1]}
-            periods = {"apply_all": {"fiscal_year": 2024, "quarters": ["Q1"]}}
+            bank_period_combinations = [
+                {
+                    "bank_id": 1,
+                    "bank_name": "Test Bank",
+                    "bank_symbol": "TB",
+                    "fiscal_year": 2024,
+                    "quarter": "Q1"
+                }
+            ]
             basic_intent = "test"
             full_intent = "Test"
             context = {"execution_id": "gen-test"}
             
             # Get generator
             gen = agent_func(
-                conversation, latest_message, banks, periods,
+                conversation, latest_message, bank_period_combinations,
                 basic_intent, full_intent, db_id, context
             )
             
@@ -280,14 +292,16 @@ class TestAllSubagents:
             
             conversation = [{"role": "user", "content": "previous message"}]
             latest_message = "Get efficiency ratio"
-            banks = {"bank_ids": [1], "bank_details": [{"id": 1, "name": "RBC", "symbol": "RY"}]}
-            periods = {"periods": {"apply_all": {"fiscal_year": 2024, "quarters": ["Q1", "Q2"]}}}
+            bank_period_combinations = [
+                {"bank_id": 1, "bank_name": "RBC", "bank_symbol": "RY", "fiscal_year": 2024, "quarter": "Q1"},
+                {"bank_id": 1, "bank_name": "RBC", "bank_symbol": "RY", "fiscal_year": 2024, "quarter": "Q2"}
+            ]
             basic_intent = "efficiency ratio"
             full_intent = "Get RBC efficiency ratio for Q1-Q2 2024"
             context = {"execution_id": "msg-test"}
             
             list(agent_func(
-                conversation, latest_message, banks, periods,
+                conversation, latest_message, bank_period_combinations,
                 basic_intent, full_intent, db_id, context
             ))
             
@@ -332,14 +346,21 @@ class TestAllSubagents:
             
             conversation = []
             latest_message = "Query"
-            banks = {"bank_ids": [1]}
-            periods = {"apply_all": {"fiscal_year": 2024, "quarters": ["Q1"]}}
+            bank_period_combinations = [
+                {
+                    "bank_id": 1,
+                    "bank_name": "Test Bank",
+                    "bank_symbol": "TB",
+                    "fiscal_year": 2024,
+                    "quarter": "Q1"
+                }
+            ]
             basic_intent = "test"
             full_intent = "Test"
             context = {"execution_id": "no-usage"}
             
             results = list(agent_func(
-                conversation, latest_message, banks, periods,
+                conversation, latest_message, bank_period_combinations,
                 basic_intent, full_intent, db_id, context
             ))
             
@@ -371,14 +392,21 @@ class TestAllSubagents:
             
             conversation = []
             latest_message = "Query"
-            banks = {"bank_ids": [1]}
-            periods = {"apply_all": {"fiscal_year": 2024, "quarters": ["Q1"]}}
+            bank_period_combinations = [
+                {
+                    "bank_id": 1,
+                    "bank_name": "Test Bank",
+                    "bank_symbol": "TB",
+                    "fiscal_year": 2024,
+                    "quarter": "Q1"
+                }
+            ]
             basic_intent = "test"
             full_intent = "Test"
             context = {"execution_id": "params-test"}
             
             list(agent_func(
-                conversation, latest_message, banks, periods,
+                conversation, latest_message, bank_period_combinations,
                 basic_intent, full_intent, db_id, context
             ))
             

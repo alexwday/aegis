@@ -242,10 +242,8 @@ class TestPlanDatabaseQueries:
                         "function": {
                             "name": "databases_selected",
                             "arguments": json.dumps({
-                                "databases": [
-                                    {"database_id": "benchmarking", "query_intent": "Get efficiency ratio"},
-                                    {"database_id": "reports", "query_intent": "Get revenue data"}
-                                ]
+                                "databases": ["benchmarking", "reports"],
+                                "rationale": "Need benchmarking for efficiency ratio and reports for revenue data"
                             })
                         }
                     }]
@@ -258,15 +256,21 @@ class TestPlanDatabaseQueries:
         # Test inputs
         query = "Show me efficiency ratio"
         conversation = [{"role": "user", "content": "Hello"}]
-        banks = {"bank_ids": [1]}
-        periods = {"apply_all": {"fiscal_year": 2024, "quarters": ["Q1"]}}
-        context = {"execution_id": "test-123"}
+        bank_period_combinations = [
+            {"bank_id": 1, "bank_name": "RBC", "bank_symbol": "RY", "fiscal_year": 2024, "quarter": "Q1"}
+        ]
+        context = {
+            "execution_id": "test-123",
+            "auth_config": {"api_key": "test-key"},
+            "ssl_config": {"verify": False}
+        }
         
-        result = plan_database_queries(query, conversation, banks, periods, context)
+        result = plan_database_queries(query, conversation, bank_period_combinations, context)
         
         assert result["status"] == "success"
         assert len(result["databases"]) == 2
-        assert result["databases"][0]["database_id"] == "benchmarking"
+        assert result["databases"][0] == "benchmarking"
+        assert result["databases"][1] == "reports"
         assert result["tokens_used"] == 1000
         assert result["cost"] == 0.05
     
@@ -296,10 +300,8 @@ class TestPlanDatabaseQueries:
                         "function": {
                             "name": "databases_selected",
                             "arguments": json.dumps({
-                                "databases": [
-                                    {"database_id": "benchmarking", "query_intent": "Get data"},
-                                    {"database_id": "reports", "query_intent": "Get reports"}  # Will be filtered
-                                ]
+                                "databases": ["benchmarking", "reports"],
+                                "rationale": "Need both databases for comprehensive data"
                             })
                         }
                     }]
@@ -311,15 +313,20 @@ class TestPlanDatabaseQueries:
         
         query = "Show me data"
         conversation = []
-        banks = {"bank_ids": [1]}
-        periods = {"apply_all": {"fiscal_year": 2024, "quarters": ["Q1"]}}
-        context = {"execution_id": "test-123"}
+        bank_period_combinations = [
+            {"bank_id": 1, "bank_name": "RBC", "bank_symbol": "RY", "fiscal_year": 2024, "quarter": "Q1"}
+        ]
+        context = {
+            "execution_id": "test-123",
+            "auth_config": {"api_key": "test-key"},
+            "ssl_config": {"verify": False}
+        }
         
-        result = plan_database_queries(query, conversation, banks, periods, context)
+        result = plan_database_queries(query, conversation, bank_period_combinations, context)
         
         assert result["status"] == "success"
         assert len(result["databases"]) == 1  # Only benchmarking included
-        assert result["databases"][0]["database_id"] == "benchmarking"
+        assert result["databases"][0] == "benchmarking"
     
     @patch('aegis.model.agents.planner.complete_with_tools')
     @patch('aegis.model.agents.planner.get_filtered_database_descriptions')
@@ -358,11 +365,16 @@ class TestPlanDatabaseQueries:
         
         query = "Hello"
         conversation = []
-        banks = {"bank_ids": [1]}
-        periods = {"apply_all": {"fiscal_year": 2024, "quarters": ["Q1"]}}
-        context = {"execution_id": "test-123"}
+        bank_period_combinations = [
+            {"bank_id": 1, "bank_name": "RBC", "bank_symbol": "RY", "fiscal_year": 2024, "quarter": "Q1"}
+        ]
+        context = {
+            "execution_id": "test-123",
+            "auth_config": {"api_key": "test-key"},
+            "ssl_config": {"verify": False}
+        }
         
-        result = plan_database_queries(query, conversation, banks, periods, context)
+        result = plan_database_queries(query, conversation, bank_period_combinations, context)
         
         assert result["status"] == "no_databases"
         assert result["reason"] == "Query is a greeting"
@@ -375,14 +387,17 @@ class TestPlanDatabaseQueries:
         """
         query = "Show me data"
         conversation = []
-        banks = {"bank_ids": []}  # Empty bank list
-        periods = {"apply_all": {"fiscal_year": 2024, "quarters": ["Q1"]}}
-        context = {"execution_id": "test-123"}
+        bank_period_combinations = []  # Empty list
+        context = {
+            "execution_id": "test-123",
+            "auth_config": {"api_key": "test-key"},
+            "ssl_config": {"verify": False}
+        }
         
-        result = plan_database_queries(query, conversation, banks, periods, context)
+        result = plan_database_queries(query, conversation, bank_period_combinations, context)
         
         assert result["status"] == "error"
-        assert "No banks provided" in result["error"]
+        assert "No bank-period combinations provided" in result["error"]
     
     @patch('aegis.model.agents.planner.get_filtered_availability_table')
     def test_plan_database_queries_no_periods(self, mock_get_availability):
@@ -391,14 +406,17 @@ class TestPlanDatabaseQueries:
         """
         query = "Show me data"
         conversation = []
-        banks = {"bank_ids": [1]}
-        periods = {}  # Empty periods
-        context = {"execution_id": "test-123"}
+        bank_period_combinations = []  # Empty means no periods
+        context = {
+            "execution_id": "test-123",
+            "auth_config": {"api_key": "test-key"},
+            "ssl_config": {"verify": False}
+        }
         
-        result = plan_database_queries(query, conversation, banks, periods, context)
+        result = plan_database_queries(query, conversation, bank_period_combinations, context)
         
         assert result["status"] == "error"
-        assert "No periods provided" in result["error"]
+        assert "No bank-period combinations provided" in result["error"]
     
     @patch('aegis.model.agents.planner.get_filtered_availability_table')
     def test_plan_database_queries_no_available_data(self, mock_get_availability):
@@ -413,11 +431,16 @@ class TestPlanDatabaseQueries:
         
         query = "Show me data"
         conversation = []
-        banks = {"bank_ids": [1]}
-        periods = {"periods": {"apply_all": {"fiscal_year": 2024, "quarters": ["Q1"]}}}
-        context = {"execution_id": "test-123"}
+        bank_period_combinations = [
+            {"bank_id": 1, "bank_name": "RBC", "bank_symbol": "RY", "fiscal_year": 2024, "quarter": "Q1"}
+        ]
+        context = {
+            "execution_id": "test-123",
+            "auth_config": {"api_key": "test-key"},
+            "ssl_config": {"verify": False}
+        }
         
-        result = plan_database_queries(query, conversation, banks, periods, context)
+        result = plan_database_queries(query, conversation, bank_period_combinations, context)
         
         assert result["status"] == "no_data"
         assert "No databases have data" in result["message"]
@@ -448,9 +471,8 @@ class TestPlanDatabaseQueries:
                         "function": {
                             "name": "databases_selected",
                             "arguments": json.dumps({
-                                "databases": [
-                                    {"database_id": "benchmarking", "query_intent": "Get efficiency ratio"}
-                                ]
+                                "databases": ["benchmarking"],
+                                "rationale": "Need benchmarking for efficiency ratio"
                             })
                         }
                     }]
@@ -462,13 +484,18 @@ class TestPlanDatabaseQueries:
         
         query = "Show me efficiency"
         conversation = []
-        banks = {"bank_ids": [1]}
-        periods = {"apply_all": {"fiscal_year": 2024, "quarters": ["Q1"]}}
-        context = {"execution_id": "test-123"}
+        bank_period_combinations = [
+            {"bank_id": 1, "bank_name": "RBC", "bank_symbol": "RY", "fiscal_year": 2024, "quarter": "Q1"}
+        ]
+        context = {
+            "execution_id": "test-123",
+            "auth_config": {"api_key": "test-key"},
+            "ssl_config": {"verify": False}
+        }
         query_intent = "efficiency ratio"  # Provided by clarifier
         
         result = plan_database_queries(
-            query, conversation, banks, periods, context, 
+            query, conversation, bank_period_combinations, context, 
             query_intent=query_intent
         )
         
@@ -521,11 +548,17 @@ class TestPlanDatabaseQueries:
         }
         
         # Test with small model override
-        context = {"execution_id": "test-123", "model_tier_override": "small"}
+        context = {
+            "execution_id": "test-123",
+            "model_tier_override": "small",
+            "auth_config": {"api_key": "test-key"},
+            "ssl_config": {"verify": False}
+        }
+        bank_period_combinations = [
+            {"bank_id": 1, "bank_name": "RBC", "bank_symbol": "RY", "fiscal_year": 2024, "quarter": "Q1"}
+        ]
         result = plan_database_queries(
-            "Query", [], {"bank_ids": [1]}, 
-            {"apply_all": {"fiscal_year": 2024, "quarters": ["Q1"]}}, 
-            context
+            "Query", [], bank_period_combinations, context
         )
         
         # Verify small model was used
@@ -535,9 +568,7 @@ class TestPlanDatabaseQueries:
         # Test with large model override
         context["model_tier_override"] = "large"
         result = plan_database_queries(
-            "Query", [], {"bank_ids": [1]}, 
-            {"apply_all": {"fiscal_year": 2024, "quarters": ["Q1"]}}, 
-            context
+            "Query", [], bank_period_combinations, context
         )
         
         # Verify large model was used
@@ -559,11 +590,16 @@ class TestPlanDatabaseQueries:
         
         query = "Show me data"
         conversation = []
-        banks = {"bank_ids": [1]}
-        periods = {"apply_all": {"fiscal_year": 2024, "quarters": ["Q1"]}}
-        context = {"execution_id": "test-123"}
+        bank_period_combinations = [
+            {"bank_id": 1, "bank_name": "RBC", "bank_symbol": "RY", "fiscal_year": 2024, "quarter": "Q1"}
+        ]
+        context = {
+            "execution_id": "test-123",
+            "auth_config": {"api_key": "test-key"},
+            "ssl_config": {"verify": False}
+        }
         
-        result = plan_database_queries(query, conversation, banks, periods, context)
+        result = plan_database_queries(query, conversation, bank_period_combinations, context)
         
         assert result["status"] == "error"
         assert "Database error" in result["error"]

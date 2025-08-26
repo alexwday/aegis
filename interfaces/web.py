@@ -12,14 +12,22 @@ from typing import Generator
 
 from flask import Flask, render_template, request, jsonify, Response
 
-from .model.main import model
-from .utils.logging import get_logger
+from src.aegis.model.main import model
+from src.aegis.utils.logging import get_logger
+from interfaces.monitoring import register_monitoring_routes
+from interfaces.database import register_database_routes
 
 # Set up the Flask app with the correct template directory
-# Templates are in the project root, not in src/aegis
-template_dir = Path(__file__).parent.parent.parent / "templates"
+# Templates are in the project root
+template_dir = Path(__file__).parent.parent / "templates"
 app = Flask(__name__, template_folder=str(template_dir))
 logger = get_logger()
+
+# Register monitoring routes
+register_monitoring_routes(app)
+
+# Register database viewer routes
+register_database_routes(app)
 
 # Store conversation history in memory (for simplicity)
 # In production, you'd want to use a session-based storage
@@ -35,6 +43,17 @@ def index():
         HTML template for the chat interface
     """
     return render_template("chat.html")
+
+
+@app.route("/monitoring")
+def monitoring():
+    """
+    Serve the monitoring dashboard interface.
+
+    Returns:
+        HTML template for the monitoring dashboard
+    """
+    return render_template("monitoring.html")
 
 
 @app.route("/api/chat", methods=["POST"])
@@ -209,17 +228,3 @@ def get_history():
     """
     return jsonify(conversation_history)
 
-
-def main():
-    """Main entry point for the web interface."""
-    # Get configuration from environment or use defaults
-    host = os.getenv("SERVER_HOST", "0.0.0.0")
-    port = int(os.getenv("SERVER_PORT", "8000"))
-    debug = os.getenv("DEBUG", "false").lower() == "true"
-
-    logger.info(f"Starting Aegis web interface on {host}:{port}")
-    app.run(debug=debug, host=host, port=port)
-
-
-if __name__ == "__main__":
-    main()

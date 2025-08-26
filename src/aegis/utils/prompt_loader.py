@@ -103,8 +103,13 @@ def load_prompt(agent_type: str, name: str) -> str:
     if agent_type not in ["agent", "subagent"]:
         raise ValueError(f"agent_type must be 'agent' or 'subagent', got: {agent_type}")
 
-    # Load the agent/subagent YAML
-    yaml_path = f"{agent_type}s/{name}.yaml"
+    # Determine YAML path based on type
+    if agent_type == "subagent":
+        # Subagents have their prompts in individual folders
+        yaml_path = f"{name}/{name}.yaml"
+    else:
+        # Agents are in the agents folder
+        yaml_path = f"{agent_type}s/{name}.yaml"
 
     try:
         agent_data = load_yaml(yaml_path)

@@ -1,0 +1,1098 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aegis Database Viewer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .viewer-container {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 1600px;
+            margin: 0 auto;
+            overflow: hidden;
+            min-height: 85vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .viewer-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .viewer-header h1 {
+            font-size: 24px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .header-nav {
+            display: flex;
+            gap: 10px;
+        }
+
+        .header-btn {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.3s;
+            font-size: 14px;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .header-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        /* Main Layout */
+        .viewer-body {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 280px;
+            background: #f8f9fa;
+            border-right: 1px solid #e0e0e0;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+
+        .sidebar-section {
+            padding: 20px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .sidebar-section h3 {
+            font-size: 14px;
+            font-weight: 600;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 12px;
+        }
+
+        .db-info {
+            font-size: 13px;
+            color: #666;
+            line-height: 1.6;
+        }
+
+        .db-info .info-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 4px;
+        }
+
+        .db-info .label {
+            font-weight: 500;
+        }
+
+        .db-info .value {
+            color: #333;
+        }
+
+        .tables-list {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .table-item {
+            padding: 8px 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+            border-radius: 4px;
+            margin-bottom: 2px;
+            font-size: 14px;
+            color: #333;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .table-item:hover {
+            background: #e8e9eb;
+        }
+
+        .table-item.selected {
+            background: #667eea;
+            color: white;
+        }
+
+        .table-row-count {
+            font-size: 11px;
+            opacity: 0.7;
+            background: rgba(0, 0, 0, 0.1);
+            padding: 2px 6px;
+            border-radius: 10px;
+        }
+
+        /* Content Area */
+        .content-area {
+            flex: 1;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Tabs */
+        .tabs-container {
+            background: white;
+            border-bottom: 1px solid #e0e0e0;
+            padding: 0 30px;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 30px;
+        }
+
+        .tab {
+            padding: 16px 0;
+            cursor: pointer;
+            border-bottom: 3px solid transparent;
+            transition: all 0.2s;
+            font-size: 14px;
+            font-weight: 500;
+            color: #666;
+        }
+
+        .tab:hover {
+            color: #667eea;
+        }
+
+        .tab.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+        }
+
+        /* Tab Content */
+        .tab-content {
+            flex: 1;
+            padding: 30px;
+            overflow-y: auto;
+            background: #fafbfc;
+        }
+
+        .tab-pane {
+            display: none;
+        }
+
+        .tab-pane.active {
+            display: block;
+        }
+
+        /* Table Schema Styles */
+        .schema-section {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        }
+
+        .schema-section h3 {
+            font-size: 16px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #f0f0f0;
+        }
+
+        .row-count {
+            background: #667eea;
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .row-count .number {
+            font-size: 36px;
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+
+        .row-count .label {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        /* Data Table Styles */
+        .table-controls {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        }
+
+        .control-row {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .control-label {
+            font-size: 12px;
+            color: #666;
+            font-weight: 500;
+        }
+
+        select, input[type="number"], input[type="text"], textarea {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            background: white;
+        }
+
+        select:focus, input:focus, textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+        }
+
+        .data-table-container {
+            background: white;
+            border-radius: 8px;
+            overflow-x: auto;
+            overflow-y: visible;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+            max-width: 100%;
+            position: relative;
+        }
+
+        /* Scrollbar styling for better visibility */
+        .data-table-container::-webkit-scrollbar {
+            height: 8px;
+        }
+
+        .data-table-container::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 4px;
+        }
+
+        .data-table-container::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 4px;
+        }
+
+        .data-table-container::-webkit-scrollbar-thumb:hover {
+            background: #667eea;
+        }
+
+        table {
+            width: 100%;
+            min-width: 600px;
+            border-collapse: collapse;
+        }
+
+        th {
+            background: #fafbfc;
+            padding: 12px 16px;
+            text-align: left;
+            font-weight: 600;
+            color: #666;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 2px solid #e0e0e0;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        td {
+            padding: 14px 16px;
+            border-bottom: 1px solid #f0f0f0;
+            color: #333;
+            font-size: 14px;
+            white-space: nowrap;
+            max-width: 400px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        /* Allow wrapping for specific columns if needed */
+        td.wrap {
+            white-space: normal;
+            word-break: break-word;
+        }
+
+        tr:hover {
+            background: #f8f9fa;
+        }
+
+        /* Query Executor Styles */
+        .query-section {
+            background: white;
+            border-radius: 8px;
+            padding: 30px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        }
+
+        .query-samples {
+            margin-bottom: 20px;
+        }
+
+        .sample-queries {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .sample-btn {
+            background: #f0f0f0;
+            border: 1px solid #ddd;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 13px;
+        }
+
+        .sample-btn:hover {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        .query-editor {
+            margin-bottom: 20px;
+        }
+
+        .query-editor textarea {
+            width: 100%;
+            min-height: 200px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            resize: vertical;
+        }
+
+        .query-controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border-radius: 5px;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #5a6fd1;
+        }
+
+        .btn-secondary {
+            background: #f0f0f0;
+            color: #333;
+            border: 1px solid #ddd;
+        }
+
+        .btn-secondary:hover {
+            background: #e0e0e0;
+        }
+
+        /* Results Section */
+        .results-section {
+            margin-top: 30px;
+        }
+
+        .results-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .results-info {
+            font-size: 14px;
+            color: #666;
+        }
+
+        .download-btn {
+            background: #28a745;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 4px;
+            border: none;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.2s;
+        }
+
+        .download-btn:hover {
+            background: #218838;
+        }
+
+        /* Loading Spinner */
+        .spinner {
+            display: none;
+            width: 40px;
+            height: 40px;
+            margin: 20px auto;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .loading {
+            display: block;
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #999;
+        }
+
+        .empty-state h3 {
+            font-size: 18px;
+            margin-bottom: 10px;
+            color: #666;
+        }
+
+        /* Error State */
+        .error-message {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+            padding: 12px 16px;
+            border-radius: 4px;
+            margin: 20px 0;
+        }
+
+        /* Success Message */
+        .success-message {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+            padding: 12px 16px;
+            border-radius: 4px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="viewer-container">
+        <!-- Header -->
+        <div class="viewer-header">
+            <h1>🗄️ Aegis Database Viewer</h1>
+            <div class="header-nav">
+                <a href="/" class="header-btn">💬 Chat</a>
+                <a href="/monitoring" class="header-btn">📊 Monitoring</a>
+                <button class="header-btn" onclick="refreshData()">↻ Refresh</button>
+            </div>
+        </div>
+
+        <!-- Main Body -->
+        <div class="viewer-body">
+            <!-- Sidebar -->
+            <div class="sidebar">
+                <div class="sidebar-section">
+                    <h3>Database Info</h3>
+                    <div class="db-info" id="dbInfo">
+                        <!-- Database info will be populated here -->
+                    </div>
+                </div>
+                
+                <div class="sidebar-section">
+                    <h3>Tables</h3>
+                    <div class="tables-list" id="tablesList">
+                        <!-- Tables will be populated here -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Content Area -->
+            <div class="content-area">
+                <!-- Tabs -->
+                <div class="tabs-container">
+                    <div class="tabs">
+                        <div class="tab active" data-tab="explorer">Table Explorer</div>
+                        <div class="tab" data-tab="query">Query Executor</div>
+                        <div class="tab" data-tab="overview">Database Overview</div>
+                    </div>
+                </div>
+
+                <!-- Tab Content -->
+                <div class="tab-content">
+                    <!-- Table Explorer Tab -->
+                    <div class="tab-pane active" id="explorer">
+                        <div id="tableExplorerContent">
+                            <div class="empty-state">
+                                <h3>Select a Table</h3>
+                                <p>Choose a table from the sidebar to view its schema and data</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Query Executor Tab -->
+                    <div class="tab-pane" id="query">
+                        <div class="query-section">
+                            <h2>SQL Query Executor</h2>
+                            
+                            <div class="query-samples">
+                                <h3>Sample Queries</h3>
+                                <div class="sample-queries" id="sampleQueries">
+                                    <!-- Sample queries will be populated here -->
+                                </div>
+                            </div>
+
+                            <div class="query-editor">
+                                <label for="queryInput" class="control-label">SQL Query (SELECT only)</label>
+                                <textarea id="queryInput" placeholder="Enter your SQL query here..."></textarea>
+                            </div>
+
+                            <div class="query-controls">
+                                <button class="btn btn-primary" onclick="executeQuery()">Execute Query</button>
+                                <button class="btn btn-secondary" onclick="clearQuery()">Clear</button>
+                            </div>
+
+                            <div class="spinner" id="querySpinner"></div>
+                            <div id="queryResults"></div>
+                        </div>
+                    </div>
+
+                    <!-- Database Overview Tab -->
+                    <div class="tab-pane" id="overview">
+                        <div id="overviewContent">
+                            <div class="spinner loading"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentTable = null;
+        let tablesData = {};
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            loadDatabaseInfo();
+            loadTables();
+            loadSampleQueries();
+            setupTabs();
+        });
+
+        // Setup tab navigation
+        function setupTabs() {
+            const tabs = document.querySelectorAll('.tab');
+            tabs.forEach(tab => {
+                tab.addEventListener('click', function() {
+                    const tabName = this.dataset.tab;
+                    
+                    // Update active tab
+                    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                    this.classList.add('active');
+                    
+                    // Update active pane
+                    document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+                    document.getElementById(tabName).classList.add('active');
+                    
+                    // Load overview data when that tab is selected
+                    if (tabName === 'overview') {
+                        loadDatabaseOverview();
+                    }
+                });
+            });
+        }
+
+        // Load database info
+        function loadDatabaseInfo() {
+            // This would normally come from an API, but we'll use config values
+            const dbInfo = `
+                <div class="info-row">
+                    <span class="label">Host:</span>
+                    <span class="value">localhost</span>
+                </div>
+                <div class="info-row">
+                    <span class="label">Port:</span>
+                    <span class="value">5432</span>
+                </div>
+                <div class="info-row">
+                    <span class="label">Database:</span>
+                    <span class="value">aegis</span>
+                </div>
+            `;
+            document.getElementById('dbInfo').innerHTML = dbInfo;
+        }
+
+        // Load tables list
+        async function loadTables() {
+            try {
+                const response = await fetch('/api/database/tables');
+                const data = await response.json();
+                
+                const tablesList = document.getElementById('tablesList');
+                tablesList.innerHTML = '';
+                
+                data.tables.forEach(table => {
+                    const tableItem = document.createElement('div');
+                    tableItem.className = 'table-item';
+                    tableItem.innerHTML = `
+                        <span>${table}</span>
+                        <span class="table-row-count" id="count-${table}"></span>
+                    `;
+                    tableItem.onclick = () => selectTable(table);
+                    tablesList.appendChild(tableItem);
+                });
+                
+                // Load row counts for each table
+                data.tables.forEach(table => {
+                    loadTableRowCount(table);
+                });
+            } catch (error) {
+                console.error('Failed to load tables:', error);
+            }
+        }
+
+        // Load row count for a table
+        async function loadTableRowCount(tableName) {
+            try {
+                const response = await fetch(`/api/database/table/${tableName}/schema`);
+                if (response.ok) {
+                    const data = await response.json();
+                    const countElement = document.getElementById(`count-${tableName}`);
+                    if (countElement && data.row_count !== undefined && data.row_count !== null) {
+                        countElement.textContent = `${data.row_count.toLocaleString()} rows`;
+                    } else if (countElement) {
+                        countElement.textContent = '? rows';
+                    }
+                }
+            } catch (error) {
+                console.error(`Failed to load row count for ${tableName}:`, error);
+            }
+        }
+
+        // Select a table
+        async function selectTable(tableName) {
+            currentTable = tableName;
+            
+            // Update selected state
+            document.querySelectorAll('.table-item').forEach(item => {
+                item.classList.remove('selected');
+                if (item.textContent.includes(tableName)) {
+                    item.classList.add('selected');
+                }
+            });
+            
+            // Load table data
+            await loadTableExplorer(tableName);
+        }
+
+        // Load table explorer content
+        async function loadTableExplorer(tableName) {
+            const content = document.getElementById('tableExplorerContent');
+            content.innerHTML = '<div class="spinner loading"></div>';
+            
+            try {
+                // Load schema
+                const schemaResponse = await fetch(`/api/database/table/${tableName}/schema`);
+                if (!schemaResponse.ok) {
+                    throw new Error(`Failed to load schema: ${schemaResponse.statusText}`);
+                }
+                const schemaData = await schemaResponse.json();
+                
+                // Check if schema data is valid
+                if (!schemaData.columns || !Array.isArray(schemaData.columns)) {
+                    throw new Error('Invalid schema data received');
+                }
+                
+                // Load initial data
+                const dataResponse = await fetch(`/api/database/table/${tableName}/data?limit=100`);
+                if (!dataResponse.ok) {
+                    throw new Error(`Failed to load data: ${dataResponse.statusText}`);
+                }
+                const tableData = await dataResponse.json();
+                
+                // Build explorer content
+                content.innerHTML = `
+                    <h2>Table: ${tableName}</h2>
+                    
+                    <div class="row-count">
+                        <div class="number">${schemaData.row_count !== undefined && schemaData.row_count !== null ? schemaData.row_count.toLocaleString() : '?'}</div>
+                        <div class="label">Total Rows</div>
+                    </div>
+                    
+                    <!-- Schema Section -->
+                    <div class="schema-section">
+                        <h3>Schema</h3>
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Column</th>
+                                    <th>Type</th>
+                                    <th>Nullable</th>
+                                    <th>Default</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${schemaData.columns.map(col => `
+                                    <tr>
+                                        <td><strong>${col.name}</strong></td>
+                                        <td>${col.type}</td>
+                                        <td>${col.nullable ? 'Yes' : 'No'}</td>
+                                        <td>${col.default || '-'}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <!-- Data Section -->
+                    <div class="schema-section">
+                        <h3>Data Preview</h3>
+                        
+                        <div class="table-controls">
+                            <div class="control-row">
+                                <div class="control-group">
+                                    <label class="control-label">Rows per page</label>
+                                    <select id="limitSelect" onchange="reloadTableData()">
+                                        <option value="10">10</option>
+                                        <option value="25">25</option>
+                                        <option value="50">50</option>
+                                        <option value="100" selected>100</option>
+                                        <option value="200">200</option>
+                                    </select>
+                                </div>
+                                
+                                <div class="control-group">
+                                    <label class="control-label">Order by</label>
+                                    <select id="orderBySelect" onchange="reloadTableData()">
+                                        <option value="">None</option>
+                                        ${schemaData.columns.map(col => 
+                                            `<option value="${col.name}">${col.name}</option>`
+                                        ).join('')}
+                                    </select>
+                                </div>
+                                
+                                <div class="control-group">
+                                    <label class="control-label">Page</label>
+                                    <input type="number" id="pageInput" value="1" min="1" onchange="reloadTableData()">
+                                </div>
+                            </div>
+                            
+                            <div class="control-row">
+                                <div class="control-group" style="flex: 1;">
+                                    <label class="control-label">Filter (WHERE clause)</label>
+                                    <input type="text" id="filterInput" placeholder="e.g., status = 'completed'" style="width: 100%;">
+                                </div>
+                                <div class="control-group">
+                                    <label class="control-label">&nbsp;</label>
+                                    <button class="btn btn-primary" onclick="reloadTableData()">Apply Filter</button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="data-table-container" id="dataTableContainer">
+                            ${renderDataTable(tableData.data)}
+                        </div>
+                    </div>
+                `;
+                
+            } catch (error) {
+                content.innerHTML = `<div class="error-message">Failed to load table: ${error.message}</div>`;
+            }
+        }
+
+        // Reload table data with current filters
+        async function reloadTableData() {
+            if (!currentTable) return;
+            
+            const limit = document.getElementById('limitSelect').value;
+            const orderBy = document.getElementById('orderBySelect').value;
+            const page = document.getElementById('pageInput').value;
+            const filter = document.getElementById('filterInput').value;
+            const offset = (page - 1) * limit;
+            
+            const container = document.getElementById('dataTableContainer');
+            container.innerHTML = '<div class="spinner loading"></div>';
+            
+            try {
+                let url = `/api/database/table/${currentTable}/data?limit=${limit}&offset=${offset}`;
+                if (orderBy) url += `&order_by=${orderBy}`;
+                if (filter) url += `&filter=${encodeURIComponent(filter)}`;
+                
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                if (response.ok) {
+                    container.innerHTML = renderDataTable(data.data);
+                } else {
+                    container.innerHTML = `<div class="error-message">${data.error}</div>`;
+                }
+            } catch (error) {
+                container.innerHTML = `<div class="error-message">Failed to load data: ${error.message}</div>`;
+            }
+        }
+
+        // Render data table
+        function renderDataTable(data) {
+            if (!data || data.length === 0) {
+                return '<div class="empty-state"><p>No data to display</p></div>';
+            }
+            
+            const columns = Object.keys(data[0]);
+            
+            return `
+                <table>
+                    <thead>
+                        <tr>
+                            ${columns.map(col => `<th>${col}</th>`).join('')}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${data.map(row => `
+                            <tr>
+                                ${columns.map(col => `<td>${formatValue(row[col])}</td>`).join('')}
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+
+        // Format value for display
+        function formatValue(value) {
+            if (value === null) return '<em style="color: #999;">null</em>';
+            if (typeof value === 'object') return JSON.stringify(value);
+            if (typeof value === 'string' && value.length > 100) {
+                return value.substring(0, 100) + '...';
+            }
+            return value;
+        }
+
+        // Load sample queries
+        async function loadSampleQueries() {
+            try {
+                const response = await fetch('/api/database/samples');
+                const data = await response.json();
+                
+                const container = document.getElementById('sampleQueries');
+                container.innerHTML = data.samples.map(sample => 
+                    `<button class="sample-btn" onclick="loadSampleQuery('${btoa(sample.query)}')">${sample.name}</button>`
+                ).join('');
+            } catch (error) {
+                console.error('Failed to load sample queries:', error);
+            }
+        }
+
+        // Load a sample query
+        function loadSampleQuery(encodedQuery) {
+            const query = atob(encodedQuery);
+            document.getElementById('queryInput').value = query;
+        }
+
+        // Execute query
+        async function executeQuery() {
+            const query = document.getElementById('queryInput').value.trim();
+            if (!query) {
+                alert('Please enter a query');
+                return;
+            }
+            
+            const resultsDiv = document.getElementById('queryResults');
+            const spinner = document.getElementById('querySpinner');
+            
+            spinner.classList.add('loading');
+            resultsDiv.innerHTML = '';
+            
+            try {
+                const response = await fetch('/api/database/query', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ query })
+                });
+                
+                const data = await response.json();
+                spinner.classList.remove('loading');
+                
+                if (response.ok) {
+                    resultsDiv.innerHTML = `
+                        <div class="results-section">
+                            <div class="results-header">
+                                <div class="results-info">
+                                    Query returned <strong>${data.total_rows}</strong> rows
+                                </div>
+                                <button class="download-btn" onclick="downloadResults('${btoa(JSON.stringify(data.data))}')">
+                                    Download CSV
+                                </button>
+                            </div>
+                            <div class="data-table-container">
+                                ${renderDataTable(data.data)}
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    resultsDiv.innerHTML = `<div class="error-message">Error: ${data.error}</div>`;
+                }
+            } catch (error) {
+                spinner.classList.remove('loading');
+                resultsDiv.innerHTML = `<div class="error-message">Failed to execute query: ${error.message}</div>`;
+            }
+        }
+
+        // Clear query
+        function clearQuery() {
+            document.getElementById('queryInput').value = '';
+            document.getElementById('queryResults').innerHTML = '';
+        }
+
+        // Download results as CSV
+        function downloadResults(encodedData) {
+            const data = JSON.parse(atob(encodedData));
+            if (!data || data.length === 0) return;
+            
+            const columns = Object.keys(data[0]);
+            const csv = [
+                columns.join(','),
+                ...data.map(row => columns.map(col => JSON.stringify(row[col])).join(','))
+            ].join('\n');
+            
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `query_results_${new Date().toISOString()}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+        }
+
+        // Load database overview
+        async function loadDatabaseOverview() {
+            const content = document.getElementById('overviewContent');
+            content.innerHTML = '<div class="spinner loading"></div>';
+            
+            try {
+                const response = await fetch('/api/database/overview');
+                const data = await response.json();
+                
+                content.innerHTML = `
+                    <h2>Database Overview</h2>
+                    
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-label">Total Tables</div>
+                            <div class="stat-value primary">${data.summary.total_tables}</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Total Rows</div>
+                            <div class="stat-value success">${data.summary.total_rows.toLocaleString()}</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Avg Columns</div>
+                            <div class="stat-value warning">${data.summary.avg_columns}</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Total Indexes</div>
+                            <div class="stat-value">${data.summary.total_indexes}</div>
+                        </div>
+                    </div>
+                    
+                    <div class="schema-section">
+                        <h3>Tables Summary</h3>
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Table Name</th>
+                                    <th>Rows</th>
+                                    <th>Columns</th>
+                                    <th>Indexes</th>
+                                    <th>Primary Key</th>
+                                    <th>Foreign Keys</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${data.tables.map(table => `
+                                    <tr>
+                                        <td><strong>${table.table}</strong></td>
+                                        <td>${table.rows.toLocaleString()}</td>
+                                        <td>${table.columns}</td>
+                                        <td>${table.indexes}</td>
+                                        <td>${table.has_pk ? '✓' : '-'}</td>
+                                        <td>${table.foreign_keys || '-'}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            } catch (error) {
+                content.innerHTML = `<div class="error-message">Failed to load overview: ${error.message}</div>`;
+            }
+        }
+
+        // Refresh data
+        function refreshData() {
+            loadTables();
+            if (currentTable) {
+                loadTableExplorer(currentTable);
+            }
+        }
+    </script>
+</body>
+</html>

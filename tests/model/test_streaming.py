@@ -13,8 +13,11 @@ from aegis.model.main import model
 class TestModelStreaming:
     """Test cases for the model streaming generator."""
 
+    @mock.patch("aegis.model.main.post_monitor_entries")
+    @mock.patch("aegis.model.main.add_monitor_entry")
+    @mock.patch("aegis.model.main.initialize_monitor")
     @mock.patch("aegis.model.main.setup_authentication")
-    def test_basic_streaming(self, mock_auth):
+    def test_basic_streaming(self, mock_auth, mock_init, mock_add, mock_post):
         """Test basic streaming with dictionary input."""
         mock_auth.return_value = {
             "success": True,
@@ -47,8 +50,11 @@ class TestModelStreaming:
         for msg in agent_messages:
             assert msg["name"] == "aegis"
 
+    @mock.patch("aegis.model.main.post_monitor_entries")
+    @mock.patch("aegis.model.main.add_monitor_entry")
+    @mock.patch("aegis.model.main.initialize_monitor")
     @mock.patch("aegis.model.main.setup_authentication")
-    def test_streaming_with_list_input(self, mock_auth):
+    def test_streaming_with_list_input(self, mock_auth, mock_init, mock_add, mock_post):
         """Test streaming with list format input."""
         mock_auth.return_value = {
             "success": True,
@@ -73,8 +79,11 @@ class TestModelStreaming:
         for msg in messages:
             assert set(msg.keys()) == {"type", "name", "content"}
 
+    @mock.patch("aegis.model.main.post_monitor_entries")
+    @mock.patch("aegis.model.main.add_monitor_entry")
+    @mock.patch("aegis.model.main.initialize_monitor")
     @mock.patch("aegis.model.main.setup_authentication")
-    def test_streaming_with_db_filters(self, mock_auth):
+    def test_streaming_with_db_filters(self, mock_auth, mock_init, mock_add, mock_post):
         """Test streaming with database filters."""
         mock_auth.return_value = {
             "success": True,

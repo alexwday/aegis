@@ -220,6 +220,18 @@ def model(
         confidence=routing_decision.get("confidence"),
     )
 
+    # Format LLM call info if we have tokens
+    llm_calls = None
+    if routing_decision.get("tokens_used"):
+        llm_calls = [{
+            "model": routing_decision.get("model_used", "unknown"),
+            "prompt_tokens": 0,  # Would need breakdown from API
+            "completion_tokens": 0,  # Would need breakdown from API
+            "total_tokens": routing_decision.get("tokens_used", 0),
+            "cost": routing_decision.get("cost", 0),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }]
+    
     add_monitor_entry(
         stage_name="Router",
         stage_start_time=router_start,
@@ -227,6 +239,7 @@ def model(
         status=routing_decision.get("status", "Success"),
         decision_details=routing_decision.get("rationale", "Routing decision made"),
         error_message=routing_decision.get("error"),
+        llm_calls=llm_calls,
         custom_metadata={
             "route": routing_decision.get("route"),
             "confidence": routing_decision.get("confidence"),
@@ -271,6 +284,18 @@ def model(
                     response_time_ms=chunk.get("response_time_ms"),
                 )
 
+                # Format LLM call info for response agent
+                llm_calls = None
+                if chunk.get("tokens_used"):
+                    llm_calls = [{
+                        "model": chunk.get("model_used", "unknown"),
+                        "prompt_tokens": 0,  # Would need breakdown
+                        "completion_tokens": 0,  # Would need breakdown
+                        "total_tokens": chunk.get("tokens_used", 0),
+                        "cost": chunk.get("cost", 0),
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                    }]
+                
                 add_monitor_entry(
                     stage_name="Response_Agent",
                     stage_start_time=response_start,
@@ -278,6 +303,7 @@ def model(
                     status=chunk.get("status", "Success"),
                     decision_details="Direct response generated",
                     error_message=chunk.get("error"),
+                    llm_calls=llm_calls,
                     custom_metadata={
                         "tokens_used": chunk.get("tokens_used"),
                         "cost": chunk.get("cost"),
@@ -308,36 +334,55 @@ def model(
             messages=processed_conversation.get("messages", []),
         )
 
+        # Determine status based on result type
+        if isinstance(clarifier_result, list):
+            # Success - received bank-period combinations
+            status = "Success"
+            needs_clarification = False
+        else:
+            # Dictionary response means error or clarification needed
+            status = clarifier_result.get("status", "unknown")
+            needs_clarification = status == "needs_clarification"
+            # Capitalize status for consistency
+            if status == "error":
+                status = "Error"
+            elif status == "needs_clarification":
+                status = "Needs Clarification"
+
         logger.info(
             "model.stage.clarifier.completed",
             execution_id=execution_id,
-            status=clarifier_result.get("status"),
-            needs_clarification=clarifier_result.get("status") == "needs_clarification",
+            status=status,
+            needs_clarification=needs_clarification,
         )
 
         add_monitor_entry(
             stage_name="Clarifier",
             stage_start_time=clarifier_start,
             stage_end_time=datetime.now(timezone.utc),
-            status=clarifier_result.get("status", "Unknown"),
-            decision_details=clarifier_result.get("clarification", "Banks and periods extracted"),
-            error_message=clarifier_result.get("error"),
+            status=status,
+            decision_details=(
+                clarifier_result.get("clarifications", "Banks and periods extracted")
+                if isinstance(clarifier_result, dict)
+                else f"Extracted {len(clarifier_result)} bank-period combinations"
+            ),
+            error_message=(
+                clarifier_result.get("error") if isinstance(clarifier_result, dict) else None
+            ),
             custom_metadata={
-                "banks": (
-                    clarifier_result.get("banks", {}).get("bank_ids")
-                    if clarifier_result.get("banks")
-                    else None
+                "combinations_count": (
+                    len(clarifier_result) if isinstance(clarifier_result, list) else None
                 ),
-                "periods": (
-                    clarifier_result.get("periods", {}).get("periods")
-                    if clarifier_result.get("periods")
+                "clarifications": (
+                    clarifier_result.get("clarifications")
+                    if isinstance(clarifier_result, dict)
                     else None
                 ),
             },
         )
 
         # Check if there was an error or clarification is needed
-        if clarifier_result.get("status") == "error":
+        if isinstance(clarifier_result, dict) and clarifier_result.get("status") == "error":
             # Handle error from clarifier (e.g., API quota exceeded)
             error_msg = clarifier_result.get(
                 "error", "An error occurred while processing your request"
@@ -350,7 +395,10 @@ def model(
                     "Please try again later or contact support if the issue persists."
                 ),
             }
-        elif clarifier_result.get("status") == "needs_clarification":
+        elif (
+            isinstance(clarifier_result, dict)
+            and clarifier_result.get("status") == "needs_clarification"
+        ):
             # Format and stream clarification request back to user
             clarifications = clarifier_result.get("clarifications", [])
 
@@ -396,12 +444,17 @@ def model(
                     "content": "Please provide more details about your query.",
                 }
         else:
-            # Continue with research workflow - we have both banks and periods
-            banks_detail = clarifier_result.get("banks", {}).get("banks_detail", {})
-            periods = clarifier_result.get("periods", {}).get("periods", {})
+            # Continue with research workflow - we have bank-period combinations
+            # clarifier_result is now a list of combinations
+            bank_period_combinations = clarifier_result
 
-            # Stream progress update with specific banks
-            bank_names = [info["name"] for info in banks_detail.values()]
+            # Extract unique bank names for status message
+            unique_banks = {}
+            for combo in bank_period_combinations:
+                bank_id = combo["bank_id"]
+                if bank_id not in unique_banks:
+                    unique_banks[bank_id] = combo["bank_name"]
+            bank_names = list(unique_banks.values())
 
             # Don't send status messages here - let subagents and summarizer handle all output
             # This ensures summarizer appears after dropdowns, not before
@@ -410,7 +463,7 @@ def model(
             logger.info("model.stage.planner.started", execution_id=execution_id)
             planner_start = datetime.now(timezone.utc)
 
-            from src.aegis.model.agents.planner import plan_database_queries
+            from aegis.model.agents.planner import plan_database_queries
 
             # Build planner context
             planner_context = {
@@ -419,37 +472,67 @@ def model(
                 "ssl_config": ssl_config,
             }
 
-            # Extract query intent from clarifier's banks result
-            query_intent = None
-            if clarifier_result.get("banks") and clarifier_result["banks"].get("query_intent"):
-                query_intent = clarifier_result["banks"]["query_intent"]
+            # Extract query intent from first combination (all should have same intent)
+            # This is now the comprehensive intent from clarifier
+            clarifier_intent = None
+            if bank_period_combinations and len(bank_period_combinations) > 0:
+                clarifier_intent = bank_period_combinations[0].get("query_intent")
 
-            # Call planner with clarifier results including intent
+            # Call planner with new standardized format
             planner_result = plan_database_queries(
                 query=processed_conversation.get("latest_message", {}).get("content", ""),
                 conversation=processed_conversation.get("messages", []),
-                banks=clarifier_result.get("banks", {}),
-                periods=clarifier_result.get("periods", {}),
+                bank_period_combinations=bank_period_combinations,
                 context=planner_context,
                 available_databases=list(filtered_databases.keys()),
-                query_intent=query_intent,
+                query_intent=clarifier_intent,
             )
 
+            # Record planner completion BEFORE subagents start
+            planner_end = datetime.now(timezone.utc)
+            
+            logger.info(
+                "model.stage.planner.completed",
+                execution_id=execution_id,
+                status=planner_result.get("status", "Success"),
+            )
+
+            # Determine decision details based on status
+            if planner_result.get("status") == "success":
+                decision_details = f"Selected databases: {', '.join(planner_result.get('databases', []))}"
+            elif planner_result.get("status") == "no_data":
+                decision_details = planner_result.get("message", "No data available")
+            elif planner_result.get("status") == "no_databases":
+                decision_details = planner_result.get("reason", "No databases needed")
+            else:
+                decision_details = f"Error: {planner_result.get('error', 'Unknown error')}"
+            
+            add_monitor_entry(
+                stage_name="Planner",
+                stage_start_time=planner_start,
+                stage_end_time=planner_end,
+                status="Success" if planner_result.get("status") == "success" else planner_result.get("status", "Error"),
+                decision_details=decision_details,
+                custom_metadata={
+                    "databases_selected": planner_result.get("databases", []),
+                    "query_intent": clarifier_intent,
+                    "error_message": planner_result.get("error") if planner_result.get("status") == "error" else None,
+                },
+            )
+            
             # Stream planner output
             if planner_result.get("status") == "success":
                 databases = planner_result.get("databases", [])
 
                 # Send initial status message BEFORE subagents start
                 if databases:
-                    # Format period description based on type
-                    period_desc = ""
-                    if periods and "apply_all" in periods:
-                        period_info = periods["apply_all"]
-                        period_desc = (
-                            f"{', '.join(period_info['quarters'])} {period_info['fiscal_year']}"
-                        )
-                    elif periods and "bank_specific" in periods:
-                        period_desc = "bank-specific periods"
+                    # Extract unique periods from combinations
+                    unique_periods = set()
+                    for combo in bank_period_combinations:
+                        period_str = f"{combo['quarter']} {combo['fiscal_year']}"
+                        unique_periods.add(period_str)
+
+                    period_desc = ", ".join(sorted(unique_periods))
 
                     # Send status message
                     yield {
@@ -469,48 +552,49 @@ def model(
                 # Collect all database responses for summarization
                 database_responses = []
 
-                def run_subagent(db_plan, queue, response_collector):
+                def run_subagent(database_id, queue, response_collector):
                     """Run a single subagent and put outputs in the queue."""
+                    subagent_start = datetime.now(timezone.utc)
+                    # Normalize database_id to lowercase for consistency
+                    normalized_db_id = database_id.lower()
+                    
                     try:
-                        database_id = db_plan.get("database_id")
-                        query_intent = db_plan.get("query_intent", "")
-
-                        # Get the appropriate subagent function
-                        subagent_func = SUBAGENT_MAPPING.get(database_id)
+                        # Add monitoring entry for subagent start
+                        logger.info(
+                            f"subagent.{normalized_db_id}.started",
+                            execution_id=execution_id,
+                            database_id=normalized_db_id,
+                        )
+                        
+                        # Get the appropriate subagent function using normalized ID
+                        subagent_func = SUBAGENT_MAPPING.get(normalized_db_id)
 
                         if not subagent_func:
                             queue.put(
                                 {
                                     "type": "subagent",
-                                    "name": database_id,
+                                    "name": normalized_db_id,
                                     "content": (
-                                        f"⚠️ No subagent found for database: {database_id}\n"
+                                        f"⚠️ No subagent found for database: {normalized_db_id}\n"
                                     ),
                                 }
                             )
                             return
 
-                        # Get basic intent from clarifier
-                        basic_intent = ""
-                        if clarifier_result.get("banks") and clarifier_result["banks"].get(
-                            "query_intent"
-                        ):
-                            basic_intent = clarifier_result["banks"]["query_intent"]
-
                         # Collect the full response for this database
                         full_response = ""
 
-                        # Call the subagent with all required parameters
+                        # Call the subagent with new standardized format
+                        # Now both basic_intent and full_intent use the clarifier's comprehensive intent
                         for chunk in subagent_func(
                             conversation=processed_conversation.get("messages", []),
                             latest_message=processed_conversation.get("latest_message", {}).get(
                                 "content", ""
                             ),
-                            banks=clarifier_result.get("banks", {}),
-                            periods=clarifier_result.get("periods", {}),
-                            basic_intent=basic_intent,  # From clarifier
-                            full_intent=query_intent,  # From planner for this specific database
-                            database_id=database_id,
+                            bank_period_combinations=bank_period_combinations,
+                            basic_intent=clarifier_intent,  # Comprehensive intent from clarifier
+                            full_intent=clarifier_intent,  # Same comprehensive intent
+                            database_id=normalized_db_id,
                             context=planner_context,
                         ):
                             queue.put(chunk)
@@ -521,63 +605,83 @@ def model(
                         # Store the complete response for summarization
                         response_collector.append(
                             {
-                                "database_id": database_id,
-                                "full_intent": query_intent,
+                                "database_id": normalized_db_id,
+                                "full_intent": clarifier_intent,
                                 "response": full_response,
                             }
                         )
+                        
+                        # Add monitoring entry for successful subagent completion
+                        add_monitor_entry(
+                            stage_name=f"Subagent_{normalized_db_id}",
+                            stage_start_time=subagent_start,
+                            stage_end_time=datetime.now(timezone.utc),
+                            status="Success",
+                            decision_details=f"Retrieved data from {normalized_db_id}",
+                            custom_metadata={
+                                "database_id": normalized_db_id,
+                                "response_length": len(full_response),
+                            },
+                        )
 
                     except Exception as e:
-                        logger.error(f"subagent.{database_id}.error", error=str(e))
+                        logger.error(f"subagent.{normalized_db_id}.error", error=str(e))
                         queue.put(
                             {
                                 "type": "subagent",
-                                "name": database_id,
-                                "content": f"⚠️ Error in {database_id}: {str(e)}\n",
+                                "name": normalized_db_id,
+                                "content": f"⚠️ Error in {normalized_db_id}: {str(e)}\n",
                             }
                         )
                         # Still add error response for summarization
                         response_collector.append(
                             {
-                                "database_id": database_id,
-                                "full_intent": query_intent if "query_intent" in locals() else "",
+                                "database_id": normalized_db_id,
+                                "full_intent": clarifier_intent,
                                 "response": f"Error retrieving data: {str(e)}",
                             }
                         )
+                        
+                        # Add monitoring entry for failed subagent
+                        add_monitor_entry(
+                            stage_name=f"Subagent_{normalized_db_id}",
+                            stage_start_time=subagent_start,
+                            stage_end_time=datetime.now(timezone.utc),
+                            status="Error",
+                            decision_details=f"Failed to retrieve data from {normalized_db_id}",
+                            error_message=str(e),
+                            custom_metadata={
+                                "database_id": normalized_db_id,
+                            },
+                        )
                     finally:
                         # Signal this subagent is done
-                        queue.put({"type": "done", "database_id": database_id})
+                        queue.put({"type": "done", "database_id": normalized_db_id})
 
                 # Send ALL subagent_start signals at once (creates all dropdowns immediately)
                 # This ensures dropdowns appear simultaneously in the UI
-                for db_plan in databases:
-                    database_id = db_plan.get("database_id")
+                # databases is now a list of strings (database IDs)
+                # Normalize to lowercase for consistency
+                for database_id in databases:
                     yield {
                         "type": "subagent_start",
-                        "name": database_id,
+                        "name": database_id.lower(),
                     }
 
                 # Now start threads for each subagent to run concurrently
                 threads = []
                 active_subagents = set()
 
-                for db_plan in databases:
-                    database_id = db_plan.get("database_id")
+                for database_id in databases:
                     active_subagents.add(database_id)
 
                     thread = threading.Thread(
                         target=run_subagent,
-                        args=(db_plan, output_queue, database_responses),
+                        args=(database_id, output_queue, database_responses),
                         daemon=True,
                     )
                     thread.start()
                     threads.append(thread)
-
-                    logger.info(
-                        f"subagent.{database_id}.started",
-                        execution_id=execution_id,
-                        database_id=database_id,
-                    )
 
                 # Stream outputs from all subagents as they arrive
                 while active_subagents:
@@ -665,6 +769,15 @@ def model(
                         planner_result.get("reason", "No database queries needed.")
                     ),
                 }
+            elif planner_result.get("status") == "no_data":
+                # No data available for the requested banks/periods
+                yield {
+                    "type": "agent",
+                    "name": "aegis",
+                    "content": (
+                        f"\n⚠️ {planner_result.get('message', 'No databases have data for the requested banks and periods')}\n"
+                    ),
+                }
             else:
                 # Error case
                 yield {
@@ -675,19 +788,7 @@ def model(
                     ),
                 }
 
-            logger.info(
-                "model.stage.planner.completed",
-                execution_id=execution_id,
-                status="Success",
-            )
-
-            add_monitor_entry(
-                stage_name="Planner",
-                stage_start_time=planner_start,
-                stage_end_time=datetime.now(timezone.utc),
-                status="Success",
-                decision_details="Research plan created and executed",
-            )
+            # Planner monitoring was already added after planning finished
 
     # Post monitoring data to database
     entries_posted = post_monitor_entries(execution_id)

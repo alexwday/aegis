@@ -376,10 +376,13 @@ def extract_banks(
                             "query_intent": {
                                 "type": "string",
                                 "description": (
-                                    "What the user is asking for (e.g., 'revenue', "
-                                    "'efficiency ratio', 'expenses', 'net income', "
-                                    "'comparison', 'performance metrics'). "
-                                    "Leave empty if unclear what they want."
+                                    "A comprehensive, self-contained description of what the user "
+                                    "is asking for. Include ALL context from the conversation and "
+                                    "the latest query. Use the user's own wording where possible. "
+                                    "This intent should be detailed enough that another agent can "
+                                    "understand the complete request without reading the conversation. "
+                                    "Example: 'User wants to compare the CET1 ratios for RBC in Q2 2025 "
+                                    "and TD in Q1 2023 to understand their relative capital strength.'"
                                 ),
                             },
                         },
@@ -951,6 +954,125 @@ def extract_periods(
         }
 
 
+def _create_bank_period_combinations(
+    banks_result: Dict[str, Any], periods_result: Dict[str, Any]
+) -> List[Dict[str, Any]]:
+    """
+    Transform banks and periods results into standardized combination records.
+
+    Args:
+        banks_result: Output from extract_banks with bank_ids, banks_detail, query_intent
+        periods_result: Output from extract_periods with periods data
+
+    Returns:
+        List of bank-period combination records
+    """
+    logger = get_logger()
+    combinations = []
+
+    bank_ids = banks_result.get("bank_ids", [])
+    banks_detail = banks_result.get("banks_detail", {})
+    query_intent = banks_result.get("query_intent", "")
+
+    periods_data = periods_result.get("periods", {})
+
+    # Log what we're transforming
+    logger.info(
+        "clarifier.transformation.starting",
+        bank_count=len(bank_ids),
+        banks=[banks_detail.get(bid, {}).get("symbol", f"ID{bid}") for bid in bank_ids],
+        period_type="uniform" if "apply_all" in periods_data else "bank-specific",
+        query_intent=query_intent if query_intent else "not specified",
+    )
+
+    if "apply_all" in periods_data:
+        # Same period applies to all banks
+        period_info = periods_data["apply_all"]
+        fiscal_year = period_info.get("fiscal_year")
+        quarters = period_info.get("quarters", [])
+
+        logger.debug(
+            "clarifier.transformation.uniform_periods",
+            fiscal_year=fiscal_year,
+            quarters=quarters,
+            applying_to_banks=len(bank_ids),
+        )
+
+        for bank_id in bank_ids:
+            bank_info = banks_detail.get(bank_id, {})
+            for quarter in quarters:
+                combinations.append(
+                    {
+                        "bank_id": bank_id,
+                        "bank_name": bank_info.get("name", ""),
+                        "bank_symbol": bank_info.get("symbol", ""),
+                        "fiscal_year": fiscal_year,
+                        "quarter": quarter,
+                        "query_intent": query_intent,
+                    }
+                )
+    else:
+        # Bank-specific periods - check for periods under bank IDs directly
+        logger.debug(
+            "clarifier.transformation.bank_specific_periods", processing_banks=len(bank_ids)
+        )
+
+        for bank_id in bank_ids:
+            bank_info = banks_detail.get(bank_id, {})
+            # Period data is stored directly under bank_id as key
+            period_data = periods_data.get(str(bank_id))
+
+            if period_data:
+                fiscal_year = period_data.get("fiscal_year")
+                quarters = period_data.get("quarters", [])
+
+                logger.debug(
+                    "clarifier.transformation.bank_periods",
+                    bank_symbol=bank_info.get("symbol", ""),
+                    fiscal_year=fiscal_year,
+                    quarters=quarters,
+                )
+
+                for quarter in quarters:
+                    combinations.append(
+                        {
+                            "bank_id": bank_id,
+                            "bank_name": bank_info.get("name", ""),
+                            "bank_symbol": bank_info.get("symbol", ""),
+                            "fiscal_year": fiscal_year,
+                            "quarter": quarter,
+                            "query_intent": query_intent,
+                        }
+                    )
+
+    # Log the final transformation result with clear individual combinations
+    logger.info(
+        "clarifier.transformation.completed",
+        total_combinations=len(combinations),
+        unique_banks=len(set(c["bank_id"] for c in combinations)),
+        unique_periods=len(set((c["fiscal_year"], c["quarter"]) for c in combinations)),
+    )
+
+    # Log each combination individually for clarity
+    for i, combo in enumerate(combinations[:5], 1):  # Show first 5
+        logger.info(
+            f"clarifier.combination.{i}",
+            bank=combo["bank_symbol"],
+            bank_name=combo["bank_name"],
+            period=f"{combo['quarter']} {combo['fiscal_year']}",
+            intent=combo.get("query_intent", "not specified"),
+        )
+
+    if len(combinations) > 5:
+        logger.info(
+            "clarifier.combinations.additional",
+            remaining=len(combinations) - 5,
+            message=f"... and {len(combinations) - 5} more combinations",
+        )
+
+    return combinations
+
+
 def clarify_query(
     query: str,
     context: Dict[str, Any],
@@ -970,12 +1092,18 @@ def clarify_query(
         messages: Optional full conversation history for context
 
     Returns:
-        Either successful extraction:
-        {
-            "status": "success",
-            "banks": {bank extraction results},
-            "periods": {period extraction results}
-        }
+        Either successful extraction as list of bank-period combinations:
+        [
+            {
+                "bank_id": 1,
+                "bank_name": "Royal Bank of Canada",
+                "bank_symbol": "RY",
+                "fiscal_year": 2024,
+                "quarter": "Q1",
+                "query_intent": "revenue analysis"
+            },
+            ...
+        ]
 
         Or clarification needed:
         {
@@ -986,7 +1114,12 @@ def clarify_query(
     logger = get_logger()
     execution_id = context.get("execution_id")
 
-    logger.info("clarifier.starting", execution_id=execution_id)
+    logger.info(
+        "clarifier.starting",
+        execution_id=execution_id,
+        query_preview=query[:100] + "..." if len(query) > 100 else query,
+        available_databases=available_databases if available_databases else "all",
+    )
 
     # Stage 1: Extract banks and query intent
     bank_result = extract_banks(query, context, available_databases, messages)
@@ -1012,31 +1145,41 @@ def clarify_query(
 
         # If we have any clarifications needed, return them
         if clarifications:
-            # Include costs from both stages even when clarification is needed
-            total_tokens = bank_result.get("tokens_used", 0) + period_result.get("tokens_used", 0)
-            total_cost = bank_result.get("cost", 0) + period_result.get("cost", 0)
-
             return {
                 "status": "needs_clarification",
-                "banks": bank_result,  # Include the successfully extracted banks
-                "periods": period_result if period_result.get("status") == "success" else None,
                 "clarifications": clarifications,
-                "tokens_used": total_tokens,
-                "cost": total_cost,
             }
 
-        # Everything successful - return extraction results
-        # Combine tokens and costs from both stages
-        total_tokens = bank_result.get("tokens_used", 0) + period_result.get("tokens_used", 0)
-        total_cost = bank_result.get("cost", 0) + period_result.get("cost", 0)
+        # Everything successful - create and return standardized combinations
+        if period_result.get("status") == "success":
+            bank_period_combinations = _create_bank_period_combinations(bank_result, period_result)
 
-        return {
-            "status": "success",
-            "banks": bank_result,
-            "periods": period_result,
-            "tokens_used": total_tokens,
-            "cost": total_cost,
-        }
+            # Log successful completion with summary
+            logger.info(
+                "clarifier.completed_successfully",
+                execution_id=execution_id,
+                result_type="bank_period_combinations",
+                total_combinations=len(bank_period_combinations),
+                banks_extracted=[combo["bank_symbol"] for combo in bank_period_combinations[:2]],
+                periods_extracted=[
+                    f"{combo['quarter']} {combo['fiscal_year']}"
+                    for combo in bank_period_combinations[:2]
+                ],
+                query_intent=(
+                    bank_period_combinations[0].get("query_intent")
+                    if bank_period_combinations
+                    else None
+                ),
+            )
+
+            # Return just the list of combinations
+            return bank_period_combinations
+        else:
+            # Period extraction had an error
+            return {
+                "status": "error",
+                "error": period_result.get("error", "Failed to extract periods"),
+            }
     else:
         # Banks need clarification, check if periods also need clarification
         period_check = extract_periods(query, None, context, available_databases, messages)
@@ -1050,10 +1193,6 @@ def clarify_query(
         if period_check["status"] == "needs_clarification" and period_check.get("clarification"):
             clarifications.append(period_check["clarification"])
 
-        # Include costs from both extraction attempts
-        total_tokens = bank_result.get("tokens_used", 0) + period_check.get("tokens_used", 0)
-        total_cost = bank_result.get("cost", 0) + period_check.get("cost", 0)
-
         return {
             "status": "needs_clarification",
             "clarifications": (
@@ -1061,6 +1200,4 @@ def clarify_query(
                 if clarifications
                 else ["Please provide more details about your query."]
             ),
-            "tokens_used": total_tokens,
-            "cost": total_cost,
         }

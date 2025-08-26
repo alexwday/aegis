@@ -11,11 +11,11 @@ import importlib
 
 # List of all subagent modules
 SUBAGENT_MODULES = [
-    ("aegis.model.subagents.benchmarking", "benchmarking_agent", "benchmarking"),
-    ("aegis.model.subagents.reports", "reports_agent", "reports"),
-    ("aegis.model.subagents.rts", "rts_agent", "rts"),
-    ("aegis.model.subagents.transcripts", "transcripts_agent", "transcripts"),
-    ("aegis.model.subagents.pillar3", "pillar3_agent", "pillar3"),
+    ("aegis.model.subagents.benchmarking.main", "benchmarking_agent", "benchmarking"),
+    ("aegis.model.subagents.reports.main", "reports_agent", "reports"),
+    ("aegis.model.subagents.rts.main", "rts_agent", "rts"),
+    ("aegis.model.subagents.transcripts.main", "transcripts_agent", "transcripts"),
+    ("aegis.model.subagents.pillar3.main", "pillar3_agent", "pillar3"),
 ]
 
 
@@ -38,27 +38,23 @@ class TestSubagentEdgeCases:
             module = importlib.import_module(module_path)
             agent_func = getattr(module, func_name)
             
-            # Banks with banks_detail
-            banks = {
-                "bank_ids": [1, 2],
-                "banks_detail": {
-                    "1": {"name": "Bank One", "symbol": "B1"},
-                    "2": {"name": "Bank Two", "symbol": "B2"}
-                }
-            }
-            periods = {"apply_all": {"fiscal_year": 2024, "quarters": ["Q1"]}}
+            # Banks with bank_period_combinations
+            bank_period_combinations = [
+                {"bank_id": 1, "bank_name": "Bank One", "bank_symbol": "B1", "fiscal_year": 2024, "quarter": "Q1"},
+                {"bank_id": 2, "bank_name": "Bank Two", "bank_symbol": "B2", "fiscal_year": 2024, "quarter": "Q1"}
+            ]
             
             results = list(agent_func(
-                [], "Test", banks, periods, "test", "Test", db_id, {"execution_id": "test"}
+                [], "Test", bank_period_combinations, "test", "Test", db_id, {"execution_id": "test"}
             ))
             
             # Check that stream was called with proper context
             call_args = mock_stream.call_args
             messages = call_args[1]["messages"]
-            system_content = messages[0]["content"]
+            user_content = messages[1]["content"]  # Bank names are in user prompt now
             
-            # Should include bank names from banks_detail
-            assert "Bank One" in system_content or "Bank Two" in system_content
+            # Should include bank names from bank_period_combinations
+            assert "Bank One" in user_content or "Bank Two" in user_content
     
     @pytest.mark.parametrize("module_path,func_name,db_id", SUBAGENT_MODULES)
     def test_subagent_bank_specific_periods(self, module_path, func_name, db_id):
@@ -75,26 +71,15 @@ class TestSubagentEdgeCases:
             agent_func = getattr(module, func_name)
             
             # Complex bank-specific setup
-            banks = {
-                "bank_ids": ["1", "2", "3"],
-                "banks_detail": {
-                    "1": {"name": "RBC", "symbol": "RY"},
-                    "2": {"name": "TD", "symbol": "TD"},
-                    "3": {"name": "BMO", "symbol": "BMO"}
-                }
-            }
-            periods = {
-                "periods": {
-                    "bank_specific": {
-                        "1": {"fiscal_year": 2024, "quarters": ["Q1", "Q2"]},
-                        "2": {"fiscal_year": 2024, "quarters": ["Q3"]},
-                        # Note: bank 3 has no period data
-                    }
-                }
-            }
+            bank_period_combinations = [
+                {"bank_id": "1", "bank_name": "RBC", "bank_symbol": "RY", "fiscal_year": 2024, "quarter": "Q1"},
+                {"bank_id": "1", "bank_name": "RBC", "bank_symbol": "RY", "fiscal_year": 2024, "quarter": "Q2"},
+                {"bank_id": "2", "bank_name": "TD", "bank_symbol": "TD", "fiscal_year": 2024, "quarter": "Q3"},
+                {"bank_id": "3", "bank_name": "BMO", "bank_symbol": "BMO", "fiscal_year": 2024, "quarter": "Q1"}
+            ]
             
             results = list(agent_func(
-                [], "Query", banks, periods, "test", "Test", db_id, {"execution_id": "test"}
+                [], "Query", bank_period_combinations, "test", "Test", db_id, {"execution_id": "test"}
             ))
             
             # Check message construction
@@ -122,26 +107,15 @@ class TestSubagentEdgeCases:
             module = importlib.import_module(module_path)
             agent_func = getattr(module, func_name)
             
-            # Bank 3 in periods but not in banks_detail
-            banks = {
-                "bank_ids": ["1", "2"],
-                "banks_detail": {
-                    "1": {"name": "RBC", "symbol": "RY"},
-                    "2": {"name": "TD", "symbol": "TD"}
-                }
-            }
-            periods = {
-                "periods": {
-                    "bank_specific": {
-                        "1": {"fiscal_year": 2024, "quarters": ["Q1"]},
-                        "3": {"fiscal_year": 2024, "quarters": ["Q2"]}  # Bank 3 not in banks_detail
-                    }
-                }
-            }
+            # Limited bank_period_combinations for edge case testing
+            bank_period_combinations = [
+                {"bank_id": "1", "bank_name": "RBC", "bank_symbol": "RY", "fiscal_year": 2024, "quarter": "Q1"},
+                {"bank_id": "2", "bank_name": "TD", "bank_symbol": "TD", "fiscal_year": 2024, "quarter": "Q1"}
+            ]
             
             # Should not crash
             results = list(agent_func(
-                [], "Query", banks, periods, "test", "Test", db_id, {"execution_id": "test"}
+                [], "Query", bank_period_combinations, "test", "Test", db_id, {"execution_id": "test"}
             ))
             
             assert len(results) > 0
@@ -168,22 +142,17 @@ class TestSubagentEdgeCases:
             module = importlib.import_module(module_path)
             agent_func = getattr(module, func_name)
             
-            banks = {
-                "bank_ids": [1, 2],
-                "banks_detail": {
-                    "1": {"name": "RBC", "symbol": "RY"},
-                    "2": {"name": "TD", "symbol": "TD"}
-                }
-            }
-            # Use periods with apply_all structure wrapped in "periods"
-            periods = {
-                "periods": {
-                    "apply_all": {"fiscal_year": 2024, "quarters": ["Q1", "Q2", "Q3"]}
-                }
-            }
+            bank_period_combinations = [
+                {"bank_id": 1, "bank_name": "RBC", "bank_symbol": "RY", "fiscal_year": 2024, "quarter": "Q1"},
+                {"bank_id": 1, "bank_name": "RBC", "bank_symbol": "RY", "fiscal_year": 2024, "quarter": "Q2"},
+                {"bank_id": 1, "bank_name": "RBC", "bank_symbol": "RY", "fiscal_year": 2024, "quarter": "Q3"},
+                {"bank_id": 2, "bank_name": "TD", "bank_symbol": "TD", "fiscal_year": 2024, "quarter": "Q1"},
+                {"bank_id": 2, "bank_name": "TD", "bank_symbol": "TD", "fiscal_year": 2024, "quarter": "Q2"},
+                {"bank_id": 2, "bank_name": "TD", "bank_symbol": "TD", "fiscal_year": 2024, "quarter": "Q3"}
+            ]
             
             results = list(agent_func(
-                [], "Query", banks, periods, "test", "Test", db_id, {"execution_id": "test"}
+                [], "Query", bank_period_combinations, "test", "Test", db_id, {"execution_id": "test"}
             ))
             
             assert len(results) > 0

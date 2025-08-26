@@ -239,15 +239,34 @@ nano .env
 Update the following key variables:
 
 ```bash
+# Core Configuration
+LOG_LEVEL=INFO  # Options: DEBUG, INFO, WARNING, ERROR, CRITICAL
+ENVIRONMENT=local  # Options: local, dev, sai, prod
+
 # LLM Configuration
 API_KEY=your_openai_api_key_here
-LLM_ENDPOINT=https://api.openai.com/v1
-AUTH_METHOD=api_key
+LLM_BASE_URL=https://api.openai.com/v1
+AUTH_METHOD=api_key  # Options: api_key or oauth
 
-# Model Configuration
-MODEL_SMALL=gpt-4-1106-preview
-MODEL_MEDIUM=gpt-4-1106-preview
-MODEL_LARGE=gpt-4-1106-preview
+# Model Configuration (3-tier system)
+# Small Model - Fast, efficient for simple tasks
+LLM_MODEL_SMALL=gpt-4.1-nano-2025-04-14
+LLM_TEMPERATURE_SMALL=0.3
+LLM_MAX_TOKENS_SMALL=1000
+
+# Medium Model - Balanced performance for most tasks  
+LLM_MODEL_MEDIUM=gpt-4.1-mini-2025-04-14
+LLM_TEMPERATURE_MEDIUM=0.5
+LLM_MAX_TOKENS_MEDIUM=2000
+
+# Large Model - Most capable for complex reasoning
+LLM_MODEL_LARGE=gpt-4.1-2025-04-14
+LLM_TEMPERATURE_LARGE=0.7
+LLM_MAX_TOKENS_LARGE=4000
+
+# Embedding Model Configuration
+LLM_EMBEDDING_MODEL=text-embedding-3-large
+LLM_EMBEDDING_DIMENSIONS=3072  # Options: 256, 1024, or 3072
 
 # Database Configuration
 POSTGRES_HOST=localhost
@@ -256,17 +275,23 @@ POSTGRES_DATABASE=finance-dev
 POSTGRES_USER=financeuser
 POSTGRES_PASSWORD=financepass123
 
-# Application Settings
-LOG_LEVEL=INFO
-SSL_VERIFY=false
+# Conversation Processing
 MAX_HISTORY_LENGTH=10
 INCLUDE_SYSTEM_MESSAGES=false
 ALLOWED_ROLES=user,assistant
 
-# Server Configuration (for web interface)
-SERVER_HOST=0.0.0.0
-SERVER_PORT=8000
+# SSL Configuration
+SSL_VERIFY=false
+SSL_CERT_PATH=src/aegis/utils/ssl/rbc-ca-bundle.cer  # Required if SSL_VERIFY=true
+
+# OAuth Configuration (if using AUTH_METHOD=oauth)
+OAUTH_ENDPOINT=https://api.example.com/oauth/token
+OAUTH_CLIENT_ID=your_client_id_here
+OAUTH_CLIENT_SECRET=your_client_secret_here
+OAUTH_GRANT_TYPE=client_credentials
 ```
+
+**Note**: The complete `.env.example` file includes additional settings for timeouts, retries, and cost tracking. Copy it to `.env` and modify as needed.
 
 ## Testing the Installation
 
@@ -298,12 +323,10 @@ from aegis.connections.llm_connector import check_connection
 from aegis.connections.oauth_connector import setup_authentication
 from aegis.utils.ssl import setup_ssl
 
-execution_id = 'test-connection'
+auth_config = setup_authentication()
 ssl_config = setup_ssl()
-auth_config = setup_authentication(execution_id, ssl_config)
-
 context = {
-    'execution_id': execution_id,
+    'execution_id': 'test-connection',
     'auth_config': auth_config,
     'ssl_config': ssl_config
 }
@@ -362,6 +385,8 @@ The web interface provides:
 - Real-time streaming responses
 - Debug information toggle
 - Clean, modern UI
+- Process monitoring dashboard (available at http://localhost:8000/monitoring)
+- Database viewer (available at http://localhost:8000/database)
 
 ### Option 2: Command Line Interface
 
@@ -428,10 +453,11 @@ Aegis uses a multi-agent architecture to process financial data requests:
 2. **Clarifier Agent**: Ensures queries have all necessary parameters (bank, metric, time period)
 3. **Planner Agent**: Creates structured execution plans for data retrieval
 4. **Research Subagents**: Specialized agents for different data sources
-   - Benchmarking Agent
-   - Reports Agent
-   - RTS (Real-Time Statistics) Agent
-   - Transcripts Agent
+   - Benchmarking Agent (financial metrics and comparisons)
+   - Pillar3 Agent (regulatory capital data)
+   - Reports Agent (pre-generated analysis reports)
+   - RTS (Real-Time Statistics) Agent (official regulatory filings)
+   - Transcripts Agent (earnings call content)
 5. **Response Agent**: Formats and presents data in a user-friendly manner
 6. **Summarizer Agent**: Creates concise summaries of complex data
 
@@ -450,7 +476,11 @@ Aegis uses a multi-agent architecture to process financial data requests:
 - **Streaming Responses**: Real-time token streaming for better UX
 - **Context Management**: Maintains conversation history for follow-up questions
 - **Error Handling**: Graceful error recovery with helpful user messages
-- **Monitoring**: Comprehensive logging and performance tracking
+- **Monitoring**: Comprehensive logging and performance tracking with web dashboard
+- **Database Viewer**: Built-in interface for exploring data and schemas
+- **3-Tier LLM System**: Small/Medium/Large models optimized for different task complexities
+- **OAuth & API Key Support**: Flexible authentication options
+- **Cost Tracking**: Integrated token usage and cost monitoring
 - **Scalability**: Modular architecture allows easy addition of new data sources
 
 ## Troubleshooting
@@ -493,17 +523,24 @@ Aegis uses a multi-agent architecture to process financial data requests:
 Before committing code, ensure it meets our standards:
 
 ```bash
+# Always work in virtual environment
+source venv/bin/activate
+
 # Format code
 black src/ --line-length 100
 
 # Check style
 flake8 src/ --max-line-length 100
 
-# Run linter
+# Run linter (must achieve 10.00/10)
 pylint src/
 
-# Run tests
-python -m pytest tests/
+# Run tests with coverage
+python -m pytest tests/ --cov=aegis --cov-report=term-missing
+
+# Clear Python cache if needed
+find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null
+rm -rf .pytest_cache/
 ```
 
 ### Contributing
@@ -520,9 +557,39 @@ python -m pytest tests/
 
 [Your License Here]
 
+## Project Structure
+
+```
+aegis/
+├── src/aegis/              # Main package
+│   ├── model/             # Core orchestration and agents
+│   │   ├── main.py       # Main workflow orchestrator
+│   │   ├── agents/       # Core decision agents
+│   │   ├── subagents/    # Database-specific agents
+│   │   └── prompts/      # YAML prompt templates
+│   ├── connections/       # External service connectors
+│   │   ├── llm_connector.py
+│   │   ├── oauth_connector.py
+│   │   └── postgres_connector.py
+│   └── utils/            # Utility modules
+│       ├── settings.py   # Configuration management
+│       ├── logging.py    # Structured logging
+│       ├── monitor.py    # Performance tracking
+│       └── ssl.py        # SSL configuration
+├── interfaces/            # Web interface modules
+│   ├── web.py           # Flask web server
+│   ├── monitoring.py    # Process monitoring dashboard
+│   └── database.py      # Database viewer interface
+├── templates/            # HTML templates
+├── tests/               # Test suite
+├── data/                # SQL schemas and sample data
+├── docs/                # Documentation
+└── performance_testing/ # Performance test suite
+```
+
 ## Support
 
 For questions or issues:
 - Open an issue on GitHub
 - Contact the development team
-- Review the documentation in `docs/`
+- Review the documentation in `docs/` and module-specific CLAUDE.md files

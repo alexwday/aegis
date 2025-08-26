@@ -104,7 +104,14 @@ def get_database_prompt(db_names: Optional[List[str]] = None) -> str:
     Returns:
         Formatted database prompt with only the filtered databases
     """
-    filtered_dbs = filter_databases(db_names)
+    # Load databases directly without duplicate logging
+    all_databases = get_available_databases()
+
+    # Apply same filtering logic but without logging
+    if not db_names:
+        filtered_dbs = all_databases
+    else:
+        filtered_dbs = {db_id: all_databases[db_id] for db_id in db_names if db_id in all_databases}
 
     if not filtered_dbs:
         return "No databases available for this query."
