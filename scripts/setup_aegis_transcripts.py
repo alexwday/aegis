@@ -63,41 +63,99 @@ class AegisTranscriptsSetup:
             with self.engine.begin() as conn:
                 if drop_existing:
                     logger.warning("Dropping existing aegis_transcripts table...")
-                    conn.execute(text("DROP TABLE IF EXISTS aegis_transcripts CASCADE"))
+                    try:
+                        conn.execute(text("DROP TABLE IF EXISTS aegis_transcripts CASCADE"))
+                    except SQLAlchemyError:
+                        pass  # Table might not exist, that's OK
                 
                 logger.info("Creating aegis_transcripts table...")
                 
-                # Split and execute statements properly
-                # Handle function definitions that contain semicolons
+                # First ensure pgvector extension is enabled
+                try:
+                    conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+                    logger.info("pgvector extension enabled")
+                except SQLAlchemyError as e:
+                    if "already exists" not in str(e).lower():
+                        logger.warning(f"Could not create pgvector extension: {e}")
+                
+                # Read and clean the SQL
+                schema_sql = schema_sql.replace('\r\n', '\n').replace('\r', '\n')
+                
+                # Remove the DROP and CREATE EXTENSION statements since we handle them above
+                lines = []
+                skip_next = False
+                for line in schema_sql.split('\n'):
+                    if 'DROP TABLE IF EXISTS' in line.upper():
+                        continue
+                    if 'CREATE EXTENSION' in line.upper():
+                        skip_next = True
+                        continue
+                    if skip_next and ';' in line:
+                        skip_next = False
+                        continue
+                    lines.append(line)
+                
+                schema_sql = '\n'.join(lines)
+                
+                # Split statements more carefully
                 statements = []
                 current = []
                 in_function = False
+                in_comment = False
                 
                 for line in schema_sql.split('\n'):
+                    # Skip pure comment lines
+                    stripped = line.strip()
+                    if stripped.startswith('--'):
+                        continue
+                    
+                    # Track function blocks
                     if '$$' in line:
                         in_function = not in_function
+                    
+                    # Track multi-line comments
+                    if '/*' in line:
+                        in_comment = True
+                    if '*/' in line:
+                        in_comment = False
+                        continue
+                    
+                    if in_comment:
+                        continue
+                    
                     current.append(line)
                     
+                    # End of statement
                     if ';' in line and not in_function:
                         stmt = '\n'.join(current).strip()
                         if stmt and not stmt.startswith('--'):
                             statements.append(stmt)
                         current = []
                 
+                # Don't forget the last statement
                 if current:
                     stmt = '\n'.join(current).strip()
                     if stmt and not stmt.startswith('--'):
                         statements.append(stmt)
                 
                 # Execute each statement
-                for statement in statements:
+                for i, statement in enumerate(statements, 1):
+                    if not statement.strip():
+                        continue
+                    
                     try:
+                        logger.debug(f"Executing statement {i}/{len(statements)}")
                         conn.execute(text(statement))
                     except SQLAlchemyError as e:
-                        if "already exists" in str(e).lower() and "extension" in str(e).lower():
-                            # Extension already exists, that's fine
-                            logger.info("pgvector extension already exists")
+                        error_msg = str(e).lower()
+                        # Skip known harmless errors
+                        if "already exists" in error_msg and "extension" in error_msg:
+                            logger.debug("Extension already exists, continuing...")
+                        elif "already exists" in error_msg and "function" in error_msg:
+                            logger.debug("Function already exists, continuing...")
                         else:
+                            logger.error(f"Error executing statement {i}: {e}")
+                            logger.error(f"Statement was: {statement[:200]}...")
                             raise
                 
                 logger.info("✓ Table aegis_transcripts created successfully")
