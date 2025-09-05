@@ -204,7 +204,22 @@ PGPASSWORD=financepass123 psql -U financeuser -p 34532 -d finance-dev -c "SELECT
 
 ### Enable pgvector Extension
 
-Before importing tables, enable the pgvector extension in your database:
+The pgvector extension is required for the aegis_transcripts table to store embeddings.
+
+#### Step 1: Verify pgvector Installation
+
+```bash
+# Check if pgvector is installed via Homebrew
+brew list | grep pgvector
+
+# If not installed, install it
+brew install pgvector
+
+# Verify the installation
+brew info pgvector
+```
+
+#### Step 2: Enable Extension in Database
 
 ```bash
 # Connect as superuser (use your Mac username for Homebrew installations)
@@ -213,6 +228,88 @@ psql -p 34532 -d finance-dev -U $(whoami) -c "CREATE EXTENSION IF NOT EXISTS vec
 # If you get a permission error, try:
 psql -p 34532 -d postgres -U $(whoami) -c "CREATE EXTENSION IF NOT EXISTS vector;"
 psql -p 34532 -d postgres -U $(whoami) -c "GRANT CREATE ON DATABASE \"finance-dev\" TO financeuser;"
+```
+
+#### Troubleshooting pgvector
+
+If you get an error like "extension vector is not available", follow these steps:
+
+##### 1. Diagnostic Commands
+
+Run these commands to diagnose the issue:
+
+```bash
+# Check PostgreSQL version
+psql -p 34532 -d postgres -U $(whoami) -c "SELECT version();"
+
+# Check if pgvector is available to PostgreSQL
+psql -p 34532 -d postgres -U $(whoami) -c "SELECT name, default_version FROM pg_available_extensions WHERE name = 'vector';"
+
+# Check PostgreSQL extension directory
+psql -p 34532 -d postgres -U $(whoami) -c "SHOW extension_destdir;"
+
+# Check shared libraries
+psql -p 34532 -d postgres -U $(whoami) -c "SHOW shared_preload_libraries;"
+```
+
+##### 2. Link pgvector to PostgreSQL (if needed)
+
+If pgvector is installed but PostgreSQL can't find it, you may need to link it manually:
+
+**For M1/M2 Macs:**
+```bash
+# Create symbolic links for pgvector
+ln -s /opt/homebrew/lib/postgresql@15/pgvector.so /opt/homebrew/opt/postgresql@15/lib/postgresql/
+ln -s /opt/homebrew/share/postgresql@15/extension/vector* /opt/homebrew/opt/postgresql@15/share/postgresql@15/extension/
+
+# Restart PostgreSQL
+brew services restart postgresql@15
+```
+
+**For Intel Macs:**
+```bash
+# Create symbolic links for pgvector
+ln -s /usr/local/lib/postgresql@15/pgvector.so /usr/local/opt/postgresql@15/lib/postgresql/
+ln -s /usr/local/share/postgresql@15/extension/vector* /usr/local/opt/postgresql@15/share/postgresql@15/extension/
+
+# Restart PostgreSQL
+brew services restart postgresql@15
+```
+
+##### 3. Alternative Installation Method
+
+If the above doesn't work, try installing pgvector from source:
+
+```bash
+# Clone pgvector repository
+git clone https://github.com/pgvector/pgvector.git
+cd pgvector
+
+# Build and install (requires PostgreSQL development files)
+make
+make install
+
+# Return to project directory
+cd ..
+rm -rf pgvector
+
+# Restart PostgreSQL
+brew services restart postgresql@15
+```
+
+##### 4. Verify Installation
+
+After fixing the installation, verify pgvector is available:
+
+```bash
+# Check if extension is now available
+psql -p 34532 -d postgres -U $(whoami) -c "SELECT * FROM pg_available_extensions WHERE name = 'vector';"
+
+# Create the extension
+psql -p 34532 -d finance-dev -U $(whoami) -c "CREATE EXTENSION IF NOT EXISTS vector;"
+
+# Verify it's enabled
+psql -p 34532 -d finance-dev -U $(whoami) -c "\dx vector"
 ```
 
 ### Import Required Tables
