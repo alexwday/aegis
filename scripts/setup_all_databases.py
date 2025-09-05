@@ -85,15 +85,15 @@ class AegisDatabaseSetup:
             True if successful, False otherwise
         """
         try:
-            with self.engine.connect() as conn:
-                trans = conn.begin()
+            with self.engine.begin() as conn:
                 try:
                     conn.execute(text(f"CREATE EXTENSION IF NOT EXISTS {extension_name}"))
-                    trans.commit()
                     logger.info(f"✓ Extension {extension_name} installed successfully")
                     return True
                 except Exception as e:
-                    trans.rollback()
+                    if "already exists" in str(e).lower():
+                        logger.info(f"Extension {extension_name} already exists")
+                        return True
                     logger.error(f"Failed to install extension {extension_name}: {e}")
                     return False
         except Exception as e:
@@ -157,47 +157,108 @@ class AegisDatabaseSetup:
             with open(schema_file, 'r') as f:
                 schema_sql = f.read()
             
-            with self.engine.connect() as conn:
-                trans = conn.begin()
-                
-                try:
-                    if drop_existing:
-                        logger.warning(f"Dropping existing table {table_name}...")
+            with self.engine.begin() as conn:
+                if drop_existing:
+                    logger.warning(f"Dropping existing table {table_name}...")
+                    try:
                         conn.execute(text(f"DROP TABLE IF EXISTS {table_name} CASCADE"))
+                    except Exception:
+                        pass  # Table might not exist, that's OK
+                
+                logger.info(f"Creating table {table_name}...")
+                
+                # For aegis_transcripts, ensure pgvector is enabled first
+                if table_name == 'aegis_transcripts':
+                    try:
+                        conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+                        logger.info("pgvector extension enabled")
+                    except Exception as e:
+                        if "already exists" not in str(e).lower():
+                            logger.warning(f"Could not create pgvector extension: {e}")
+                
+                # Clean the SQL
+                schema_sql = schema_sql.replace('\r\n', '\n').replace('\r', '\n')
+                
+                # Remove DROP and CREATE EXTENSION statements since we handle them above
+                lines = []
+                skip_next = False
+                for line in schema_sql.split('\n'):
+                    if 'DROP TABLE IF EXISTS' in line.upper():
+                        continue
+                    if 'CREATE EXTENSION' in line.upper():
+                        skip_next = True
+                        continue
+                    if skip_next and ';' in line:
+                        skip_next = False
+                        continue
+                    lines.append(line)
+                
+                schema_sql = '\n'.join(lines)
+                
+                # Split statements more carefully
+                statements = []
+                current = []
+                in_function = False
+                in_comment = False
+                
+                for line in schema_sql.split('\n'):
+                    # Skip pure comment lines
+                    stripped = line.strip()
+                    if stripped.startswith('--'):
+                        continue
                     
-                    logger.info(f"Creating table {table_name}...")
+                    # Track function blocks
+                    if '$$' in line:
+                        in_function = not in_function
                     
-                    # Execute schema SQL
-                    # Split by semicolon but be careful with functions
-                    statements = []
-                    current_statement = []
-                    in_function = False
+                    # Track multi-line comments
+                    if '/*' in line:
+                        in_comment = True
+                    if '*/' in line:
+                        in_comment = False
+                        continue
                     
-                    for line in schema_sql.split('\n'):
-                        if '$$' in line:
-                            in_function = not in_function
-                        current_statement.append(line)
-                        
-                        if ';' in line and not in_function:
-                            statements.append('\n'.join(current_statement))
-                            current_statement = []
+                    if in_comment:
+                        continue
                     
-                    if current_statement:
-                        statements.append('\n'.join(current_statement))
+                    current.append(line)
                     
-                    for statement in statements:
-                        statement = statement.strip()
-                        if statement and not statement.startswith('--'):
-                            conn.execute(text(statement))
+                    # End of statement
+                    if ';' in line and not in_function:
+                        stmt = '\n'.join(current).strip()
+                        if stmt and not stmt.startswith('--'):
+                            statements.append(stmt)
+                        current = []
+                
+                # Don't forget the last statement
+                if current:
+                    stmt = '\n'.join(current).strip()
+                    if stmt and not stmt.startswith('--'):
+                        statements.append(stmt)
+                
+                # Execute each statement
+                success = True
+                for i, statement in enumerate(statements, 1):
+                    if not statement.strip():
+                        continue
                     
-                    trans.commit()
+                    try:
+                        logger.debug(f"Executing statement {i}/{len(statements)}")
+                        conn.execute(text(statement))
+                    except Exception as e:
+                        error_msg = str(e).lower()
+                        # Skip known harmless errors
+                        if "already exists" in error_msg and ("extension" in error_msg or "function" in error_msg):
+                            logger.debug(f"Object already exists, continuing...")
+                        else:
+                            logger.error(f"Failed on statement {i}: {e}")
+                            logger.error(f"Statement preview: {statement[:200]}...")
+                            success = False
+                            raise
+                
+                if success:
                     logger.info(f"✓ Table {table_name} created successfully")
-                    return True
-                    
-                except Exception as e:
-                    trans.rollback()
-                    logger.error(f"Failed to create table {table_name}: {e}")
-                    return False
+                return success
                     
         except Exception as e:
             logger.error(f"Failed to process schema file: {e}")
@@ -226,26 +287,21 @@ class AegisDatabaseSetup:
             with open(data_file, 'r') as f:
                 data_sql = f.read()
             
-            with self.engine.connect() as conn:
-                trans = conn.begin()
+            with self.engine.begin() as conn:
+                logger.info(f"Loading initial data for {table_name}...")
                 
-                try:
-                    logger.info(f"Loading initial data for {table_name}...")
-                    
-                    # Execute data SQL
-                    for statement in data_sql.split(';'):
-                        statement = statement.strip()
-                        if statement and not statement.startswith('--'):
+                # Execute data SQL
+                for statement in data_sql.split(';'):
+                    statement = statement.strip()
+                    if statement and not statement.startswith('--'):
+                        try:
                             conn.execute(text(statement))
-                    
-                    trans.commit()
-                    logger.info(f"✓ Initial data loaded for {table_name}")
-                    return True
-                    
-                except Exception as e:
-                    trans.rollback()
-                    logger.error(f"Failed to load data for {table_name}: {e}")
-                    return False
+                        except Exception as e:
+                            logger.error(f"Failed to execute data statement: {e}")
+                            raise
+                
+                logger.info(f"✓ Initial data loaded for {table_name}")
+                return True
                     
         except Exception as e:
             logger.error(f"Failed to read data file: {e}")
