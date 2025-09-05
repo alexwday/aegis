@@ -31,6 +31,120 @@ from ....connections.postgres_connector import get_connection
 from sqlalchemy import text
 
 
+def get_filter_diagnostics(combo: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Get diagnostic counts for each filter to help debug why queries return 0 results.
+    
+    Returns dict with counts for:
+    - Total records in table
+    - Records matching bank_id
+    - Records matching fiscal_year
+    - Records matching quarter
+    - Records matching all filters
+    """
+    logger = get_logger()
+    execution_id = context.get("execution_id")
+    
+    diagnostics = {}
+    
+    try:
+        with get_connection() as conn:
+            # Total records
+            result = conn.execute(text("SELECT COUNT(*) FROM aegis_transcripts"))
+            diagnostics['total_records'] = result.scalar()
+            
+            # Records matching bank_id
+            result = conn.execute(
+                text("SELECT COUNT(*) FROM aegis_transcripts WHERE institution_id = :bank_id_str OR institution_id::text = :bank_id_str"),
+                {"bank_id_str": str(combo["bank_id"])}
+            )
+            diagnostics['matching_bank_id'] = result.scalar()
+            
+            # Records matching fiscal_year
+            result = conn.execute(
+                text("SELECT COUNT(*) FROM aegis_transcripts WHERE fiscal_year = :fiscal_year"),
+                {"fiscal_year": combo["fiscal_year"]}
+            )
+            diagnostics['matching_year'] = result.scalar()
+            
+            # Records matching quarter
+            result = conn.execute(
+                text("SELECT COUNT(*) FROM aegis_transcripts WHERE fiscal_quarter = :quarter"),
+                {"quarter": combo["quarter"]}
+            )
+            diagnostics['matching_quarter'] = result.scalar()
+            
+            # Records matching bank + year
+            result = conn.execute(
+                text("""
+                    SELECT COUNT(*) FROM aegis_transcripts 
+                    WHERE (institution_id = :bank_id_str OR institution_id::text = :bank_id_str)
+                    AND fiscal_year = :fiscal_year
+                """),
+                {"bank_id_str": str(combo["bank_id"]), "fiscal_year": combo["fiscal_year"]}
+            )
+            diagnostics['matching_bank_and_year'] = result.scalar()
+            
+            # Records matching bank + quarter
+            result = conn.execute(
+                text("""
+                    SELECT COUNT(*) FROM aegis_transcripts 
+                    WHERE (institution_id = :bank_id_str OR institution_id::text = :bank_id_str)
+                    AND fiscal_quarter = :quarter
+                """),
+                {"bank_id_str": str(combo["bank_id"]), "quarter": combo["quarter"]}
+            )
+            diagnostics['matching_bank_and_quarter'] = result.scalar()
+            
+            # Records matching year + quarter
+            result = conn.execute(
+                text("""
+                    SELECT COUNT(*) FROM aegis_transcripts 
+                    WHERE fiscal_year = :fiscal_year
+                    AND fiscal_quarter = :quarter
+                """),
+                {"fiscal_year": combo["fiscal_year"], "quarter": combo["quarter"]}
+            )
+            diagnostics['matching_year_and_quarter'] = result.scalar()
+            
+            # Records matching all filters
+            result = conn.execute(
+                text("""
+                    SELECT COUNT(*) FROM aegis_transcripts 
+                    WHERE (institution_id = :bank_id_str OR institution_id::text = :bank_id_str)
+                    AND fiscal_year = :fiscal_year
+                    AND fiscal_quarter = :quarter
+                """),
+                {
+                    "bank_id_str": str(combo["bank_id"]), 
+                    "fiscal_year": combo["fiscal_year"],
+                    "quarter": combo["quarter"]
+                }
+            )
+            diagnostics['matching_all_filters'] = result.scalar()
+            
+            # Get sample institution_ids if no match
+            if diagnostics['matching_all_filters'] == 0:
+                result = conn.execute(
+                    text("""
+                        SELECT DISTINCT institution_id, company_name 
+                        FROM aegis_transcripts 
+                        WHERE fiscal_year = :fiscal_year 
+                        AND fiscal_quarter = :quarter 
+                        LIMIT 5
+                    """),
+                    {"fiscal_year": combo["fiscal_year"], "quarter": combo["quarter"]}
+                )
+                sample_banks = [(row[0], row[1]) for row in result]
+                diagnostics['sample_available_banks'] = sample_banks
+            
+    except Exception as e:
+        logger.error(f"Failed to get filter diagnostics: {e}")
+        diagnostics['error'] = str(e)
+    
+    return diagnostics
+
+
 def load_financial_categories() -> Dict[int, Dict[str, str]]:
     """Load financial categories from YAML file."""
     yaml_path = Path(__file__).parent.parent.parent / "prompts" / "transcripts" / "financial_categories.yaml"
@@ -83,6 +197,22 @@ def retrieve_full_section(combo: Dict[str, Any], sections: str, context: Dict[st
     
     sections_to_fetch = section_filter.get(sections, ["MANAGEMENT DISCUSSION SECTION", "Q&A"])
     
+    # Get diagnostics if no results expected
+    diagnostics = get_filter_diagnostics(combo, context)
+    
+    # Log the filter parameters and diagnostic counts
+    logger.info(
+        f"subagent.transcripts.filter_diagnostics",
+        execution_id=execution_id,
+        filters={
+            "bank_id": combo["bank_id"],
+            "fiscal_year": combo["fiscal_year"],
+            "quarter": combo["quarter"],
+            "sections": sections
+        },
+        diagnostics=diagnostics
+    )
+    
     try:
         with get_connection() as conn:
             # Build query to fetch all chunks for specified sections
@@ -129,6 +259,24 @@ def retrieve_full_section(combo: Dict[str, Any], sections: str, context: Dict[st
                     "classification_names": row[8]
                 })
             
+            # Enhanced logging with diagnostic info if no results
+            if len(chunks) == 0 and diagnostics.get('matching_all_filters', 0) == 0:
+                logger.warning(
+                    f"subagent.transcripts.no_results_found",
+                    execution_id=execution_id,
+                    bank_id_requested=combo["bank_id"],
+                    year_requested=combo["fiscal_year"],
+                    quarter_requested=combo["quarter"],
+                    total_records_in_db=diagnostics.get('total_records', 0),
+                    matching_bank_only=diagnostics.get('matching_bank_id', 0),
+                    matching_year_only=diagnostics.get('matching_year', 0),
+                    matching_quarter_only=diagnostics.get('matching_quarter', 0),
+                    matching_bank_and_year=diagnostics.get('matching_bank_and_year', 0),
+                    matching_bank_and_quarter=diagnostics.get('matching_bank_and_quarter', 0),
+                    matching_year_and_quarter=diagnostics.get('matching_year_and_quarter', 0),
+                    sample_available_banks=diagnostics.get('sample_available_banks', [])
+                )
+            
             logger.info(
                 f"subagent.transcripts.full_section_retrieval",
                 execution_id=execution_id,
@@ -163,6 +311,22 @@ def retrieve_by_categories(combo: Dict[str, Any], category_ids: List[int], conte
     """
     logger = get_logger()
     execution_id = context.get("execution_id")
+    
+    # Get diagnostics
+    diagnostics = get_filter_diagnostics(combo, context)
+    
+    # Log the filter parameters and diagnostic counts
+    logger.info(
+        f"subagent.transcripts.filter_diagnostics_category",
+        execution_id=execution_id,
+        filters={
+            "bank_id": combo["bank_id"],
+            "fiscal_year": combo["fiscal_year"],
+            "quarter": combo["quarter"],
+            "category_ids": category_ids
+        },
+        diagnostics=diagnostics
+    )
     
     try:
         with get_connection() as conn:
@@ -212,6 +376,25 @@ def retrieve_by_categories(combo: Dict[str, Any], category_ids: List[int], conte
                     "classification_names": row[8]
                 })
             
+            # Enhanced logging with diagnostic info if no results
+            if len(chunks) == 0 and diagnostics.get('matching_all_filters', 0) == 0:
+                logger.warning(
+                    f"subagent.transcripts.no_results_category",
+                    execution_id=execution_id,
+                    bank_id_requested=combo["bank_id"],
+                    year_requested=combo["fiscal_year"],
+                    quarter_requested=combo["quarter"],
+                    category_ids_requested=category_ids,
+                    total_records_in_db=diagnostics.get('total_records', 0),
+                    matching_bank_only=diagnostics.get('matching_bank_id', 0),
+                    matching_year_only=diagnostics.get('matching_year', 0),
+                    matching_quarter_only=diagnostics.get('matching_quarter', 0),
+                    matching_bank_and_year=diagnostics.get('matching_bank_and_year', 0),
+                    matching_bank_and_quarter=diagnostics.get('matching_bank_and_quarter', 0),
+                    matching_year_and_quarter=diagnostics.get('matching_year_and_quarter', 0),
+                    sample_available_banks=diagnostics.get('sample_available_banks', [])
+                )
+            
             logger.info(
                 f"subagent.transcripts.category_retrieval",
                 execution_id=execution_id,
@@ -247,6 +430,22 @@ def retrieve_by_similarity(combo: Dict[str, Any], search_phrase: str, context: D
     """
     logger = get_logger()
     execution_id = context.get("execution_id")
+    
+    # Get diagnostics
+    diagnostics = get_filter_diagnostics(combo, context)
+    
+    # Log the filter parameters and diagnostic counts
+    logger.info(
+        f"subagent.transcripts.filter_diagnostics_similarity",
+        execution_id=execution_id,
+        filters={
+            "bank_id": combo["bank_id"],
+            "fiscal_year": combo["fiscal_year"],
+            "quarter": combo["quarter"],
+            "search_phrase": search_phrase[:50]  # First 50 chars
+        },
+        diagnostics=diagnostics
+    )
     
     try:
         # Create embedding for the search phrase
@@ -314,6 +513,25 @@ def retrieve_by_similarity(combo: Dict[str, Any], search_phrase: str, context: D
                     "classification_names": row[8],
                     "similarity_score": 1.0 - float(row[9])  # Convert distance to similarity
                 })
+            
+            # Enhanced logging with diagnostic info if no results
+            if len(chunks) == 0 and diagnostics.get('matching_all_filters', 0) == 0:
+                logger.warning(
+                    f"subagent.transcripts.no_results_similarity",
+                    execution_id=execution_id,
+                    bank_id_requested=combo["bank_id"],
+                    year_requested=combo["fiscal_year"],
+                    quarter_requested=combo["quarter"],
+                    search_phrase=search_phrase[:50],
+                    total_records_in_db=diagnostics.get('total_records', 0),
+                    matching_bank_only=diagnostics.get('matching_bank_id', 0),
+                    matching_year_only=diagnostics.get('matching_year', 0),
+                    matching_quarter_only=diagnostics.get('matching_quarter', 0),
+                    matching_bank_and_year=diagnostics.get('matching_bank_and_year', 0),
+                    matching_bank_and_quarter=diagnostics.get('matching_bank_and_quarter', 0),
+                    matching_year_and_quarter=diagnostics.get('matching_year_and_quarter', 0),
+                    sample_available_banks=diagnostics.get('sample_available_banks', [])
+                )
             
             logger.info(
                 f"subagent.transcripts.similarity_retrieval",
