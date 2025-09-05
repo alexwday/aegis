@@ -62,6 +62,9 @@ pip install -e .
 # Install PostgreSQL
 brew install postgresql@15
 
+# Install pgvector extension for embeddings support
+brew install pgvector
+
 # Start PostgreSQL service
 brew services start postgresql@15
 
@@ -199,14 +202,48 @@ PGPASSWORD=financepass123 psql -U financeuser -p 34532 -d finance-dev -c "SELECT
 
 ## Database Configuration
 
+### Enable pgvector Extension
+
+Before importing tables, enable the pgvector extension in your database:
+
+```bash
+# Connect as superuser (use your Mac username for Homebrew installations)
+psql -p 34532 -d finance-dev -U $(whoami) -c "CREATE EXTENSION IF NOT EXISTS vector;"
+
+# If you get a permission error, try:
+psql -p 34532 -d postgres -U $(whoami) -c "CREATE EXTENSION IF NOT EXISTS vector;"
+psql -p 34532 -d postgres -U $(whoami) -c "GRANT CREATE ON DATABASE \"finance-dev\" TO financeuser;"
+```
+
 ### Import Required Tables
 
-The project includes SQL dump files with the necessary table schemas and sample data.
+The project includes SQL dump files with the necessary table schemas and sample data. You can import them manually or use the setup script:
+
+#### Option 1: Using Setup Script (Recommended)
+
+```bash
+# Activate virtual environment
+source venv/bin/activate
+
+# Create all tables (including aegis_transcripts)
+python scripts/setup_all_databases.py --create-all
+
+# Or create tables individually
+python scripts/setup_all_databases.py --create-table aegis_data_availability
+python scripts/setup_all_databases.py --create-table process_monitor_logs
+python scripts/setup_all_databases.py --create-table aegis_transcripts
+
+# Check status
+python scripts/setup_all_databases.py --status
+```
+
+#### Option 2: Manual Import
 
 ```bash
 # Import table schemas
 PGPASSWORD=financepass123 psql -U financeuser -p 34532 -d finance-dev < data/process_monitor_logs_schema.sql
 PGPASSWORD=financepass123 psql -U financeuser -p 34532 -d finance-dev < data/aegis_data_availability_schema.sql
+PGPASSWORD=financepass123 psql -U financeuser -p 34532 -d finance-dev < data/aegis_transcripts_schema.sql
 
 # Import sample data
 PGPASSWORD=financepass123 psql -U financeuser -p 34532 -d finance-dev < data/process_monitor_logs_data.sql
@@ -216,6 +253,19 @@ PGPASSWORD=financepass123 psql -U financeuser -p 34532 -d finance-dev < data/aeg
 PGPASSWORD=financepass123 psql -U financeuser -p 34532 -d finance-dev -c "\dt"
 PGPASSWORD=financepass123 psql -U financeuser -p 34532 -d finance-dev -c "SELECT COUNT(*) FROM process_monitor_logs;"
 PGPASSWORD=financepass123 psql -U financeuser -p 34532 -d finance-dev -c "SELECT COUNT(*) FROM aegis_data_availability;"
+PGPASSWORD=financepass123 psql -U financeuser -p 34532 -d finance-dev -c "SELECT COUNT(*) FROM aegis_transcripts;"
+```
+
+### Loading Transcript Data from CSV
+
+If you have transcript embeddings in a CSV file:
+
+```bash
+# Load CSV data into aegis_transcripts table
+python scripts/setup_aegis_transcripts.py --load-csv /path/to/your/transcripts.csv
+
+# Verify the data
+python scripts/setup_aegis_transcripts.py --verify
 ```
 
 ## Environment Setup
