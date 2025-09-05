@@ -26,6 +26,7 @@ def format_full_section_chunks(
 ) -> str:
     """
     Format chunks retrieved via Method 0 (Full Section).
+    Preserves all content without truncation.
     
     Args:
         chunks: Retrieved transcript chunks
@@ -33,7 +34,7 @@ def format_full_section_chunks(
         context: Execution context
         
     Returns:
-        Formatted transcript text
+        Formatted transcript text with ALL content
     """
     if not chunks:
         return "No transcript data available."
@@ -92,6 +93,17 @@ def format_full_section_chunks(
     current_section = None
     current_qa_group = None
     section_num = 0
+    qa_count = 0
+    
+    # Count total Q&A groups for logging
+    qa_groups = set(chunk.get('qa_group_id') for chunk in sorted_chunks 
+                    if chunk.get('section_name') == 'Q&A' and chunk.get('qa_group_id'))
+    if qa_groups:
+        logger.info(
+            f"Formatting {len(qa_groups)} Q&A exchanges",
+            execution_id=execution_id,
+            qa_group_ids=sorted(qa_groups)
+        )
     
     for chunk in sorted_chunks:
         section_name = chunk.get('section_name', 'Unknown')
@@ -102,19 +114,24 @@ def format_full_section_chunks(
             current_section = section_name
             formatted += f"\n## Section {section_num}: {section_name}\n\n"
             current_qa_group = None
+            qa_count = 0
         
         # Handle Q&A grouping
         if section_name == "Q&A" and chunk.get('qa_group_id'):
             if chunk['qa_group_id'] != current_qa_group:
                 current_qa_group = chunk['qa_group_id']
-                formatted += f"\n### Q&A Exchange {current_qa_group}\n\n"
+                qa_count += 1
+                formatted += f"\n### Question {qa_count} (Q&A Group {current_qa_group})\n\n"
         
         # Add content with speaker info if available
         speaker = chunk.get('speaker', '')
         if speaker:
             formatted += f"**{speaker}**\n"
         
-        formatted += f"{chunk.get('content', '')}\n\n"
+        # Include full content without truncation
+        content = chunk.get('content', '')
+        if content:
+            formatted += f"{content}\n\n"
     
     return formatted
 
@@ -144,7 +161,8 @@ def rerank_similarity_chunks(
     # Build prompt for reranking
     chunk_summaries = []
     for i, chunk in enumerate(chunks):
-        summary = chunk.get('block_summary', chunk.get('content', '')[:100])
+        # Use block_summary if available, otherwise use first 200 chars of content for reranking decision only
+        summary = chunk.get('block_summary', chunk.get('content', '')[:200] if chunk.get('content', '') else '')
         chunk_summaries.append(f"{i}: {summary}")
     
     rerank_prompt = f"""You are analyzing transcript chunks for relevance to a user query.
@@ -572,7 +590,7 @@ CRITICAL INSTRUCTIONS:
 5. Focus specifically on answering the user's query, not providing general commentary
 
 TRANSCRIPT CHUNKS PROVIDED:
-{formatted_content[:8000]}  # Limit content size for LLM
+{formatted_content}  # Full content, no truncation
 
 Based ONLY on the above transcript chunks, provide a focused research statement (2-3 paragraphs) that directly addresses the user's query. If the chunks don't contain information relevant to the query, say so explicitly."""
     
@@ -586,7 +604,7 @@ Based ONLY on the above transcript chunks, provide a focused research statement 
             llm_params={
                 "model": model_config.model,
                 "temperature": 0.3,
-                "max_tokens": 500
+                "max_tokens": 2000  # Increased to allow fuller responses
             }
         )
         

@@ -74,9 +74,9 @@ def transcripts_agent(
     logger.info(
         f"subagent.{database_id}.started",
         execution_id=execution_id,
-        latest_message=latest_message[:100],
+        latest_message=latest_message[:100],  # Only truncate for logging display
         num_combinations=len(bank_period_combinations),
-        basic_intent=basic_intent[:100]
+        basic_intent=basic_intent[:100]  # Only truncate for logging display
     )
     
     try:
@@ -396,7 +396,7 @@ Select the method and provide reasoning for your choice."""
                     f"subagent.{database_id}.similarity_retrieved",
                     execution_id=execution_id,
                     bank=combo['bank_symbol'],
-                    search_phrase=search_phrase[:50],
+                    search_phrase=search_phrase[:50],  # Only truncate for logging display,
                     chunk_count=len(chunks),
                     reasoning=reasoning
                 )
@@ -405,7 +405,19 @@ Select the method and provide reasoning for your choice."""
             
             # Generate research statement for this combination
             if chunks and formatted_content:
-                research_statement = generate_research_statement(formatted_content, combo, context)
+                # For full section retrievals (method 0), include the actual content
+                # For other methods, generate a summary
+                if method == 0:
+                    # Include the actual formatted content for full sections
+                    research_statement = f"""### {combo['bank_name']} - {combo['quarter']} {combo['fiscal_year']}
+
+{formatted_content}
+
+---
+"""
+                else:
+                    # Generate summary for category or similarity searches
+                    research_statement = generate_research_statement(formatted_content, combo, context)
                 all_research_statements.append(research_statement)
                 
                 logger.info(
