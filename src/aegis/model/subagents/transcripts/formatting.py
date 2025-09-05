@@ -582,25 +582,37 @@ def generate_research_statement(
     if method == 0:
         # Full section retrieval - provide comprehensive synthesis
         response_style = """Provide a DETAILED and COMPREHENSIVE synthesis (3-5 paragraphs) that:
-1. If Q&A section: Summarize ALL questions asked and key management responses
-2. If MD section: Highlight ALL major points made by management
-3. Include specific quotes and details from the transcript
-4. Organize information thematically if there are multiple topics
-5. Be thorough - this is a full section analysis, not a brief summary"""
+1. If Q&A section: 
+   - Summarize ALL Q&A exchanges/groups you received
+   - Identify the main topics/themes across questions
+   - Note which analysts asked about what topics
+   - Highlight key management responses with speaker attribution
+2. If MD section: 
+   - Capture ALL major points from each speaker block
+   - Attribute statements to specific executives (CEO, CFO, etc.)
+   - Maintain the narrative flow from the prepared remarks
+   - Note transitions between speakers and topics
+3. Include specific quotes with speaker names
+4. Organize by themes while preserving the discussion flow
+5. Be thorough - synthesize the COMPLETE section provided"""
     elif method == 1:
         # Category-based - focused on specific topics
         response_style = """Provide a focused synthesis (2-3 paragraphs) that:
-1. Addresses the specific financial categories requested
-2. Includes relevant quotes and data points
-3. Connects related points across different speakers"""
+1. Addresses the specific financial categories from the chunks
+2. Include quotes with speaker attribution (analyst name or executive title)
+3. Connect related points across different speaker blocks or Q&A groups
+4. Note if content comes from prepared remarks (MD) or Q&A exchanges
+5. Maintain context about who raised topics and who responded"""
     else:
         # Similarity search - targeted response
         response_style = """Provide a targeted synthesis (2-3 paragraphs) that:
-1. Directly addresses the specific query
-2. Includes the most relevant quotes and context
-3. Notes if information is partial or incomplete"""
+1. Directly addresses the specific query using the retrieved chunks
+2. Include relevant quotes with full speaker attribution
+3. Note if you're seeing partial speaker blocks or incomplete Q&A exchanges
+4. Indicate whether content is from MD section or Q&A section
+5. Acknowledge if gaps exist in the retrieved content"""
     
-    # Build prompt for research statement
+    # Build prompt for research statement with data structure context
     prompt = f"""You are analyzing earnings transcript content. Your response MUST be based ONLY on the transcript chunks provided below.
 
 Bank: {combo['bank_name']} ({combo['bank_symbol']})
@@ -609,12 +621,40 @@ User Query Intent: {combo.get('query_intent', 'General analysis')}
 Retrieval Method: {'Full Section' if method == 0 else 'Category-based' if method == 1 else 'Similarity Search'}
 {f'Method Reasoning: {method_reasoning}' if method_reasoning else ''}
 
+DATA STRUCTURE CONTEXT:
+You are receiving formatted earnings call transcript data organized as follows:
+
+1. MANAGEMENT DISCUSSION (MD) SECTION:
+   - Contains prepared remarks from company executives (CEO, CFO, etc.)
+   - Organized into "speaker blocks" - continuous segments by the same speaker
+   - Each block may contain multiple chunks if the speaker talked at length
+   - Blocks are numbered sequentially as they occurred in the call
+   - Format: Speaker name followed by their complete remarks
+
+2. Q&A SECTION:
+   - Contains analyst questions and management responses
+   - Organized into "Q&A Groups" or "Q&A Exchanges" - each represents one complete question-answer interaction
+   - Each group contains:
+     * The analyst's question(s)
+     * Management's response(s) - may involve multiple executives
+     * Any follow-up questions and answers within that exchange
+   - Groups are numbered sequentially (Question 1, Question 2, etc.)
+   - Format: Shows speaker names (analysts and executives) with their statements
+
+3. CHUNK ORGANIZATION:
+   - Content is broken into chunks for processing
+   - Related chunks are kept together (same speaker block or Q&A group)
+   - Chunks maintain their original sequence from the call
+   - If gaps exist, they are noted with "[Gap: X blocks omitted]"
+
 CRITICAL INSTRUCTIONS:
 1. Use ONLY the specific transcript content provided below
 2. Do NOT add any information not present in the chunks
-3. Quote directly from the transcript when possible
+3. Quote directly from the transcript when possible, citing the speaker
 4. Be comprehensive and detailed in your synthesis
 5. Focus on answering the user's query completely
+6. When referencing Q&A, mention which questions (by topic, not number) were asked
+7. When referencing MD section, attribute statements to specific executives
 
 {response_style}
 
