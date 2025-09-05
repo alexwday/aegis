@@ -15,6 +15,7 @@ import logging
 from ....connections.postgres_connector import get_connection
 from ....connections.llm_connector import complete
 from ....utils.logging import get_logger
+from ....utils.settings import config
 from sqlalchemy import text
 
 
@@ -162,10 +163,13 @@ If all chunks are relevant, return: []"""
     
     try:
         messages = [{"role": "user", "content": rerank_prompt}]
+        # Use large model for better reranking
+        model_config = getattr(config.llm, "large")
         response = complete(
             messages=messages,
             context=context,
             llm_params={
+                "model": model_config.model,
                 "temperature": 0.1,
                 "max_tokens": 100
             }
@@ -574,10 +578,13 @@ Based ONLY on the above transcript chunks, provide a focused research statement 
     
     try:
         messages = [{"role": "user", "content": prompt}]
+        # Use large model for better research generation
+        model_config = getattr(config.llm, "large")
         response = complete(
             messages=messages,
             context=context,
             llm_params={
+                "model": model_config.model,
                 "temperature": 0.3,
                 "max_tokens": 500
             }

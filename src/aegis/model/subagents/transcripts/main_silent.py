@@ -145,7 +145,7 @@ Based on the query, select the most appropriate method and provide necessary par
             
             # Call LLM with tool
             try:
-                model_tier = "medium"
+                model_tier = "large"  # Use large model for better decision making
                 model_config = getattr(config.llm, model_tier)
                 
                 response = complete_with_tools(
