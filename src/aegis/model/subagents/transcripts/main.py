@@ -256,9 +256,8 @@ Select the method and provide reasoning for your choice."""
                     tools=[retrieval_tool],
                     context=context,
                     llm_params={
-                        "model": model_config.model,
-                        "temperature": 0.3,
-                        "max_tokens": 300
+                        "model": model_config.model
+                        # Use defaults from config for all parameters
                     }
                 )
                 
@@ -405,19 +404,15 @@ Select the method and provide reasoning for your choice."""
             
             # Generate research statement for this combination
             if chunks and formatted_content:
-                # For full section retrievals (method 0), include the actual content
-                # For other methods, generate a summary
-                if method == 0:
-                    # Include the actual formatted content for full sections
-                    research_statement = f"""### {combo['bank_name']} - {combo['quarter']} {combo['fiscal_year']}
-
-{formatted_content}
-
----
-"""
-                else:
-                    # Generate summary for category or similarity searches
-                    research_statement = generate_research_statement(formatted_content, combo, context)
+                # Always generate a synthesized research statement
+                # Pass the method type to generate appropriate detail level
+                research_statement = generate_research_statement(
+                    formatted_content, 
+                    combo, 
+                    context,
+                    method=method,
+                    method_reasoning=reasoning
+                )
                 all_research_statements.append(research_statement)
                 
                 logger.info(

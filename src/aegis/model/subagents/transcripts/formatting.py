@@ -187,9 +187,8 @@ If all chunks are relevant, return: []"""
             messages=messages,
             context=context,
             llm_params={
-                "model": model_config.model,
-                "temperature": 0.1,
-                "max_tokens": 100
+                "model": model_config.model
+                # Use defaults from config
             }
         )
         
@@ -559,21 +558,47 @@ def format_category_or_similarity_chunks(
 def generate_research_statement(
     formatted_content: str,
     combo: Dict[str, Any],
-    context: Dict[str, Any]
+    context: Dict[str, Any],
+    method: int = None,
+    method_reasoning: str = None
 ) -> str:
     """
-    Generate a research statement summarizing the retrieved content.
+    Generate a detailed research statement synthesizing the retrieved content.
     
     Args:
-        formatted_content: Formatted transcript content
+        formatted_content: Formatted transcript content (full, no truncation)
         combo: Bank-period combination
         context: Execution context
+        method: Retrieval method used (0=full section, 1=category, 2=similarity)
+        method_reasoning: Explanation of why this method was chosen
         
     Returns:
-        Research statement with header
+        Detailed synthesized research statement with header
     """
     logger = get_logger()
     execution_id = context.get("execution_id")
+    
+    # Determine appropriate response style based on method
+    if method == 0:
+        # Full section retrieval - provide comprehensive synthesis
+        response_style = """Provide a DETAILED and COMPREHENSIVE synthesis (3-5 paragraphs) that:
+1. If Q&A section: Summarize ALL questions asked and key management responses
+2. If MD section: Highlight ALL major points made by management
+3. Include specific quotes and details from the transcript
+4. Organize information thematically if there are multiple topics
+5. Be thorough - this is a full section analysis, not a brief summary"""
+    elif method == 1:
+        # Category-based - focused on specific topics
+        response_style = """Provide a focused synthesis (2-3 paragraphs) that:
+1. Addresses the specific financial categories requested
+2. Includes relevant quotes and data points
+3. Connects related points across different speakers"""
+    else:
+        # Similarity search - targeted response
+        response_style = """Provide a targeted synthesis (2-3 paragraphs) that:
+1. Directly addresses the specific query
+2. Includes the most relevant quotes and context
+3. Notes if information is partial or incomplete"""
     
     # Build prompt for research statement
     prompt = f"""You are analyzing earnings transcript content. Your response MUST be based ONLY on the transcript chunks provided below.
@@ -581,18 +606,22 @@ def generate_research_statement(
 Bank: {combo['bank_name']} ({combo['bank_symbol']})
 Period: {combo['quarter']} {combo['fiscal_year']}
 User Query Intent: {combo.get('query_intent', 'General analysis')}
+Retrieval Method: {'Full Section' if method == 0 else 'Category-based' if method == 1 else 'Similarity Search'}
+{f'Method Reasoning: {method_reasoning}' if method_reasoning else ''}
 
 CRITICAL INSTRUCTIONS:
 1. Use ONLY the specific transcript content provided below
 2. Do NOT add any information not present in the chunks
 3. Quote directly from the transcript when possible
-4. If the chunks don't contain relevant information for the query, explicitly state that
-5. Focus specifically on answering the user's query, not providing general commentary
+4. Be comprehensive and detailed in your synthesis
+5. Focus on answering the user's query completely
+
+{response_style}
 
 TRANSCRIPT CHUNKS PROVIDED:
 {formatted_content}  # Full content, no truncation
 
-Based ONLY on the above transcript chunks, provide a focused research statement (2-3 paragraphs) that directly addresses the user's query. If the chunks don't contain information relevant to the query, say so explicitly."""
+Based ONLY on the above transcript chunks, provide your synthesis:"""
     
     try:
         messages = [{"role": "user", "content": prompt}]
@@ -602,9 +631,8 @@ Based ONLY on the above transcript chunks, provide a focused research statement 
             messages=messages,
             context=context,
             llm_params={
-                "model": model_config.model,
-                "temperature": 0.3,
-                "max_tokens": 2000  # Increased to allow fuller responses
+                "model": model_config.model
+                # Use default temperature and max_tokens from config
             }
         )
         
