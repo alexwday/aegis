@@ -263,7 +263,7 @@ def expand_speaker_blocks(
                             classification_names,
                             title
                         FROM aegis_transcripts
-                        WHERE institution_id = :bank_id
+                        WHERE (institution_id = :bank_id_str OR institution_id::text = :bank_id_str)
                             AND fiscal_year = :fiscal_year
                             AND fiscal_quarter = :quarter
                             AND section_name = 'MANAGEMENT DISCUSSION SECTION'
@@ -272,7 +272,7 @@ def expand_speaker_blocks(
                     """)
                     
                     result = conn.execute(query, {
-                        "bank_id": str(combo["bank_id"]),
+                        "bank_id_str": str(combo["bank_id"]),
                         "fiscal_year": combo["fiscal_year"],
                         "quarter": combo["quarter"],
                         "block_ids": list(speaker_block_ids)
@@ -373,7 +373,7 @@ def fill_gaps_in_speaker_blocks(
                         classification_names,
                         title
                     FROM aegis_transcripts
-                    WHERE institution_id = :bank_id
+                    WHERE (institution_id = :bank_id_str OR institution_id::text = :bank_id_str)
                         AND fiscal_year = :fiscal_year
                         AND fiscal_quarter = :quarter
                         AND section_name = 'MANAGEMENT DISCUSSION SECTION'
@@ -382,7 +382,7 @@ def fill_gaps_in_speaker_blocks(
                 """)
                 
                 result = conn.execute(query, {
-                    "bank_id": str(combo["bank_id"]),
+                    "bank_id_str": str(combo["bank_id"]),
                     "fiscal_year": combo["fiscal_year"],
                     "quarter": combo["quarter"],
                     "block_ids": gaps_to_fill

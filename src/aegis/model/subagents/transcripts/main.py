@@ -86,6 +86,7 @@ def retrieve_full_section(combo: Dict[str, Any], sections: str, context: Dict[st
     try:
         with get_connection() as conn:
             # Build query to fetch all chunks for specified sections
+            # Handle both TEXT and INTEGER institution_id columns
             query = text("""
                 SELECT 
                     id,
@@ -98,7 +99,7 @@ def retrieve_full_section(combo: Dict[str, Any], sections: str, context: Dict[st
                     classification_ids,
                     classification_names
                 FROM aegis_transcripts
-                WHERE institution_id = :bank_id
+                WHERE (institution_id = :bank_id_str OR institution_id::text = :bank_id_str)
                     AND fiscal_year = :fiscal_year
                     AND fiscal_quarter = :quarter
                     AND section_name = ANY(:sections)
@@ -108,7 +109,7 @@ def retrieve_full_section(combo: Dict[str, Any], sections: str, context: Dict[st
             """)
             
             result = conn.execute(query, {
-                "bank_id": str(combo["bank_id"]),
+                "bank_id_str": str(combo["bank_id"]),
                 "fiscal_year": combo["fiscal_year"],
                 "quarter": combo["quarter"],
                 "sections": sections_to_fetch
@@ -181,7 +182,7 @@ def retrieve_by_categories(combo: Dict[str, Any], category_ids: List[int], conte
                     classification_ids,
                     classification_names
                 FROM aegis_transcripts
-                WHERE institution_id = :bank_id
+                WHERE (institution_id = :bank_id_str OR institution_id::text = :bank_id_str)
                     AND fiscal_year = :fiscal_year
                     AND fiscal_quarter = :quarter
                     AND classification_ids && :category_ids
@@ -191,7 +192,7 @@ def retrieve_by_categories(combo: Dict[str, Any], category_ids: List[int], conte
             """)
             
             result = conn.execute(query, {
-                "bank_id": str(combo["bank_id"]),
+                "bank_id_str": str(combo["bank_id"]),
                 "fiscal_year": combo["fiscal_year"],
                 "quarter": combo["quarter"],
                 "category_ids": category_ids_text
@@ -283,7 +284,7 @@ def retrieve_by_similarity(combo: Dict[str, Any], search_phrase: str, context: D
                     classification_names,
                     chunk_embedding <=> CAST(:embedding AS vector) AS distance
                 FROM aegis_transcripts
-                WHERE institution_id = :bank_id
+                WHERE (institution_id = :bank_id_str OR institution_id::text = :bank_id_str)
                     AND fiscal_year = :fiscal_year
                     AND fiscal_quarter = :quarter
                     AND chunk_embedding IS NOT NULL
@@ -292,7 +293,7 @@ def retrieve_by_similarity(combo: Dict[str, Any], search_phrase: str, context: D
             """)
             
             result = conn.execute(query, {
-                "bank_id": str(combo["bank_id"]),
+                "bank_id_str": str(combo["bank_id"]),
                 "fiscal_year": combo["fiscal_year"],
                 "quarter": combo["quarter"],
                 "embedding": embedding_str,
