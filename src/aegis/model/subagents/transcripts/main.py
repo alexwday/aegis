@@ -33,7 +33,7 @@ from sqlalchemy import text
 
 def load_financial_categories() -> Dict[int, Dict[str, str]]:
     """Load financial categories from YAML file."""
-    yaml_path = Path(__file__).parent.parent.parent.parent.parent.parent / "docs" / "financial_categories.yaml"
+    yaml_path = Path(__file__).parent.parent.parent / "prompts" / "transcripts" / "financial_categories.yaml"
     
     try:
         with open(yaml_path, 'r') as f:
