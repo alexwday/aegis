@@ -177,7 +177,8 @@ class AegisDatabaseSetup:
         self, 
         csv_path: str, 
         batch_size: int = 100,
-        skip_errors: bool = True
+        skip_errors: bool = True,
+        truncate_first: bool = True
     ) -> int:
         """
         Load CSV data into aegis_transcripts table.
@@ -186,6 +187,7 @@ class AegisDatabaseSetup:
             csv_path: Path to CSV file
             batch_size: Number of rows to process at a time
             skip_errors: Whether to skip rows with errors
+            truncate_first: Whether to truncate the table before loading (default: True)
             
         Returns:
             Number of rows successfully loaded
@@ -197,6 +199,17 @@ class AegisDatabaseSetup:
         if 'aegis_transcripts' not in self.inspector.get_table_names():
             logger.error("Table aegis_transcripts does not exist. Create it first with --create-tables")
             return 0
+        
+        # Truncate the table if requested
+        if truncate_first:
+            try:
+                with self.engine.begin() as conn:
+                    logger.info("Truncating aegis_transcripts table before loading...")
+                    conn.execute(text("TRUNCATE TABLE aegis_transcripts"))
+                    logger.info("✓ Table truncated successfully")
+            except Exception as e:
+                logger.error(f"Failed to truncate table: {e}")
+                return 0
         
         logger.info(f"Loading CSV data from {csv_path}...")
         df = pd.read_csv(csv_path)
@@ -379,13 +392,18 @@ def main():
         '--load-csv',
         type=str,
         metavar='PATH',
-        help='Load transcript data from CSV file'
+        help='Load transcript data from CSV file (truncates table first by default)'
     )
     parser.add_argument(
         '--batch-size',
         type=int,
         default=100,
         help='Batch size for CSV loading (default: 100)'
+    )
+    parser.add_argument(
+        '--no-truncate',
+        action='store_true',
+        help='Do NOT truncate table before loading CSV (append mode)'
     )
     
     # Status
@@ -442,7 +460,8 @@ def main():
         
         rows = setup.load_transcripts_csv(
             args.load_csv,
-            batch_size=args.batch_size
+            batch_size=args.batch_size,
+            truncate_first=(not args.no_truncate)
         )
         
         if rows > 0:
