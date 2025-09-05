@@ -554,15 +554,23 @@ def generate_research_statement(
     execution_id = context.get("execution_id")
     
     # Build prompt for research statement
-    prompt = f"""Based on the following transcript content for {combo['bank_name']} ({combo['bank_symbol']}) 
-for {combo['quarter']} {combo['fiscal_year']}, provide a concise research statement addressing the user's query.
+    prompt = f"""You are analyzing earnings transcript content. Your response MUST be based ONLY on the transcript chunks provided below.
 
+Bank: {combo['bank_name']} ({combo['bank_symbol']})
+Period: {combo['quarter']} {combo['fiscal_year']}
 User Query Intent: {combo.get('query_intent', 'General analysis')}
 
-Transcript Content:
+CRITICAL INSTRUCTIONS:
+1. Use ONLY the specific transcript content provided below
+2. Do NOT add any information not present in the chunks
+3. Quote directly from the transcript when possible
+4. If the chunks don't contain relevant information for the query, explicitly state that
+5. Focus specifically on answering the user's query, not providing general commentary
+
+TRANSCRIPT CHUNKS PROVIDED:
 {formatted_content[:8000]}  # Limit content size for LLM
 
-Provide a focused research statement (2-3 paragraphs) that directly addresses the user's query based on the transcript evidence."""
+Based ONLY on the above transcript chunks, provide a focused research statement (2-3 paragraphs) that directly addresses the user's query. If the chunks don't contain information relevant to the query, say so explicitly."""
     
     try:
         messages = [{"role": "user", "content": prompt}]

@@ -227,6 +227,18 @@ Based on the query, select the most appropriate method and provide necessary par
                 # Full Section Retrieval
                 sections = decision.get("sections", "ALL")
                 chunks = retrieve_full_section(combo, sections, context)
+                
+                # Log what sections are in the retrieved chunks
+                sections_in_chunks = set(chunk.get('section_name', 'Unknown') for chunk in chunks)
+                logger.info(
+                    f"subagent.{database_id}.sections_retrieved",
+                    execution_id=execution_id,
+                    bank=combo['bank_symbol'],
+                    requested_sections=sections,
+                    actual_sections=list(sections_in_chunks),
+                    chunk_count=len(chunks)
+                )
+                
                 formatted_content = format_full_section_chunks(chunks, combo, context)
                 
             elif method == 1:
