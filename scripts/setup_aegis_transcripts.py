@@ -40,17 +40,21 @@ class AegisTranscriptsSetup:
         self.engine = create_engine(self.connection_string)
         self.inspector = inspect(self.engine)
         
-    def create_table(self, drop_existing: bool = False) -> bool:
+    def create_table(self, drop_existing: bool = False, use_simple: bool = True) -> bool:
         """
         Create the aegis_transcripts table.
         
         Args:
             drop_existing: Whether to drop existing table before creating
+            use_simple: Use simplified schema without indexes
             
         Returns:
             True if successful, False otherwise
         """
-        schema_path = Path(__file__).parent.parent / "data" / "aegis_transcripts_schema.sql"
+        if use_simple:
+            schema_path = Path(__file__).parent.parent / "data" / "aegis_transcripts_schema_simple.sql"
+        else:
+            schema_path = Path(__file__).parent.parent / "data" / "aegis_transcripts_schema.sql"
         
         if not schema_path.exists():
             logger.error(f"Schema file not found: {schema_path}")

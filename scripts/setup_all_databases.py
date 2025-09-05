@@ -43,7 +43,7 @@ class AegisDatabaseSetup:
         self.tables = {
             'aegis_data_availability': 'aegis_data_availability_schema.sql',
             'process_monitor_logs': 'process_monitor_logs_schema.sql',
-            'aegis_transcripts': 'aegis_transcripts_schema.sql'
+            'aegis_transcripts': 'aegis_transcripts_schema_simple.sql'  # Use simple schema
         }
         
         # Define tables with data files (for initial data loading)
