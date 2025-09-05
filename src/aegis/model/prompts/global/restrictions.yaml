@@ -7,7 +7,7 @@ content: |
   
   Data Sourcing Requirements:
   - Base responses EXCLUSIVELY on information from:
-    * Retrieved data from available databases (transcripts, benchmarking, reports, pillar3, rts)
+    * Retrieved data from available databases (transcripts, benchmarking, reports, rts)
     * Current user query and conversation history
     * Fiscal and temporal context provided
   - NEVER use internal training knowledge about specific financial data or metrics

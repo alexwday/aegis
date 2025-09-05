@@ -55,7 +55,7 @@ databases:
       ✓ Trend analysis of metrics
       ✓ Segment/platform performance data
       ✓ ALWAYS pair with RTS for comprehensive line item coverage
-      ✓ For regulatory metrics, ALWAYS pair with pillar3
+      ✓ Regulatory metrics (CET1, RWA, leverage ratios)
       
       DO NOT USE FOR:
       ✗ Pure management commentary (use transcripts instead)
@@ -120,46 +120,6 @@ databases:
       
       Institution Coverage:
       Available for: Banks with pre-generated reports in the system
-
-  - id: pillar3
-    name: Pillar 3 Regulatory Database
-    content: |
-      Data Contains:
-      Quarterly Pillar 3 reporting from Canadian banks. Contains Basel III regulatory disclosures 
-      including detailed capital adequacy metrics, risk-weighted assets by category, leverage 
-      ratios, liquidity coverage ratios (LCR), net stable funding ratios (NSFR), and other 
-      regulatory compliance metrics required by OSFI.
-      
-      WHEN TO USE:
-      ✓ CET1, Tier 1, Total Capital ratios
-      ✓ Risk-weighted assets (RWA)
-      ✓ Leverage ratios
-      ✓ Liquidity metrics (LCR, NSFR)
-      ✓ Basel III regulatory metrics
-      ✓ ALWAYS use WITH benchmarking (never alone)
-      
-      DO NOT USE FOR:
-      ✗ Non-regulatory metrics (use benchmarking+RTS)
-      ✗ Management commentary (use transcripts)
-      ✗ As a standalone database (always pair with benchmarking)
-      ✗ US banks (Canadian banks only)
-      
-      CRITICAL RULE:
-      ⚠️ NEVER use pillar3 alone - ALWAYS pair with benchmarking
-      ⚠️ Pillar3 is SUPPLEMENTARY to benchmarking for regulatory metrics
-      
-      Query Requirements:
-      - Fiscal Year (e.g., FY2024, FY2025)
-      - Quarter (e.g., Q1, Q2, Q3, Q4)
-      - Bank(s) (e.g., RBC, TD, BMO, Scotia, CIBC)
-      
-      Example Queries:
-      - "What is RBC's CET1 ratio?" (use benchmarking + pillar3)
-      - "Compare capital ratios" (use benchmarking + pillar3)
-      - "Show RWA trends" (use benchmarking + pillar3)
-      
-      Institution Coverage:
-      Available for: Canadian banks only
 
   - id: rts
     name: Report to Shareholders Database

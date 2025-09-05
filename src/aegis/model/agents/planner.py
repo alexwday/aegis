@@ -402,7 +402,7 @@ def plan_database_queries(
                                 "type": "array",
                                 "items": {
                                     "type": "string",
-                                    "description": "The database ID (e.g., 'transcripts', 'benchmarking', 'pillar3')",
+                                    "description": "The database ID (e.g., 'transcripts', 'benchmarking', 'reports', 'rts')",
                                 },
                                 "description": "List of database IDs to query",
                             },
