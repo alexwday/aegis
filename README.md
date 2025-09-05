@@ -232,11 +232,28 @@ psql -p 34532 -d postgres -U $(whoami) -c "GRANT CREATE ON DATABASE \"finance-de
 
 #### Troubleshooting pgvector
 
-If you get an error like "extension vector is not available", follow these steps:
+If you get an error like "extension vector is not available", we provide diagnostic and fix scripts:
 
-##### 1. Diagnostic Commands
+##### Quick Fix (Recommended)
 
-Run these commands to diagnose the issue:
+Run the automated fix script:
+```bash
+# This script will detect your system and fix the pgvector installation
+./scripts/fix_pgvector.sh
+```
+
+##### Diagnostic Tool
+
+If the quick fix doesn't work, run the diagnostic tool:
+```bash
+python scripts/diagnose_pgvector.py
+```
+
+This will show you exactly what's wrong and provide specific fix commands.
+
+##### Manual Diagnostic Commands
+
+You can also run these commands manually to diagnose the issue:
 
 ```bash
 # Check PostgreSQL version
