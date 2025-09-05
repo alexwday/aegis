@@ -236,17 +236,19 @@ class AegisTranscriptsSetup:
                     for col in ['classification_ids', 'classification_names', 'chunk_paragraph_ids']:
                         if col in batch_df.columns:
                             batch_df[col] = batch_df[col].apply(
-                                lambda x: self._parse_array(x) if pd.notna(x) else None
+                                lambda x: self._parse_array(x) if x is not None and not (isinstance(x, float) and pd.isna(x)) else None
                             )
                     
                     # Process embedding column
                     if 'chunk_embedding' in batch_df.columns:
                         batch_df['chunk_embedding'] = batch_df['chunk_embedding'].apply(
-                            lambda x: self._parse_embedding(x) if pd.notna(x) else None
+                            lambda x: self._parse_embedding(x) if x is not None and not (isinstance(x, float) and pd.isna(x)) else None
                         )
                     
                     # Filter out rows without embeddings
-                    valid_df = batch_df[batch_df['chunk_embedding'].notna()].copy()
+                    # Use a custom check since embeddings are arrays
+                    valid_mask = batch_df['chunk_embedding'].apply(lambda x: x is not None and (isinstance(x, list) or isinstance(x, str)))
+                    valid_df = batch_df[valid_mask].copy()
                     
                     if not valid_df.empty:
                         # Prepare the insert statement
@@ -271,14 +273,20 @@ class AegisTranscriptsSetup:
                             for col in columns:
                                 if col in row:
                                     value = row[col]
-                                    # Convert numpy/pandas types to Python types
-                                    if pd.isna(value):
+                                    # Handle different column types
+                                    if value is None:
+                                        row_dict[col] = None
+                                    elif isinstance(value, float) and pd.isna(value):
                                         row_dict[col] = None
                                     elif col in ['classification_ids', 'classification_names', 'chunk_paragraph_ids']:
-                                        row_dict[col] = value if value else []
+                                        # Handle array columns
+                                        if isinstance(value, list):
+                                            row_dict[col] = value if value else []
+                                        else:
+                                            row_dict[col] = []
                                     elif col == 'chunk_embedding':
                                         # Format embedding for PostgreSQL
-                                        if value is not None:
+                                        if value is not None and isinstance(value, (list, tuple)):
                                             row_dict[col] = f"[{','.join(map(str, value))}]"
                                         else:
                                             row_dict[col] = None
