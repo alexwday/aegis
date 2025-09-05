@@ -43,7 +43,7 @@ class AegisDatabaseSetup:
         self.tables = {
             'aegis_data_availability': 'aegis_data_availability_schema.sql',
             'process_monitor_logs': 'process_monitor_logs_schema.sql',
-            'stage_08_embeddings': 'stage_08_postgres_schema.sql'
+            'aegis_transcripts': 'aegis_transcripts_schema.sql'
         }
         
         # Define tables with data files (for initial data loading)
@@ -145,8 +145,8 @@ class AegisDatabaseSetup:
             return False
         
         try:
-            # Check for pgvector extension if creating embeddings table
-            if table_name == 'stage_08_embeddings':
+            # Check for pgvector extension if creating transcripts table
+            if table_name == 'aegis_transcripts':
                 if not self.check_extension('vector'):
                     logger.warning("pgvector extension not found. Attempting to install...")
                     if not self.install_extension('vector'):
