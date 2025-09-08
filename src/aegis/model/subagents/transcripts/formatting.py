@@ -560,7 +560,8 @@ def generate_research_statement(
     combo: Dict[str, Any],
     context: Dict[str, Any],
     method: int = None,
-    method_reasoning: str = None
+    method_reasoning: str = None,
+    custom_prompt: str = None  # NEW: Allow custom ETL prompts
 ) -> str:
     """
     Generate a detailed research statement synthesizing the retrieved content.
@@ -571,6 +572,7 @@ def generate_research_statement(
         context: Execution context
         method: Retrieval method used (0=full section, 1=category, 2=similarity)
         method_reasoning: Explanation of why this method was chosen
+        custom_prompt: Optional custom prompt to override default synthesis behavior (for ETL)
         
     Returns:
         Detailed synthesized research statement with header
@@ -578,10 +580,29 @@ def generate_research_statement(
     logger = get_logger()
     execution_id = context.get("execution_id")
     
-    # Determine appropriate response style based on method
-    if method == 0:
-        # Full section retrieval - provide comprehensive synthesis
-        response_style = """Provide a DETAILED and COMPREHENSIVE synthesis (3-5 paragraphs) that:
+    # Check if custom prompt is provided (ETL mode)
+    if custom_prompt:
+        # Use custom ETL prompt directly, bypassing default prompt construction
+        prompt = f"""Bank: {combo['bank_name']} ({combo['bank_symbol']})
+Period: {combo['quarter']} {combo['fiscal_year']}
+
+TRANSCRIPT CONTENT:
+{formatted_content}
+
+{custom_prompt}"""
+        
+        logger.info(
+            f"subagent.transcripts.using_custom_prompt",
+            execution_id=execution_id,
+            bank=combo['bank_symbol'],
+            custom_prompt_length=len(custom_prompt)
+        )
+    else:
+        # Original prompt building logic
+        # Determine appropriate response style based on method
+        if method == 0:
+            # Full section retrieval - provide comprehensive synthesis
+            response_style = """Provide a DETAILED and COMPREHENSIVE synthesis (3-5 paragraphs) that:
 1. If Q&A section: 
    - Summarize ALL Q&A exchanges/groups you received
    - Identify the main topics/themes across questions
@@ -595,25 +616,25 @@ def generate_research_statement(
 3. Include specific quotes with speaker names
 4. Organize by themes while preserving the discussion flow
 5. Be thorough - synthesize the COMPLETE section provided"""
-    elif method == 1:
-        # Category-based - focused on specific topics
-        response_style = """Provide a focused synthesis (2-3 paragraphs) that:
+        elif method == 1:
+            # Category-based - focused on specific topics
+            response_style = """Provide a focused synthesis (2-3 paragraphs) that:
 1. Addresses the specific financial categories from the chunks
 2. Include quotes with speaker attribution (analyst name or executive title)
 3. Connect related points across different speaker blocks or Q&A groups
 4. Note if content comes from prepared remarks (MD) or Q&A exchanges
 5. Maintain context about who raised topics and who responded"""
-    else:
-        # Similarity search - targeted response
-        response_style = """Provide a targeted synthesis (2-3 paragraphs) that:
+        else:
+            # Similarity search - targeted response
+            response_style = """Provide a targeted synthesis (2-3 paragraphs) that:
 1. Directly addresses the specific query using the retrieved chunks
 2. Include relevant quotes with full speaker attribution
 3. Note if you're seeing partial speaker blocks or incomplete Q&A exchanges
 4. Indicate whether content is from MD section or Q&A section
 5. Acknowledge if gaps exist in the retrieved content"""
-    
-    # Build prompt for research statement with data structure context
-    prompt = f"""You are analyzing earnings transcript content. Your response MUST be based ONLY on the transcript chunks provided below.
+        
+        # Build prompt for research statement with data structure context
+        prompt = f"""You are analyzing earnings transcript content. Your response MUST be based ONLY on the transcript chunks provided below.
 
 Bank: {combo['bank_name']} ({combo['bank_symbol']})
 Period: {combo['quarter']} {combo['fiscal_year']}
