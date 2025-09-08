@@ -607,6 +607,48 @@ Run it:
 python test_aegis.py
 ```
 
+### Option 4: ETL Command Line Tools
+
+Aegis includes ETL scripts for direct data extraction and report generation, bypassing the conversational AI flow for improved efficiency.
+
+#### Call Summary ETL
+
+Generate transcript summaries and extract specific information:
+
+```bash
+# Activate virtual environment
+source venv/bin/activate
+
+# Basic usage
+python -m aegis.etls.call_summary.main \
+  --bank "Royal Bank of Canada" \
+  --year 2024 \
+  --quarter Q3 \
+  --query "What did management say about expenses?"
+
+# Using bank symbols
+python -m aegis.etls.call_summary.main \
+  --bank RY \
+  --year 2024 \
+  --quarter Q3 \
+  --query "Extract all revenue metrics and growth rates"
+
+# Save output to file
+python -m aegis.etls.call_summary.main \
+  --bank BMO \
+  --year 2024 \
+  --quarter Q2 \
+  --query "Provide complete earnings call summary" \
+  --output bmo_q2_summary.txt
+```
+
+**ETL Benefits:**
+- 80% reduction in LLM calls (1 vs 5 in conversational flow)
+- Direct parameter specification (no natural language parsing)
+- Batch processing capability
+- Reports stored in database for instant Aegis retrieval
+- Ideal for scheduled report generation
+
 ## Architecture Overview
 
 Aegis uses a multi-agent architecture to process financial data requests:
