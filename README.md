@@ -613,41 +613,123 @@ Aegis includes ETL scripts for direct data extraction and report generation, byp
 
 #### Call Summary ETL
 
-Generate transcript summaries and extract specific information:
+The Call Summary ETL generates comprehensive Word documents with structured earnings call analysis, organized into 15 predefined categories.
+
+##### Basic Usage
 
 ```bash
 # Activate virtual environment
 source venv/bin/activate
 
-# Basic usage
+# Generate a call summary report (outputs to Word document)
 python -m aegis.etls.call_summary.main \
   --bank "Royal Bank of Canada" \
-  --year 2024 \
-  --quarter Q3 \
-  --query "What did management say about expenses?"
+  --year 2025 \
+  --quarter Q2
 
-# Using bank symbols
+# Using bank symbol instead of full name
 python -m aegis.etls.call_summary.main \
   --bank RY \
-  --year 2024 \
-  --quarter Q3 \
-  --query "Extract all revenue metrics and growth rates"
+  --year 2025 \
+  --quarter Q2
 
-# Save output to file
+# Using bank ID (1-7 for Canadian banks, 8-14 for US banks)
 python -m aegis.etls.call_summary.main \
-  --bank BMO \
-  --year 2024 \
-  --quarter Q2 \
-  --query "Provide complete earnings call summary" \
-  --output bmo_q2_summary.txt
+  --bank 1 \
+  --year 2025 \
+  --quarter Q2
 ```
 
-**ETL Benefits:**
-- 80% reduction in LLM calls (1 vs 5 in conversational flow)
-- Direct parameter specification (no natural language parsing)
-- Batch processing capability
-- Reports stored in database for instant Aegis retrieval
-- Ideal for scheduled report generation
+##### Output Format
+
+The ETL generates a Word document (.docx) saved to:
+```
+src/aegis/etls/call_summary/output/[BANK_SYMBOL]_[YEAR]_[QUARTER]_[ID].docx
+```
+
+Example: `RY_2025_Q2_1ce841f8.docx`
+
+##### Document Structure
+
+Each generated report includes:
+- **Title Page**: Bank name, symbol, period
+- **15 Analysis Categories** (for Canadian banks):
+  1. Financial Performance & Metrics
+  2. Revenue & Income Breakdown
+  3. Expense Management & Efficiency
+  4. Credit Quality & Risk Metrics
+  5. Capital & Liquidity Position
+  6. Business Segment Performance
+  7. Strategic Initiatives & Growth Plans
+  8. Economic & Market Outlook
+  9. Regulatory & Compliance Updates
+  10. Technology & Digital Innovation
+  11. ESG & Sustainability
+  12. Management Guidance & Outlook
+  13. Analyst Q&A Key Themes
+  14. Competitive Positioning
+  15. Notable Quotes & Key Takeaways
+
+Each category includes:
+- Dynamic section titles based on content
+- Key metric summaries with **bold** highlighting
+- Direct quotes with speaker attribution in *italics*
+- Bullet points with proper formatting (• for unordered lists)
+- Numbered lists where appropriate
+
+##### Testing the ETL
+
+```bash
+# Test with different banks
+python -m aegis.etls.call_summary.main --bank TD --year 2025 --quarter Q2
+python -m aegis.etls.call_summary.main --bank BMO --year 2025 --quarter Q1
+python -m aegis.etls.call_summary.main --bank "Bank of America" --year 2025 --quarter Q2
+
+# View available banks
+python -c "
+from aegis.connections.postgres_connector import get_connection
+from sqlalchemy import text
+with get_connection() as conn:
+    result = conn.execute(text('SELECT DISTINCT bank_id, bank_name, bank_symbol FROM aegis_data_availability ORDER BY bank_id'))
+    for row in result:
+        print(f'{row.bank_id}: {row.bank_name} ({row.bank_symbol})')
+"
+
+# Check what periods are available for a specific bank
+python -c "
+from aegis.connections.postgres_connector import get_connection
+from sqlalchemy import text
+bank = 'RY'  # Change this to your bank symbol
+with get_connection() as conn:
+    result = conn.execute(text('''
+        SELECT DISTINCT fiscal_year, quarter 
+        FROM aegis_data_availability 
+        WHERE bank_symbol = :bank 
+        ORDER BY fiscal_year DESC, quarter DESC
+    '''), {'bank': bank})
+    print(f'Available periods for {bank}:')
+    for row in result:
+        print(f'  {row.fiscal_year} {row.quarter}')
+"
+```
+
+##### Monitoring ETL Progress
+
+The ETL logs detailed progress information:
+- Stage 1: Research plan generation (analyzes full transcript)
+- Stage 2: Category-by-category content extraction (15 iterations)
+- Each category shows section source (MD, QA, or ALL)
+- Token usage and costs are tracked per LLM call
+
+##### ETL Benefits
+
+- **80% LLM reduction**: Uses 16 targeted calls vs 80+ in conversational flow
+- **Structured output**: Consistent Word document format
+- **Category-based analysis**: 15 predefined sections ensure comprehensive coverage
+- **Quote preservation**: Maintains speaker attribution and verbatim quotes
+- **Markdown formatting**: Proper conversion to Word styles (headings, lists, bold, italic)
+- **Batch processing**: Can be scripted for multiple banks/periods
+- **Database storage**: Reports saved for future reference
 
 ## Architecture Overview
 
