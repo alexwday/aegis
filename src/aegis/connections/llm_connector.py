@@ -372,19 +372,40 @@ def complete(
     try:
         client = _get_llm_client(context["auth_config"], context["ssl_config"], model_tier)
 
+        # Check if it's an o-series model (reasoning models)
+        # These models don't support temperature or system messages
+        is_o_series = (
+            model in ['o1', 'o3', 'o4'] or 
+            model.startswith('o1-') or 
+            model.startswith('o3-') or 
+            model.startswith('o4-')
+        )
+        
+        # Build API parameters based on model type
+        api_params = {
+            "model": model,
+            "messages": messages,
+        }
+        
+        if is_o_series:
+            # o-series models: no temperature, use max_completion_tokens
+            if max_tokens:
+                api_params["max_completion_tokens"] = max_tokens
+        else:
+            # Regular models: standard parameters
+            api_params["temperature"] = temperature
+            api_params["max_tokens"] = max_tokens
+        
+        # Add any extra parameters
+        api_params.update({
+            k: v
+            for k, v in llm_params.items()
+            if k not in ["model", "temperature", "max_tokens"]
+        })
+
         # Time the API call
         with ResponseTimer() as timer:
-            response = client.chat.completions.create(
-                model=model,
-                messages=messages,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                **{
-                    k: v
-                    for k, v in llm_params.items()
-                    if k not in ["model", "temperature", "max_tokens"]
-                },
-            )
+            response = client.chat.completions.create(**api_params)
 
         # Convert response to dict
         response_dict = response.model_dump()
@@ -473,19 +494,40 @@ def stream(  # pylint: disable=too-many-locals
         # Start timing
         start_time = time.time()
 
-        # Remove our known params, pass rest as kwargs
-        stream_response = client.chat.completions.create(
-            model=model,
-            messages=messages,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            stream=True,
-            **{
-                k: v
-                for k, v in llm_params.items()
-                if k not in ["model", "temperature", "max_tokens"]
-            },
+        # Check if it's an o-series model (reasoning models)
+        # These models don't support temperature or system messages
+        is_o_series = (
+            model in ['o1', 'o3', 'o4'] or 
+            model.startswith('o1-') or 
+            model.startswith('o3-') or 
+            model.startswith('o4-')
         )
+        
+        # Build API parameters based on model type
+        api_params = {
+            "model": model,
+            "messages": messages,
+            "stream": True,
+        }
+        
+        if is_o_series:
+            # o-series models: no temperature, use max_completion_tokens
+            if max_tokens:
+                api_params["max_completion_tokens"] = max_tokens
+        else:
+            # Regular models: standard parameters
+            api_params["temperature"] = temperature
+            api_params["max_tokens"] = max_tokens
+        
+        # Add any extra parameters
+        api_params.update({
+            k: v
+            for k, v in llm_params.items()
+            if k not in ["model", "temperature", "max_tokens"]
+        })
+        
+        # Remove our known params, pass rest as kwargs
+        stream_response = client.chat.completions.create(**api_params)
 
         chunk_count = 0
         accumulated_usage = None
@@ -601,20 +643,44 @@ def complete_with_tools(
     try:
         client = _get_llm_client(context["auth_config"], context["ssl_config"], model_tier)
 
+        # Check if it's an o-series model (reasoning models)
+        # These models don't support temperature or system messages
+        is_o_series = (
+            model in ['o1', 'o3', 'o4'] or 
+            model.startswith('o1-') or 
+            model.startswith('o3-') or 
+            model.startswith('o4-')
+        )
+        
+        # O-series models don't support tool/function calling
+        if is_o_series:
+            logger.warning(
+                "O-series models don't support tool calling, falling back to regular completion",
+                execution_id=context["execution_id"],
+                model=model
+            )
+            # Fall back to regular completion without tools
+            return complete(messages, context, llm_params, model_tier)
+        
+        # Build API parameters for regular models (O-series already handled above)
+        api_params = {
+            "model": model,
+            "messages": messages,
+            "tools": tools,
+            "temperature": temperature,
+            "max_tokens": max_tokens
+        }
+        
+        # Add any extra parameters
+        api_params.update({
+            k: v
+            for k, v in llm_params.items()
+            if k not in ["model", "temperature", "max_tokens"]
+        })
+
         # Time the API call
         with ResponseTimer() as timer:
-            response = client.chat.completions.create(
-                model=model,
-                messages=messages,
-                tools=tools,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                **{
-                    k: v
-                    for k, v in llm_params.items()
-                    if k not in ["model", "temperature", "max_tokens"]
-                },
-            )
+            response = client.chat.completions.create(**api_params)
 
         # Convert response to dict
         response_dict = response.model_dump()

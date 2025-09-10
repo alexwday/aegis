@@ -40,6 +40,44 @@ from aegis.utils.settings import config
 setup_logging()
 logger = get_logger()
 
+# =============================================================================
+# MODEL CONFIGURATION OVERRIDES
+# =============================================================================
+# Configure which models to use for different stages of the ETL process.
+# Set to None to use the default model from config (config.llm.large.model)
+# 
+# O-series models (o1, o1-mini, o3, etc.) are great for reasoning tasks
+# but DON'T support tool/function calling. They can only be used for:
+# - SYNTHESIS_MODEL: Final report synthesis (no tools needed)
+# 
+# Regular models (gpt-4, gpt-4-turbo) support tool calling and can be used for:
+# - RESEARCH_PLAN_MODEL: Generating research plans (requires tool calling)
+# - CATEGORY_EXTRACTION_MODEL: Extracting category data (requires tool calling)
+# - SYNTHESIS_MODEL: Final report synthesis (can use any model)
+# =============================================================================
+
+MODEL_OVERRIDES = {
+    # Model for generating research plans (MUST support tool calling - no O-series)
+    "RESEARCH_PLAN_MODEL": None,  # e.g., "gpt-4-turbo", "gpt-4o", or None for default
+    
+    # Model for extracting category data (MUST support tool calling - no O-series)  
+    "CATEGORY_EXTRACTION_MODEL": None,  # e.g., "gpt-4-turbo", "gpt-4o", or None for default
+    
+    # Model for final synthesis (can use O-series models for better reasoning)
+    "SYNTHESIS_MODEL": None,  # e.g., "o1-mini", "o1", "o3", "gpt-4", or None for default
+}
+
+# Helper function to get model for each stage
+def get_model_for_stage(stage: str) -> str:
+    """Get the model to use for a specific stage, with override support."""
+    override = MODEL_OVERRIDES.get(stage)
+    if override:
+        logger.info(f"Using override model for {stage}: {override}")
+        return override
+    default = config.llm.large.model
+    logger.debug(f"Using default model for {stage}: {default}")
+    return default
+
 
 def load_research_plan_config():
     """Load the research plan prompt and tool definition from YAML file."""
@@ -504,7 +542,7 @@ Category {i}:
                 tools=[research_config['tool']],
                 context=context,
                 llm_params={
-                    "model": config.llm.large.model
+                    "model": get_model_for_stage("RESEARCH_PLAN_MODEL")
                 }
             )
             
@@ -634,7 +672,7 @@ Category {i}:
                     tools=[extraction_config['tool']],
                     context=context,
                     llm_params={
-                        "model": config.llm.large.model
+                        "model": get_model_for_stage("CATEGORY_EXTRACTION_MODEL")
                     }
                 )
                 
