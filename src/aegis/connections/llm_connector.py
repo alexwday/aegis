@@ -373,7 +373,7 @@ def complete(
         client = _get_llm_client(context["auth_config"], context["ssl_config"], model_tier)
 
         # Check if it's an o-series model (reasoning models)
-        # These models don't support temperature or system messages
+        # These models don't support the temperature parameter
         is_o_series = (
             model in ['o1', 'o3', 'o4'] or 
             model.startswith('o1-') or 
@@ -495,7 +495,7 @@ def stream(  # pylint: disable=too-many-locals
         start_time = time.time()
 
         # Check if it's an o-series model (reasoning models)
-        # These models don't support temperature or system messages
+        # These models don't support the temperature parameter
         is_o_series = (
             model in ['o1', 'o3', 'o4'] or 
             model.startswith('o1-') or 
@@ -644,7 +644,7 @@ def complete_with_tools(
         client = _get_llm_client(context["auth_config"], context["ssl_config"], model_tier)
 
         # Check if it's an o-series model (reasoning models)
-        # These models don't support temperature or system messages
+        # These models don't support temperature parameter
         is_o_series = (
             model in ['o1', 'o3', 'o4'] or 
             model.startswith('o1-') or 
@@ -652,24 +652,21 @@ def complete_with_tools(
             model.startswith('o4-')
         )
         
-        # O-series models don't support tool/function calling
-        if is_o_series:
-            logger.warning(
-                "O-series models don't support tool calling, falling back to regular completion",
-                execution_id=context["execution_id"],
-                model=model
-            )
-            # Fall back to regular completion without tools
-            return complete(messages, context, llm_params, model_tier)
-        
-        # Build API parameters for regular models (O-series already handled above)
+        # Build API parameters based on model type
         api_params = {
             "model": model,
             "messages": messages,
             "tools": tools,
-            "temperature": temperature,
-            "max_tokens": max_tokens
         }
+        
+        if is_o_series:
+            # O-series models: no temperature, use max_completion_tokens
+            if max_tokens:
+                api_params["max_completion_tokens"] = max_tokens
+        else:
+            # Regular models: standard parameters
+            api_params["temperature"] = temperature
+            api_params["max_tokens"] = max_tokens
         
         # Add any extra parameters
         api_params.update({

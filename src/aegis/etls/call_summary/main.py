@@ -46,25 +46,21 @@ logger = get_logger()
 # Configure which models to use for different stages of the ETL process.
 # Set to None to use the default model from config (config.llm.large.model)
 # 
-# O-series models (o1, o1-mini, o3, etc.) are great for reasoning tasks
-# but DON'T support tool/function calling. They can only be used for:
-# - SYNTHESIS_MODEL: Final report synthesis (no tools needed)
+# O-series models (o1, o1-mini, o3, etc.) offer superior reasoning capabilities
+# and now support tool/function calling (as of December 2024).
+# They don't support the temperature parameter but excel at complex analysis.
 # 
-# Regular models (gpt-4, gpt-4-turbo) support tool calling and can be used for:
-# - RESEARCH_PLAN_MODEL: Generating research plans (requires tool calling)
-# - CATEGORY_EXTRACTION_MODEL: Extracting category data (requires tool calling)
-# - SYNTHESIS_MODEL: Final report synthesis (can use any model)
+# Available models include:
+# - O-series: o1, o1-mini, o3, o3-mini (better reasoning, no temperature)
+# - GPT-4 series: gpt-4, gpt-4-turbo, gpt-4o (standard capabilities)
 # =============================================================================
 
 MODEL_OVERRIDES = {
-    # Model for generating research plans (MUST support tool calling - no O-series)
-    "RESEARCH_PLAN_MODEL": None,  # e.g., "gpt-4-turbo", "gpt-4o", or None for default
+    # Model for generating research plans (uses tool calling)
+    "RESEARCH_PLAN_MODEL": None,  # e.g., "o1-mini", "gpt-4-turbo", "gpt-4o", or None for default
     
-    # Model for extracting category data (MUST support tool calling - no O-series)  
-    "CATEGORY_EXTRACTION_MODEL": None,  # e.g., "gpt-4-turbo", "gpt-4o", or None for default
-    
-    # Model for final synthesis (can use O-series models for better reasoning)
-    "SYNTHESIS_MODEL": None,  # e.g., "o1-mini", "o1", "o3", "gpt-4", or None for default
+    # Model for extracting category data (uses tool calling)  
+    "CATEGORY_EXTRACTION_MODEL": None,  # e.g., "o1", "o3-mini", "gpt-4o", or None for default
 }
 
 # Helper function to get model for each stage
