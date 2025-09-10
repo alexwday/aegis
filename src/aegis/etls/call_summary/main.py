@@ -26,6 +26,11 @@ from docx.enum.style import WD_STYLE_TYPE
 import re
 import mistune
 from html.parser import HTMLParser
+from reportlab.lib.pagesizes import letter
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import inch
+from reportlab.lib.enums import TA_LEFT
 
 # Import direct transcript functions
 from aegis.model.subagents.transcripts.retrieval import retrieve_full_section
@@ -183,6 +188,111 @@ def parse_and_add_formatted_text(doc, text: str):
             # Parse HTML and add to Word document
             parser = MarkdownToDocxParser(doc)
             parser.feed(html_content)
+
+
+def save_transcript_content_to_pdf(
+    content: str,
+    filename: str,
+    title: str,
+    subtitle: str = "",
+    output_dir: Optional[str] = None
+) -> str:
+    """
+    Save formatted transcript content to PDF for verification.
+    
+    Args:
+        content: The formatted transcript content
+        filename: Output filename (without .pdf extension)
+        title: PDF title
+        subtitle: Optional subtitle
+        output_dir: Output directory path (defaults to output folder)
+    
+    Returns:
+        Path to the saved PDF file
+    """
+    # Set up output directory
+    if output_dir is None:
+        output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'output')
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # Create PDF filepath
+    pdf_path = os.path.join(output_dir, f"{filename}.pdf")
+    
+    # Create PDF document
+    doc = SimpleDocTemplate(
+        pdf_path,
+        pagesize=letter,
+        rightMargin=72,
+        leftMargin=72,
+        topMargin=72,
+        bottomMargin=72
+    )
+    
+    # Get styles
+    styles = getSampleStyleSheet()
+    
+    # Create custom styles
+    title_style = ParagraphStyle(
+        'CustomTitle',
+        parent=styles['Heading1'],
+        fontSize=16,
+        spaceAfter=12,
+        alignment=TA_LEFT
+    )
+    
+    subtitle_style = ParagraphStyle(
+        'CustomSubtitle',
+        parent=styles['Heading2'],
+        fontSize=12,
+        spaceAfter=24,
+        alignment=TA_LEFT
+    )
+    
+    body_style = ParagraphStyle(
+        'CustomBody',
+        parent=styles['BodyText'],
+        fontSize=10,
+        leading=14,
+        spaceAfter=6
+    )
+    
+    # Build story
+    story = []
+    
+    # Add title
+    story.append(Paragraph(title, title_style))
+    
+    # Add subtitle if provided
+    if subtitle:
+        story.append(Paragraph(subtitle, subtitle_style))
+    
+    story.append(Spacer(1, 0.2 * inch))
+    
+    # Process content - escape XML characters and split into paragraphs
+    # Replace problematic characters for XML
+    safe_content = content.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+    
+    # Split content into lines and process
+    lines = safe_content.split('\n')
+    for line in lines:
+        if line.strip():
+            # Add each non-empty line as a paragraph
+            story.append(Paragraph(line, body_style))
+        else:
+            # Add small space for empty lines
+            story.append(Spacer(1, 0.1 * inch))
+    
+    # Build PDF
+    doc.build(story)
+    
+    logger.info(
+        "etl.call_summary.pdf_saved",
+        pdf_path=pdf_path,
+        title=title,
+        content_length=len(content)
+    )
+    
+    return pdf_path
 
 
 def load_categories_from_xlsx(bank_type: str) -> List[Dict[str, str]]:
@@ -511,6 +621,14 @@ def generate_call_summary(
             content_length=len(formatted_transcript)
         )
         
+        # Save Stage 1 transcript content to PDF for verification
+        save_transcript_content_to_pdf(
+            content=formatted_transcript,
+            filename=f"{bank_info['bank_symbol']}_{fiscal_year}_{quarter}_Stage1_ALL_{execution_id[:8]}",
+            title=f"Stage 1: Full Transcript - ALL Sections",
+            subtitle=f"{bank_info['bank_name']} ({bank_info['bank_symbol']}) - {quarter} {fiscal_year}"
+        )
+        
         # Build CO-STAR+XML prompt for research plan
         costar_prompt = f"""<context>
 You are creating a comprehensive earnings call summary report for {bank_info['bank_name']} ({bank_info['bank_symbol']}) for {quarter} {fiscal_year}.
@@ -639,6 +757,14 @@ Based on the transcript above, create the research plan:"""
                 chunks=chunks,
                 combo=combo,
                 context=context
+            )
+            
+            # Save Stage 2 transcript content to PDF for each category
+            save_transcript_content_to_pdf(
+                content=formatted_section,
+                filename=f"{bank_info['bank_symbol']}_{fiscal_year}_{quarter}_Stage2_Cat{i:02d}_{category['transcripts_section']}_{execution_id[:8]}",
+                title=f"Stage 2 Category {i}: {category['category_name']}",
+                subtitle=f"Section: {category['transcripts_section']} | {bank_info['bank_name']} - {quarter} {fiscal_year}"
             )
             
             # Build context from previous research outputs
