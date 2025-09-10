@@ -5,11 +5,14 @@ Sync aegis_data_availability table with actual transcript data.
 This script:
 1. On first run (--rebuild): Wipes and rebuilds the entire table from transcript data
 2. On subsequent runs: Updates only the 'transcripts' tag in database_names array
+3. For fixing mismatched IDs (--complete-wipe): DELETEs all records then rebuilds
 
 Usage:
-    python scripts/sync_data_availability.py           # Update mode (preserves other tags)
-    python scripts/sync_data_availability.py --rebuild # Rebuild mode (wipes and recreates)
-    python scripts/sync_data_availability.py --dry-run # Show what would be done
+    python scripts/sync_data_availability.py                # Update mode (preserves other tags)
+    python scripts/sync_data_availability.py --rebuild      # Rebuild mode (truncates and recreates)
+    python scripts/sync_data_availability.py --complete-wipe # Complete wipe (DELETE all, then rebuild)
+    python scripts/sync_data_availability.py --dry-run      # Show what would be done
+    python scripts/sync_data_availability.py --verify       # Show current table state
 """
 
 import argparse
@@ -100,18 +103,24 @@ def get_current_availability() -> Dict[Tuple[int, int, str], List[str]]:
         return current
 
 
-def rebuild_table(transcript_data: Dict, dry_run: bool = False):
+def rebuild_table(transcript_data: Dict, dry_run: bool = False, complete_wipe: bool = False):
     """
     Wipe and rebuild the entire aegis_data_availability table.
     
     Args:
         transcript_data: Dictionary of transcript availability
         dry_run: If True, only show what would be done
+        complete_wipe: If True, DELETE all records (slower but ensures clean state)
     """
-    logger.info("Starting REBUILD mode - will wipe and recreate table")
+    if complete_wipe:
+        logger.info("Starting COMPLETE WIPE mode - will DELETE all records and recreate table")
+    else:
+        logger.info("Starting REBUILD mode - will wipe and recreate table")
     
     if dry_run:
         logger.info("DRY RUN - No changes will be made")
+        if complete_wipe:
+            logger.info("Would DELETE all existing records")
         logger.info(f"Would insert {len(transcript_data)} records")
         for key, data in list(transcript_data.items())[:5]:  # Show first 5
             logger.info(f"  Would insert: {data['bank_name']} - {data['fiscal_year']} {data['quarter']}")
@@ -124,9 +133,15 @@ def rebuild_table(transcript_data: Dict, dry_run: bool = False):
         trans = conn.begin()
         
         try:
-            # 1. Truncate the table
-            logger.info("Truncating aegis_data_availability table...")
-            conn.execute(text("TRUNCATE TABLE aegis_data_availability"))
+            if complete_wipe:
+                # DELETE all records (ensures complete removal even with FK constraints)
+                logger.info("Deleting ALL records from aegis_data_availability table...")
+                result = conn.execute(text("DELETE FROM aegis_data_availability"))
+                logger.info(f"Deleted {result.rowcount} existing records")
+            else:
+                # 1. Truncate the table (faster but may fail with FK constraints)
+                logger.info("Truncating aegis_data_availability table...")
+                conn.execute(text("TRUNCATE TABLE aegis_data_availability"))
             
             # 2. Insert all transcript data
             logger.info(f"Inserting {len(transcript_data)} records...")
@@ -327,6 +342,11 @@ def main():
         help="Wipe and rebuild the entire table (use for first run)"
     )
     parser.add_argument(
+        "--complete-wipe",
+        action="store_true",
+        help="DELETE all records before rebuild (ensures clean state, removes mismatched bank IDs)"
+    )
+    parser.add_argument(
         "--dry-run",
         action="store_true",
         help="Show what would be done without making changes"
@@ -349,8 +369,8 @@ def main():
         transcript_data = get_transcript_availability()
         logger.info(f"Found {len(transcript_data)} bank/period combinations in transcripts")
         
-        if args.rebuild:
-            rebuild_table(transcript_data, dry_run=args.dry_run)
+        if args.rebuild or args.complete_wipe:
+            rebuild_table(transcript_data, dry_run=args.dry_run, complete_wipe=args.complete_wipe)
         else:
             update_transcript_tags(transcript_data, dry_run=args.dry_run)
         
