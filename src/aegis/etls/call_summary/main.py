@@ -19,280 +19,114 @@ from datetime import datetime
 from typing import Dict, Any, List, Optional
 from sqlalchemy import text
 import pandas as pd
+import yaml
 from docx import Document
 from docx.shared import Inches, Pt, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.enum.style import WD_STYLE_TYPE
 import re
-import mistune
-from html.parser import HTMLParser
-from reportlab.lib.pagesizes import letter
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.units import inch
-from reportlab.lib.enums import TA_LEFT
 
 # Import direct transcript functions
 from aegis.model.subagents.transcripts.retrieval import retrieve_full_section
-from aegis.model.subagents.transcripts.formatting import (
-    format_full_section_chunks,
-    generate_research_statement
-)
+from aegis.model.subagents.transcripts.formatting import format_full_section_chunks
 from aegis.utils.ssl import setup_ssl
 from aegis.connections.oauth_connector import setup_authentication
+from aegis.connections.llm_connector import complete_with_tools
 from aegis.connections.postgres_connector import get_connection
 from aegis.utils.logging import setup_logging, get_logger
+from aegis.utils.settings import config
 
 # Initialize logging
 setup_logging()
 logger = get_logger()
 
 
-class MarkdownToDocxParser(HTMLParser):
-    """
-    Custom HTML parser to convert markdown-generated HTML to Word document format.
-    """
-    def __init__(self, doc):
-        super().__init__()
-        self.doc = doc
-        self.current_paragraph = None
-        self.current_run = None
-        self.text_stack = []
-        self.format_stack = []  # Track bold, italic, etc.
-        self.in_list = False
-        self.list_type = None
-        self.list_counter = 1  # Track numbered list counter
-        
-    def handle_starttag(self, tag, attrs):
-        if tag == 'h1':
-            self.current_paragraph = self.doc.add_heading(level=1)
-        elif tag == 'h2':
-            self.current_paragraph = self.doc.add_heading(level=2)
-        elif tag == 'h3':
-            self.current_paragraph = self.doc.add_heading(level=3)
-        elif tag == 'p':
-            self.current_paragraph = self.doc.add_paragraph()
-        elif tag == 'strong' or tag == 'b':
-            self.format_stack.append('bold')
-        elif tag == 'em' or tag == 'i':
-            self.format_stack.append('italic')
-        elif tag == 'ul':
-            self.in_list = True
-            self.list_type = 'bullet'
-        elif tag == 'ol':
-            self.in_list = True
-            self.list_type = 'number'
-            self.list_counter = 1  # Reset counter for new list
-        elif tag == 'li':
-            # Create a regular paragraph with manual bullet/number
-            self.current_paragraph = self.doc.add_paragraph()
-            from docx.shared import Inches
-            self.current_paragraph.paragraph_format.left_indent = Inches(0.25)
-            
-            if self.list_type == 'bullet':
-                # Add bullet character manually at the start
-                self.current_paragraph.add_run('• ')
-            elif self.list_type == 'number':
-                # Add number manually at the start
-                self.current_paragraph.add_run(f'{self.list_counter}. ')
-                self.list_counter += 1
-        elif tag == 'br':
-            if self.current_paragraph:
-                self.current_paragraph.add_run('\n')
-                
-    def handle_endtag(self, tag):
-        if tag in ['h1', 'h2', 'h3', 'p', 'li']:
-            self.current_paragraph = None
-        elif tag in ['strong', 'b']:
-            if 'bold' in self.format_stack:
-                self.format_stack.remove('bold')
-        elif tag in ['em', 'i']:
-            if 'italic' in self.format_stack:
-                self.format_stack.remove('italic')
-        elif tag in ['ul', 'ol']:
-            self.in_list = False
-            self.list_type = None
-            self.list_counter = 1  # Reset counter
-            # Don't add extra spacing - let normal paragraph flow handle it
-            
-    def handle_data(self, data):
-        if not data.strip():
-            return
-            
-        if self.current_paragraph is None:
-            self.current_paragraph = self.doc.add_paragraph()
-            
-        run = self.current_paragraph.add_run(data)
-        
-        # Apply formatting from stack
-        if 'bold' in self.format_stack:
-            run.bold = True
-        if 'italic' in self.format_stack:
-            run.italic = True
-
-
-def parse_and_add_formatted_text(doc, text: str):
-    """
-    Parse markdown text and add to Word document with proper formatting.
-    Uses mistune to convert markdown to HTML, then parses HTML to Word.
-    """
-    # Clean up unwanted elements first
-    lines = text.split('\n')
-    cleaned_lines = []
-    
-    for line in lines:
-        # Skip unwanted headers and dividers
-        if line.strip().startswith('###') or line.strip() == '---':
-            continue
-        cleaned_lines.append(line)
-    
-    cleaned_text = '\n'.join(cleaned_lines)
-    
-    # Check if this is a category header (contains colon and matches expected pattern)
-    first_line = cleaned_lines[0] if cleaned_lines else ''
-    
-    # Debug logging for header detection
-    logger.debug(f"Checking first line for header: {first_line[:100] if first_line else 'Empty'}")
-    
-    # More flexible header detection - look for category name pattern with colon
-    # Headers typically follow pattern: "Category Name: Dynamic Title"
-    is_header = (
-        ':' in first_line and 
-        len(first_line) < 200 and  # Headers are typically short
-        not first_line.strip().startswith('-') and  # Not a list item
-        not first_line.strip().startswith('"')  # Not a quote
+def load_research_plan_config():
+    """Load the research plan prompt and tool definition from YAML file."""
+    prompt_path = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), 
+        'research_plan_prompt.yaml'
     )
-    
-    if is_header:
-        # Extract category header
-        header_line = first_line.strip().replace('**', '')
-        doc.add_heading(header_line, level=2)
-        # Don't add extra spacing - Word handles heading spacing
-        # Process the rest of the content
-        remaining_text = '\n'.join(cleaned_lines[1:])
-        if remaining_text.strip():
-            # Convert markdown to HTML
-            markdown = mistune.create_markdown()
-            html_content = markdown(remaining_text)
-            
-            # Parse HTML and add to Word document
-            parser = MarkdownToDocxParser(doc)
-            parser.feed(html_content)
-    else:
-        # No special header, process all content
-        if cleaned_text.strip():
-            # Convert markdown to HTML
-            markdown = mistune.create_markdown()
-            html_content = markdown(cleaned_text)
-            
-            # Parse HTML and add to Word document
-            parser = MarkdownToDocxParser(doc)
-            parser.feed(html_content)
+    with open(prompt_path, 'r') as f:
+        config = yaml.safe_load(f)
+    return {
+        'system_template': config['system_template'],
+        'tool': config['tool']
+    }
 
 
-def save_transcript_content_to_pdf(
-    content: str,
-    filename: str,
-    title: str,
-    subtitle: str = "",
-    output_dir: Optional[str] = None
-) -> str:
+def load_category_extraction_config():
+    """Load the category extraction prompt and tool definition from YAML file."""
+    prompt_path = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), 
+        'category_extraction_prompt.yaml'
+    )
+    with open(prompt_path, 'r') as f:
+        config = yaml.safe_load(f)
+    return {
+        'system_template': config['system_template'],
+        'tool': config['tool']
+    }
+
+
+def add_structured_content_to_doc(doc, category_data: dict) -> None:
     """
-    Save formatted transcript content to PDF for verification.
+    Add structured category data directly to Word document with proper formatting.
     
     Args:
-        content: The formatted transcript content
-        filename: Output filename (without .pdf extension)
-        title: PDF title
-        subtitle: Optional subtitle
-        output_dir: Output directory path (defaults to output folder)
-    
-    Returns:
-        Path to the saved PDF file
+        doc: Word document object
+        category_data: Dictionary with title, summary_statements, evidence structure
     """
-    # Set up output directory
-    if output_dir is None:
-        output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'output')
-    os.makedirs(output_dir, exist_ok=True)
+    if category_data.get('rejected', False):
+        return  # Skip rejected categories
     
-    # Create PDF filepath
-    pdf_path = os.path.join(output_dir, f"{filename}.pdf")
+    # Add the category title as a heading
+    heading = doc.add_heading(category_data['title'], level=2)
+    # Reduce heading font size and spacing
+    for run in heading.runs:
+        run.font.size = Pt(12)
+    heading.paragraph_format.space_before = Pt(4)  # Minimal space before new section
+    heading.paragraph_format.space_after = Pt(1)   # Almost no space after title
     
-    # Create PDF document
-    doc = SimpleDocTemplate(
-        pdf_path,
-        pagesize=letter,
-        rightMargin=72,
-        leftMargin=72,
-        topMargin=72,
-        bottomMargin=72
-    )
-    
-    # Get styles
-    styles = getSampleStyleSheet()
-    
-    # Create custom styles
-    title_style = ParagraphStyle(
-        'CustomTitle',
-        parent=styles['Heading1'],
-        fontSize=16,
-        spaceAfter=12,
-        alignment=TA_LEFT
-    )
-    
-    subtitle_style = ParagraphStyle(
-        'CustomSubtitle',
-        parent=styles['Heading2'],
-        fontSize=12,
-        spaceAfter=24,
-        alignment=TA_LEFT
-    )
-    
-    body_style = ParagraphStyle(
-        'CustomBody',
-        parent=styles['BodyText'],
-        fontSize=10,
-        leading=14,
-        spaceAfter=6
-    )
-    
-    # Build story
-    story = []
-    
-    # Add title
-    story.append(Paragraph(title, title_style))
-    
-    # Add subtitle if provided
-    if subtitle:
-        story.append(Paragraph(subtitle, subtitle_style))
-    
-    story.append(Spacer(1, 0.2 * inch))
-    
-    # Process content - escape XML characters and split into paragraphs
-    # Replace problematic characters for XML
-    safe_content = content.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
-    
-    # Split content into lines and process
-    lines = safe_content.split('\n')
-    for line in lines:
-        if line.strip():
-            # Add each non-empty line as a paragraph
-            story.append(Paragraph(line, body_style))
-        else:
-            # Add small space for empty lines
-            story.append(Spacer(1, 0.1 * inch))
-    
-    # Build PDF
-    doc.build(story)
-    
-    logger.info(
-        "etl.call_summary.pdf_saved",
-        pdf_path=pdf_path,
-        title=title,
-        content_length=len(content)
-    )
-    
-    return pdf_path
+    # Process each summary statement
+    for statement_data in category_data.get('summary_statements', []):
+        # Add the statement as a bullet point
+        statement_para = doc.add_paragraph(style='List Bullet')
+        statement_run = statement_para.add_run(statement_data['statement'])
+        statement_run.font.size = Pt(10)
+        statement_para.paragraph_format.space_after = Pt(2)
+        statement_para.paragraph_format.line_spacing = 1.0
+        
+        # Add supporting evidence as indented quotes (no bullets)
+        if statement_data.get('evidence'):
+            for evidence in statement_data['evidence']:
+                # Create indented paragraph for quotes/evidence (no bullet)
+                evidence_para = doc.add_paragraph()
+                # Set significant indentation from both sides
+                evidence_para.paragraph_format.left_indent = Inches(0.75)   # Much more left indent
+                evidence_para.paragraph_format.right_indent = Inches(0.75)  # Much more right indent
+                evidence_para.paragraph_format.space_after = Pt(1)
+                evidence_para.paragraph_format.line_spacing = 1.0
+                
+                # Add the evidence content in italics with smaller font
+                if evidence['type'] == 'quote':
+                    content_run = evidence_para.add_run(f'"{evidence["content"]}"')
+                else:  # paraphrase
+                    content_run = evidence_para.add_run(evidence['content'])
+                
+                content_run.italic = True
+                content_run.font.size = Pt(8)
+                content_run.font.color.rgb = RGBColor(64, 64, 64)  # Dark gray
+                
+                # Add speaker attribution
+                speaker_run = evidence_para.add_run(f' — {evidence["speaker"]}')
+                speaker_run.italic = True
+                speaker_run.font.size = Pt(8)
+                speaker_run.font.color.rgb = RGBColor(96, 96, 96)  # Lighter gray
+
+
+
+
 
 
 def load_categories_from_xlsx(bank_type: str) -> List[Dict[str, str]]:
@@ -575,7 +409,7 @@ def generate_call_summary(
             num_categories=len(categories)
         )
         
-        # Step 6: FIRST STAGE - Generate Research Plan
+        # Step 6: FIRST STAGE - Generate Research Plan using Tool Calling
         # Pull ALL sections from transcript
         combo = {
             "bank_id": bank_info["bank_id"],
@@ -621,108 +455,91 @@ def generate_call_summary(
             content_length=len(formatted_transcript)
         )
         
-        # Save Stage 1 transcript content to PDF for verification
-        save_transcript_content_to_pdf(
-            content=formatted_transcript,
-            filename=f"{bank_info['bank_symbol']}_{fiscal_year}_{quarter}_Stage1_ALL_{execution_id[:8]}",
-            title=f"Stage 1: Full Transcript - ALL Sections",
-            subtitle=f"{bank_info['bank_name']} ({bank_info['bank_symbol']}) - {quarter} {fiscal_year}"
-        )
+        # Load research plan configuration (prompt + tool)
+        research_config = load_research_plan_config()
         
-        # Build CO-STAR+XML prompt for research plan
-        costar_prompt = f"""<context>
-You are creating a comprehensive earnings call summary report for {bank_info['bank_name']} ({bank_info['bank_symbol']}) for {quarter} {fiscal_year}.
-You have been provided with the complete earnings call transcript.
-</context>
-
-<objective>
-Create a RESEARCH PLAN that organizes and structures how the transcript content should be distributed across report categories.
-This is an organizational exercise only - DO NOT extract actual values, numbers, or verbatim quotes.
-</objective>
-
-<style>
-- Focus on content organization and structure, not extraction
-- Identify topics and themes without providing specific values
-- Note speaker roles and discussion sections without quoting
-- Map relationships between categories to avoid duplication
-- Provide directional guidance for the extraction phase
-</style>
-
-<task>
-Review the transcript and create a research plan for each category below. Each category has specific instructions and a designated section source (MD only, QA only, or ALL). Your plan should explain how to extract and organize content for that category while respecting its section constraints.
-
-Categories to plan for:
-"""
-        
-        # Add indexed categories to the prompt with section context
+        # Format categories for system prompt
+        categories_text = ""
         for i, category in enumerate(categories, 1):
-            # Determine section context description
-            if category['transcripts_section'] == 'MD':
-                section_context = "using ONLY the Management Discussion section"
-            elif category['transcripts_section'] == 'QA':
-                section_context = "using ONLY the Q&A section"
-            else:  # ALL
-                section_context = "using BOTH Management Discussion and Q&A sections"
+            section_desc = {
+                'MD': 'Management Discussion section only',
+                'QA': 'Q&A section only', 
+                'ALL': 'Both Management Discussion and Q&A sections'
+            }.get(category['transcripts_section'], 'ALL sections')
             
-            costar_prompt += f"""
-<category index="{i}">
-<name>{category['category_name']}</name>
-<section_source>{section_context}</section_source>
-<instructions>{category['category_description']}</instructions>
-</category>
+            categories_text += f"""
+Category {i}:
+- Name: {category['category_name']}
+- Section: {section_desc}
+- Instructions: {category['category_description']}
 """
         
-        costar_prompt += f"""
-</task>
-
-<audience>
-Financial analysts and investors who need structured, comprehensive analysis of earnings calls.
-</audience>
-
-<response_format>
-CRITICAL: You MUST use this EXACT XML structure for EVERY category. This format is required for parsing.
-
-For EACH of the {len(categories)} categories above, provide EXACTLY this structure:
-
-<category_plan index="[NUMBER]">
-<name>[CATEGORY NAME - must match exactly from list above]</name>
-<research_plan>
-[A paragraph describing the research plan for this category. Based on the category instructions and section source, explain what topics to look for, what types of metrics to extract (without values), which speakers or discussions to reference, and how this content should be organized. Note any overlaps with other categories to avoid duplication. Focus on planning the extraction and organization, not writing the actual content. Remember to respect the section_source constraint - if it says "ONLY Management Discussion" then do not plan to use Q&A content, and vice versa.]
-</research_plan>
-</category_plan>
-
-REQUIREMENTS:
-1. You MUST provide EXACTLY {len(categories)} category_plan blocks
-2. Index numbers MUST be sequential from 1 to {len(categories)}
-3. Category names MUST match exactly as provided in the list above
-4. Research plan MUST be in paragraph format (not bullet points)
-5. Research plan MUST respect the section_source constraint (MD only, QA only, or ALL)
-6. Do NOT include actual numbers, percentages, dollar amounts, or verbatim quotes
-7. Do NOT add any text outside the XML structures
-
-This structured format is required for automated parsing. Non-compliance will cause processing errors.
-</response_format>
-
-Based on the transcript above, create the research plan:"""
-        
-        # Generate the research plan
-        research_plan = generate_research_statement(
-            formatted_content=formatted_transcript,
-            combo=combo,
-            context=context,
-            method=0,  # Full retrieval
-            method_reasoning="ETL Stage 1: Research Plan Generation",
-            custom_prompt=costar_prompt
+        # Format system prompt with all context
+        system_prompt = research_config['system_template'].format(
+            bank_name=bank_info['bank_name'],
+            bank_symbol=bank_info['bank_symbol'],
+            quarter=quarter,
+            fiscal_year=fiscal_year,
+            categories_list=categories_text
         )
         
+        # Keep user prompt minimal - just the transcript
+        user_prompt = f"Analyze this transcript and create the research plan:\n\n{formatted_transcript}"
+        
+        # Build messages for LLM
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ]
+        
+        # Make tool call to generate research plan
         logger.info(
-            "etl.call_summary.research_plan_generated",
-            execution_id=execution_id,
-            plan_length=len(research_plan)
+            "etl.call_summary.calling_llm_research_plan",
+            execution_id=execution_id
         )
         
-        # Step 7: SECOND STAGE - Generate each category section using the research plan
+        try:
+            response = complete_with_tools(
+                messages=messages,
+                tools=[research_config['tool']],
+                context=context,
+                llm_params={
+                    "model": config.llm.large.model
+                }
+            )
+            
+            # Parse the tool response
+            tool_call = response['choices'][0]['message']['tool_calls'][0]
+            research_plan_data = json.loads(tool_call['function']['arguments'])
+            
+            logger.info(
+                "etl.call_summary.research_plan_generated",
+                execution_id=execution_id,
+                num_plans=len(research_plan_data['category_plans'])
+            )
+            
+            # Validate we got plans for all categories
+            if len(research_plan_data['category_plans']) != len(categories):
+                logger.warning(
+                    "etl.call_summary.plan_count_mismatch",
+                    execution_id=execution_id,
+                    expected=len(categories),
+                    received=len(research_plan_data['category_plans'])
+                )
+            
+        except Exception as e:
+            logger.error(
+                "etl.call_summary.research_plan_error",
+                execution_id=execution_id,
+                error=str(e)
+            )
+            return f"❌ Error generating research plan: {str(e)}"
+        
+        # Step 7: SECOND STAGE - Extract content for each category using tool calling
         category_results = []
+        
+        # Load category extraction configuration
+        extraction_config = load_category_extraction_config()
         
         for i, category in enumerate(categories, 1):
             logger.info(
@@ -732,6 +549,21 @@ Based on the transcript above, create the research plan:"""
                 category_name=category["category_name"],
                 section=category["transcripts_section"]
             )
+            
+            # Get research plan for this category
+            category_plan = next(
+                (p for p in research_plan_data['category_plans'] 
+                 if p['name'] == category['category_name']),
+                None
+            )
+            
+            if not category_plan:
+                logger.warning(
+                    "etl.call_summary.no_plan_for_category",
+                    execution_id=execution_id,
+                    category_name=category["category_name"]
+                )
+                category_plan = {"plan": "No specific plan available"}
             
             # Retrieve chunks for this specific category's section
             chunks = retrieve_full_section(
@@ -746,9 +578,12 @@ Based on the transcript above, create the research plan:"""
                     execution_id=execution_id,
                     category_name=category["category_name"]
                 )
+                # Create rejected result
                 category_results.append({
-                    "category_name": category["category_name"],
-                    "content": f"No {category['transcripts_section']} section data available for this category."
+                    "index": i,
+                    "name": category["category_name"],
+                    "rejected": True,
+                    "rejection_reason": f"No {category['transcripts_section']} section data available"
                 })
                 continue
             
@@ -759,163 +594,170 @@ Based on the transcript above, create the research plan:"""
                 context=context
             )
             
-            # Save Stage 2 transcript content to PDF for each category
-            save_transcript_content_to_pdf(
-                content=formatted_section,
-                filename=f"{bank_info['bank_symbol']}_{fiscal_year}_{quarter}_Stage2_Cat{i:02d}_{category['transcripts_section']}_{execution_id[:8]}",
-                title=f"Stage 2 Category {i}: {category['category_name']}",
-                subtitle=f"Section: {category['transcripts_section']} | {bank_info['bank_name']} - {quarter} {fiscal_year}"
-            )
+            # Format previous sections summary (keep minimal)
+            previous_summary = ""
+            if category_results:
+                # Just list category names that were completed
+                completed_names = [r['name'] for r in category_results if not r.get('rejected', False)]
+                if completed_names:
+                    previous_summary = f"Already completed: {', '.join(completed_names)}"
+                else:
+                    previous_summary = "No previous sections completed yet"
             
-            # Build context from previous research outputs
-            previous_research = "\n\n".join([
-                f"[Category {j}: {res['category_name']}]\n{res['content']}" 
-                for j, res in enumerate(category_results, 1)
-            ]) if category_results else "No previous sections completed yet."
-            
-            # Create CO-STAR+XML prompt for this specific category
-            category_prompt = f"""<context>
-You are continuing to write section {i} of {len(categories)} in an ongoing report.
-The bank and period context ({bank_info['bank_name']}, {quarter} {fiscal_year}) is already established.
-Do NOT repeat the bank name or period in your opening or closing.
-</context>
-
-<objective>
-Continue the report by writing the next section for this category.
-Provide rich content with quotes and insights that flow naturally from previous sections.
-Do NOT reintroduce the bank or restate the context - dive directly into the content.
-Do NOT end with a summary paragraph that repeats the bank name or period.
-</objective>
-
-<style>
-- Start with category name and a dynamic title based on the content
-- Provide short summary statements to introduce topics
-- Include substantial direct quotes with speaker attribution
-- Mix paraphrased content with verbatim quotes
-- Focus on extracting key statements and insights
-- Keep summaries concise - let quotes carry the detail
-</style>
-
-<task>
-Current Category: {category['category_name']}
-Category Instructions: {category['category_description']}
-Section Source: {category['transcripts_section']} section only
-
-Research Plan for this Category:
-{[plan for plan in research_plan.split('</category_plan>') if f"<name>{category['category_name']}</name>" in plan][0] if research_plan else "No plan available"}
-
-Previous Sections Completed:
-{previous_research}
-
-Based on the transcript section above, generate the research output for this category.
-</task>
-
-<audience>
-Financial analysts requiring detailed earnings call analysis with supporting quotes and evidence.
-</audience>
-
-<response_format>
-IMPORTANT: Do NOT include:
-- Headers like "### Royal Bank of Canada - Q2 2025" 
-- Section breaks like "---"
-- Any bank/period headers - just start with the category
-
-MANDATORY FORMAT - Your response MUST begin EXACTLY like this:
-**{category['category_name']}: [Your Dynamic Title]**
-
-The double asterisks ** are ABSOLUTELY REQUIRED at start and end.
-DO NOT FORGET THE ** MARKERS!
-
-Example of correct format:
-**{category['category_name']}: Strong Performance Driven by Capital Markets**
-
-Then continue with:
-[Opening paragraph with key summary points. Use **bold** for important metrics or key terms.]
-
-[Topic area with context], followed by relevant quotes:
-
-- "[Direct quote with specific detail]" - *Speaker Name, Title*
-- Management noted that [paraphrased content with **key points** highlighted]
-
-[Continue pattern of summary + quotes for each major topic]
-
-Use proper markdown formatting:
-- **bold** for important numbers, metrics, and key terms
-- *italic* for speaker names and emphasis
-- Bullet lists: ensure blank line before list, then use "- " for each item
-- For multiple quotes, create proper markdown lists with blank lines before/after
-
-CRITICAL RULES:
-- Start DIRECTLY with **Category Name: Title** format
-- NO opening like "Royal Bank of Canada reported..."
-- NO closing like "In summary, Royal Bank's Q2 2025..."
-- Let content flow naturally into the next section
-- Focus on quotes and insights, not repetitive summaries
-- Write as a continuation of the report, not a standalone piece
-</response_format>
-
-Generate the research content for this category:"""
-            
-            # Generate research for this category
-            category_research = generate_research_statement(
-                formatted_content=formatted_section,
-                combo=combo,
-                context=context,
-                method=0,
-                method_reasoning=f"ETL Stage 2: Category {i} - {category['category_name']}",
-                custom_prompt=category_prompt
-            )
-            
-            # Log a sample of the markdown for debugging list formatting
-            logger.debug(
-                "etl.call_summary.category_markdown_sample",
-                execution_id=execution_id,
-                category_name=category["category_name"],
-                markdown_sample=category_research[:500] if category_research else "Empty"
-            )
-            
-            category_results.append({
-                "category_name": category["category_name"],
-                "content": category_research
-            })
-            
-            logger.info(
-                "etl.call_summary.category_completed",
-                execution_id=execution_id,
+            # Format system prompt with ALL context
+            system_prompt = extraction_config['system_template'].format(
                 category_index=i,
-                category_name=category["category_name"],
-                content_length=len(category_research)
+                total_categories=len(categories),
+                bank_name=bank_info['bank_name'],
+                quarter=quarter,
+                fiscal_year=fiscal_year,
+                category_name=category['category_name'],
+                category_description=category['category_description'],
+                transcripts_section=category['transcripts_section'],
+                research_plan=category_plan['plan'],
+                previous_sections=previous_summary
             )
+            
+            # Keep user prompt minimal - just the transcript section
+            user_prompt = f"Extract content from this transcript section:\n\n{formatted_section}"
+            
+            # Build messages
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ]
+            
+            # Make tool call
+            try:
+                response = complete_with_tools(
+                    messages=messages,
+                    tools=[extraction_config['tool']],
+                    context=context,
+                    llm_params={
+                        "model": config.llm.large.model
+                    }
+                )
+                
+                # Parse the tool response
+                tool_call = response['choices'][0]['message']['tool_calls'][0]
+                extracted_data = json.loads(tool_call['function']['arguments'])
+                
+                # Add index and name
+                extracted_data['index'] = i
+                extracted_data['name'] = category['category_name']
+                
+                category_results.append(extracted_data)
+                
+                logger.info(
+                    "etl.call_summary.category_completed",
+                    execution_id=execution_id,
+                    category_index=i,
+                    category_name=category["category_name"],
+                    rejected=extracted_data.get('rejected', False)
+                )
+                
+            except Exception as e:
+                logger.error(
+                    "etl.call_summary.category_extraction_error",
+                    execution_id=execution_id,
+                    category_name=category["category_name"],
+                    error=str(e)
+                )
+                # Add error result
+                category_results.append({
+                    "index": i,
+                    "name": category["category_name"],
+                    "rejected": True,
+                    "rejection_reason": f"Error extracting content: {str(e)}"
+                })
         
-        # Step 8: Generate Word Document
+        # Step 8: Generate Word Document from structured data
         logger.info(
             "etl.call_summary.generating_document",
             execution_id=execution_id,
-            num_sections=len(category_results)
+            num_categories=len(category_results),
+            num_rejected=sum(1 for c in category_results if c.get('rejected', False))
         )
+        
+        # Filter out rejected categories
+        valid_categories = [c for c in category_results if not c.get('rejected', False)]
+        
+        if not valid_categories:
+            logger.warning(
+                "etl.call_summary.no_valid_categories",
+                execution_id=execution_id
+            )
+            return "⚠️ All categories were rejected - no content to generate document"
         
         # Create Word document
         doc = Document()
         
-        # Add title
-        title = doc.add_heading(f'{bank_info["bank_name"]} ({bank_info["bank_symbol"]})', 0)
+        # Set narrow margins for the entire document
+        sections = doc.sections
+        for section in sections:
+            section.top_margin = Inches(0.5)
+            section.bottom_margin = Inches(0.5)
+            section.left_margin = Inches(0.5)
+            section.right_margin = Inches(0.5)
+        
+        # Title Page
+        # Add bank name as main title
+        title = doc.add_heading(bank_info["bank_name"], 0)
         title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        for run in title.runs:
+            run.font.size = Pt(20)
+        title.paragraph_format.space_after = Pt(3)  # Reduced from 6
         
-        # Add subtitle
-        subtitle = doc.add_heading(f'Earnings Call Summary - {quarter} {fiscal_year}', 1)
-        subtitle.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        # Add ticker symbol
+        ticker = doc.add_paragraph()
+        ticker.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        ticker_run = ticker.add_run(f'({bank_info["bank_symbol"]})')
+        ticker_run.font.size = Pt(14)
+        ticker_run.font.color.rgb = RGBColor(64, 64, 64)
+        ticker.paragraph_format.space_after = Pt(6)  # Reduced from 12
         
-        # Add spacing after title
-        doc.add_paragraph()
+        # Add report type
+        report_type = doc.add_heading('Earnings Call Summary', 1)
+        report_type.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        for run in report_type.runs:
+            run.font.size = Pt(16)
+        report_type.paragraph_format.space_after = Pt(3)  # Reduced from 6
         
-        # Add each category section
-        for i, result in enumerate(category_results, 1):
-            # Use the parsing function to add formatted content
-            parse_and_add_formatted_text(doc, result['content'])
+        # Add period
+        period = doc.add_paragraph()
+        period.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        period_run = period.add_run(f'{quarter} {fiscal_year}')
+        period_run.font.size = Pt(12)
+        period_run.bold = True
+        period.paragraph_format.space_after = Pt(6)  # Reduced from 18 - minimal space before first content
+        
+        # Add generation date
+        generated = doc.add_paragraph()
+        generated.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        gen_run = generated.add_run(f'Generated: {datetime.now().strftime("%B %d, %Y")}')
+        gen_run.font.size = Pt(9)
+        gen_run.font.color.rgb = RGBColor(128, 128, 128)
+        
+        # Add page break after title page
+        doc.add_page_break()
+        
+        # Add each valid category section
+        for i, category_data in enumerate(valid_categories, 1):
+            # Use the new function to add structured content
+            add_structured_content_to_doc(doc, category_data)
             
             # Add minimal spacing between sections (if not last section)
-            if i < len(category_results):
-                doc.add_paragraph()
+            if i < len(valid_categories):
+                para = doc.add_paragraph()
+                para.paragraph_format.space_after = Pt(3)
+            
+            # Log progress
+            logger.debug(
+                "etl.call_summary.category_added_to_doc",
+                execution_id=execution_id,
+                category_name=category_data['name'],
+                num_statements=len(category_data.get('summary_statements', []))
+            )
         
         # Save the document
         output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'output')
@@ -928,14 +770,16 @@ Generate the research content for this category:"""
         logger.info(
             "etl.call_summary.document_saved",
             execution_id=execution_id,
-            filepath=filepath
+            filepath=filepath,
+            valid_categories=len(valid_categories),
+            rejected_categories=len(category_results) - len(valid_categories)
         )
         
         logger.info(
             "etl.call_summary.completed",
             execution_id=execution_id,
             stage="full_report",
-            num_categories=len(category_results)
+            num_categories=len(valid_categories)
         )
         
         # Return summary output
@@ -948,16 +792,29 @@ Period: {quarter} {fiscal_year}
 Generated: {datetime.now().isoformat()}
 Execution ID: {execution_id}
 Bank Type: {bank_type}
-Categories Processed: {len(category_results)}
 ================================================================================
 
-RESEARCH PLAN GENERATED:
-{len(research_plan)} characters
+RESEARCH PLAN:
+- Categories Analyzed: {len(research_plan_data['category_plans'])}
 
-SECTIONS COMPLETED:
+EXTRACTION RESULTS:
+- Categories Processed: {len(category_results)}
+- Categories Included: {len(valid_categories)}
+- Categories Rejected: {len(category_results) - len(valid_categories)}
 """
-        for i, result in enumerate(category_results, 1):
-            output += f"\n{i}. {result['category_name']} - {len(result['content'])} characters"
+        
+        # Add rejection reasons if any
+        rejected = [c for c in category_results if c.get('rejected', False)]
+        if rejected:
+            output += "\nREJECTED CATEGORIES:\n"
+            for cat in rejected:
+                output += f"  - {cat['name']}: {cat.get('rejection_reason', 'No reason provided')}\n"
+        
+        # Add included categories summary
+        output += "\nINCLUDED CATEGORIES:\n"
+        for cat in valid_categories:
+            num_statements = len(cat.get('summary_statements', []))
+            output += f"  - {cat['name']}: {num_statements} key findings\n"
         
         output += f"""
 

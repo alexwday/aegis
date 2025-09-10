@@ -1,0 +1,129 @@
+# Category Extraction Prompt
+# This prompt is used in Stage 2 to extract structured content for each category
+
+tool:
+  type: function
+  function:
+    name: extract_category_content
+    description: Extracts structured content for a specific category or rejects if not applicable
+    parameters:
+      type: object
+      properties:
+        rejected:
+          type: boolean
+          description: True if this category should be excluded due to lack of meaningful content
+        rejection_reason:
+          type: string
+          description: Brief explanation if rejected (only required when rejected=true)
+        title:
+          type: string
+          description: "Format: 'Category Name: Dynamic Contextual Title Based on Content'"
+        summary_statements:
+          type: array
+          description: Key findings with supporting evidence
+          items:
+            type: object
+            properties:
+              statement:
+                type: string
+                description: Concise summary statement of a key finding
+              evidence:
+                type: array
+                description: Supporting quotes and paraphrases
+                items:
+                  type: object
+                  properties:
+                    type:
+                      type: string
+                      enum: [quote, paraphrase]
+                      description: Whether this is a direct quote or paraphrased content
+                    content:
+                      type: string
+                      description: The quote or paraphrased content
+                    speaker:
+                      type: string
+                      description: Who said this (name and title if available)
+                  required: [type, content, speaker]
+            required: [statement, evidence]
+      required: [rejected]
+      # Note: Additional validation - if rejected=true, need rejection_reason; if rejected=false, need title and summary_statements
+
+system_template: |
+  <context>
+  You are continuing to write section {category_index} of {total_categories} in an earnings call summary report.
+  The bank and period context ({bank_name}, {quarter} {fiscal_year}) is already established.
+  You are extracting content for a specific category based on its requirements.
+  </context>
+  
+  <objective>
+  Extract structured content for the "{category_name}" category.
+  Create synthesized statements that capture key insights, supported by quotes that add contextual depth.
+  If no meaningful content exists for this category, reject it with explanation.
+  Do NOT reintroduce the bank or restate the context - dive directly into the content.
+  </objective>
+  
+  <style>
+  - Start with a dynamic title that captures the actual content found
+  - Provide 3-7 summary statements that synthesize key findings
+  - Relationship between statements and evidence:
+    * Statements: Provide concise synthesis of themes, trends, or insights
+    * Evidence: Add contextual color, specific details, or nuanced perspectives
+    * Quotes should substantiate and enrich, not merely repeat the statement
+  - Select quotes that paint a picture or provide unique context
+  - Focus on material information that matters for the category
+  - Aim for complementary relationship: statement synthesizes, quote illuminates
+  </style>
+  
+  <task>
+  Current Category: {category_name}
+  Category Instructions: {category_description}
+  Section Source: {transcripts_section} section only
+  
+  Research Plan for this Category:
+  {research_plan}
+  
+  Previous Sections Completed (avoid duplication):
+  {previous_sections}
+  
+  Based on the transcript section provided, extract structured content for this category.
+  Follow the category instructions carefully and use the research plan as guidance.
+  </task>
+  
+  <audience>
+  Financial analysts and investors who need detailed earnings call analysis with supporting evidence.
+  The content will be formatted into a professional report document.
+  </audience>
+  
+  <response_format>
+  Use the provided tool to return structured content with:
+  
+  1. Rejection (if applicable):
+     - Set rejected=true if no meaningful content exists
+     - Provide clear rejection_reason explaining why
+  
+  2. For valid categories:
+     - title: "Category Name: Dynamic Contextual Title" format
+     - summary_statements: Array of key findings, each with:
+       * statement: Synthesized insight about trends, themes, or metrics (10-20 words)
+       * evidence: Supporting quotes that add context and color (0-3 items max)
+  
+  STATEMENT-EVIDENCE RELATIONSHIP:
+  - Statement: "Revenue growth driven by strong retail banking performance"
+    Evidence: Quote about specific products, customer segments, or regional details
+  - Statement: "Credit quality remains stable with improving trends"  
+    Evidence: Quote providing color on specific portfolios, forward indicators, or management outlook
+  - The evidence should ADD to the statement, not just prove it exists
+  
+  SELECTION CRITERIA:
+  - Choose quotes that provide specific numbers, unique perspectives, or strategic context
+  - Paraphrase lengthy quotes while preserving the essential contextual details
+  - Quality over quantity - only include evidence that truly enriches understanding
+  
+  CRITICAL RULES:
+  - Statements synthesize; quotes contextualize
+  - Either reject the category OR provide full content (not both)
+  - NO opening like "Royal Bank of Canada reported..."
+  - NO closing like "In summary, Royal Bank's Q2 2025..."
+  - Focus on material, specific information
+  - All evidence must have speaker attribution
+  </response_format>
