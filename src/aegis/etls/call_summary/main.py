@@ -760,26 +760,42 @@ Category {i}:
             
             # Format previous sections summary (keep minimal)
             previous_summary = ""
+            extracted_themes = ""
             if category_results:
                 # Just list category names that were completed
                 completed_names = [r['name'] for r in category_results if not r.get('rejected', False)]
                 if completed_names:
                     previous_summary = f"Already completed: {', '.join(completed_names)}"
+                    # Extract key themes from completed categories
+                    theme_list = []
+                    for result in category_results:
+                        if not result.get('rejected', False) and 'summary_statements' in result:
+                            for stmt in result['summary_statements'][:2]:  # Take first 2 statements as themes
+                                theme_list.append(f"- {stmt['statement'][:100]}...")  # Truncate long statements
+                    if theme_list:
+                        extracted_themes = "\n".join(theme_list[:5])  # Limit to 5 themes total
+                    else:
+                        extracted_themes = "No specific themes extracted yet"
                 else:
                     previous_summary = "No previous sections completed yet"
+                    extracted_themes = "No themes extracted yet"
+            else:
+                extracted_themes = "Starting extraction - no prior themes"
             
             # Format system prompt with ALL context
             system_prompt = extraction_config['system_template'].format(
                 category_index=i,
                 total_categories=len(categories),
                 bank_name=bank_info['bank_name'],
+                bank_symbol=bank_info['bank_symbol'],
                 quarter=quarter,
                 fiscal_year=fiscal_year,
                 category_name=category['category_name'],
                 category_description=category['category_description'],
                 transcripts_section=category['transcripts_section'],
-                research_plan=category_plan['plan'],
-                previous_sections=previous_summary
+                research_plan=category_plan['extraction_strategy'],
+                previous_sections=previous_summary,
+                extracted_themes=extracted_themes
             )
             
             # Keep user prompt minimal - just the transcript section
