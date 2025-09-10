@@ -24,6 +24,8 @@ from docx import Document
 from docx.shared import Inches, Pt, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.enum.style import WD_STYLE_TYPE
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
 import re
 
 # Import direct transcript functions
@@ -101,6 +103,98 @@ def load_category_extraction_config():
         'system_template': config['system_template'],
         'tool': config['tool']
     }
+
+
+def add_page_numbers(doc):
+    """Add page numbers to the footer of the document."""
+    for section in doc.sections:
+        footer = section.footer
+        
+        # Clear existing footer content
+        footer.paragraphs[0].clear()
+        
+        # Create a paragraph for the page number
+        footer_para = footer.paragraphs[0]
+        footer_para.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+        
+        # Add page number field
+        run = footer_para.add_run()
+        fldChar1 = OxmlElement('w:fldChar')
+        fldChar1.set(qn('w:fldCharType'), 'begin')
+        run._element.append(fldChar1)
+        
+        instrText = OxmlElement('w:instrText')
+        instrText.text = 'PAGE'
+        run._element.append(instrText)
+        
+        fldChar2 = OxmlElement('w:fldChar')
+        fldChar2.set(qn('w:fldCharType'), 'end')
+        run._element.append(fldChar2)
+
+
+def add_table_of_contents(doc):
+    """Add a real table of contents field to the document."""
+    # Add TOC heading
+    toc_heading = doc.add_heading('Table of Contents', 1)
+    toc_heading.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    for run in toc_heading.runs:
+        run.font.size = Pt(14)
+    toc_heading.paragraph_format.space_after = Pt(12)
+    
+    # Add the actual TOC field
+    paragraph = doc.add_paragraph()
+    run = paragraph.add_run()
+    
+    # Create the TOC field code
+    fldChar = OxmlElement('w:fldChar')
+    fldChar.set(qn('w:fldCharType'), 'begin')
+    # Set the dirty attribute to force update on open
+    fldChar.set(qn('w:dirty'), 'true')
+    
+    instrText = OxmlElement('w:instrText')
+    instrText.set(qn('xml:space'), 'preserve')
+    instrText.text = 'TOC \\o "2-2" \\h \\z \\u'  # TOC for heading level 2 with hyperlinks
+    
+    fldChar2 = OxmlElement('w:fldChar')
+    fldChar2.set(qn('w:fldCharType'), 'separate')
+    
+    # Add placeholder text
+    fldChar3 = OxmlElement('w:t')
+    fldChar3.text = "Table of Contents will generate here"
+    
+    fldChar4 = OxmlElement('w:fldChar')
+    fldChar4.set(qn('w:fldCharType'), 'end')
+    
+    r_element = run._element
+    r_element.append(fldChar)
+    r_element.append(instrText)
+    r_element.append(fldChar2)
+    r_element.append(fldChar3)
+    r_element.append(fldChar4)
+    
+    # Add instruction text
+    instruction = doc.add_paragraph()
+    instruction_run = instruction.add_run("Right-click above and select 'Update Field' to refresh, or it will update when you print/print preview")
+    instruction_run.font.size = Pt(9)
+    instruction_run.font.italic = True
+    instruction_run.font.color.rgb = RGBColor(128, 128, 128)
+    instruction.paragraph_format.space_before = Pt(6)
+    
+    # Add page break after TOC
+    doc.add_page_break()
+
+
+def mark_document_for_update(doc):
+    """Mark the document settings to update fields on open."""
+    # Access the document settings
+    settings = doc.settings.element
+    
+    # Create updateFields element if it doesn't exist
+    updateFields = OxmlElement('w:updateFields')
+    updateFields.set(qn('w:val'), 'true')
+    
+    # Add to settings
+    settings.append(updateFields)
 
 
 def add_structured_content_to_doc(doc, category_data: dict) -> None:
@@ -734,46 +828,65 @@ Category {i}:
             section.left_margin = Inches(0.5)
             section.right_margin = Inches(0.5)
         
-        # Title Page
-        # Add bank name as main title
-        title = doc.add_heading(bank_info["bank_name"], 0)
-        title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        # Add page numbers to footer
+        add_page_numbers(doc)
+        
+        # Title Page with Banner
+        # Check for banner image in ETL folder
+        etl_dir = os.path.dirname(os.path.abspath(__file__))
+        banner_path = None
+        for ext in ['jpg', 'jpeg', 'png']:
+            potential_banner = os.path.join(etl_dir, f'banner.{ext}')
+            if os.path.exists(potential_banner):
+                banner_path = potential_banner
+                break
+        
+        # Add banner image if found
+        if banner_path:
+            try:
+                # Add the banner image at the top, full width
+                doc.add_picture(banner_path, width=Inches(7.5))  # Full width with margins
+                last_paragraph = doc.paragraphs[-1] 
+                last_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                last_paragraph.paragraph_format.space_after = Pt(24)  # Space after banner
+                
+                logger.info(
+                    "etl.call_summary.banner_added",
+                    execution_id=execution_id,
+                    banner_path=banner_path
+                )
+            except Exception as e:
+                logger.warning(
+                    "etl.call_summary.banner_failed",
+                    execution_id=execution_id,
+                    error=str(e)
+                )
+        
+        # Add title - Left aligned as requested
+        title_text = f"{quarter}/{str(fiscal_year)[-2:]} Results and Call Summary - {bank_info['bank_name']}"
+        title = doc.add_heading(title_text, 0)
+        title.alignment = WD_ALIGN_PARAGRAPH.LEFT  # Left aligned as requested
         for run in title.runs:
-            run.font.size = Pt(20)
-        title.paragraph_format.space_after = Pt(3)  # Reduced from 6
+            run.font.size = Pt(18)
+            run.font.bold = True
+        title.paragraph_format.space_after = Pt(12)
         
-        # Add ticker symbol
-        ticker = doc.add_paragraph()
-        ticker.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        ticker_run = ticker.add_run(f'({bank_info["bank_symbol"]})')
-        ticker_run.font.size = Pt(14)
-        ticker_run.font.color.rgb = RGBColor(64, 64, 64)
-        ticker.paragraph_format.space_after = Pt(6)  # Reduced from 12
-        
-        # Add report type
-        report_type = doc.add_heading('Earnings Call Summary', 1)
-        report_type.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        for run in report_type.runs:
-            run.font.size = Pt(16)
-        report_type.paragraph_format.space_after = Pt(3)  # Reduced from 6
-        
-        # Add period
-        period = doc.add_paragraph()
-        period.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        period_run = period.add_run(f'{quarter} {fiscal_year}')
-        period_run.font.size = Pt(12)
-        period_run.bold = True
-        period.paragraph_format.space_after = Pt(6)  # Reduced from 18 - minimal space before first content
-        
-        # Add generation date
+        # Add generation date (smaller, grey)
         generated = doc.add_paragraph()
-        generated.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        generated.alignment = WD_ALIGN_PARAGRAPH.LEFT
         gen_run = generated.add_run(f'Generated: {datetime.now().strftime("%B %d, %Y")}')
         gen_run.font.size = Pt(9)
         gen_run.font.color.rgb = RGBColor(128, 128, 128)
+        generated.paragraph_format.space_after = Pt(24)
         
-        # Add page break after title page
-        doc.add_page_break()
+        # Add Table of Contents
+        add_table_of_contents(doc)
+        
+        # Mark document to update fields when opened
+        try:
+            mark_document_for_update(doc)
+        except Exception as e:
+            logger.debug(f"Could not set auto-update fields: {e}")
         
         # Add each valid category section
         for i, category_data in enumerate(valid_categories, 1):
