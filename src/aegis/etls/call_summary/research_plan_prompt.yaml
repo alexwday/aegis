@@ -1,17 +1,17 @@
-# Research Plan Generation Prompt
-# This prompt is used in Stage 1 to analyze the full transcript and create a research plan
+# Research Plan Generation Prompt - Quality Optimized
+# Enhanced for comprehensive analysis with detailed guidance
 
 tool:
   type: function
   function:
     name: generate_research_plan
-    description: Creates a research plan for organizing transcript content across report categories
+    description: Creates comprehensive research plan with content mapping and extraction strategy
     parameters:
       type: object
       properties:
         category_plans:
           type: array
-          description: Research plan for each category
+          description: Detailed research plan for each category
           items:
             type: object
             properties:
@@ -21,57 +21,98 @@ tool:
               name:
                 type: string
                 description: Category name
-              plan:
+              availability:
                 type: string
-                description: Paragraph explaining how to approach extracting content for this category based on its description. Should reference what topics were found, where in the transcript to focus, and how to follow the category's specific instructions.
-            required: [index, name, plan]
+                enum: [high, medium, low, none]
+                description: Content availability assessment
+              primary_sections:
+                type: string
+                enum: [MD, QA, Both, None]
+                description: Where relevant content appears
+              key_themes:
+                type: array
+                items:
+                  type: string
+                description: Main themes and topics found (3-5 items)
+              key_speakers:
+                type: array
+                items:
+                  type: string
+                description: Relevant speaker roles discussing this topic
+              extraction_strategy:
+                type: string
+                description: Detailed paragraph on how to approach extraction for maximum quality
+              cross_category_notes:
+                type: string
+                description: Relationships with other categories to manage overlap
+            required: [index, name, availability, primary_sections, key_themes, key_speakers, extraction_strategy]
       required: [category_plans]
 
 system_template: |
   <context>
-  You are a financial analyst creating a comprehensive earnings call summary report for {bank_name} ({bank_symbol}) {quarter} {fiscal_year}.
-  You have been provided with the complete earnings call transcript.
-  Your role is to create a research plan that organizes how content should be extracted across report categories.
+  You are a senior financial analyst preparing a comprehensive earnings call analysis for {bank_name} ({bank_symbol}) {quarter} {fiscal_year}.
+  Your task is to create a detailed research plan that will guide high-quality content extraction.
   </context>
   
   <objective>
-  Create a RESEARCH PLAN that maps transcript content to report categories.
-  This is an organizational exercise only - DO NOT extract actual values, numbers, or verbatim quotes.
-  Focus on planning how to approach each category based on what you find in the transcript.
+  Analyze the complete transcript to create a COMPREHENSIVE RESEARCH PLAN that:
+  1. Maps content availability and location for each category
+  2. Identifies key themes and discussion points
+  3. Provides strategic extraction guidance for maximum insight quality
+  4. Manages cross-category relationships to optimize coverage
   </objective>
   
-  <style>
-  - Focus on content organization and structure, not extraction
-  - Identify topics and themes without providing specific values
-  - Note speaker roles and discussion sections without quoting
-  - Map relationships between categories to avoid duplication
-  - Provide directional guidance for the extraction phase
-  - Write plans in paragraph form explaining the approach
-  </style>
-  
-  <task>
-  Review the transcript and create a research plan for these categories:
-  
+  <categories_to_analyze>
   {categories_list}
+  </categories_to_analyze>
   
-  Each category has specific instructions and a designated section source.
-  Your plan should explain how to extract and organize content for that category while respecting its section constraints.
-  </task>
+  <analysis_framework>
+  For each category, conduct deep analysis to determine:
   
-  <audience>
-  The next phase of processing that will use these plans to extract actual content.
-  Financial analysts who need structured, comprehensive analysis of earnings calls.
-  </audience>
+  AVAILABILITY ASSESSMENT:
+  - high: Multiple detailed discussions with specific metrics and forward guidance
+  - medium: Substantive content but may lack comprehensive detail
+  - low: Limited mentions, mostly indirect or brief references
+  - none: No material content worth extracting
+  
+  SECTION MAPPING:
+  - MD: Management Discussion/Prepared Remarks
+  - QA: Question & Answer session
+  - Both: Substantial content in both sections
+  - None: No relevant content found
+  
+  THEME IDENTIFICATION:
+  - Identify 3-5 specific themes discussed (not generic topics)
+  - Note unique angles or perspectives presented
+  - Flag any surprising or notable insights
+  
+  SPEAKER ANALYSIS:
+  - Identify which executives discuss each topic
+  - Note depth of commentary from each speaker
+  - Highlight any divergent views or emphasis
+  </analysis_framework>
+  
+  <extraction_strategy_guidance>
+  For the extraction_strategy field, provide a detailed paragraph that includes:
+  - Specific areas of focus based on actual content found
+  - Recommended approach for synthesizing insights
+  - Key relationships or dependencies to highlight
+  - Potential challenges and how to address them
+  - Cross-references to other categories to avoid duplication
+  - Suggestions for evidence selection priorities
+  </extraction_strategy_guidance>
+  
+  <quality_standards>
+  - Be specific about content found - avoid generic observations
+  - Identify material insights worth extracting
+  - Note quantitative data availability
+  - Flag forward-looking statements and strategic initiatives
+  - Highlight any category where content exceeds or falls short of expectations
+  </quality_standards>
   
   <response_format>
   Use the provided tool to return a structured research plan.
-  For each category, provide a paragraph explaining:
-  - What relevant topics were found in the transcript
-  - Where in the transcript to focus (which speakers, sections)
-  - How to follow the category's specific instructions
-  - Any overlaps with other categories to avoid duplication
-  - Special considerations or challenges for this category
-  
-  Remember: DO NOT include actual numbers, percentages, dollar amounts, or verbatim quotes.
-  Focus on the planning and organization of content extraction.
+  Remember: This plan guides the extraction phase, so be thorough and specific.
+  Focus on WHERE content is and HOW to extract it effectively.
+  Do NOT extract actual values or quotes - only map and strategize.
   </response_format>

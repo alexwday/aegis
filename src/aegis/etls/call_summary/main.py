@@ -43,35 +43,71 @@ setup_logging()
 logger = get_logger()
 
 # =============================================================================
-# MODEL CONFIGURATION OVERRIDES
+# MODEL CONFIGURATION - QUALITY OPTIMIZED
 # =============================================================================
-# Configure which models to use for different stages of the ETL process.
-# Set to None to use the default model from config (config.llm.large.model)
+# Model selection optimized for maximum output quality.
+# Set to None to use the default model from config.
 # 
-# O-series models (o1, o1-mini, o3, etc.) offer superior reasoning capabilities
-# and now support tool/function calling (as of December 2024).
-# They don't support the temperature parameter but excel at complex analysis.
+# QUALITY-FIRST STRATEGY:
+# - Research Planning: Comprehensive analysis → Use high-capability models
+# - Category Extraction: Deep synthesis → Use best available models
+# - Focus on insight quality over token cost
 # 
-# Available models include:
-# - O-series: o1, o1-mini, o3, o3-mini (better reasoning, no temperature)
-# - GPT-4 series: gpt-4, gpt-4-turbo, gpt-4o (standard capabilities)
+# Recommended models by capability:
+# - o1/o3: Superior reasoning and synthesis (best for complex analysis)
+# - o1-mini: Excellent reasoning with faster response
+# - gpt-4-turbo/gpt-4o: High quality with good speed
+# - gpt-4o-mini: Fast but may miss nuances
 # =============================================================================
 
 MODEL_OVERRIDES = {
-    # Model for generating research plans (uses tool calling)
-    "RESEARCH_PLAN_MODEL": None,  # e.g., "o1-mini", "gpt-4-turbo", "gpt-4o", or None for default
+    # Research Planning: Comprehensive content mapping and strategy
+    "RESEARCH_PLAN_MODEL": None,  # Recommended: "gpt-4o" or "o1-mini" for thorough analysis
     
-    # Model for extracting category data (uses tool calling)  
-    "CATEGORY_EXTRACTION_MODEL": None,  # e.g., "o1", "o3-mini", "gpt-4o", or None for default
+    # Category Extraction: Maximum quality synthesis and insight generation
+    "CATEGORY_EXTRACTION_MODEL": None,  # Recommended: "o1-mini" or "o1" for best quality
+}
+
+# Category-specific model overrides for specialized content
+# Use highest capability models for complex financial analysis
+CATEGORY_MODEL_OVERRIDES = {
+    # Complex financial analysis benefits from O-series reasoning
+    # "Financial Performance & Metrics": "o1",
+    # "Credit Quality & Risk Metrics": "o1",
+    # "Capital & Liquidity Position": "o1-mini",
+    # "Business Segment Performance": "o1-mini",
+    
+    # Standard categories can use GPT-4 variants
+    # "Forward Guidance & Outlook": "gpt-4o",
+    # "Key Risks & Challenges": "gpt-4o",
 }
 
 # Helper function to get model for each stage
-def get_model_for_stage(stage: str) -> str:
-    """Get the model to use for a specific stage, with override support."""
-    override = MODEL_OVERRIDES.get(stage)
-    if override:
-        logger.info(f"Using override model for {stage}: {override}")
-        return override
+def get_model_for_stage(stage: str, category_name: Optional[str] = None) -> str:
+    """
+    Get the model to use for a specific stage, with override support.
+    
+    Args:
+        stage: The processing stage (RESEARCH_PLAN_MODEL, CATEGORY_EXTRACTION_MODEL)
+        category_name: Optional category name for fine-grained model selection
+    
+    Returns:
+        Model name to use
+    """
+    # Check for category-specific override first (highest priority)
+    if category_name and stage == "CATEGORY_EXTRACTION_MODEL":
+        category_override = CATEGORY_MODEL_OVERRIDES.get(category_name)
+        if category_override:
+            logger.info(f"Using category-specific model for '{category_name}': {category_override}")
+            return category_override
+    
+    # Check for stage-level override
+    stage_override = MODEL_OVERRIDES.get(stage)
+    if stage_override:
+        logger.info(f"Using stage override model for {stage}: {stage_override}")
+        return stage_override
+    
+    # Fall back to default
     default = config.llm.large.model
     logger.debug(f"Using default model for {stage}: {default}")
     return default
@@ -762,7 +798,7 @@ Category {i}:
                     tools=[extraction_config['tool']],
                     context=context,
                     llm_params={
-                        "model": get_model_for_stage("CATEGORY_EXTRACTION_MODEL")
+                        "model": get_model_for_stage("CATEGORY_EXTRACTION_MODEL", category["category_name"])
                     }
                 )
                 
