@@ -179,10 +179,11 @@ def setup_toc_styles(doc):
         # Create TOC 1 style if it doesn't exist
         toc1_style = styles.add_style('TOC 1', WD_STYLE_TYPE.PARAGRAPH)
     
-    toc1_style.font.size = Pt(9)  # Smaller font
+    toc1_style.font.size = Pt(8)  # Reduced from 9pt
     toc1_style.font.bold = True   # Bold for main sections
-    toc1_style.paragraph_format.space_after = Pt(2)
-    toc1_style.paragraph_format.line_spacing = 1.0
+    toc1_style.paragraph_format.space_before = Pt(1)  # Minimal space before
+    toc1_style.paragraph_format.space_after = Pt(1)   # Minimal space after
+    toc1_style.paragraph_format.line_spacing = 0.9    # Tighter line spacing
     
     # Try to modify TOC 2 style (Level 2 - subsections)
     try:
@@ -191,11 +192,12 @@ def setup_toc_styles(doc):
         # Create TOC 2 style if it doesn't exist
         toc2_style = styles.add_style('TOC 2', WD_STYLE_TYPE.PARAGRAPH)
     
-    toc2_style.font.size = Pt(8)  # Even smaller for subsections
+    toc2_style.font.size = Pt(7)  # Reduced from 8pt
     toc2_style.font.bold = False  # Not bold for subsections
-    toc2_style.paragraph_format.left_indent = Inches(0.25)  # Indent subsections
-    toc2_style.paragraph_format.space_after = Pt(1)
-    toc2_style.paragraph_format.line_spacing = 1.0
+    toc2_style.paragraph_format.left_indent = Inches(0.2)  # Slightly less indent
+    toc2_style.paragraph_format.space_before = Pt(0)  # No space before
+    toc2_style.paragraph_format.space_after = Pt(0.5) # Minimal space after
+    toc2_style.paragraph_format.line_spacing = 0.9    # Tighter line spacing
 
 
 def add_table_of_contents(doc):
@@ -206,10 +208,10 @@ def add_table_of_contents(doc):
     # Add TOC heading as a regular paragraph with bold formatting (not a heading level)
     toc_title = doc.add_paragraph()
     toc_title_run = toc_title.add_run('Contents')
-    toc_title_run.font.size = Pt(11)
+    toc_title_run.font.size = Pt(10)  # Reduced from 11pt
     toc_title_run.font.bold = True
     toc_title.alignment = WD_ALIGN_PARAGRAPH.LEFT
-    toc_title.paragraph_format.space_after = Pt(6)  # Space before TOC entries
+    toc_title.paragraph_format.space_after = Pt(3)  # Reduced space before TOC entries
     
     # Add the actual TOC field
     paragraph = doc.add_paragraph()
@@ -1052,8 +1054,8 @@ Category {i}:
         # Set narrow margins for content-heavy document
         sections = doc.sections
         for section in sections:
-            section.top_margin = Inches(0.5)  # Narrow top margin
-            section.bottom_margin = Inches(0.5)  # Narrow bottom margin
+            section.top_margin = Inches(0.4)  # Even narrower top margin for more space
+            section.bottom_margin = Inches(0.4)  # Even narrower bottom margin
             section.left_margin = Inches(0.6)  # Slightly wider left for binding
             section.right_margin = Inches(0.5)  # Narrow right margin
             # Set gutter for binding if needed
@@ -1079,7 +1081,7 @@ Category {i}:
                 doc.add_picture(banner_path, width=Inches(7.4))  # Full width with narrow margins
                 last_paragraph = doc.paragraphs[-1] 
                 last_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                last_paragraph.paragraph_format.space_after = Pt(6)  # Tiny space after banner
+                last_paragraph.paragraph_format.space_after = Pt(3)  # Even smaller space after banner
                 
                 logger.info(
                     "etl.call_summary.banner_added",
@@ -1098,13 +1100,13 @@ Category {i}:
         title = doc.add_heading(title_text, 0)
         title.alignment = WD_ALIGN_PARAGRAPH.LEFT  # Left-aligned
         for run in title.runs:
-            run.font.size = Pt(16)
+            run.font.size = Pt(14)  # Reduced from 16pt to save space
             run.font.bold = True
             try:
                 run.font.name = 'Arial'  # Professional font
             except:
                 pass  # Use default font if Arial not available
-        title.paragraph_format.space_after = Pt(8)  # Small space before TOC
+        title.paragraph_format.space_after = Pt(4)  # Reduced space before TOC
         
         # Add Table of Contents
         add_table_of_contents(doc)
