@@ -171,14 +171,15 @@ def add_page_numbers(doc):
 def add_table_of_contents(doc):
     """Add a real table of contents field to the document."""
     # Add TOC heading
-    toc_heading = doc.add_heading('Table of Contents', 1)
+    toc_heading = doc.add_heading('Contents', 1)
     toc_heading.alignment = WD_ALIGN_PARAGRAPH.LEFT
     for run in toc_heading.runs:
-        run.font.size = Pt(12)
-    toc_heading.paragraph_format.space_after = Pt(8)
+        run.font.size = Pt(10)  # Reduced font size
+    toc_heading.paragraph_format.space_after = Pt(4)  # Reduced spacing
     
     # Add the actual TOC field
     paragraph = doc.add_paragraph()
+    paragraph.paragraph_format.line_spacing = 1.0  # Tighter line spacing
     run = paragraph.add_run()
     
     # Create the TOC field code
@@ -189,14 +190,14 @@ def add_table_of_contents(doc):
     
     instrText = OxmlElement('w:instrText')
     instrText.set(qn('xml:space'), 'preserve')
-    instrText.text = 'TOC \\o "2-2" \\h \\z \\u'  # TOC for heading level 2 with hyperlinks
+    instrText.text = 'TOC \\o "1-2" \\h \\z \\u'  # TOC for heading levels 1-2 with hyperlinks
     
     fldChar2 = OxmlElement('w:fldChar')
     fldChar2.set(qn('w:fldCharType'), 'separate')
     
     # Add placeholder text to keep the field visible
     fldChar3 = OxmlElement('w:t')
-    fldChar3.text = "Table of Contents"
+    fldChar3.text = "Contents"
     
     fldChar4 = OxmlElement('w:fldChar')
     fldChar4.set(qn('w:fldCharType'), 'end')
@@ -207,6 +208,9 @@ def add_table_of_contents(doc):
     r_element.append(fldChar2)
     r_element.append(fldChar3)
     r_element.append(fldChar4)
+    
+    # Add smaller font size to the TOC placeholder
+    run.font.size = Pt(9)
     
     # Add page break after TOC
     doc.add_page_break()
@@ -1040,7 +1044,7 @@ Category {i}:
                 doc.add_picture(banner_path, width=Inches(7.4))  # Full width with narrow margins
                 last_paragraph = doc.paragraphs[-1] 
                 last_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                last_paragraph.paragraph_format.space_after = Pt(24)  # Space after banner
+                last_paragraph.paragraph_format.space_after = Pt(6)  # Tiny space after banner
                 
                 logger.info(
                     "etl.call_summary.banner_added",
@@ -1054,10 +1058,10 @@ Category {i}:
                     error=str(e)
                 )
         
-        # Add title - Professional formatting
-        title_text = f"{quarter}/{str(fiscal_year)[-2:]} Results and Call Summary"
+        # Add title - Left-aligned with bank symbol
+        title_text = f"{quarter}/{str(fiscal_year)[-2:]} Results and Call Summary - {bank_info['bank_symbol']}"
         title = doc.add_heading(title_text, 0)
-        title.alignment = WD_ALIGN_PARAGRAPH.CENTER  # Center for professional look
+        title.alignment = WD_ALIGN_PARAGRAPH.LEFT  # Left-aligned
         for run in title.runs:
             run.font.size = Pt(16)
             run.font.bold = True
@@ -1065,30 +1069,7 @@ Category {i}:
                 run.font.name = 'Arial'  # Professional font
             except:
                 pass  # Use default font if Arial not available
-        title.paragraph_format.space_after = Pt(4)
-        
-        # Add bank name as subtitle
-        subtitle = doc.add_paragraph()
-        subtitle.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        subtitle_run = subtitle.add_run(bank_info['bank_name'])
-        subtitle_run.font.size = Pt(13)
-        try:
-            subtitle_run.font.name = 'Arial'
-        except:
-            pass  # Use default font if Arial not available
-        subtitle.paragraph_format.space_after = Pt(12)
-        
-        # Add generation date (professional placement)
-        generated = doc.add_paragraph()
-        generated.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        gen_run = generated.add_run(f'Generated: {datetime.now().strftime("%B %d, %Y at %I:%M %p")}')
-        gen_run.font.size = Pt(8)
-        gen_run.font.color.rgb = RGBColor(100, 100, 100)
-        try:
-            gen_run.font.name = 'Arial'
-        except:
-            pass  # Use default font if Arial not available
-        generated.paragraph_format.space_after = Pt(18)  # Reduced space before TOC
+        title.paragraph_format.space_after = Pt(8)  # Small space before TOC
         
         # Add Table of Contents
         add_table_of_contents(doc)
