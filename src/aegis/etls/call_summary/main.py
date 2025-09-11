@@ -237,49 +237,85 @@ def add_structured_content_to_doc(doc, category_data: dict, heading_level: int =
     if category_data.get('rejected', False):
         return  # Skip rejected categories
     
+    try:
+    
     # Add the category title as a heading
     heading = doc.add_heading(category_data['title'], level=heading_level)
-    # Reduce heading font size and spacing
+    # Professional heading formatting
     for run in heading.runs:
-        run.font.size = Pt(12)
-    heading.paragraph_format.space_before = Pt(4)  # Minimal space before new section
-    heading.paragraph_format.space_after = Pt(1)   # Almost no space after title
+        run.font.size = Pt(14) if heading_level == 1 else Pt(12)
+        run.font.bold = True
+    heading.paragraph_format.space_before = Pt(12) if heading_level == 1 else Pt(8)
+    heading.paragraph_format.space_after = Pt(6)
+    # Keep heading with next paragraph (prevent orphan headings)
+    heading.paragraph_format.keep_with_next = True
+    heading.paragraph_format.page_break_before = False
     
     # Process each summary statement
-    for statement_data in category_data.get('summary_statements', []):
+    statements = category_data.get('summary_statements', [])
+    for idx, statement_data in enumerate(statements):
         # Add the statement as a bullet point
         statement_para = doc.add_paragraph(style='List Bullet')
         statement_run = statement_para.add_run(statement_data['statement'])
-        statement_run.font.size = Pt(10)
-        statement_para.paragraph_format.space_after = Pt(2)
-        statement_para.paragraph_format.line_spacing = 1.0
+        statement_run.font.size = Pt(11)
+        statement_para.paragraph_format.space_after = Pt(3)
+        statement_para.paragraph_format.line_spacing = 1.15
+        # Keep statement with its evidence (prevent splits)
+        statement_para.paragraph_format.keep_with_next = True
         
         # Add supporting evidence as indented quotes (no bullets)
-        if statement_data.get('evidence'):
-            for evidence in statement_data['evidence']:
+        evidence_list = statement_data.get('evidence', [])
+        if evidence_list:
+            for i, evidence in enumerate(evidence_list):
                 # Create indented paragraph for quotes/evidence (no bullet)
                 evidence_para = doc.add_paragraph()
-                # Set significant indentation from both sides
-                evidence_para.paragraph_format.left_indent = Inches(0.75)   # Much more left indent
-                evidence_para.paragraph_format.right_indent = Inches(0.75)  # Much more right indent
-                evidence_para.paragraph_format.space_after = Pt(1)
-                evidence_para.paragraph_format.line_spacing = 1.0
+                # Professional indentation for block quotes
+                evidence_para.paragraph_format.left_indent = Inches(0.5)   # Standard block quote indent
+                evidence_para.paragraph_format.right_indent = Inches(0.25)  # Slight right indent
+                evidence_para.paragraph_format.first_line_indent = Inches(0)  # No additional first line indent
+                evidence_para.paragraph_format.space_after = Pt(2)
+                evidence_para.paragraph_format.line_spacing = 1.1
                 
-                # Add the evidence content in italics with smaller font
+                # Keep evidence together with statement (for last evidence item, don't keep with next)
+                if i < len(evidence_list) - 1:
+                    evidence_para.paragraph_format.keep_with_next = True
+                elif idx < len(statements) - 1:
+                    # Add spacing after last evidence before next statement
+                    evidence_para.paragraph_format.space_after = Pt(8)
+                
+                # Prevent widows and orphans
+                evidence_para.paragraph_format.widow_control = True
+                
+                # Add the evidence content in italics with professional font size
+                # Truncate very long evidence to prevent document bloat
+                evidence_content = evidence['content']
+                if len(evidence_content) > 500:  # Limit evidence to ~500 chars
+                    evidence_content = evidence_content[:497] + '...'
+                
                 if evidence['type'] == 'quote':
-                    content_run = evidence_para.add_run(f'"{evidence["content"]}"')
+                    content_run = evidence_para.add_run(f'"{evidence_content}"')
                 else:  # paraphrase
-                    content_run = evidence_para.add_run(evidence['content'])
+                    content_run = evidence_para.add_run(evidence_content)
                 
                 content_run.italic = True
-                content_run.font.size = Pt(8)
+                content_run.font.size = Pt(10)
                 content_run.font.color.rgb = RGBColor(64, 64, 64)  # Dark gray
                 
-                # Add speaker attribution
+                # Add speaker attribution with em dash
                 speaker_run = evidence_para.add_run(f' — {evidence["speaker"]}')
-                speaker_run.italic = True
-                speaker_run.font.size = Pt(8)
+                speaker_run.italic = False  # Attribution not italic, just smaller
+                speaker_run.font.size = Pt(9)
                 speaker_run.font.color.rgb = RGBColor(96, 96, 96)  # Lighter gray
+    
+    except Exception as e:
+        # Log error but don't fail the entire document generation
+        logger.warning(f"Error formatting category content: {e}", exc_info=True)
+        # Add basic content as fallback
+        try:
+            fallback_para = doc.add_paragraph(f"[Error formatting content for: {category_data.get('title', 'Unknown')}]")
+            fallback_para.font.color.rgb = RGBColor(255, 0, 0)
+        except:
+            pass  # Silently fail if even fallback fails
 
 
 
@@ -868,13 +904,15 @@ Category {i}:
         # Create Word document
         doc = Document()
         
-        # Set narrow margins for the entire document
+        # Set professional margins for the entire document
         sections = doc.sections
         for section in sections:
-            section.top_margin = Inches(0.5)
-            section.bottom_margin = Inches(0.5)
-            section.left_margin = Inches(0.5)
-            section.right_margin = Inches(0.5)
+            section.top_margin = Inches(1.0)  # Standard top margin
+            section.bottom_margin = Inches(1.0)  # Standard bottom margin
+            section.left_margin = Inches(1.0)  # Standard left margin
+            section.right_margin = Inches(1.0)  # Standard right margin
+            # Set gutter for binding if needed
+            section.gutter = Inches(0)
         
         # Add page numbers to footer
         add_page_numbers(doc)
@@ -892,8 +930,8 @@ Category {i}:
         # Add banner image if found
         if banner_path:
             try:
-                # Add the banner image at the top, full width
-                doc.add_picture(banner_path, width=Inches(7.5))  # Full width with margins
+                # Add the banner image at the top, adjusted for new margins
+                doc.add_picture(banner_path, width=Inches(6.5))  # Full width with 1-inch margins
                 last_paragraph = doc.paragraphs[-1] 
                 last_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
                 last_paragraph.paragraph_format.space_after = Pt(24)  # Space after banner
@@ -910,22 +948,41 @@ Category {i}:
                     error=str(e)
                 )
         
-        # Add title - Left aligned as requested
-        title_text = f"{quarter}/{str(fiscal_year)[-2:]} Results and Call Summary - {bank_info['bank_name']}"
+        # Add title - Professional formatting
+        title_text = f"{quarter}/{str(fiscal_year)[-2:]} Results and Call Summary"
         title = doc.add_heading(title_text, 0)
-        title.alignment = WD_ALIGN_PARAGRAPH.LEFT  # Left aligned as requested
+        title.alignment = WD_ALIGN_PARAGRAPH.CENTER  # Center for professional look
         for run in title.runs:
-            run.font.size = Pt(18)
+            run.font.size = Pt(20)
             run.font.bold = True
-        title.paragraph_format.space_after = Pt(12)
+            try:
+                run.font.name = 'Arial'  # Professional font
+            except:
+                pass  # Use default font if Arial not available
+        title.paragraph_format.space_after = Pt(6)
         
-        # Add generation date (smaller, grey)
+        # Add bank name as subtitle
+        subtitle = doc.add_paragraph()
+        subtitle.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        subtitle_run = subtitle.add_run(bank_info['bank_name'])
+        subtitle_run.font.size = Pt(16)
+        try:
+            subtitle_run.font.name = 'Arial'
+        except:
+            pass  # Use default font if Arial not available
+        subtitle.paragraph_format.space_after = Pt(18)
+        
+        # Add generation date (professional placement)
         generated = doc.add_paragraph()
-        generated.alignment = WD_ALIGN_PARAGRAPH.LEFT
-        gen_run = generated.add_run(f'Generated: {datetime.now().strftime("%B %d, %Y")}')
-        gen_run.font.size = Pt(9)
-        gen_run.font.color.rgb = RGBColor(128, 128, 128)
-        generated.paragraph_format.space_after = Pt(24)
+        generated.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        gen_run = generated.add_run(f'Generated: {datetime.now().strftime("%B %d, %Y at %I:%M %p")}')
+        gen_run.font.size = Pt(10)
+        gen_run.font.color.rgb = RGBColor(100, 100, 100)
+        try:
+            gen_run.font.name = 'Arial'
+        except:
+            pass  # Use default font if Arial not available
+        generated.paragraph_format.space_after = Pt(36)  # More space before TOC
         
         # Add Table of Contents
         add_table_of_contents(doc)
@@ -949,20 +1006,26 @@ Category {i}:
         for section_name, section_categories in groupby(sorted_categories, key=lambda x: x.get('report_section', 'Results Summary')):
             section_categories = list(section_categories)
             
-            # Add main section heading (Level 1)
+            # Add main section heading (Level 1) with page break control
             section_heading = doc.add_heading(section_name, level=1)
-            section_heading.paragraph_format.space_before = Pt(12)
-            section_heading.paragraph_format.space_after = Pt(6)
+            section_heading.paragraph_format.space_before = Pt(18)
+            section_heading.paragraph_format.space_after = Pt(12)
+            section_heading.paragraph_format.keep_with_next = True
+            # Add page break before major sections (except first)
+            if section_name != 'Results Summary':
+                section_heading.paragraph_format.page_break_before = True
             
             # Add categories within this section
             for i, category_data in enumerate(section_categories, 1):
                 # Use the new function to add structured content (as Level 2)
                 add_structured_content_to_doc(doc, category_data, heading_level=2)
                 
-                # Add minimal spacing between categories (if not last in section)
+                # Add professional spacing between categories (if not last in section)
                 if i < len(section_categories):
-                    para = doc.add_paragraph()
-                    para.paragraph_format.space_after = Pt(3)
+                    spacer = doc.add_paragraph()
+                    spacer.paragraph_format.space_after = Pt(12)  # Clear visual separation
+                    # Add a subtle separator line for clarity
+                    spacer.add_run()  # Empty paragraph for spacing
                 
                 # Log progress
                 logger.debug(
