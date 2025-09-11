@@ -28,7 +28,9 @@ tool:
             properties:
               statement:
                 type: string
-                description: Synthesized insight that captures a material theme or trend
+                description: |
+                  Synthesized insight that captures a material theme or trend.
+                  Use **text** to bold key metrics, numbers, percentages (e.g., "Revenue grew **12%** year-over-year")
               evidence:
                 type: array
                 description: Supporting quotes and context that enrich the statement
@@ -43,7 +45,9 @@ tool:
                       description: Whether this is a direct quote or paraphrased content
                     content:
                       type: string
-                      description: Evidence that adds depth, context, or nuance to the statement
+                      description: |
+                        Evidence that adds depth, context, or nuance to the statement.
+                        For quotes: Use __text__ to underline critical phrases (e.g., "__unprecedented growth__ in wealth management")
                     speaker:
                       type: string
                       description: Speaker's name and title/role

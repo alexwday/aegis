@@ -225,6 +225,96 @@ def mark_document_for_update(doc):
     settings.append(updateFields)
 
 
+def parse_and_format_text(paragraph, text: str, base_font_size=None, base_color=None, base_italic=False) -> None:
+    """
+    Parse markdown-style formatting and add formatted runs to paragraph.
+    Supports **bold** for emphasis and __underline__ for important phrases.
+    
+    Args:
+        paragraph: Word paragraph object to add formatted text to
+        text: Text containing markdown formatting
+        base_font_size: Base font size for all runs (optional)
+        base_color: Base RGB color for all runs (optional) 
+        base_italic: Whether base text should be italic (default False)
+    """
+    import re
+    
+    # Pattern to match bold (**text**) and underline (__text__) markdown
+    # This handles nested cases and ensures proper matching
+    pattern = r'(\*\*[^*]+\*\*|__[^_]+__|[^*_]+)'
+    
+    # If text doesn't contain any formatting, add it as a single run
+    if '**' not in text and '__' not in text:
+        run = paragraph.add_run(text)
+        if base_font_size:
+            run.font.size = base_font_size
+        if base_color:
+            run.font.color.rgb = base_color
+        run.italic = base_italic
+        return
+    
+    # Process the text with formatting
+    remaining_text = text
+    while remaining_text:
+        # Try to find the next formatted section
+        bold_match = re.search(r'\*\*([^*]+)\*\*', remaining_text)
+        underline_match = re.search(r'__([^_]+)__', remaining_text)
+        
+        # Determine which comes first
+        next_match = None
+        match_type = None
+        
+        if bold_match and underline_match:
+            if bold_match.start() < underline_match.start():
+                next_match = bold_match
+                match_type = 'bold'
+            else:
+                next_match = underline_match
+                match_type = 'underline'
+        elif bold_match:
+            next_match = bold_match
+            match_type = 'bold'
+        elif underline_match:
+            next_match = underline_match
+            match_type = 'underline'
+        
+        if next_match:
+            # Add any text before the match
+            if next_match.start() > 0:
+                run = paragraph.add_run(remaining_text[:next_match.start()])
+                if base_font_size:
+                    run.font.size = base_font_size
+                if base_color:
+                    run.font.color.rgb = base_color
+                run.italic = base_italic
+            
+            # Add the formatted text
+            run = paragraph.add_run(next_match.group(1))
+            if base_font_size:
+                run.font.size = base_font_size
+            if base_color:
+                run.font.color.rgb = base_color
+            run.italic = base_italic
+            
+            # Apply the formatting
+            if match_type == 'bold':
+                run.bold = True
+            elif match_type == 'underline':
+                run.underline = True
+            
+            # Move to the remaining text
+            remaining_text = remaining_text[next_match.end():]
+        else:
+            # No more formatting, add the rest as plain text
+            run = paragraph.add_run(remaining_text)
+            if base_font_size:
+                run.font.size = base_font_size
+            if base_color:
+                run.font.color.rgb = base_color
+            run.italic = base_italic
+            break
+
+
 def add_structured_content_to_doc(doc, category_data: dict, heading_level: int = 2) -> None:
     """
     Add structured category data directly to Word document with proper formatting.
@@ -253,10 +343,10 @@ def add_structured_content_to_doc(doc, category_data: dict, heading_level: int =
         # Process each summary statement
         statements = category_data.get('summary_statements', [])
         for idx, statement_data in enumerate(statements):
-            # Add the statement as a bullet point
+            # Add the statement as a bullet point with markdown formatting
             statement_para = doc.add_paragraph(style='List Bullet')
-            statement_run = statement_para.add_run(statement_data['statement'])
-            statement_run.font.size = Pt(9)
+            # Use the new parsing function to handle **bold** markdown
+            parse_and_format_text(statement_para, statement_data['statement'], base_font_size=Pt(9))
             statement_para.paragraph_format.space_after = Pt(2)
             statement_para.paragraph_format.line_spacing = 1.0
             # Keep statement with its evidence (prevent splits)
@@ -291,14 +381,31 @@ def add_structured_content_to_doc(doc, category_data: dict, heading_level: int =
                     if len(evidence_content) > 500:  # Limit evidence to ~500 chars
                         evidence_content = evidence_content[:497] + '...'
                     
+                    # Add quotes if needed and parse markdown (__underline__)
                     if evidence['type'] == 'quote':
-                        content_run = evidence_para.add_run(f'"{evidence_content}"')
+                        # Add opening quote
+                        evidence_para.add_run('"').italic = True
+                        # Parse the content with underline support
+                        parse_and_format_text(
+                            evidence_para, 
+                            evidence_content,
+                            base_font_size=Pt(8),
+                            base_color=RGBColor(64, 64, 64),
+                            base_italic=True
+                        )
+                        # Add closing quote
+                        closing_run = evidence_para.add_run('"')
+                        closing_run.italic = True
+                        closing_run.font.size = Pt(8)
+                        closing_run.font.color.rgb = RGBColor(64, 64, 64)
                     else:  # paraphrase
-                        content_run = evidence_para.add_run(evidence_content)
-                    
-                    content_run.italic = True
-                    content_run.font.size = Pt(8)
-                    content_run.font.color.rgb = RGBColor(64, 64, 64)  # Dark gray
+                        parse_and_format_text(
+                            evidence_para,
+                            evidence_content,
+                            base_font_size=Pt(8),
+                            base_color=RGBColor(64, 64, 64),
+                            base_italic=True
+                        )
                     
                     # Add speaker attribution with em dash
                     speaker_run = evidence_para.add_run(f' — {evidence["speaker"]}')
