@@ -194,9 +194,9 @@ def add_table_of_contents(doc):
     fldChar2 = OxmlElement('w:fldChar')
     fldChar2.set(qn('w:fldCharType'), 'separate')
     
-    # Use a zero-width space to keep the field visible but empty-looking
+    # Add placeholder text to keep the field visible
     fldChar3 = OxmlElement('w:t')
-    fldChar3.text = "\u200B"  # Zero-width space character
+    fldChar3.text = "Table of Contents"
     
     fldChar4 = OxmlElement('w:fldChar')
     fldChar4.set(qn('w:fldCharType'), 'end')
