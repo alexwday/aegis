@@ -168,14 +168,48 @@ def add_page_numbers(doc):
         run._element.append(fldChar2)
 
 
+def setup_toc_styles(doc):
+    """Setup custom TOC styles for formatting."""
+    styles = doc.styles
+    
+    # Try to modify TOC 1 style (Level 1 - main sections)
+    try:
+        toc1_style = styles['TOC 1']
+    except KeyError:
+        # Create TOC 1 style if it doesn't exist
+        toc1_style = styles.add_style('TOC 1', WD_STYLE_TYPE.PARAGRAPH)
+    
+    toc1_style.font.size = Pt(9)  # Smaller font
+    toc1_style.font.bold = True   # Bold for main sections
+    toc1_style.paragraph_format.space_after = Pt(2)
+    toc1_style.paragraph_format.line_spacing = 1.0
+    
+    # Try to modify TOC 2 style (Level 2 - subsections)
+    try:
+        toc2_style = styles['TOC 2']
+    except KeyError:
+        # Create TOC 2 style if it doesn't exist
+        toc2_style = styles.add_style('TOC 2', WD_STYLE_TYPE.PARAGRAPH)
+    
+    toc2_style.font.size = Pt(8)  # Even smaller for subsections
+    toc2_style.font.bold = False  # Not bold for subsections
+    toc2_style.paragraph_format.left_indent = Inches(0.25)  # Indent subsections
+    toc2_style.paragraph_format.space_after = Pt(1)
+    toc2_style.paragraph_format.line_spacing = 1.0
+
+
 def add_table_of_contents(doc):
     """Add a real table of contents field to the document."""
-    # Add TOC heading
-    toc_heading = doc.add_heading('Contents', 1)
-    toc_heading.alignment = WD_ALIGN_PARAGRAPH.LEFT
-    for run in toc_heading.runs:
-        run.font.size = Pt(10)  # Reduced font size
-    toc_heading.paragraph_format.space_after = Pt(4)  # Reduced spacing
+    # Setup TOC styles first
+    setup_toc_styles(doc)
+    
+    # Add TOC heading as a regular paragraph with bold formatting (not a heading level)
+    toc_title = doc.add_paragraph()
+    toc_title_run = toc_title.add_run('Contents')
+    toc_title_run.font.size = Pt(11)
+    toc_title_run.font.bold = True
+    toc_title.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    toc_title.paragraph_format.space_after = Pt(6)  # Space before TOC entries
     
     # Add the actual TOC field
     paragraph = doc.add_paragraph()
@@ -197,7 +231,7 @@ def add_table_of_contents(doc):
     
     # Add placeholder text to keep the field visible
     fldChar3 = OxmlElement('w:t')
-    fldChar3.text = "Contents"
+    fldChar3.text = "[Table of Contents will be generated here]"
     
     fldChar4 = OxmlElement('w:fldChar')
     fldChar4.set(qn('w:fldCharType'), 'end')
@@ -210,7 +244,8 @@ def add_table_of_contents(doc):
     r_element.append(fldChar4)
     
     # Add smaller font size to the TOC placeholder
-    run.font.size = Pt(9)
+    run.font.size = Pt(8)
+    run.font.color.rgb = RGBColor(128, 128, 128)  # Gray color for placeholder
     
     # Add page break after TOC
     doc.add_page_break()
