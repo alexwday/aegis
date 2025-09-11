@@ -194,9 +194,9 @@ def add_table_of_contents(doc):
     fldChar2 = OxmlElement('w:fldChar')
     fldChar2.set(qn('w:fldCharType'), 'separate')
     
-    # Add placeholder text
+    # No placeholder text - just empty TOC field
     fldChar3 = OxmlElement('w:t')
-    fldChar3.text = "Table of Contents will generate here"
+    fldChar3.text = ""
     
     fldChar4 = OxmlElement('w:fldChar')
     fldChar4.set(qn('w:fldCharType'), 'end')
