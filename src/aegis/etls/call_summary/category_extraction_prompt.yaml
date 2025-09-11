@@ -17,7 +17,7 @@ tool:
           description: Detailed explanation if rejected (required when rejected=true)
         title:
           type: string
-          description: "Dynamic title that captures the essence of content found"
+          description: "Format: 'Category Name: Brief Context' (e.g., 'Expenses: Navigating workforce challenges' or 'Credit Quality: Resilient amid economic uncertainty'). Keep brief for TOC readability (max 60 chars total)"
         summary_statements:
           type: array
           description: Comprehensive key findings with rich supporting evidence
@@ -81,50 +81,68 @@ system_template: |
   </previous_categories_context>
   
   <extraction_framework>
-  EVIDENCE SELECTION PRIORITIES (in order):
-  1. Quantitative metrics with strategic context
-     - Not just numbers, but what drives them
-     - Year-over-year comparisons with explanations
-     - Forward guidance with rationale
+  METRIC EXTRACTION RULES:
+  1. When reporting ANY metric, include ALL available variations:
+     - Current period value
+     - Year-over-year (YoY) change (amount and percentage)
+     - Quarter-over-quarter (QoQ) change if mentioned
+     - Year-to-date (YTD) figures if provided
+     - Prior year comparisons
+     - Any guidance or targets mentioned
   
-  2. Strategic initiatives and transformations
+  2. Each metric should have its OWN statement:
+     - Don't combine multiple unrelated metrics in one statement
+     - Group only closely related sub-metrics (e.g., NIM components)
+     - Make the metric the focus of the statement
+  
+  3. Evidence selection for metrics:
+     - DO NOT quote/paraphrase metrics already in the statement
+     - ONLY add quotes that provide context BEYOND the numbers:
+       * Management explanation of drivers
+       * Strategic rationale for changes
+       * Forward-looking commentary
+       * Unusual factors or one-time items
+     - Skip evidence if it merely restates the metric
+  
+  EVIDENCE SELECTION PRIORITIES (in order):
+  1. Strategic initiatives and transformations
      - New programs or changes in approach
      - Investment priorities and resource allocation
      - Competitive positioning statements
   
-  3. Management insights and forward outlook
+  2. Management insights and forward outlook
      - CEO/CFO commentary on trends
      - Responses to analyst concerns
      - Risk mitigation strategies
   
-  4. Market dynamics and external factors
+  3. Market dynamics and external factors
      - Regulatory impacts and responses
      - Economic environment effects
      - Competitive landscape observations
   
-  5. Operational performance indicators
+  4. Operational performance indicators
      - Efficiency improvements
      - Technology implementations
      - Process optimizations
   
   EVIDENCE QUALITY STANDARDS:
-  - Each piece of evidence must ADD VALUE beyond the statement
-  - Prefer specific over generic content
-  - Include context that explains the "why" behind metrics
+  - Each piece of evidence must ADD CONTEXT beyond the statement
+  - Never quote metrics that are already in the statement
+  - Focus on the "why" and "how" rather than the "what"
   - Select quotes that provide color or unique perspective
   - Balance between prepared remarks and Q&A insights
   </extraction_framework>
   
   <synthesis_approach>
   For each summary statement:
-  1. SYNTHESIZE: Combine related points into a cohesive insight
-  2. SUBSTANTIATE: Support with evidence that adds depth
-  3. CONTEXTUALIZE: Explain significance or implications
+  1. FOCUS: One primary metric or closely related metric group per statement
+  2. COMPLETE: Include all available data points (current, YoY, QoQ, YTD)
+  3. CONTEXTUALIZE: Evidence should explain drivers, not repeat numbers
   4. DIFFERENTIATE: Ensure unique from other categories
   
   The relationship should be:
-  - Statement = The "what" (synthesized finding)
-  - Evidence = The "how/why/when" (context and color)
+  - Statement = Complete metric with all variations
+  - Evidence = Context, drivers, and strategic rationale (NOT the numbers)
   </synthesis_approach>
   
   <quality_requirements>
@@ -151,7 +169,10 @@ system_template: |
   Use the provided tool to return structured content.
   
   For accepted categories:
-  - Create a dynamic title reflecting actual content
+  - Title MUST start with category name followed by colon and brief context
+    * Format: "Category Name: Brief descriptive context"
+    * Example: "Financial Performance: Record revenue amid headwinds"
+    * Keep total length under 60 characters for TOC readability
   - Provide 3-7 comprehensive summary statements
   - Support each with 1-4 pieces of enriching evidence
   - Ensure high quality over quantity

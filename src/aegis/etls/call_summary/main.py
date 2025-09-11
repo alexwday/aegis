@@ -208,14 +208,6 @@ def add_table_of_contents(doc):
     r_element.append(fldChar3)
     r_element.append(fldChar4)
     
-    # Add instruction text
-    instruction = doc.add_paragraph()
-    instruction_run = instruction.add_run("Right-click above and select 'Update Field' to refresh, or it will update when you print/print preview")
-    instruction_run.font.size = Pt(9)
-    instruction_run.font.italic = True
-    instruction_run.font.color.rgb = RGBColor(128, 128, 128)
-    instruction.paragraph_format.space_before = Pt(6)
-    
     # Add page break after TOC
     doc.add_page_break()
 
@@ -233,19 +225,20 @@ def mark_document_for_update(doc):
     settings.append(updateFields)
 
 
-def add_structured_content_to_doc(doc, category_data: dict) -> None:
+def add_structured_content_to_doc(doc, category_data: dict, heading_level: int = 2) -> None:
     """
     Add structured category data directly to Word document with proper formatting.
     
     Args:
         doc: Word document object
         category_data: Dictionary with title, summary_statements, evidence structure
+        heading_level: Heading level for category title (default 2)
     """
     if category_data.get('rejected', False):
         return  # Skip rejected categories
     
     # Add the category title as a heading
-    heading = doc.add_heading(category_data['title'], level=2)
+    heading = doc.add_heading(category_data['title'], level=heading_level)
     # Reduce heading font size and spacing
     for run in heading.runs:
         run.font.size = Pt(12)
@@ -325,8 +318,8 @@ def load_categories_from_xlsx(bank_type: str) -> List[Dict[str, str]]:
         }]
     
     try:
-        # Read the Template sheet
-        df = pd.read_excel(xlsx_path, sheet_name="Template")
+        # Read the first sheet (previously named Template)
+        df = pd.read_excel(xlsx_path, sheet_name=0)  # Use first sheet
         
         # Convert to list of dictionaries
         categories = df.to_dict('records')
@@ -746,6 +739,7 @@ Category {i}:
                 category_results.append({
                     "index": i,
                     "name": category["category_name"],
+                    "report_section": category.get("report_section", "Results Summary"),
                     "rejected": True,
                     "rejection_reason": f"No {category['transcripts_section']} section data available"
                 })
@@ -822,9 +816,10 @@ Category {i}:
                 tool_call = response['choices'][0]['message']['tool_calls'][0]
                 extracted_data = json.loads(tool_call['function']['arguments'])
                 
-                # Add index and name
+                # Add index, name, and report section
                 extracted_data['index'] = i
                 extracted_data['name'] = category['category_name']
+                extracted_data['report_section'] = category.get('report_section', 'Results Summary')
                 
                 category_results.append(extracted_data)
                 
@@ -847,6 +842,7 @@ Category {i}:
                 category_results.append({
                     "index": i,
                     "name": category["category_name"],
+                    "report_section": category.get("report_section", "Results Summary"),
                     "rejected": True,
                     "rejection_reason": f"Error extracting content: {str(e)}"
                 })
@@ -940,23 +936,42 @@ Category {i}:
         except Exception as e:
             logger.debug(f"Could not set auto-update fields: {e}")
         
-        # Add each valid category section
-        for i, category_data in enumerate(valid_categories, 1):
-            # Use the new function to add structured content
-            add_structured_content_to_doc(doc, category_data)
+        # Group categories by report section
+        from itertools import groupby
+        
+        # Sort by report_section first to group them, then by original index to maintain order
+        sorted_categories = sorted(valid_categories, key=lambda x: (
+            0 if x.get('report_section', 'Results Summary') == 'Results Summary' else 1,
+            x.get('index', 0)
+        ))
+        
+        # Group by report_section
+        for section_name, section_categories in groupby(sorted_categories, key=lambda x: x.get('report_section', 'Results Summary')):
+            section_categories = list(section_categories)
             
-            # Add minimal spacing between sections (if not last section)
-            if i < len(valid_categories):
-                para = doc.add_paragraph()
-                para.paragraph_format.space_after = Pt(3)
+            # Add main section heading (Level 1)
+            section_heading = doc.add_heading(section_name, level=1)
+            section_heading.paragraph_format.space_before = Pt(12)
+            section_heading.paragraph_format.space_after = Pt(6)
             
-            # Log progress
-            logger.debug(
-                "etl.call_summary.category_added_to_doc",
-                execution_id=execution_id,
-                category_name=category_data['name'],
-                num_statements=len(category_data.get('summary_statements', []))
-            )
+            # Add categories within this section
+            for i, category_data in enumerate(section_categories, 1):
+                # Use the new function to add structured content (as Level 2)
+                add_structured_content_to_doc(doc, category_data, heading_level=2)
+                
+                # Add minimal spacing between categories (if not last in section)
+                if i < len(section_categories):
+                    para = doc.add_paragraph()
+                    para.paragraph_format.space_after = Pt(3)
+                
+                # Log progress
+                logger.debug(
+                    "etl.call_summary.category_added_to_doc",
+                    execution_id=execution_id,
+                    section=section_name,
+                    category_name=category_data['name'],
+                    num_statements=len(category_data.get('summary_statements', []))
+                )
         
         # Save the document
         output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'output')
