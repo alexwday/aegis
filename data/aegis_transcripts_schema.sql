@@ -44,7 +44,7 @@ CREATE TABLE aegis_transcripts (
     chunk_paragraph_ids TEXT[],
     
     -- Embedding (3072 dimensions for text-embedding-3-large)
-    chunk_embedding vector(3072),
+    chunk_embedding halfvec(3072),
     
     -- Timestamps
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,

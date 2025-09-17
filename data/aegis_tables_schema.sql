@@ -78,7 +78,7 @@ CREATE TABLE aegis_transcripts (
     chunk_paragraph_ids TEXT[],                        -- Array of paragraph identifiers in chunk
 
     -- Embedding (3072 dimensions for text-embedding-3-large)
-    chunk_embedding vector(3072),                      -- Vector embedding for similarity search
+    chunk_embedding halfvec(3072),                     -- Vector embedding for similarity search (16-bit precision)
 
     -- Timestamps
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,  -- Record creation timestamp
