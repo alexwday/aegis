@@ -139,9 +139,10 @@ def rebuild_table(transcript_data: Dict, dry_run: bool = False, complete_wipe: b
                 result = conn.execute(text("DELETE FROM aegis_data_availability"))
                 logger.info(f"Deleted {result.rowcount} existing records")
             else:
-                # 1. Truncate the table (faster but may fail with FK constraints)
-                logger.info("Truncating aegis_data_availability table...")
-                conn.execute(text("TRUNCATE TABLE aegis_data_availability"))
+                # 1. Delete all records (more compatible with restricted permissions)
+                logger.info("Deleting all records from aegis_data_availability table...")
+                result = conn.execute(text("DELETE FROM aegis_data_availability"))
+                logger.info(f"Deleted {result.rowcount} existing records")
             
             # 2. Insert all transcript data
             logger.info(f"Inserting {len(transcript_data)} records...")
