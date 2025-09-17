@@ -200,15 +200,16 @@ class AegisDatabaseSetup:
             logger.error("Table aegis_transcripts does not exist. Create it first with --create-tables")
             return 0
         
-        # Truncate the table if requested
+        # Clear the table if requested (use DELETE instead of TRUNCATE for permission compatibility)
         if truncate_first:
             try:
                 with self.engine.begin() as conn:
-                    logger.info("Truncating aegis_transcripts table before loading...")
-                    conn.execute(text("TRUNCATE TABLE aegis_transcripts"))
-                    logger.info("✓ Table truncated successfully")
+                    logger.info("Clearing aegis_transcripts table before loading...")
+                    result = conn.execute(text("DELETE FROM aegis_transcripts"))
+                    logger.info(f"✓ Table cleared successfully ({result.rowcount} rows deleted)")
             except Exception as e:
-                logger.error(f"Failed to truncate table: {e}")
+                logger.error(f"Failed to clear table: {e}")
+                logger.info("Tip: If you don't have DELETE permissions, use --no-truncate to append data")
                 return 0
         
         logger.info(f"Loading CSV data from {csv_path}...")
@@ -392,7 +393,7 @@ def main():
         '--load-csv',
         type=str,
         metavar='PATH',
-        help='Load transcript data from CSV file (truncates table first by default)'
+        help='Load transcript data from CSV file (deletes all existing rows first by default)'
     )
     parser.add_argument(
         '--batch-size',
@@ -403,7 +404,7 @@ def main():
     parser.add_argument(
         '--no-truncate',
         action='store_true',
-        help='Do NOT truncate table before loading CSV (append mode)'
+        help='Do NOT delete existing rows before loading CSV (append mode)'
     )
     
     # Status
