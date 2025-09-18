@@ -493,30 +493,33 @@ def load_categories_from_xlsx(bank_type: str) -> List[Dict[str, str]]:
     xlsx_path = os.path.join(current_dir, file_name)
     
     if not os.path.exists(xlsx_path):
-        logger.warning(f"Categories file not found: {xlsx_path}, using default ALL section")
-        return [{
-            "transcripts_section": "ALL",
-            "category_name": "Full Transcript Analysis",
-            "category_description": "Complete transcript analysis"
-        }]
-    
+        error_msg = f"Categories file not found: {xlsx_path}. Cannot proceed without category definitions."
+        logger.error(error_msg)
+        raise FileNotFoundError(error_msg)
+
     try:
         # Read the first sheet (previously named Template)
         df = pd.read_excel(xlsx_path, sheet_name=0)  # Use first sheet
-        
+
+        # Validate that we have required columns
+        required_columns = ['transcripts_section', 'category_name', 'category_description']
+        missing_columns = [col for col in required_columns if col not in df.columns]
+        if missing_columns:
+            raise ValueError(f"Missing required columns in {file_name}: {missing_columns}")
+
         # Convert to list of dictionaries
         categories = df.to_dict('records')
-        
+
+        if not categories:
+            raise ValueError(f"No categories found in {file_name} - file appears to be empty")
+
         logger.info(f"Loaded {len(categories)} categories from {file_name}")
         return categories
-        
+
     except Exception as e:
-        logger.error(f"Error loading categories from {xlsx_path}: {e}")
-        return [{
-            "transcripts_section": "ALL",
-            "category_name": "Full Transcript Analysis", 
-            "category_description": "Complete transcript analysis"
-        }]
+        error_msg = f"Failed to load categories from {xlsx_path}: {str(e)}"
+        logger.error(error_msg)
+        raise RuntimeError(error_msg)
 
 
 def get_bank_type(bank_id: int) -> str:
@@ -832,48 +835,92 @@ Category {i}:
             {"role": "user", "content": user_prompt}
         ]
         
-        # Make tool call to generate research plan
+        # Make tool call to generate research plan with retry logic
         logger.info(
             "etl.call_summary.calling_llm_research_plan",
             execution_id=execution_id
         )
-        
-        try:
-            response = complete_with_tools(
-                messages=messages,
-                tools=[research_config['tool']],
-                context=context,
-                llm_params={
-                    "model": get_model_for_stage("RESEARCH_PLAN_MODEL")
-                }
-            )
-            
-            # Parse the tool response
-            tool_call = response['choices'][0]['message']['tool_calls'][0]
-            research_plan_data = json.loads(tool_call['function']['arguments'])
-            
-            logger.info(
-                "etl.call_summary.research_plan_generated",
-                execution_id=execution_id,
-                num_plans=len(research_plan_data['category_plans'])
-            )
-            
-            # Validate we got plans for all categories
-            if len(research_plan_data['category_plans']) != len(categories):
-                logger.warning(
-                    "etl.call_summary.plan_count_mismatch",
-                    execution_id=execution_id,
-                    expected=len(categories),
-                    received=len(research_plan_data['category_plans'])
+
+        max_retries = 3
+        research_plan_data = None
+
+        for attempt in range(max_retries):
+            try:
+                response = complete_with_tools(
+                    messages=messages,
+                    tools=[research_config['tool']],
+                    context=context,
+                    llm_params={
+                        "model": get_model_for_stage("RESEARCH_PLAN_MODEL")
+                    }
                 )
-            
-        except Exception as e:
-            logger.error(
-                "etl.call_summary.research_plan_error",
-                execution_id=execution_id,
-                error=str(e)
-            )
-            return f"❌ Error generating research plan: {str(e)}"
+
+                # Parse the tool response
+                tool_call = response['choices'][0]['message']['tool_calls'][0]
+                research_plan_data = json.loads(tool_call['function']['arguments'])
+
+                logger.info(
+                    "etl.call_summary.research_plan_generated",
+                    execution_id=execution_id,
+                    num_plans=len(research_plan_data['category_plans']),
+                    attempt=attempt + 1
+                )
+
+                # Validate we got plans for all categories
+                if len(research_plan_data['category_plans']) != len(categories):
+                    error_msg = (
+                        f"Plan count mismatch: expected {len(categories)}, "
+                        f"got {len(research_plan_data['category_plans'])}"
+                    )
+                    logger.error(
+                        "etl.call_summary.plan_count_mismatch",
+                        execution_id=execution_id,
+                        expected=len(categories),
+                        received=len(research_plan_data['category_plans']),
+                        attempt=attempt + 1
+                    )
+                    if attempt < max_retries - 1:
+                        logger.info(f"Retrying research plan generation (attempt {attempt + 2}/{max_retries})")
+                        continue
+                    else:
+                        raise ValueError(error_msg)
+
+                # Validate all categories have plans
+                plan_names = {plan['name'] for plan in research_plan_data['category_plans']}
+                category_names = {cat['category_name'] for cat in categories}
+                missing = category_names - plan_names
+                if missing:
+                    error_msg = f"Missing plans for categories: {missing}"
+                    logger.error(
+                        "etl.call_summary.missing_category_plans",
+                        execution_id=execution_id,
+                        missing_categories=list(missing),
+                        attempt=attempt + 1
+                    )
+                    if attempt < max_retries - 1:
+                        logger.info(f"Retrying research plan generation (attempt {attempt + 2}/{max_retries})")
+                        continue
+                    else:
+                        raise ValueError(error_msg)
+
+                # Success - break out of retry loop
+                break
+
+            except Exception as e:
+                logger.error(
+                    "etl.call_summary.research_plan_error",
+                    execution_id=execution_id,
+                    error=str(e),
+                    attempt=attempt + 1
+                )
+                if attempt < max_retries - 1:
+                    logger.info(f"Retrying due to error: {str(e)} (attempt {attempt + 2}/{max_retries})")
+                    continue
+                else:
+                    return f"❌ Error generating research plan after {max_retries} attempts: {str(e)}"
+
+        if not research_plan_data:
+            return f"❌ Failed to generate research plan after {max_retries} attempts"
         
         # Step 7: SECOND STAGE - Extract content for each category using tool calling
         category_results = []
@@ -890,20 +937,36 @@ Category {i}:
                 section=category["transcripts_section"]
             )
             
-            # Get research plan for this category
+            # Get research plan for this category by index (more reliable than name)
             category_plan = next(
-                (p for p in research_plan_data['category_plans'] 
-                 if p['name'] == category['category_name']),
+                (p for p in research_plan_data['category_plans']
+                 if p.get('index') == i),  # Match by index
                 None
             )
-            
-            if not category_plan:
+
+            # Validate name matches as secondary check
+            if category_plan and category_plan.get('name') != category['category_name']:
                 logger.warning(
+                    "etl.call_summary.name_mismatch",
+                    execution_id=execution_id,
+                    expected_name=category['category_name'],
+                    received_name=category_plan.get('name'),
+                    index=i
+                )
+
+
+            if not category_plan:
+                # This should not happen after validation, but handle gracefully
+                logger.error(
                     "etl.call_summary.no_plan_for_category",
                     execution_id=execution_id,
                     category_name=category["category_name"]
                 )
-                category_plan = {"plan": "No specific plan available"}
+                # Create a minimal plan to continue
+                category_plan = {
+                    "extraction_strategy": "No research plan available. Extract any relevant content found.",
+                    "cross_category_notes": ""
+                }
             
             # Retrieve chunks for this specific category's section
             chunks = retrieve_full_section(
@@ -935,22 +998,28 @@ Category {i}:
                 context=context
             )
             
-            # Format previous sections summary (keep minimal)
+            # Format previous sections with FULL content for deduplication
             previous_summary = ""
             extracted_themes = ""
             if category_results:
-                # Just list category names that were completed
-                completed_names = [r['name'] for r in category_results if not r.get('rejected', False)]
-                if completed_names:
+                # Get non-rejected completed categories
+                completed_results = [r for r in category_results if not r.get('rejected', False)]
+                if completed_results:
+                    # List completed category names
+                    completed_names = [r['name'] for r in completed_results]
                     previous_summary = f"Already completed: {', '.join(completed_names)}"
-                    # Extract key themes from completed categories
-                    theme_list = []
-                    for result in category_results:
-                        if not result.get('rejected', False) and 'summary_statements' in result:
-                            for stmt in result['summary_statements'][:2]:  # Take first 2 statements as themes
-                                theme_list.append(f"- {stmt['statement'][:100]}...")  # Truncate long statements
-                    if theme_list:
-                        extracted_themes = "\n".join(theme_list[:5])  # Limit to 5 themes total
+
+                    # Include ALL statements from completed categories for proper deduplication
+                    all_statements = []
+                    for result in completed_results:
+                        if 'summary_statements' in result:
+                            for stmt in result['summary_statements']:
+                                # Include full statement for context
+                                all_statements.append(f"[{result['name']}] {stmt['statement']}")
+
+                    if all_statements:
+                        # Provide all extracted content to prevent duplication
+                        extracted_themes = "\n".join(all_statements)
                     else:
                         extracted_themes = "No specific themes extracted yet"
                 else:
@@ -971,6 +1040,7 @@ Category {i}:
                 category_description=category['category_description'],
                 transcripts_section=category['transcripts_section'],
                 research_plan=category_plan['extraction_strategy'],
+                cross_category_notes=category_plan.get('cross_category_notes', ''),
                 previous_sections=previous_summary,
                 extracted_themes=extracted_themes
             )
@@ -984,51 +1054,66 @@ Category {i}:
                 {"role": "user", "content": user_prompt}
             ]
             
-            # Make tool call
-            try:
-                response = complete_with_tools(
-                    messages=messages,
-                    tools=[extraction_config['tool']],
-                    context=context,
-                    llm_params={
-                        "model": get_model_for_stage("CATEGORY_EXTRACTION_MODEL", category["category_name"])
-                    }
-                )
-                
-                # Parse the tool response
-                tool_call = response['choices'][0]['message']['tool_calls'][0]
-                extracted_data = json.loads(tool_call['function']['arguments'])
-                
-                # Add index, name, and report section
-                extracted_data['index'] = i
-                extracted_data['name'] = category['category_name']
-                extracted_data['report_section'] = category.get('report_section', 'Results Summary')
-                
-                category_results.append(extracted_data)
-                
-                logger.info(
-                    "etl.call_summary.category_completed",
-                    execution_id=execution_id,
-                    category_index=i,
-                    category_name=category["category_name"],
-                    rejected=extracted_data.get('rejected', False)
-                )
-                
-            except Exception as e:
-                logger.error(
-                    "etl.call_summary.category_extraction_error",
-                    execution_id=execution_id,
-                    category_name=category["category_name"],
-                    error=str(e)
-                )
-                # Add error result
-                category_results.append({
-                    "index": i,
-                    "name": category["category_name"],
-                    "report_section": category.get("report_section", "Results Summary"),
-                    "rejected": True,
-                    "rejection_reason": f"Error extracting content: {str(e)}"
-                })
+            # Make tool call with retry logic
+            max_extraction_retries = 2
+            extracted_data = None
+
+            for attempt in range(max_extraction_retries):
+                try:
+                    response = complete_with_tools(
+                        messages=messages,
+                        tools=[extraction_config['tool']],
+                        context=context,
+                        llm_params={
+                            "model": get_model_for_stage("CATEGORY_EXTRACTION_MODEL", category["category_name"])
+                        }
+                    )
+
+                    # Parse the tool response
+                    tool_call = response['choices'][0]['message']['tool_calls'][0]
+                    extracted_data = json.loads(tool_call['function']['arguments'])
+
+                    # Add index, name, and report section
+                    extracted_data['index'] = i
+                    extracted_data['name'] = category['category_name']
+                    extracted_data['report_section'] = category.get('report_section', 'Results Summary')
+
+                    category_results.append(extracted_data)
+
+                    logger.info(
+                        "etl.call_summary.category_completed",
+                        execution_id=execution_id,
+                        category_index=i,
+                        category_name=category["category_name"],
+                        rejected=extracted_data.get('rejected', False),
+                        attempt=attempt + 1
+                    )
+                    break  # Success
+
+                except Exception as e:
+                    logger.error(
+                        "etl.call_summary.category_extraction_error",
+                        execution_id=execution_id,
+                        category_name=category["category_name"],
+                        error=str(e),
+                        attempt=attempt + 1
+                    )
+
+                    if attempt < max_extraction_retries - 1:
+                        logger.info(
+                            f"Retrying extraction for {category['category_name']} "
+                            f"(attempt {attempt + 2}/{max_extraction_retries})"
+                        )
+                        continue
+                    else:
+                        # Final failure - add error result
+                        category_results.append({
+                            "index": i,
+                            "name": category["category_name"],
+                            "report_section": category.get("report_section", "Results Summary"),
+                            "rejected": True,
+                            "rejection_reason": f"Error after {max_extraction_retries} attempts: {str(e)}"
+                        })
         
         # Step 8: Generate Word Document from structured data
         logger.info(
@@ -1163,8 +1248,10 @@ Category {i}:
         # Save the document
         output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'output')
         os.makedirs(output_dir, exist_ok=True)
-        
-        filename = f"{bank_info['bank_symbol']}_{fiscal_year}_{quarter}_{execution_id[:8]}.docx"
+
+        # Generate timestamp for filename (YYYYMMDD_HHMMSS format)
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"{bank_info['bank_symbol']}_{fiscal_year}_{quarter}_{timestamp}.docx"
         filepath = os.path.join(output_dir, filename)
         doc.save(filepath)
         
