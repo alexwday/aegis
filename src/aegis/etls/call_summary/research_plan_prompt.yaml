@@ -17,35 +17,30 @@ tool:
             properties:
               index:
                 type: integer
-                description: Category index number (1-based)
+                description: Category index number (1-based) - MUST match the category number provided
               name:
                 type: string
-                description: Category name
-              availability:
-                type: string
-                enum: [high, medium, low, none]
-                description: Content availability assessment
-              primary_sections:
-                type: string
-                enum: [MD, QA, Both, None]
-                description: Where relevant content appears
-              key_themes:
-                type: array
-                items:
-                  type: string
-                description: Main themes and topics found (3-5 items)
-              key_speakers:
-                type: array
-                items:
-                  type: string
-                description: Relevant speaker roles discussing this topic
+                description: Category name - MUST match exactly as provided
               extraction_strategy:
                 type: string
-                description: Detailed paragraph on how to approach extraction for maximum quality
+                description: |
+                  Comprehensive extraction guidance that MUST include:
+                  1. ALL themes and topics found relevant to this category
+                  2. ALL relevant speakers who discussed this topic and their roles
+                  3. ALL specific metrics or data points discovered
+                  4. Recommended approach for synthesis
+                  5. Any unique insights or notable discussions
+
+                  Be EXHAUSTIVE - include everything relevant, not just highlights.
+                  If no relevant content exists, explain what was searched for and why nothing was found.
               cross_category_notes:
                 type: string
-                description: Relationships with other categories to manage overlap
-            required: [index, name, availability, primary_sections, key_themes, key_speakers, extraction_strategy]
+                description: |
+                  Deduplication strategy to prevent overlap between categories.
+                  Specify which content belongs in THIS category vs others.
+                  Example: "Revenue metrics go here; profitability ratios go to Financial Performance"
+                  Leave empty if no overlap concerns.
+            required: [index, name, extraction_strategy, cross_category_notes]
       required: [category_plans]
 
 system_template: |
@@ -60,6 +55,8 @@ system_template: |
   2. Identifies key themes and discussion points
   3. Provides strategic extraction guidance for maximum insight quality
   4. Manages cross-category relationships to optimize coverage
+  5. Notes which requested metrics are available vs. absent (for internal planning only)
+  6. Identifies emerging topics that fit category patterns
   </objective>
   
   <categories_to_analyze>
@@ -67,47 +64,84 @@ system_template: |
   </categories_to_analyze>
   
   <analysis_framework>
-  For each category, conduct deep analysis to determine:
-  
-  AVAILABILITY ASSESSMENT:
-  - high: Multiple detailed discussions with specific metrics and forward guidance
-  - medium: Substantive content but may lack comprehensive detail
-  - low: Limited mentions, mostly indirect or brief references
-  - none: No material content worth extracting
-  
-  SECTION MAPPING:
-  - MD: Management Discussion/Prepared Remarks
-  - QA: Question & Answer session
-  - Both: Substantial content in both sections
-  - None: No relevant content found
-  
-  THEME IDENTIFICATION:
-  - Identify 3-5 specific themes discussed (not generic topics)
-  - Note unique angles or perspectives presented
-  - Flag any surprising or notable insights
-  
-  SPEAKER ANALYSIS:
-  - Identify which executives discuss each topic
-  - Note depth of commentary from each speaker
-  - Highlight any divergent views or emphasis
+  For each category, conduct deep analysis and create an extraction_strategy that includes:
+
+  KEY THEMES & TOPICS (embed in extraction_strategy):
+  - List ALL specific themes discussed with actual details
+  - Include EVERY metric mentioned (e.g., "NIM expanded 15bps to 1.72%")
+  - Document ALL unique angles, perspectives, or insights
+  - Capture ALL forward-looking statements and guidance
+  - Be EXHAUSTIVE - don't limit to top items
+  - Note: Focus on what IS discussed, not what's missing
+  - Identify emerging topics that match the category's analytical purpose
+
+  SPEAKER ANALYSIS (embed in extraction_strategy):
+  - Name specific executives and their roles (e.g., "CFO Nadine Ahn discussed...")
+  - Note which analysts asked relevant questions
+  - Highlight depth and quality of responses
+  - Flag any divergent views between speakers
+
+  EXTRACTION APPROACH (core of extraction_strategy):
+  - Specify what to prioritize for this category
+  - Recommend synthesis approach (chronological, thematic, by importance)
+  - Note available metrics vs. category description (for planning only - not for output)
+  - Provide specific search terms or phrases to focus on
+  - Guide on handling emerging/novel topics that fit the category pattern
   </analysis_framework>
   
   <extraction_strategy_guidance>
-  For the extraction_strategy field, provide a detailed paragraph that includes:
-  - Specific areas of focus based on actual content found
-  - Recommended approach for synthesizing insights
-  - Key relationships or dependencies to highlight
-  - Potential challenges and how to address them
-  - Cross-references to other categories to avoid duplication
-  - Suggestions for evidence selection priorities
+  The extraction_strategy field MUST be a comprehensive paragraph (150-250 words) that includes:
+
+  1. THEMES & METRICS FOUND:
+     Start with: "Key themes: [list ALL themes found with specific details]"
+     Include EVERY metric mentioned with actual values
+     Don't summarize or limit - be comprehensive
+     Note which category-suggested metrics are present (internal use only)
+     Highlight any novel/emerging metrics that fit the category's purpose
+
+  2. SPEAKER CONTRIBUTIONS:
+     Continue with: "Primary speakers: [name specific people and their key points]"
+     Be specific about who said what
+
+  3. EXTRACTION APPROACH:
+     Then describe: "Extract by focusing on..."
+     - What to prioritize
+     - How to organize findings
+     - What evidence to select
+
+  4. SPECIFIC GUIDANCE:
+     End with concrete extraction tips
+     - Search terms to use
+     - Sections to emphasize
+     - Metrics to capture (focus on available ones)
+     - How to handle novel topics that fit the pattern
+     - Reminder: Extract only what exists, never mention absences
   </extraction_strategy_guidance>
+
+  <cross_category_notes_guidance>
+  The cross_category_notes field should specify deduplication decisions:
+
+  - State which content belongs in THIS category vs others
+  - Be explicit: "Include X here, leave Y for [other category]"
+  - Address any natural overlaps between categories
+  - Provide clear boundaries for content division
+  - If no overlap concerns, leave empty
+
+  Examples:
+  - "All PCL and provision discussions here; leave capital ratios for Capital & Liquidity"
+  - "Focus on digital banking initiatives; exclude digital risk (goes to Risk Management)"
+  - "Revenue breakdown here; profitability analysis in Financial Performance"
+  </cross_category_notes_guidance>
   
   <quality_standards>
-  - Be specific about content found - avoid generic observations
-  - Identify material insights worth extracting
-  - Note quantitative data availability
-  - Flag forward-looking statements and strategic initiatives
-  - Highlight any category where content exceeds or falls short of expectations
+  - Be EXHAUSTIVE: Include ALL speakers, ALL metrics, ALL themes - don't filter or limit
+  - Be SPECIFIC: Use actual names, exact numbers, precise quotes
+  - NO GENERIC STATEMENTS: Don't say "management discussed revenue" - say "CEO noted 12% revenue growth driven by wealth management"
+  - EMBED ALL ANALYSIS: Themes and speakers go IN the extraction_strategy, not separate fields
+  - DEDUPLICATION IS CRITICAL: Use cross_category_notes to prevent content appearing twice
+  - COMPLETENESS: Document everything relevant - this is comprehensive research, not a summary
+  - ADAPTIVE: Note how emerging topics fit category patterns for intelligent extraction
+  - AVAILABILITY FOCUS: Track what's present, guide extraction to avoid mentioning absences
   </quality_standards>
   
   <response_format>
@@ -115,4 +149,12 @@ system_template: |
   Remember: This plan guides the extraction phase, so be thorough and specific.
   Focus on WHERE content is and HOW to extract it effectively.
   Do NOT extract actual values or quotes - only map and strategize.
+
+  CRITICAL REQUIREMENTS:
+  - You MUST create a plan for EVERY category provided, even if no relevant content exists
+  - For categories with no content, provide extraction_strategy explaining what was searched and why nothing was found
+  - The number of category_plans returned MUST equal the number of categories provided
+  - Include ALL categories in your response, maintaining the exact index numbers provided
+  - The extraction_strategy MUST contain the themes and speakers - they are NOT separate fields
+  - Use cross_category_notes to specify where overlapping content should be placed
   </response_format>

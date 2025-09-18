@@ -20,9 +20,8 @@ tool:
           description: "Format: 'Category Name: Brief Context' (e.g., 'Expenses: Navigating workforce challenges' or 'Credit Quality: Resilient amid economic uncertainty'). Keep brief for TOC readability (max 60 chars total)"
         summary_statements:
           type: array
-          description: Comprehensive key findings with rich supporting evidence
-          minItems: 3
-          maxItems: 7
+          description: ALL key findings with rich supporting evidence - be exhaustive
+          minItems: 1
           items:
             type: object
             properties:
@@ -33,9 +32,8 @@ tool:
                   Use **text** to bold key metrics, numbers, percentages (e.g., "Revenue grew **12%** year-over-year")
               evidence:
                 type: array
-                description: Supporting quotes and context that enrich the statement
+                description: ALL relevant supporting quotes and context that enrich the statement
                 minItems: 1
-                maxItems: 4
                 items:
                   type: object
                   properties:
@@ -51,9 +49,6 @@ tool:
                     speaker:
                       type: string
                       description: Speaker's name and title/role
-                    context:
-                      type: string
-                      description: Optional context about when/why this was said
                   required: [type, content, speaker]
             required: [statement, evidence]
       required: [rejected]
@@ -74,6 +69,9 @@ system_template: |
   <research_guidance>
   Based on the research plan for this category:
   {research_plan}
+
+  Deduplication notes from research phase:
+  {cross_category_notes}
   </research_guidance>
   
   <previous_categories_context>
@@ -84,6 +82,18 @@ system_template: |
   {extracted_themes}
   </previous_categories_context>
   
+  <adaptive_extraction_guidance>
+  CRITICAL: Category descriptions provide EXAMPLES of typical content based on historical patterns.
+  They are GUIDANCE, not rigid requirements. Apply intelligent reasoning:
+
+  1. NEVER mention missing metrics - only extract what's actually discussed
+  2. Category descriptions show typical metrics, but not all will be present in every call
+  3. If a metric from the category description isn't mentioned, simply omit it without comment
+  4. Apply pattern recognition to include NEW/EMERGING topics in appropriate categories
+  5. Use the category's thematic intent to guide inclusion of novel content
+  6. Think beyond literal examples - include new metrics that serve similar analytical purposes
+  </adaptive_extraction_guidance>
+
   <extraction_framework>
   METRIC EXTRACTION RULES:
   1. When reporting ANY metric, include ALL available variations:
@@ -107,6 +117,12 @@ system_template: |
        * Forward-looking commentary
        * Unusual factors or one-time items
      - Skip evidence if it merely restates the metric
+
+  4. Intelligent categorization:
+     - Recognize that category descriptions are based on PAST examples
+     - Include emerging topics that fit the category's analytical purpose
+     - Apply judgment to categorize novel metrics appropriately
+     - Focus on the category's intent, not just literal metric names
   
   EVIDENCE SELECTION PRIORITIES (in order):
   1. Strategic initiatives and transformations
@@ -143,28 +159,36 @@ system_template: |
   2. COMPLETE: Include all available data points (current, YoY, QoQ, YTD)
   3. CONTEXTUALIZE: Evidence should explain drivers, not repeat numbers
   4. DIFFERENTIATE: Ensure unique from other categories
-  
+  5. BE EXHAUSTIVE: Create as many statements as needed to capture ALL material content
+  6. ADAPTIVE: Include relevant content even if not explicitly named in category description
+
   The relationship should be:
-  - Statement = Complete metric with all variations
-  - Evidence = Context, drivers, and strategic rationale (NOT the numbers)
+  - Statement = Complete metric with all variations THAT EXIST IN THE TRANSCRIPT
+  - Evidence = ALL relevant context, drivers, and strategic rationale (NOT the numbers)
+  - Don't limit yourself - if there are 15 important findings, include all 15
+  - NEVER state that a metric is missing - focus only on what's present
   </synthesis_approach>
   
   <quality_requirements>
-  - Extract 3-7 MATERIAL insights (prefer depth over quantity)
-  - Each statement must represent a significant finding
-  - Evidence should illuminate, not just repeat
+  - Extract ALL material insights - no artificial limits
+  - Each statement must represent a significant finding THAT EXISTS IN THE TRANSCRIPT
+  - Include ALL relevant evidence that adds context
   - Maintain analytical objectivity
   - Focus on bank-specific insights over industry generalities
   - Ensure no redundancy with previously extracted content
+  - BE EXHAUSTIVE: This is comprehensive extraction, not summarization
+  - SILENT OMISSION: Never mention absence of metrics - only report what's present
+  - FUTURE-PROOF: Intelligently categorize emerging topics based on category intent
+  - ADAPTIVE: Category descriptions are historical examples, not exhaustive requirements
   </quality_requirements>
   
   <rejection_criteria>
-  Reject this category if:
-  - Fewer than 3 material insights can be extracted
-  - Content is predominantly generic or boilerplate
-  - All substantial content already covered in other categories
-  - Discussion lacks sufficient depth for meaningful analysis
-  - No concrete information beyond passing mentions
+  Reject this category ONLY if:
+  - NO material insights can be extracted at all
+  - Content is entirely generic boilerplate with no specific information
+  - ALL content already covered in other categories
+  - Only passing mentions with no substantive discussion
+  - No concrete information whatsoever
   
   If rejecting, provide specific explanation referencing the actual content reviewed.
   </rejection_criteria>
@@ -177,9 +201,9 @@ system_template: |
     * Format: "Category Name: Brief descriptive context"
     * Example: "Financial Performance: Record revenue amid headwinds"
     * Keep total length under 60 characters for TOC readability
-  - Provide 3-7 comprehensive summary statements
-  - Support each with 1-4 pieces of enriching evidence
-  - Ensure high quality over quantity
+  - Provide ALL comprehensive summary statements found
+  - Support each with ALL relevant pieces of enriching evidence
+  - Be EXHAUSTIVE - include everything material, not just highlights
   
   For rejected categories:
   - Set rejected=true
