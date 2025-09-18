@@ -866,42 +866,28 @@ Category {i}:
                     attempt=attempt + 1
                 )
 
-                # Validate we got plans for all categories
+                # Log if we got fewer plans than categories (this is OK - some may not apply)
                 if len(research_plan_data['category_plans']) != len(categories):
-                    error_msg = (
-                        f"Plan count mismatch: expected {len(categories)}, "
-                        f"got {len(research_plan_data['category_plans'])}"
-                    )
-                    logger.error(
-                        "etl.call_summary.plan_count_mismatch",
+                    logger.warning(
+                        "etl.call_summary.plan_count_differs",
                         execution_id=execution_id,
                         expected=len(categories),
                         received=len(research_plan_data['category_plans']),
-                        attempt=attempt + 1
+                        note="Some categories may not apply to this bank/transcript"
                     )
-                    if attempt < max_retries - 1:
-                        logger.info(f"Retrying research plan generation (attempt {attempt + 2}/{max_retries})")
-                        continue
-                    else:
-                        raise ValueError(error_msg)
 
-                # Validate all categories have plans
+                # Check which categories have plans (for informational purposes)
+                plan_indices = {plan['index'] for plan in research_plan_data['category_plans']}
                 plan_names = {plan['name'] for plan in research_plan_data['category_plans']}
                 category_names = {cat['category_name'] for cat in categories}
                 missing = category_names - plan_names
                 if missing:
-                    error_msg = f"Missing plans for categories: {missing}"
-                    logger.error(
-                        "etl.call_summary.missing_category_plans",
+                    logger.info(
+                        "etl.call_summary.categories_without_plans",
                         execution_id=execution_id,
-                        missing_categories=list(missing),
-                        attempt=attempt + 1
+                        categories_without_plans=list(missing),
+                        note="These categories may not have relevant content in the transcript"
                     )
-                    if attempt < max_retries - 1:
-                        logger.info(f"Retrying research plan generation (attempt {attempt + 2}/{max_retries})")
-                        continue
-                    else:
-                        raise ValueError(error_msg)
 
                 # Success - break out of retry loop
                 break
@@ -956,17 +942,23 @@ Category {i}:
 
 
             if not category_plan:
-                # This should not happen after validation, but handle gracefully
-                logger.error(
-                    "etl.call_summary.no_plan_for_category",
+                # Category may not apply to this bank/transcript - this is acceptable
+                logger.info(
+                    "etl.call_summary.category_skipped_no_plan",
                     execution_id=execution_id,
-                    category_name=category["category_name"]
+                    category_name=category["category_name"],
+                    category_index=i,
+                    note="Category not applicable to this transcript based on research plan analysis"
                 )
-                # Create a minimal plan to continue
-                category_plan = {
-                    "extraction_strategy": "No research plan available. Extract any relevant content found.",
-                    "cross_category_notes": ""
-                }
+                # Skip this category entirely
+                category_results.append({
+                    "index": i,
+                    "name": category["category_name"],
+                    "report_section": category.get("report_section", "Results Summary"),
+                    "rejected": True,
+                    "rejection_reason": "Category not applicable to this transcript based on research plan analysis"
+                })
+                continue
             
             # Retrieve chunks for this specific category's section
             chunks = retrieve_full_section(

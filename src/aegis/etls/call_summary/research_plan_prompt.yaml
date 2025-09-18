@@ -151,10 +151,11 @@ system_template: |
   Do NOT extract actual values or quotes - only map and strategize.
 
   CRITICAL REQUIREMENTS:
-  - You MUST create a plan for EVERY category provided, even if no relevant content exists
-  - For categories with no content, provide extraction_strategy explaining what was searched and why nothing was found
-  - The number of category_plans returned MUST equal the number of categories provided
-  - Include ALL categories in your response, maintaining the exact index numbers provided
+  - Create plans ONLY for categories that have relevant content in the transcript
+  - You MAY skip categories that genuinely don't apply to this bank or transcript
+  - For categories with no relevant content, you may OMIT them from your response entirely
+  - Include the exact index numbers as provided for categories you DO include
   - The extraction_strategy MUST contain the themes and speakers - they are NOT separate fields
   - Use cross_category_notes to specify where overlapping content should be placed
+  - It's better to skip irrelevant categories than to force content that doesn't fit
   </response_format>
