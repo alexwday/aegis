@@ -8,11 +8,11 @@ This script:
 3. For fixing mismatched IDs (--complete-wipe): DELETEs all records then rebuilds
 
 Usage:
-    python scripts/sync_data_availability.py                # Update mode (preserves other tags)
-    python scripts/sync_data_availability.py --rebuild      # Rebuild mode (truncates and recreates)
-    python scripts/sync_data_availability.py --complete-wipe # Complete wipe (DELETE all, then rebuild)
-    python scripts/sync_data_availability.py --dry-run      # Show what would be done
-    python scripts/sync_data_availability.py --verify       # Show current table state
+    python scripts/sync_availability_table.py                # Update mode (preserves other tags)
+    python scripts/sync_availability_table.py --rebuild      # Rebuild mode (truncates and recreates)
+    python scripts/sync_availability_table.py --complete-wipe # Complete wipe (DELETE all, then rebuild)
+    python scripts/sync_availability_table.py --dry-run      # Show what would be done
+    python scripts/sync_availability_table.py --verify       # Show current table state
 """
 
 import argparse

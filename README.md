@@ -5,8 +5,6 @@ Aegis is an intelligent financial data assistant that helps users query and anal
 ## Table of Contents
 - [Prerequisites](#prerequisites)
 - [Installation](#installation)
-- [PostgreSQL Setup](#postgresql-setup)
-- [Database Configuration](#database-configuration)
 - [Environment Setup](#environment-setup)
 - [Testing the Installation](#testing-the-installation)
 - [Running the Application](#running-the-application)
@@ -14,12 +12,12 @@ Aegis is an intelligent financial data assistant that helps users query and anal
 
 ## Prerequisites
 
-Before you begin, ensure you have the following installed:
+Before you begin, ensure you have the following:
 - Python 3.11 or higher
 - Git
-- Homebrew (for macOS users)
 - At least 4GB of available RAM
 - An OpenAI API key (or compatible LLM API endpoint)
+- Access credentials to the hosted PostgreSQL development server
 
 ## Installation
 
@@ -52,334 +50,51 @@ pip install -e .
 # This installs all dependencies and makes 'aegis' importable
 ```
 
-## PostgreSQL Setup
-
-### Installing PostgreSQL on macOS
-
-#### Option 1: Using Homebrew (Recommended)
-
-```bash
-# Install PostgreSQL
-brew install postgresql@15
-
-# Install pgvector extension for embeddings support
-brew install pgvector
-
-# Start PostgreSQL service
-brew services start postgresql@15
-
-# Add PostgreSQL to PATH (add to ~/.zshrc or ~/.bash_profile)
-echo 'export PATH="/opt/homebrew/opt/postgresql@15/bin:$PATH"' >> ~/.zshrc
-source ~/.zshrc
-
-# Verify installation
-psql --version
-```
-
-#### Option 2: Using PostgreSQL.app
-
-1. Download PostgreSQL.app from https://postgresapp.com/
-2. Move to Applications folder
-3. Open PostgreSQL.app and click "Initialize"
-4. Add to PATH: `sudo mkdir -p /etc/paths.d && echo /Applications/Postgres.app/Contents/Versions/latest/bin | sudo tee /etc/paths.d/postgresapp`
-
-### Configure PostgreSQL for Custom Port (IMPORTANT: Do this first!)
-
-We need PostgreSQL to run on port 34532 instead of the default 5432.
-
-```bash
-# Find your postgresql.conf location
-# For Homebrew, try:
-psql -d postgres -c "SHOW config_file;" 2>/dev/null || psql -p 5432 -d postgres -c "SHOW config_file;"
-
-# If the above doesn't work, the config file is usually at:
-# Homebrew (Intel Mac): /usr/local/var/postgresql@15/postgresql.conf
-# Homebrew (M1/M2 Mac): /opt/homebrew/var/postgresql@15/postgresql.conf
-# PostgreSQL.app: ~/Library/Application Support/Postgres/var-15/postgresql.conf
-```
-
-Edit the configuration file using one of these methods:
-
-**Option 1: Using sed (easiest - automatic replacement):**
-```bash
-# For Homebrew on M1/M2 Macs:
-sed -i '' 's/^#*port = 5432/port = 34532/' /opt/homebrew/var/postgresql@15/postgresql.conf
-
-# For Homebrew on Intel Macs:
-sed -i '' 's/^#*port = 5432/port = 34532/' /usr/local/var/postgresql@15/postgresql.conf
-```
-
-**Option 2: Using VS Code (if installed):**
-```bash
-# For M1/M2 Macs:
-code /opt/homebrew/var/postgresql@15/postgresql.conf
-
-# For Intel Macs:
-code /usr/local/var/postgresql@15/postgresql.conf
-```
-
-**Option 3: Using TextEdit (GUI):**
-```bash
-# For M1/M2 Macs:
-open -a TextEdit /opt/homebrew/var/postgresql@15/postgresql.conf
-
-# For Intel Macs:
-open -a TextEdit /usr/local/var/postgresql@15/postgresql.conf
-```
-
-**Option 4: Using nano (if you prefer):**
-```bash
-# For M1/M2 Macs:
-nano /opt/homebrew/var/postgresql@15/postgresql.conf
-
-# For Intel Macs:
-nano /usr/local/var/postgresql@15/postgresql.conf
-```
-
-Find and change the port setting (usually around line 63):
-```
-port = 34532                # (change from 5432 to 34532)
-```
-
-Note: If the line starts with '#', remove the '#' to uncomment it.
-
-Restart PostgreSQL:
-```bash
-# For Homebrew:
-brew services restart postgresql@15
-
-# For PostgreSQL.app:
-# Click on the elephant icon in menu bar and select "Restart"
-```
-
-Verify the port change:
-```bash
-# This should now work:
-psql -p 34532 -d postgres -c "SELECT 1;"
-```
-
-### Creating the Database and User
-
-```bash
-# Connect to PostgreSQL on the new port
-# Note: Homebrew typically creates a superuser with your Mac username, not "postgres"
-psql -p 34532 -d postgres
-
-# If you get an error about role "postgres" not existing, try:
-psql -p 34532 -d postgres -U $(whoami)
-```
-
-Run the following SQL commands in the PostgreSQL prompt:
-
-```sql
--- First, check if the database already exists
-\l
-
--- Create the database (if it doesn't exist)
-CREATE DATABASE "finance-dev";
-
--- Create the user with password (if it doesn't exist)
-CREATE USER financeuser WITH PASSWORD 'financepass123';
-
--- Grant all privileges on the database
-GRANT ALL PRIVILEGES ON DATABASE "finance-dev" TO financeuser;
-
--- Connect to the new database
-\c "finance-dev"
-
--- Grant schema permissions
-GRANT ALL ON SCHEMA public TO financeuser;
-
--- Exit PostgreSQL
-\q
-```
-
-Verify the setup:
-```bash
-# This should connect successfully:
-PGPASSWORD=financepass123 psql -U financeuser -p 34532 -d finance-dev -c "SELECT 1;"
-```
-
 ## Database Configuration
 
-### Enable pgvector Extension
+The Aegis application connects to a hosted PostgreSQL development server. All required tables and data have been set up by the IT team.
 
-The pgvector extension is required for the aegis_transcripts table to store embeddings.
+### Available Tables
 
-#### Step 1: Verify pgvector Installation
+The following tables are available on the hosted server:
+- `aegis_data_availability` - Bank and period coverage data
+- `process_monitor_logs` - Workflow execution tracking
+- `aegis_transcripts` - Earnings call transcripts with embeddings
 
-```bash
-# Check if pgvector is installed via Homebrew
-brew list | grep pgvector
+Table schema files are preserved in the `data/` directory for reference:
+- `data/aegis_data_availability_schema.sql`
+- `data/process_monitor_logs_schema.sql`
+- `data/aegis_transcripts_schema.sql`
+- `data/aegis_tables_schema.sql`
 
-# If not installed, install it
-brew install pgvector
+### Database Status Check
 
-# Verify the installation
-brew info pgvector
-```
-
-#### Step 2: Enable Extension in Database
-
-```bash
-# Connect as superuser (use your Mac username for Homebrew installations)
-psql -p 34532 -d finance-dev -U $(whoami) -c "CREATE EXTENSION IF NOT EXISTS vector;"
-
-# If you get a permission error, try:
-psql -p 34532 -d postgres -U $(whoami) -c "CREATE EXTENSION IF NOT EXISTS vector;"
-psql -p 34532 -d postgres -U $(whoami) -c "GRANT CREATE ON DATABASE \"finance-dev\" TO financeuser;"
-```
-
-#### Troubleshooting pgvector
-
-If you get an error like "extension vector is not available", we provide diagnostic and fix scripts:
-
-##### Quick Fix (Recommended)
-
-Run the automated fix script:
-```bash
-# This script will detect your system and fix the pgvector installation
-./scripts/fix_pgvector.sh
-```
-
-##### Diagnostic Tool
-
-If the quick fix doesn't work, run the diagnostic tool:
-```bash
-python scripts/diagnose_pgvector.py
-```
-
-This will show you exactly what's wrong and provide specific fix commands.
-
-##### Manual Diagnostic Commands
-
-You can also run these commands manually to diagnose the issue:
-
-```bash
-# Check PostgreSQL version
-psql -p 34532 -d postgres -U $(whoami) -c "SELECT version();"
-
-# Check if pgvector is available to PostgreSQL
-psql -p 34532 -d postgres -U $(whoami) -c "SELECT name, default_version FROM pg_available_extensions WHERE name = 'vector';"
-
-# Check PostgreSQL extension directory
-psql -p 34532 -d postgres -U $(whoami) -c "SHOW extension_destdir;"
-
-# Check shared libraries
-psql -p 34532 -d postgres -U $(whoami) -c "SHOW shared_preload_libraries;"
-```
-
-##### 2. Link pgvector to PostgreSQL (if needed)
-
-If pgvector is installed but PostgreSQL can't find it, you may need to link it manually:
-
-**For M1/M2 Macs:**
-```bash
-# Create symbolic links for pgvector
-ln -s /opt/homebrew/lib/postgresql@15/pgvector.so /opt/homebrew/opt/postgresql@15/lib/postgresql/
-ln -s /opt/homebrew/share/postgresql@15/extension/vector* /opt/homebrew/opt/postgresql@15/share/postgresql@15/extension/
-
-# Restart PostgreSQL
-brew services restart postgresql@15
-```
-
-**For Intel Macs:**
-```bash
-# Create symbolic links for pgvector
-ln -s /usr/local/lib/postgresql@15/pgvector.so /usr/local/opt/postgresql@15/lib/postgresql/
-ln -s /usr/local/share/postgresql@15/extension/vector* /usr/local/opt/postgresql@15/share/postgresql@15/extension/
-
-# Restart PostgreSQL
-brew services restart postgresql@15
-```
-
-##### 3. Alternative Installation Method
-
-If the above doesn't work, try installing pgvector from source:
-
-```bash
-# Clone pgvector repository
-git clone https://github.com/pgvector/pgvector.git
-cd pgvector
-
-# Build and install (requires PostgreSQL development files)
-make
-make install
-
-# Return to project directory
-cd ..
-rm -rf pgvector
-
-# Restart PostgreSQL
-brew services restart postgresql@15
-```
-
-##### 4. Verify Installation
-
-After fixing the installation, verify pgvector is available:
-
-```bash
-# Check if extension is now available
-psql -p 34532 -d postgres -U $(whoami) -c "SELECT * FROM pg_available_extensions WHERE name = 'vector';"
-
-# Create the extension
-psql -p 34532 -d finance-dev -U $(whoami) -c "CREATE EXTENSION IF NOT EXISTS vector;"
-
-# Verify it's enabled
-psql -p 34532 -d finance-dev -U $(whoami) -c "\dx vector"
-```
-
-### Import Required Tables
-
-The project includes SQL dump files with the necessary table schemas and sample data. You can import them manually or use the setup script:
-
-#### Option 1: Using Setup Script (Recommended)
+To verify your connection and check table status:
 
 ```bash
 # Activate virtual environment
 source venv/bin/activate
 
-# Create all tables (including aegis_transcripts)
-python scripts/setup_all_databases.py --create-all
-
-# Or create tables individually
-python scripts/setup_all_databases.py --create-table aegis_data_availability
-python scripts/setup_all_databases.py --create-table process_monitor_logs
-python scripts/setup_all_databases.py --create-table aegis_transcripts
-
-# Check status
-python scripts/setup_all_databases.py --status
+# Check database status
+python scripts/database_validator.py --status
 ```
 
-#### Option 2: Manual Import
+This will display:
+- Connection status to the hosted server
+- List of available tables and row counts
+- pgvector extension availability
 
-```bash
-# Import table schemas
-PGPASSWORD=financepass123 psql -U financeuser -p 34532 -d finance-dev < data/process_monitor_logs_schema.sql
-PGPASSWORD=financepass123 psql -U financeuser -p 34532 -d finance-dev < data/aegis_data_availability_schema.sql
-PGPASSWORD=financepass123 psql -U financeuser -p 34532 -d finance-dev < data/aegis_transcripts_schema.sql
+### Loading Additional Data (Optional)
 
-# Import sample data
-PGPASSWORD=financepass123 psql -U financeuser -p 34532 -d finance-dev < data/process_monitor_logs_data.sql
-PGPASSWORD=financepass123 psql -U financeuser -p 34532 -d finance-dev < data/aegis_data_availability_data.sql
-
-# Verify the import
-PGPASSWORD=financepass123 psql -U financeuser -p 34532 -d finance-dev -c "\dt"
-PGPASSWORD=financepass123 psql -U financeuser -p 34532 -d finance-dev -c "SELECT COUNT(*) FROM process_monitor_logs;"
-PGPASSWORD=financepass123 psql -U financeuser -p 34532 -d finance-dev -c "SELECT COUNT(*) FROM aegis_data_availability;"
-PGPASSWORD=financepass123 psql -U financeuser -p 34532 -d finance-dev -c "SELECT COUNT(*) FROM aegis_transcripts;"
-```
-
-### Loading Transcript Data from CSV
-
-If you have transcript embeddings in a CSV file:
+If you need to load transcript data from CSV files:
 
 ```bash
 # Load CSV data into aegis_transcripts table
-python scripts/setup_aegis_transcripts.py --load-csv /path/to/your/transcripts.csv
+python scripts/database_validator.py --load-csv /path/to/your/transcripts.csv
 
-# Verify the data
-python scripts/setup_aegis_transcripts.py --verify
+# Options:
+# --batch-size 100      # Process rows in batches
+# --no-truncate         # Append instead of replacing existing data
 ```
 
 ## Environment Setup
@@ -432,12 +147,12 @@ LLM_MAX_TOKENS_LARGE=4000
 LLM_EMBEDDING_MODEL=text-embedding-3-large
 LLM_EMBEDDING_DIMENSIONS=3072  # Options: 256, 1024, or 3072
 
-# Database Configuration
-POSTGRES_HOST=localhost
-POSTGRES_PORT=34532
-POSTGRES_DATABASE=finance-dev
-POSTGRES_USER=financeuser
-POSTGRES_PASSWORD=financepass123
+# Database Configuration (Hosted PostgreSQL Server)
+POSTGRES_HOST=your_host_here    # Provided by IT team
+POSTGRES_PORT=5432               # Standard PostgreSQL port
+POSTGRES_DATABASE=your_db_here  # Provided by IT team
+POSTGRES_USER=your_user_here    # Provided by IT team
+POSTGRES_PASSWORD=your_pass_here # Provided by IT team
 
 # Conversation Processing
 MAX_HISTORY_LENGTH=10
@@ -775,10 +490,10 @@ Aegis uses a multi-agent architecture to process financial data requests:
 
 ### Common Issues
 
-1. **PostgreSQL Connection Refused**
-   - Ensure PostgreSQL is running: `brew services list`
-   - Check port configuration: `psql -U financeuser -p 34532 -d finance-dev -c "SELECT 1;"`
-   - Verify credentials in `.env` file
+1. **Database Connection Refused**
+   - Verify credentials in `.env` file match those provided by IT team
+   - Check network connectivity to the hosted PostgreSQL server
+   - Ensure your IP is whitelisted on the database server (contact IT if needed)
 
 2. **Module Import Errors**
    - Ensure virtual environment is activated: `source venv/bin/activate`

@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-Unified database setup script for Aegis.
+Database validation and utility script for Aegis.
 
-This script handles all database operations:
-- Creating tables (aegis_data_availability, process_monitor_logs, aegis_transcripts)
-- Loading initial data
-- Loading CSV data for transcripts
-- Checking database status
+This script handles database validation and utilities:
+- Checking table existence and status
+- Validating pgvector extension availability
+- Loading CSV data for transcripts (optional)
+- Verifying connection to hosted PostgreSQL server
 """
 
 import argparse
@@ -44,17 +44,11 @@ class AegisDatabaseSetup:
         self.inspector = inspect(self.engine)
         self.data_dir = Path(__file__).parent.parent / "data"
         
-        # Define tables and their schema files
+        # Define tables and their schema files (for reference only)
         self.tables = {
             'aegis_data_availability': 'aegis_data_availability_schema.sql',
             'process_monitor_logs': 'process_monitor_logs_schema.sql',
             'aegis_transcripts': 'aegis_transcripts_schema.sql'
-        }
-        
-        # Define tables with initial data files
-        self.data_files = {
-            'aegis_data_availability': 'aegis_data_availability_data.sql',
-            'process_monitor_logs': 'process_monitor_logs_data.sql'
         }
     
     def check_pgvector(self) -> bool:
@@ -107,9 +101,8 @@ class AegisDatabaseSetup:
             # For aegis_transcripts, ensure pgvector is enabled
             if table_name == 'aegis_transcripts':
                 if not self.check_pgvector():
-                    logger.error("pgvector extension not available. Please install it first.")
-                    logger.info("Run: brew install pgvector")
-                    logger.info("Then: ./scripts/fix_pgvector.sh")
+                    logger.error("pgvector extension not available on the database server.")
+                    logger.error("Please contact IT team to enable the pgvector extension.")
                     return False
                 self.enable_pgvector()
             
@@ -134,44 +127,6 @@ class AegisDatabaseSetup:
             logger.error(f"Failed to create table {table_name}: {e}")
             return False
     
-    def load_initial_data(self, table_name: str) -> bool:
-        """
-        Load initial SQL data for a table.
-        
-        Args:
-            table_name: Name of the table to load data into
-            
-        Returns:
-            True if successful or no data file, False on error
-        """
-        if table_name not in self.data_files:
-            logger.debug(f"No initial data file for {table_name}")
-            return True
-        
-        data_file = self.data_dir / self.data_files[table_name]
-        if not data_file.exists():
-            logger.debug(f"Data file not found: {data_file}")
-            return True
-        
-        try:
-            with open(data_file, 'r') as f:
-                data_sql = f.read()
-            
-            with self.engine.begin() as conn:
-                logger.info(f"Loading initial data for {table_name}...")
-                
-                # Execute data SQL statements
-                for statement in data_sql.split(';'):
-                    statement = statement.strip()
-                    if statement and not statement.startswith('--'):
-                        conn.execute(text(statement))
-                
-                logger.info(f"✓ Initial data loaded for {table_name}")
-                return True
-                
-        except Exception as e:
-            logger.error(f"Failed to load data for {table_name}: {e}")
-            return False
     
     def load_transcripts_csv(
         self, 
@@ -349,31 +304,31 @@ class AegisDatabaseSetup:
     
     def setup_all_tables(self, drop_existing: bool = False) -> bool:
         """
-        Setup all Aegis tables.
-        
+        Create all Aegis tables (for local testing only).
+        NOTE: In production, tables are managed on the hosted PostgreSQL server.
+
         Args:
             drop_existing: Whether to drop existing tables first
-            
+
         Returns:
             True if all successful, False if any failed
         """
+        logger.warning("Note: Tables should already exist on the hosted PostgreSQL server.")
+        logger.warning("This command is for local testing only.")
+
         success = True
-        
+
         for table_name in self.tables:
             if not self.create_table(table_name, drop_existing):
                 success = False
-                continue
-            
-            if not self.load_initial_data(table_name):
-                success = False
-        
+
         return success
 
 
 def main():
     """Main entry point."""
     parser = argparse.ArgumentParser(
-        description='Aegis Database Setup - Manage all database tables and data'
+        description='Aegis Database Utilities - Validate connection and manage transcript data'
     )
     
     # Table creation
@@ -441,14 +396,16 @@ def main():
         
         return 0
     
-    # Create tables
+    # Create tables (for local testing only)
     if args.create_tables:
         logger.info("="*60)
-        logger.info("Creating Database Tables")
+        logger.info("Creating Database Tables (Local Testing Only)")
         logger.info("="*60)
-        
+        logger.warning("\n⚠️ This command is for local testing only.")
+        logger.warning("Production tables should exist on the hosted server.\n")
+
         if setup.setup_all_tables(drop_existing=args.drop_existing):
-            logger.info("\n✓ All tables created successfully!")
+            logger.info("\n✓ Tables created successfully (for testing)!")
         else:
             logger.error("\n✗ Some tables failed to create")
             return 1

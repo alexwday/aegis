@@ -6,7 +6,7 @@ This script creates a clean YAML lookup file with bank ID, symbol, and name
 for easy reference without database access.
 
 Usage:
-    python generate_bank_lookup.py
+    python export_bank_lookup.py
     
 Output:
     bank_lookup.yaml - Simple YAML file with bank information
