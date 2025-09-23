@@ -27,6 +27,14 @@ from docx.enum.style import WD_STYLE_TYPE
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 import re
+import hashlib
+
+# Import document converter functions
+from aegis.etls.call_summary.document_converter import (
+    convert_docx_to_pdf,
+    structured_data_to_markdown,
+    get_standard_report_metadata
+)
 
 # Import direct transcript functions
 from aegis.model.subagents.transcripts.retrieval import retrieve_full_section
@@ -1241,10 +1249,14 @@ Category {i}:
         output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'output')
         os.makedirs(output_dir, exist_ok=True)
 
-        # Generate timestamp for filename (YYYYMMDD_HHMMSS format)
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        filename = f"{bank_info['bank_symbol']}_{fiscal_year}_{quarter}_{timestamp}.docx"
-        filepath = os.path.join(output_dir, filename)
+        # Generate unique hash for this report based on content
+        content_hash = hashlib.md5(
+            f"{bank_info['bank_id']}_{fiscal_year}_{quarter}_{datetime.now().isoformat()}".encode()
+        ).hexdigest()[:8]
+
+        filename_base = f"{bank_info['bank_symbol']}_{fiscal_year}_{quarter}_{content_hash}"
+        docx_filename = f"{filename_base}.docx"
+        filepath = os.path.join(output_dir, docx_filename)
         doc.save(filepath)
         
         logger.info(
@@ -1254,6 +1266,186 @@ Category {i}:
             valid_categories=len(valid_categories),
             rejected_categories=len(category_results) - len(valid_categories)
         )
+
+        # Step 9: Convert to PDF
+        logger.info(
+            "etl.call_summary.converting_to_pdf",
+            execution_id=execution_id
+        )
+
+        pdf_filename = f"{filename_base}.pdf"
+        pdf_filepath = os.path.join(output_dir, pdf_filename)
+        pdf_result = convert_docx_to_pdf(filepath, pdf_filepath)
+
+        if pdf_result:
+            logger.info(
+                "etl.call_summary.pdf_created",
+                execution_id=execution_id,
+                pdf_filepath=pdf_result
+            )
+        else:
+            logger.warning(
+                "etl.call_summary.pdf_creation_failed",
+                execution_id=execution_id
+            )
+            pdf_filepath = None
+            pdf_filename = None
+
+        # Step 10: Generate Markdown content
+        logger.info(
+            "etl.call_summary.generating_markdown",
+            execution_id=execution_id
+        )
+
+        markdown_content = structured_data_to_markdown(
+            category_results=valid_categories,
+            bank_info=bank_info,
+            quarter=quarter,
+            fiscal_year=fiscal_year
+        )
+
+        # Step 11: Save to database
+        logger.info(
+            "etl.call_summary.saving_to_database",
+            execution_id=execution_id
+        )
+
+        report_metadata = get_standard_report_metadata()
+        generation_timestamp = datetime.now()
+
+        try:
+            with get_connection() as conn:
+                # Delete any existing report for this bank/period/type combination
+                deleted = conn.execute(text(
+                    """
+                    DELETE FROM aegis_reports
+                    WHERE bank_id = :bank_id
+                      AND fiscal_year = :fiscal_year
+                      AND quarter = :quarter
+                      AND report_type = :report_type
+                    RETURNING id
+                    """
+                ), {
+                    "bank_id": bank_info["bank_id"],
+                    "fiscal_year": fiscal_year,
+                    "quarter": quarter,
+                    "report_type": report_metadata["report_type"]
+                }).fetchall()
+
+                if deleted:
+                    logger.info(
+                        "etl.call_summary.existing_reports_deleted",
+                        execution_id=execution_id,
+                        deleted_count=len(deleted),
+                        deleted_ids=[row.id for row in deleted]
+                    )
+
+                # Insert new report
+                result = conn.execute(text(
+                    """
+                    INSERT INTO aegis_reports (
+                        report_name,
+                        report_description,
+                        report_type,
+                        bank_id,
+                        bank_name,
+                        bank_symbol,
+                        fiscal_year,
+                        quarter,
+                        local_filepath,
+                        s3_document_name,
+                        s3_pdf_name,
+                        markdown_content,
+                        generation_date,
+                        generated_by,
+                        execution_id,
+                        metadata
+                    ) VALUES (
+                        :report_name,
+                        :report_description,
+                        :report_type,
+                        :bank_id,
+                        :bank_name,
+                        :bank_symbol,
+                        :fiscal_year,
+                        :quarter,
+                        :local_filepath,
+                        :s3_document_name,
+                        :s3_pdf_name,
+                        :markdown_content,
+                        :generation_date,
+                        :generated_by,
+                        :execution_id,
+                        :metadata
+                    )
+                    RETURNING id
+                    """
+                ), {
+                    "report_name": report_metadata["report_name"],
+                    "report_description": report_metadata["report_description"],
+                    "report_type": report_metadata["report_type"],
+                    "bank_id": bank_info["bank_id"],
+                    "bank_name": bank_info["bank_name"],
+                    "bank_symbol": bank_info["bank_symbol"],
+                    "fiscal_year": fiscal_year,
+                    "quarter": quarter,
+                    "local_filepath": filepath,
+                    "s3_document_name": docx_filename,  # Will be updated when uploaded to S3
+                    "s3_pdf_name": pdf_filename,  # Will be updated when uploaded to S3
+                    "markdown_content": markdown_content,
+                    "generation_date": generation_timestamp,
+                    "generated_by": "call_summary_etl",
+                    "execution_id": execution_id,
+                    "metadata": json.dumps({
+                        "bank_type": bank_type,
+                        "categories_processed": len(category_results),
+                        "categories_included": len(valid_categories),
+                        "categories_rejected": len(category_results) - len(valid_categories)
+                    })
+                })
+                conn.commit()
+                report_id = result.fetchone().id
+                logger.info(
+                    "etl.call_summary.database_inserted",
+                    execution_id=execution_id,
+                    report_id=report_id
+                )
+
+                # Update aegis_data_availability to include 'reports' database
+                update_result = conn.execute(text("""
+                    UPDATE aegis_data_availability
+                    SET database_names =
+                        CASE
+                            WHEN 'reports' = ANY(database_names) THEN database_names
+                            ELSE array_append(database_names, 'reports')
+                        END
+                    WHERE bank_id = :bank_id
+                      AND fiscal_year = :fiscal_year
+                      AND quarter = :quarter
+                      AND NOT ('reports' = ANY(database_names))
+                    RETURNING bank_id
+                """), {
+                    "bank_id": bank_info["bank_id"],
+                    "fiscal_year": fiscal_year,
+                    "quarter": quarter
+                })
+
+                if update_result.rowcount > 0:
+                    conn.commit()
+                    logger.info(
+                        "etl.call_summary.availability_updated",
+                        execution_id=execution_id,
+                        bank_id=bank_info["bank_id"],
+                        fiscal_year=fiscal_year,
+                        quarter=quarter
+                    )
+
+        except Exception as e:
+            logger.error(
+                "etl.call_summary.database_error",
+                execution_id=execution_id,
+                error=str(e)
+            )
         
         logger.info(
             "etl.call_summary.completed",
@@ -1298,8 +1490,11 @@ EXTRACTION RESULTS:
         
         output += f"""
 
-WORD DOCUMENT SAVED:
-{filepath}
+DOCUMENT OUTPUTS:
+- Word Document: {filepath}
+- PDF Document: {pdf_filepath if pdf_filepath else 'PDF generation failed'}
+- Database Entry: {'Saved to aegis_reports table' if markdown_content else 'Not saved'}
+- Markdown Length: {len(markdown_content)} characters
 
 ================================================================================
 END OF REPORT

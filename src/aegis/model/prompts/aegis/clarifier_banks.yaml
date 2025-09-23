@@ -29,8 +29,8 @@ content: |
   - Exact matches: "RBC", "TD", "BMO" → return corresponding IDs
   - Category matches: "Big Six", "Canadian banks" → return category bank IDs
   - Partial matches: "Royal" → likely RBC (ID 1)
-  - Multiple matches: "RBC and TD" → return [1, 2]
-  - Clear references: "National Bank" in Canadian context → NBC (ID 6)
+  - Multiple matches: "RBC and TD" → return [1, 6]
+  - Clear references: "National Bank" in Canadian context → NBC (ID 4)
   - Ambiguous: Single words like "First", "Commerce" → clarify
   - No match: Unknown bank names → request clarification
   </matching_rules>
@@ -53,16 +53,16 @@ content: |
   → banks_found: {"bank_ids": [1], "query_intent": "User wants to see RBC's revenue"}
 
   Query: "Compare TD and BMO efficiency ratios"
-  → banks_found: {"bank_ids": [2, 3], "query_intent": "User wants to compare the efficiency ratios between TD and BMO"}
+  → banks_found: {"bank_ids": [6, 2], "query_intent": "User wants to compare the efficiency ratios between TD and BMO"}
 
   Query: "Big Six Canadian banks performance"
-  → banks_found: {"bank_ids": [1, 2, 3, 4, 5, 6], "query_intent": "User wants to see performance metrics for all Big Six Canadian banks (RBC, TD, BMO, Scotia, CIBC, NBC)"}
+  → banks_found: {"bank_ids": [1, 2, 3, 4, 5, 6], "query_intent": "User wants to see performance metrics for all Big Six Canadian banks (RBC, BMO, CIBC, National Bank, Scotia, TD)"}
 
   Query: "Show me National Bank's expenses"
-  → banks_found: {"bank_ids": [6], "query_intent": "User wants to see National Bank's expenses"}
+  → banks_found: {"bank_ids": [4], "query_intent": "User wants to see National Bank's expenses"}
   
   Query: "what is rbc cet1 ratio for q2 2025, and what was td cet1 ratio for q1 2023"
-  → banks_found: {"bank_ids": [1, 2], "query_intent": "User wants to know RBC's CET1 ratio for Q2 2025 and TD's CET1 ratio for Q1 2023"}
+  → banks_found: {"bank_ids": [1, 6], "query_intent": "User wants to know RBC's CET1 ratio for Q2 2025 and TD's CET1 ratio for Q1 2023"}
   
   Query: "RBC Q2 2025"
   → banks_found: {"bank_ids": [1], "query_intent": "User is asking about RBC for Q2 2025 (specific metric not specified)"}

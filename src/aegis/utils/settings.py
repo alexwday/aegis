@@ -108,6 +108,7 @@ class Config:  # pylint: disable=too-many-instance-attributes
         OAUTH_GRANT_TYPE: OAuth grant type (typically client_credentials)
         OAUTH_MAX_RETRIES: Maximum retry attempts for token generation
         OAUTH_RETRY_DELAY: Initial retry delay in seconds
+        S3_REPORTS_BASE_URL: Base URL for S3 reports (e.g., https://s3.amazonaws.com/bucket/reports/)
     """
 
     _instance = None
@@ -177,6 +178,11 @@ class Config:  # pylint: disable=too-many-instance-attributes
         self.postgres_database = os.getenv("POSTGRES_DATABASE", "")
         self.postgres_user = os.getenv("POSTGRES_USER", "")
         self.postgres_password = os.getenv("POSTGRES_PASSWORD", "")
+
+        # S3 Configuration for Reports
+        self.s3_reports_base_url = os.getenv("S3_REPORTS_BASE_URL", "")
+        # Example: https://s3.amazonaws.com/my-bucket/reports/
+        # or https://cdn.example.com/reports/
 
         # LLM Configuration
         self.llm = LLMConfig(

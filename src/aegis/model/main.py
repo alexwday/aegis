@@ -20,8 +20,87 @@ from ..utils.monitor import (
     initialize_monitor,
     post_monitor_entries,
 )
+from ..utils.settings import config
 from ..utils.ssl import setup_ssl
 from .agents import route_query, generate_response, clarify_query, synthesize_responses
+import re
+
+
+def extract_s3_info(content: str) -> List[Dict[str, str]]:
+    """
+    Extract S3 file information from markers in content.
+
+    Args:
+        content: String content that may contain S3 link markers
+
+    Returns:
+        List of dicts with S3 file info
+    """
+    # Pattern to match markers: {{S3_LINK:action:type:key:text}}
+    pattern = r'\{\{S3_LINK:([^:]+):([^:]+):([^:]+):([^}]+)\}\}'
+
+    s3_files = []
+    for match in re.finditer(pattern, content):
+        s3_files.append({
+            'action': match.group(1),     # download or open
+            'file_type': match.group(2),  # docx or pdf
+            's3_key': match.group(3),      # S3 filename
+            'display_text': match.group(4) # Text to display
+        })
+
+    return s3_files
+
+
+def process_s3_links(content: str) -> str:
+    """
+    Process S3 link markers in content and replace with actual HTML links.
+
+    Markers have format: {{S3_LINK:action:file_type:s3_key:display_text}}
+    Example: {{S3_LINK:download:docx:RY_2025_Q2_abc.docx:Download Document}}
+    Example: {{S3_LINK:open:pdf:RY_2025_Q2_abc.pdf:Open PDF}}
+
+    Args:
+        content: Text content potentially containing S3 markers
+
+    Returns:
+        Content with markers replaced by HTML links
+    """
+    # Pattern to match S3 link markers
+    pattern = r'\{\{S3_LINK:([^:]+):([^:]+):([^:]+):([^}]+)\}\}'
+
+    def replace_marker(match):
+        action = match.group(1)        # download or open
+        file_type = match.group(2)     # docx, pdf, etc.
+        s3_key = match.group(3)         # S3 filename
+        display_text = match.group(4)   # Text to display
+
+        # Get S3 base URL from config
+        base_url = config.s3_reports_base_url
+
+        if not base_url:
+            # If no S3 URL configured, return a placeholder link
+            return f'[{display_text}](#no-s3-configured)'
+
+        # Ensure base URL ends with /
+        if not base_url.endswith('/'):
+            base_url += '/'
+
+        # Construct full S3 URL
+        full_url = f"{base_url}{s3_key}"
+
+        # Generate HTML based on action type
+        if action == 'download':
+            # Standard download link
+            return f'<a href="{full_url}" download>{display_text}</a>'
+        elif action == 'open':
+            # Special format for PDF viewer (UI will handle this)
+            return f'<a href="{full_url}" data-action="open-pdf" target="_blank">{display_text}</a>'
+        else:
+            # Default fallback
+            return f'<a href="{full_url}" target="_blank">{display_text}</a>'
+
+    # Replace all markers with HTML links
+    return re.sub(pattern, replace_marker, content)
 
 
 def model(
@@ -683,6 +762,9 @@ def model(
                     thread.start()
                     threads.append(thread)
 
+                # Collect S3 file info from reports subagent
+                s3_files_found = []
+
                 # Stream outputs from all subagents as they arrive
                 while active_subagents:
                     try:
@@ -699,6 +781,15 @@ def model(
                                 remaining=len(active_subagents),
                             )
                         else:
+                            # Extract S3 info before processing (only from reports subagent)
+                            if msg.get("type") == "subagent" and msg.get("name") == "reports" and msg.get("content"):
+                                found_files = extract_s3_info(msg["content"])
+                                if found_files:
+                                    s3_files_found.extend(found_files)
+
+                            # Process S3 links in subagent content before yielding
+                            if msg.get("type") == "subagent" and msg.get("content"):
+                                msg["content"] = process_s3_links(msg["content"])
                             # Stream the message
                             yield msg
                     except Exception:
@@ -743,6 +834,56 @@ def model(
                         context=planner_context,
                     ):
                         yield chunk
+
+                    # Programmatically add S3 links if we found any from reports subagent
+                    if s3_files_found and config.s3_reports_base_url:
+                        base_url = config.s3_reports_base_url
+                        if not base_url.endswith('/'):
+                            base_url += '/'
+
+                        # Group links by document (pair DOCX and PDF for same report)
+                        grouped_links = {}
+                        for file_info in s3_files_found:
+                            # Extract identifier from display text (e.g., "RY Q2 2025")
+                            display_text = file_info['display_text']
+                            # Find the part in parentheses if it exists
+                            import re
+                            match = re.search(r'\((.*?)\)', display_text)
+                            if match:
+                                report_id = match.group(1)
+                            else:
+                                report_id = 'Report'
+
+                            if report_id not in grouped_links:
+                                grouped_links[report_id] = []
+
+                            full_url = f"{base_url}{file_info['s3_key']}"
+                            # Use the full display text which includes the report name
+                            if file_info['action'] == 'download':
+                                grouped_links[report_id].append(f'<a href="{full_url}" download>{file_info["display_text"]}</a>')
+                            elif file_info['action'] == 'open':
+                                grouped_links[report_id].append(f'<a href="{full_url}" data-action="open-pdf" target="_blank">{file_info["display_text"]}</a>')
+
+                        # Format output based on number of reports
+                        if len(grouped_links) == 1:
+                            # Single report - simple format
+                            links = list(grouped_links.values())[0]
+                            yield {
+                                "type": "agent",
+                                "name": "aegis",
+                                "content": "\n\n**Available Downloads:** " + " | ".join(links)
+                            }
+                        else:
+                            # Multiple reports - organized format
+                            content_parts = ["\n\n**Available Downloads:**\n"]
+                            for report_id, links in grouped_links.items():
+                                content_parts.append(f"• **{report_id}**: " + " | ".join(links))
+
+                            yield {
+                                "type": "agent",
+                                "name": "aegis",
+                                "content": "\n".join(content_parts)
+                            }
 
                     logger.info(
                         "model.stage.summarizer.completed",
