@@ -1,21 +1,21 @@
 """
-Benchmarking Subagent - Educational Placeholder Implementation
+Supplementary Subagent - Educational Placeholder Implementation
 
 This file demonstrates how to build a subagent that integrates with Aegis.
 It shows the key utilities you'll need: logging, prompts, LLM calls, and monitoring.
 
 HOW THIS IS CALLED FROM AEGIS:
-The main workflow (src/aegis/model/main.py) calls this when "benchmarking" is needed:
+The main workflow (src/aegis/model/main.py) calls this when "supplementary" is needed:
 
-    from .main import benchmarking_agent
+    from .main import supplementary_agent
 
-    for chunk in benchmarking_agent(
+    for chunk in supplementary_agent(
         conversation=conversation,
         latest_message=latest_message,
         bank_period_combinations=bank_period_combinations,
         basic_intent=basic_intent,
         full_intent=full_intent,
-        database_id="benchmarking",
+        database_id="supplementary",
         context=context
     ):
         yield chunk
@@ -34,7 +34,7 @@ from ....connections.llm_connector import stream
 from ....utils.monitor import add_monitor_entry, format_llm_call
 
 
-def benchmarking_agent(
+def supplementary_agent(
     conversation: List[Dict[str, str]],
     latest_message: str,
     bank_period_combinations: List[Dict[str, Any]],
@@ -44,7 +44,7 @@ def benchmarking_agent(
     context: Dict[str, Any],
 ) -> Generator[Dict[str, str], None, None]:
     """
-    Benchmarking subagent - generates placeholder benchmarking data.
+    Supplementary subagent - generates placeholder supplementary information data.
 
     This function MUST:
     1. Accept these exact 7 parameters
@@ -57,7 +57,7 @@ def benchmarking_agent(
         bank_period_combinations: Banks/periods to query [{bank_id, bank_name, bank_symbol, fiscal_year, quarter}]
         basic_intent: Simple interpretation (e.g., "efficiency ratio query")
         full_intent: Detailed interpretation
-        database_id: Always "benchmarking" for this subagent
+        database_id: Always "supplementary" for this subagent
         context: Contains execution_id, auth_config, ssl_config
     """
 
@@ -111,10 +111,10 @@ def benchmarking_agent(
         # ==================================================
         # STEP 3: Load prompt from YAML with global contexts
         # ==================================================
-        # This loads from prompts/benchmarking/benchmarking.yaml
+        # This loads from prompts/supplementary/supplementary.yaml
         # and automatically includes fiscal, project, and restrictions
         try:
-            system_prompt = load_subagent_prompt("benchmarking")
+            system_prompt = load_subagent_prompt("supplementary")
             logger.debug(
                 f"subagent.{database_id}.prompt_loaded",
                 execution_id=execution_id,
@@ -127,13 +127,13 @@ def benchmarking_agent(
                 error=str(e),
             )
             # Fallback prompt if YAML loading fails
-            system_prompt = """You are the Benchmarking subagent for Aegis.
-            Generate realistic placeholder benchmarking data based on the context provided."""
+            system_prompt = """You are the Supplementary subagent for Aegis.
+            Generate realistic placeholder supplementary data based on the context provided."""
 
         # ==================================================
         # STEP 4: Build the user prompt with context
         # ==================================================
-        user_prompt = f"""Generate benchmarking data for this request:
+        user_prompt = f"""Generate supplementary data for this request:
 
 User Query: {full_intent}
 Latest Message: {latest_message}
@@ -142,9 +142,9 @@ Banks Requested: {banks_text}
 Periods Requested: {periods_text}
 Basic Intent: {basic_intent}
 
-Create realistic placeholder benchmarking data that would answer this query.
-Include specific details appropriate for benchmarking data.
-End with: *[Benchmarking placeholder data - test mode]*"""
+Create realistic placeholder supplementary data that would answer this query.
+Include specific details appropriate for supplementary data.
+End with: *[Supplementary placeholder data - test mode]*"""
 
         # ==================================================
         # STEP 5: Call the LLM and stream response
@@ -244,12 +244,12 @@ End with: *[Benchmarking placeholder data - test mode]*"""
         # Add comprehensive monitoring entry
         stage_end = datetime.now(timezone.utc)
         add_monitor_entry(
-            stage_name="Subagent_Benchmarking",
+            stage_name="Subagent_Supplementary",
             stage_start_time=stage_start,
             stage_end_time=stage_end,
             status="Success",
             llm_calls=llm_calls if llm_calls else None,
-            decision_details=f"Generated benchmarking data for {len(bank_period_combinations)} bank-period combinations",
+            decision_details=f"Generated supplementary data for {len(bank_period_combinations)} bank-period combinations",
             custom_metadata={
                 "subagent": database_id,
                 "banks": [combo["bank_id"] for combo in bank_period_combinations],
@@ -279,7 +279,7 @@ End with: *[Benchmarking placeholder data - test mode]*"""
 
         # Add monitoring entry for the failure
         add_monitor_entry(
-            stage_name="Subagent_Benchmarking",
+            stage_name="Subagent_Supplementary",
             stage_start_time=stage_start,
             stage_end_time=datetime.now(timezone.utc),
             status="Failure",
@@ -294,13 +294,13 @@ End with: *[Benchmarking placeholder data - test mode]*"""
         yield {
             "type": "subagent",
             "name": database_id,
-            "content": f"\n⚠️ Error in Benchmarking subagent: {error_msg}\n",
+            "content": f"\n⚠️ Error in Supplementary subagent: {error_msg}\n",
         }
 
 
 # NOTES FOR REPLACING THIS IMPLEMENTATION:
 #
-# 1. Keep the function name: benchmarking_agent
+# 1. Keep the function name: supplementary_agent
 # 2. Keep all 7 parameters exactly as shown
 # 3. Always yield {"type": "subagent", "name": database_id, "content": "..."}
 # 4. Use the utilities demonstrated:

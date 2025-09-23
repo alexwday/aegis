@@ -172,7 +172,7 @@
             border: 2px solid #764ba2;
             border-radius: 10px;
             padding: 15px;
-            margin: 10promotional 0;
+            margin: 10px 0;
         }
 
         .agent-card h4 {
@@ -286,6 +286,7 @@
             <button class="nav-btn" onclick="showSection('routing')">Routing Logic</button>
             <button class="nav-btn" onclick="showSection('research')">Research Workflow</button>
             <button class="nav-btn" onclick="showSection('direct')">Direct Response</button>
+            <button class="nav-btn" onclick="showSection('etl')">ETL Mode</button>
             <button class="nav-btn" onclick="showSection('monitoring')">Monitoring</button>
             <button class="nav-btn" onclick="showSection('architecture')">Architecture</button>
         </nav>
@@ -294,9 +295,21 @@
             <!-- Overview Section -->
             <div class="section active" id="overview">
                 <h2>System Overview</h2>
-                
+
                 <div class="info-box">
                     <strong>Purpose:</strong> Aegis is an AI-powered financial assistant for RBC's CFO Group that processes natural language queries about financial data, orchestrating multiple specialized agents to retrieve and synthesize information from various databases.
+                </div>
+
+                <div class="success-box">
+                    <strong>Key Features:</strong>
+                    <ul style="list-style: none; padding-left: 0;">
+                        <li>✓ Real-time streaming responses</li>
+                        <li>✓ Concurrent database retrieval</li>
+                        <li>✓ Intelligent query routing</li>
+                        <li>✓ ETL mode for batch processing</li>
+                        <li>✓ Comprehensive monitoring</li>
+                        <li>✓ Cost tracking and optimization</li>
+                    </ul>
                 </div>
 
                 <div class="metrics">
@@ -318,9 +331,19 @@
                     </div>
                 </div>
 
+                <div class="warning-box">
+                    <strong>Database Pairing Rules:</strong>
+                    <ul style="list-style: none; padding-left: 0;">
+                        <li>• <strong>Line items:</strong> benchmarking + RTS (always together)</li>
+                        <li>• <strong>Management commentary:</strong> transcripts only</li>
+                        <li>• <strong>Pre-generated reports:</strong> reports only</li>
+                        <li>• <strong>Official documents:</strong> RTS only (10-Q/10-K)</li>
+                    </ul>
+                </div>
+
                 <div class="flow-diagram">
                     <h3>High-Level Process Flow</h3>
-                    
+
                     <div class="flow-step">
                         <h3>1. Request Reception</h3>
                         <p>User query arrives through web interface or API</p>
@@ -421,7 +444,7 @@ ssl_config = setup_ssl()
                         <div class="timeline-item">
                             <h4>Configure Authentication</h4>
                             <div class="code-block">
-auth_config = setup_authentication()
+auth_config = setup_authentication(execution_id, ssl_config)
 # OAuth 2.0 or API key based on AUTH_METHOD
                             </div>
                         </div>
@@ -468,7 +491,7 @@ context = {
                 <div class="agent-card">
                     <h4>Router Agent</h4>
                     <p><strong>Purpose:</strong> Binary classification to determine processing path</p>
-                    <p><strong>Model:</strong> GPT-4.1-mini (small tier for speed)</p>
+                    <p><strong>Model:</strong> Medium tier for balanced speed and accuracy</p>
                     <p><strong>Decision:</strong> "direct_response" or "research_workflow"</p>
                 </div>
 
@@ -509,7 +532,7 @@ def route_query(conversation, latest_message, context):
         {"role": "user", "content": latest_message["content"]}
     ]
     
-    response = complete(messages, context, model_tier="small")
+    response = complete_with_tools(messages, tools, context, model_tier="medium")
     
     if "direct" in response.lower():
         return "direct_response"
@@ -527,7 +550,7 @@ def route_query(conversation, latest_message, context):
                     
                     <div class="flow-step">
                         <h3>Stage 1: Clarification</h3>
-                        <p><strong>Agent:</strong> Clarifier | <strong>Model:</strong> GPT-4.1-mini</p>
+                        <p><strong>Agent:</strong> Clarifier | <strong>Model:</strong> Large tier for complex extraction</p>
                         <div class="details">
                             <ul>
                                 <li>Extract bank entities from query</li>
@@ -548,12 +571,12 @@ Output: {
 
                     <div class="flow-step">
                         <h3>Stage 2: Planning</h3>
-                        <p><strong>Agent:</strong> Planner | <strong>Model:</strong> GPT-4.1</p>
+                        <p><strong>Agent:</strong> Planner | <strong>Model:</strong> Large tier for reasoning</p>
                         <div class="details">
                             <ul>
                                 <li>Analyze clarified requirements</li>
                                 <li>Select appropriate databases</li>
-                                <li>Apply pairing rules (e.g., RTS+Transcripts)</li>
+                                <li>Apply pairing rules (e.g., benchmarking+RTS for line items)</li>
                                 <li>Generate execution plan</li>
                             </ul>
                         </div>
@@ -568,7 +591,7 @@ Output: {
 
                     <div class="flow-step">
                         <h3>Stage 3: Concurrent Retrieval</h3>
-                        <p><strong>Subagents:</strong> Database-specific agents | <strong>Model:</strong> GPT-4.1-mini</p>
+                        <p><strong>Subagents:</strong> Database-specific agents | <strong>Model:</strong> Medium tier</p>
                         <div class="details">
                             <ul>
                                 <li>Launch parallel threads for each database</li>
@@ -600,7 +623,7 @@ Output: {
 
                     <div class="flow-step">
                         <h3>Stage 4: Synthesis</h3>
-                        <p><strong>Agent:</strong> Summarizer | <strong>Model:</strong> GPT-4.1</p>
+                        <p><strong>Agent:</strong> Summarizer | <strong>Model:</strong> Large tier for synthesis</p>
                         <div class="details">
                             <ul>
                                 <li>Aggregate results from all sources</li>
@@ -624,7 +647,7 @@ Output: {
                 <div class="agent-card">
                     <h4>Response Agent</h4>
                     <p><strong>Purpose:</strong> Generate immediate answers without database queries</p>
-                    <p><strong>Model:</strong> GPT-4.1 (large tier for quality)</p>
+                    <p><strong>Model:</strong> Large tier for quality responses</p>
                     <p><strong>Use Cases:</strong> Greetings, definitions, clarifications, system info</p>
                 </div>
 
@@ -664,6 +687,93 @@ for chunk in stream(messages, context, model_tier="large"):
 
                 <div class="info-box">
                     <strong>Streaming:</strong> Direct responses use generator functions to provide real-time output, improving perceived performance and user experience.
+                </div>
+            </div>
+
+            <!-- ETL Mode Section -->
+            <div class="section" id="etl">
+                <h2>ETL Direct Access Mode</h2>
+
+                <div class="info-box">
+                    <strong>Purpose:</strong> Bypass conversational flow for predetermined workflows, enabling batch processing and scheduled report generation with 80% reduction in LLM calls.
+                </div>
+
+                <div class="flow-diagram">
+                    <h3>Conversational vs ETL Mode Comparison</h3>
+
+                    <div class="branch">
+                        <div class="branch-option">
+                            <h4>Conversational Mode (5 LLM Calls)</h4>
+                            <ol style="list-style: decimal; padding-left: 20px;">
+                                <li>Router agent classification</li>
+                                <li>Clarifier entity extraction</li>
+                                <li>Planner database selection</li>
+                                <li>Method selection (for transcripts)</li>
+                                <li>Research synthesis generation</li>
+                            </ol>
+                        </div>
+                        <div class="branch-option">
+                            <h4>ETL Mode (1 LLM Call)</h4>
+                            <ol style="list-style: decimal; padding-left: 20px;">
+                                <li>Direct subagent access</li>
+                                <li>Predetermined parameters</li>
+                                <li>Custom prompt injection</li>
+                                <li>Research synthesis only</li>
+                                <li>Store results in database</li>
+                            </ol>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flow-diagram">
+                    <h3>ETL Implementation</h3>
+
+                    <div class="flow-step">
+                        <h3>Direct Function Access</h3>
+                        <p>Import subagent functions directly without orchestration</p>
+                        <div class="code-block">
+from aegis.model.subagents.transcripts.retrieval import retrieve_full_section
+from aegis.model.subagents.transcripts.formatting import generate_research_statement
+
+# Direct access - no router/clarifier/planner needed
+chunks = retrieve_full_section(combo, sections="ALL", context)
+research = generate_research_statement(
+    formatted_content=formatted,
+    combo=combo,
+    context=context,
+    custom_prompt="Extract revenue metrics and growth rates"
+)
+                        </div>
+                    </div>
+
+                    <div class="flow-step">
+                        <h3>Command-Line Interface</h3>
+                        <p>Structured parameters replace natural language queries</p>
+                        <div class="code-block">
+python -m aegis.etls.call_summary.main \
+    --bank "Royal Bank of Canada" \
+    --year 2024 \
+    --quarter Q3 \
+    --query "Extract all revenue metrics"
+                        </div>
+                    </div>
+
+                    <div class="flow-step">
+                        <h3>Report Generation</h3>
+                        <p>Store results for Aegis retrieval via Reports subagent</p>
+                        <div class="details">
+                            <ul>
+                                <li>Generate structured reports</li>
+                                <li>Save to database</li>
+                                <li>Available via conversational mode</li>
+                                <li>Schedule for regular updates</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="success-box">
+                    <strong>Benefits:</strong> 80% LLM cost reduction, batch processing capability, scheduled report generation, custom extraction prompts, hybrid usage pattern.
                 </div>
             </div>
 
@@ -725,9 +835,9 @@ CREATE TABLE process_monitor_logs (
                         <p>Automatic token and cost calculation</p>
                         <div class="details">
                             <ul>
-                                <li>GPT-4.1-nano: $0.075 / 1M tokens</li>
-                                <li>GPT-4.1-mini: $0.30 / 1M tokens</li>
-                                <li>GPT-4.1: $2.50 / 1M input, $10.00 / 1M output</li>
+                                <li>Small tier: $0.075 / 1M tokens</li>
+                                <li>Medium tier: $0.30 / 1M tokens</li>
+                                <li>Large tier: $2.50 / 1M input, $10.00 / 1M output</li>
                             </ul>
                         </div>
                     </div>
