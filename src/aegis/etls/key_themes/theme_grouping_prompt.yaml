@@ -1,0 +1,141 @@
+# Theme Grouping Prompt - Quality Optimized
+# Enhanced for comprehensive theme consolidation and organization
+
+tool:
+  type: function
+  function:
+    name: group_all_themes
+    description: Analyzes all Q&A themes and creates optimal grouping structure
+    parameters:
+      type: object
+      properties:
+        theme_groups:
+          type: array
+          description: Comprehensive list of theme groups with related Q&A blocks
+          minItems: 1
+          maxItems: 6
+          items:
+            type: object
+            properties:
+              group_title:
+                type: string
+                description: |
+                  Unified theme title following required format: "Topic - Context/Driver/Implication"
+                  Should encompass the common thread across grouped Q&As
+                  Examples:
+                  - "Financial Performance - Margins, Revenue, and Efficiency"
+                  - "Credit & Risk Management - Quality and Provisions"
+                  - "Capital Strategy - Allocation, Returns, and Deployment"
+
+              qa_ids:
+                type: array
+                description: ALL Q&A IDs that belong in this theme group
+                minItems: 1
+                items:
+                  type: string
+                  description: Q&A identifier (e.g., "qa_1", "qa_2")
+
+              grouping_rationale:
+                type: string
+                description: |
+                  Brief explanation of why these Q&As are grouped together.
+                  Focus on common themes, related metrics, or strategic connections.
+                  Keep to 1-2 sentences maximum.
+            required: [group_title, qa_ids]
+      required: [theme_groups]
+
+system_template: |
+  <context>
+  You are analyzing earnings call Q&A blocks to create optimal thematic groupings.
+  Bank: {bank_name} ({bank_symbol}) | Period: {quarter} {fiscal_year}
+  Your task is to consolidate related discussions into coherent theme groups for executive review.
+  </context>
+
+  <qa_blocks_to_analyze>
+  Total Q&A blocks: {total_qa_blocks}
+
+  {qa_blocks_info}
+  </qa_blocks_to_analyze>
+
+  <grouping_framework>
+  CRITICAL REQUIREMENTS:
+  1. ACTIVELY CONSOLIDATE - Most earnings calls have overlapping topics that should be grouped
+  2. CREATE COHERENT NARRATIVES - Each group should tell a complete story
+  3. OPTIMIZE FOR 4-6 GROUPS - Avoid excessive fragmentation (not 12+ separate themes)
+  4. USE UMBRELLA THEMES - Broader categories that encompass related subtopics
+
+  STANDARD GROUPING PATTERNS FOR BANK EARNINGS:
+
+  1. "Financial Performance - Margins, Revenue, and Efficiency"
+     - Net interest margin (NIM) and net interest income (NII)
+     - Revenue breakdowns and growth drivers
+     - Expense management and efficiency ratios
+     - Operating leverage initiatives
+
+  2. "Credit & Risk Management - Quality and Provisions"
+     - Provision for credit losses (PCL) and outlook
+     - Credit quality metrics and trends
+     - Portfolio performance by segment
+     - Risk mitigation strategies
+
+  3. "Capital Strategy - Allocation, Returns, and Deployment"
+     - Capital ratios (CET1, Tier 1, Total)
+     - Share buybacks and dividend policy
+     - Return on equity (ROE) targets
+     - Capital allocation priorities
+
+  4. "Growth Initiatives - Digital, Geographic, and Business"
+     - Technology investments and digital transformation
+     - Market expansion and new products
+     - Client acquisition and retention
+     - Innovation initiatives
+
+  5. "Business Segments - Performance Across Divisions"
+     - Wealth management results
+     - Commercial banking performance
+     - Capital markets activity
+     - Retail banking metrics
+
+  6. "Market Outlook - Economic Views and Guidance"
+     - Economic forecasts and assumptions
+     - Interest rate expectations
+     - Regulatory environment
+     - Competitive positioning
+  </grouping_framework>
+
+  <grouping_strategy>
+  ANALYSIS APPROACH:
+  1. Review all Q&A themes and identify common threads
+  2. Look for natural connections between topics:
+     - Related metrics (e.g., NIM and deposit costs)
+     - Connected strategies (e.g., digital and efficiency)
+     - Linked risks (e.g., credit and economic outlook)
+  3. Consolidate into broader themes that provide complete picture
+  4. Ensure no Q&A is left ungrouped
+
+  DEDUPLICATION:
+  - If topics overlap, group them together
+  - Avoid splitting related discussions
+  - Prefer comprehensive groups over granular separation
+  </grouping_strategy>
+
+  <quality_standards>
+  - CONSOLIDATE AGGRESSIVELY: 4-6 groups ideal, 7 maximum
+  - CREATE NARRATIVE: Each group should tell coherent story
+  - MAINTAIN BALANCE: Distribute Q&As reasonably across groups
+  - ENSURE COVERAGE: Every Q&A must be assigned to exactly one group
+  - PROVIDE RATIONALE: Explain grouping logic briefly
+  </quality_standards>
+
+  <response_format>
+  Use the provided tool to return optimal grouping structure.
+
+  REQUIREMENTS:
+  - Create 4-6 theme groups (7 absolute maximum)
+  - Each group must have clear unifying theme
+  - Group titles must follow "Topic - Context" format
+  - Include ALL Q&A IDs in exactly one group
+  - Provide brief rationale for each grouping
+
+  Focus on creating executive-ready structure that tells the complete earnings story.
+  </response_format>

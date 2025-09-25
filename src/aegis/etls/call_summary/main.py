@@ -11,6 +11,7 @@ Usage:
 """
 
 import argparse
+import asyncio
 import json
 import sys
 import uuid
@@ -547,33 +548,35 @@ def get_bank_type(bank_id: int) -> str:
         return "US_Banks"
 
 
-def get_bank_info(bank_name: str) -> Dict[str, Any]:
+async def get_bank_info(bank_name: str) -> Dict[str, Any]:
     """
     Look up bank information from the aegis_data_availability table.
-    
+
     Args:
         bank_name: Name, symbol, or ID of the bank
-        
+
     Returns:
         Dictionary with bank_id, bank_name, and bank_symbol
-        
+
     Raises:
         ValueError: If bank not found
     """
-    with get_connection() as conn:
+    async with get_connection() as conn:
         # Check if input is a numeric ID
         if bank_name.isdigit():
-            result = conn.execute(text(
+            result = await conn.execute(text(
                 """
                 SELECT DISTINCT bank_id, bank_name, bank_symbol
                 FROM aegis_data_availability
                 WHERE bank_id = :bank_id
                 LIMIT 1
                 """
-            ), {"bank_id": int(bank_name)}).fetchone()
+            ))
+            result = await result.fetchone()
+            result = result._asdict() if result else None
         else:
             # Try exact match first on name or symbol
-            result = conn.execute(text(
+            result = await conn.execute(text(
                 """
                 SELECT DISTINCT bank_id, bank_name, bank_symbol
                 FROM aegis_data_availability
@@ -581,11 +584,13 @@ def get_bank_info(bank_name: str) -> Dict[str, Any]:
                    OR LOWER(bank_symbol) = LOWER(:bank_name)
                 LIMIT 1
                 """
-            ), {"bank_name": bank_name}).fetchone()
+            ))
+            result = await result.fetchone()
+            result = result._asdict() if result else None
             
             if not result:
                 # Try partial match
-                result = conn.execute(text(
+                result = await conn.execute(text(
                     """
                     SELECT DISTINCT bank_id, bank_name, bank_symbol
                     FROM aegis_data_availability
@@ -593,44 +598,47 @@ def get_bank_info(bank_name: str) -> Dict[str, Any]:
                        OR LOWER(bank_symbol) LIKE LOWER(:pattern)
                     LIMIT 1
                     """
-                ), {"pattern": f"%{bank_name}%"}).fetchone()
+                ))
+                result = await result.fetchone()
+                result = result._asdict() if result else None
         
         if not result:
             # List available banks for user
-            available = conn.execute(text(
+            available = await conn.execute(text(
                 """
                 SELECT DISTINCT bank_symbol, bank_name
                 FROM aegis_data_availability
                 ORDER BY bank_symbol
                 """
-            )).fetchall()
+            ))
+            available = await available.fetchall()
             
-            bank_list = "\n".join([f"  - {r.bank_symbol}: {r.bank_name}" for r in available])
+            bank_list = "\n".join([f"  - {r['bank_symbol']}: {r['bank_name']}" for r in available])
             raise ValueError(
                 f"Bank '{bank_name}' not found. Available banks:\n{bank_list}"
             )
         
         return {
-            "bank_id": result.bank_id,
-            "bank_name": result.bank_name,
-            "bank_symbol": result.bank_symbol
+            "bank_id": result["bank_id"],
+            "bank_name": result["bank_name"],
+            "bank_symbol": result["bank_symbol"]
         }
 
 
-def verify_data_availability(bank_id: int, fiscal_year: int, quarter: str) -> bool:
+async def verify_data_availability(bank_id: int, fiscal_year: int, quarter: str) -> bool:
     """
     Check if transcript data is available for the specified bank and period.
-    
+
     Args:
         bank_id: Bank ID
         fiscal_year: Year (e.g., 2024)
         quarter: Quarter (e.g., "Q3")
-        
+
     Returns:
         True if transcript data is available, False otherwise
     """
-    with get_connection() as conn:
-        result = conn.execute(text(
+    async with get_connection() as conn:
+        result = await conn.execute(text(
             """
             SELECT database_names
             FROM aegis_data_availability
@@ -638,31 +646,28 @@ def verify_data_availability(bank_id: int, fiscal_year: int, quarter: str) -> bo
               AND fiscal_year = :fiscal_year
               AND quarter = :quarter
             """
-        ), {
-            "bank_id": bank_id,
-            "fiscal_year": fiscal_year,
-            "quarter": quarter
-        }).fetchone()
-        
-        if result and result.database_names:
-            return 'transcripts' in result.database_names
-        
+        ))
+        result = await result.fetchone()
+
+        if result and result['database_names']:
+            return 'transcripts' in result['database_names']
+
         return False
 
 
-def generate_call_summary(
+async def generate_call_summary(
     bank_name: str,
     fiscal_year: int,
     quarter: str
 ) -> str:
     """
     Generate a call summary by directly calling transcript functions.
-    
+
     Args:
         bank_name: ID, name, or symbol of the bank
         fiscal_year: Year (e.g., 2024)
         quarter: Quarter (e.g., "Q3")
-        
+
     Returns:
         The generated call summary content
     """
@@ -677,7 +682,7 @@ def generate_call_summary(
     
     try:
         # Step 1: Look up bank information
-        bank_info = get_bank_info(bank_name)
+        bank_info = await get_bank_info(bank_name)
         logger.info(
             "etl.call_summary.bank_found",
             execution_id=execution_id,
@@ -687,7 +692,7 @@ def generate_call_summary(
         )
         
         # Step 2: Verify data availability
-        if not verify_data_availability(bank_info["bank_id"], fiscal_year, quarter):
+        if not await verify_data_availability(bank_info["bank_id"], fiscal_year, quarter):
             error_msg = f"No transcript data available for {bank_info['bank_name']} {quarter} {fiscal_year}"
             logger.warning(
                 "etl.call_summary.no_data",
@@ -696,8 +701,8 @@ def generate_call_summary(
             )
             
             # Check what periods are available
-            with get_connection() as conn:
-                available_periods = conn.execute(text(
+            async with get_connection() as conn:
+                result = await conn.execute(text(
                     """
                     SELECT DISTINCT fiscal_year, quarter
                     FROM aegis_data_availability
@@ -706,17 +711,18 @@ def generate_call_summary(
                     ORDER BY fiscal_year DESC, quarter DESC
                     LIMIT 10
                     """
-                ), {"bank_id": bank_info["bank_id"]}).fetchall()
+                ))
+                available_periods = await result.fetchall()
                 
                 if available_periods:
-                    period_list = ", ".join([f"{p.quarter} {p.fiscal_year}" for p in available_periods])
+                    period_list = ", ".join([f"{p['quarter']} {p['fiscal_year']}" for p in available_periods])
                     error_msg += f"\n\nAvailable periods for {bank_info['bank_name']}: {period_list}"
             
             return f"⚠️ {error_msg}"
         
         # Step 3: Setup context for function calls
         ssl_config = setup_ssl()
-        auth_config = setup_authentication(execution_id, ssl_config)
+        auth_config = await setup_authentication(execution_id, ssl_config)
         
         if not auth_config["success"]:
             error_msg = f"Authentication failed: {auth_config.get('error', 'Unknown error')}"
@@ -778,7 +784,7 @@ def generate_call_summary(
         )
         
         # Retrieve ALL transcript sections
-        chunks = retrieve_full_section(
+        chunks = await retrieve_full_section(
             combo=combo,
             sections="ALL",  # Get complete transcript
             context=context
@@ -794,7 +800,7 @@ def generate_call_summary(
         )
         
         # Format the complete transcript
-        formatted_transcript = format_full_section_chunks(
+        formatted_transcript = await format_full_section_chunks(
             chunks=chunks,
             combo=combo,
             context=context
@@ -854,7 +860,7 @@ Category {i}:
 
         for attempt in range(max_retries):
             try:
-                response = complete_with_tools(
+                response = await complete_with_tools(
                     messages=messages,
                     tools=[research_config['tool']],
                     context=context,
@@ -969,7 +975,7 @@ Category {i}:
                 continue
             
             # Retrieve chunks for this specific category's section
-            chunks = retrieve_full_section(
+            chunks = await retrieve_full_section(
                 combo=combo,
                 sections=category["transcripts_section"],  # MD, QA, or ALL
                 context=context
@@ -992,7 +998,7 @@ Category {i}:
                 continue
             
             # Format the chunks for this category
-            formatted_section = format_full_section_chunks(
+            formatted_section = await format_full_section_chunks(
                 chunks=chunks,
                 combo=combo,
                 context=context
@@ -1060,7 +1066,7 @@ Category {i}:
 
             for attempt in range(max_extraction_retries):
                 try:
-                    response = complete_with_tools(
+                    response = await complete_with_tools(
                         messages=messages,
                         tools=[extraction_config['tool']],
                         context=context,
@@ -1340,6 +1346,43 @@ Category {i}:
                         deleted_ids=[row.id for row in deleted]
                     )
 
+                    # Check if there are any other reports for this bank/period
+                    remaining_reports = conn.execute(text(
+                        """
+                        SELECT COUNT(*) as count
+                        FROM aegis_reports
+                        WHERE bank_id = :bank_id
+                          AND fiscal_year = :fiscal_year
+                          AND quarter = :quarter
+                        """
+                    ), {
+                        "bank_id": bank_info["bank_id"],
+                        "fiscal_year": fiscal_year,
+                        "quarter": quarter
+                    }).scalar()
+
+                    # If no other reports exist, remove 'reports' from availability
+                    if remaining_reports == 0:
+                        conn.execute(text(
+                            """
+                            UPDATE aegis_data_availability
+                            SET database_names = array_remove(database_names, 'reports')
+                            WHERE bank_id = :bank_id
+                              AND fiscal_year = :fiscal_year
+                              AND quarter = :quarter
+                              AND 'reports' = ANY(database_names)
+                            """
+                        ), {
+                            "bank_id": bank_info["bank_id"],
+                            "fiscal_year": fiscal_year,
+                            "quarter": quarter
+                        })
+                        logger.info(
+                            "etl.call_summary.availability_reports_removed",
+                            execution_id=execution_id,
+                            reason="No remaining reports after deletion"
+                        )
+
                 # Insert new report
                 result = conn.execute(text(
                     """
@@ -1565,12 +1608,12 @@ Examples:
     
     # Generate the call summary
     print(f"\n🔄 Generating report for {args.bank} {args.quarter} {args.year}...\n")
-    
-    result = generate_call_summary(
+
+    result = asyncio.run(generate_call_summary(
         bank_name=args.bank,
         fiscal_year=args.year,
         quarter=args.quarter
-    )
+    ))
     
     # Output the result
     if args.output:
