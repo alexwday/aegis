@@ -237,35 +237,55 @@ def _get_model_config(
     )
 
 
-async def _get_or_create_async_client(auth_token: str) -> AsyncOpenAI:
+async def _get_or_create_async_client(auth_token: str, ssl_config: Optional[Dict[str, Any]] = None) -> AsyncOpenAI:
     """
     Get or create an async OpenAI client with proper configuration.
 
     Creates a cached AsyncOpenAI client configured with the appropriate
-    authentication and timeout settings. Clients are cached by auth token
-    to enable connection reuse.
+    authentication, timeout, and SSL settings. Clients are cached by auth token
+    and SSL config to enable connection reuse.
 
     Args:
         auth_token: Authentication token from auth config
+        ssl_config: Optional SSL configuration with 'verify' and optional 'cert_path'
 
     Returns:
         Configured AsyncOpenAI client instance.
     """
     logger = get_logger()
 
-    # Use token as cache key
-    cache_key = auth_token or "no-auth"
+    # Create cache key from auth token and SSL config
+    ssl_verify = ssl_config.get("verify", True) if ssl_config else True
+    ssl_cert = ssl_config.get("cert_path", "") if ssl_config else ""
+    cache_key = f"{auth_token or 'no-auth'}_{ssl_verify}_{ssl_cert}"
 
     # Return cached client if exists
     if cache_key in _async_client_cache:
-        logger.debug("Using cached async LLM client", cache_key=cache_key[:8] + "...")
+        logger.debug("Using cached async LLM client", cache_key=cache_key[:20] + "...")
         return _async_client_cache[cache_key]
 
-    # Create AsyncOpenAI client with 180 second timeout
+    # Configure httpx client with SSL settings
+    httpx_client_kwargs = {}
+    if ssl_config:
+        if not ssl_config.get("verify", True):
+            # SSL verification disabled
+            httpx_client_kwargs["verify"] = False
+        elif ssl_config.get("cert_path"):
+            # Use custom certificate
+            httpx_client_kwargs["verify"] = ssl_config["cert_path"]
+        # else: use default SSL verification
+
+    # Create httpx client with SSL configuration
+    http_client = httpx.AsyncClient(
+        timeout=httpx.Timeout(180.0, connect=5.0),
+        **httpx_client_kwargs
+    )
+
+    # Create AsyncOpenAI client with configured httpx client
     client = AsyncOpenAI(
         api_key=auth_token,
         base_url=config.llm.base_url,
-        timeout=httpx.Timeout(180.0, connect=5.0),
+        http_client=http_client,
         max_retries=3,
     )
 
@@ -276,6 +296,8 @@ async def _get_or_create_async_client(auth_token: str) -> AsyncOpenAI:
         "Created new async LLM client",
         base_url=config.llm.base_url,
         timeout=180,
+        ssl_verify=ssl_verify,
+        ssl_cert=bool(ssl_cert),
     )
 
     return client
@@ -328,7 +350,10 @@ async def complete(
     )
 
     try:
-        client = await _get_or_create_async_client(context["auth_config"].get("token", "no-token"))
+        client = await _get_or_create_async_client(
+            context["auth_config"].get("token", "no-token"),
+            context.get("ssl_config")
+        )
 
         # Check if it's an o-series model (reasoning models)
         # These models don't support the temperature parameter
@@ -440,7 +465,10 @@ async def stream(
     )
 
     try:
-        client = await _get_or_create_async_client(context["auth_config"].get("token", "no-token"))
+        client = await _get_or_create_async_client(
+            context["auth_config"].get("token", "no-token"),
+            context.get("ssl_config")
+        )
 
         # Start timing
         start_time = time.time()
@@ -581,7 +609,10 @@ async def complete_with_tools(
     )
 
     try:
-        client = await _get_or_create_async_client(context["auth_config"].get("token", "no-token"))
+        client = await _get_or_create_async_client(
+            context["auth_config"].get("token", "no-token"),
+            context.get("ssl_config")
+        )
 
         # Check if it's an o-series model (reasoning models)
         # These models don't support temperature parameter
@@ -707,7 +738,10 @@ async def embed(
     )
 
     try:
-        client = await _get_or_create_async_client(context["auth_config"].get("token", "no-token"))
+        client = await _get_or_create_async_client(
+            context["auth_config"].get("token", "no-token"),
+            context.get("ssl_config")
+        )
 
         # Time the API call
         with ResponseTimer() as timer:
@@ -796,7 +830,10 @@ async def embed_batch(
     )
 
     try:
-        client = await _get_or_create_async_client(context["auth_config"].get("token", "no-token"))
+        client = await _get_or_create_async_client(
+            context["auth_config"].get("token", "no-token"),
+            context.get("ssl_config")
+        )
 
         # Time the API call
         with ResponseTimer() as timer:
