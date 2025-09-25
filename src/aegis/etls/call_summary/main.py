@@ -46,6 +46,7 @@ from aegis.connections.llm_connector import complete_with_tools
 from aegis.connections.postgres_connector import get_connection
 from aegis.utils.logging import setup_logging, get_logger
 from aegis.utils.settings import config
+from aegis.etls.call_summary.config import MODELS, TEMPERATURE, MAX_TOKENS
 
 # Initialize logging
 setup_logging()
@@ -95,11 +96,11 @@ CATEGORY_MODEL_OVERRIDES = {
 def get_model_for_stage(stage: str, category_name: Optional[str] = None) -> str:
     """
     Get the model to use for a specific stage, with override support.
-    
+
     Args:
         stage: The processing stage (RESEARCH_PLAN_MODEL, CATEGORY_EXTRACTION_MODEL)
         category_name: Optional category name for fine-grained model selection
-    
+
     Returns:
         Model name to use
     """
@@ -109,17 +110,17 @@ def get_model_for_stage(stage: str, category_name: Optional[str] = None) -> str:
         if category_override:
             logger.info(f"Using category-specific model for '{category_name}': {category_override}")
             return category_override
-    
+
     # Check for stage-level override
     stage_override = MODEL_OVERRIDES.get(stage)
     if stage_override:
         logger.info(f"Using stage override model for {stage}: {stage_override}")
         return stage_override
-    
-    # Fall back to default
-    default = config.llm.large.model
-    logger.debug(f"Using default model for {stage}: {default}")
-    return default
+
+    # Use config model
+    model = MODELS["summarization"]
+    logger.debug(f"Using configured model for {stage}: {model}")
+    return model
 
 
 def load_research_plan_config():
@@ -865,7 +866,9 @@ Category {i}:
                     tools=[research_config['tool']],
                     context=context,
                     llm_params={
-                        "model": get_model_for_stage("RESEARCH_PLAN_MODEL")
+                        "model": get_model_for_stage("RESEARCH_PLAN_MODEL"),
+                        "temperature": TEMPERATURE,
+                        "max_tokens": MAX_TOKENS
                     }
                 )
 
@@ -1071,7 +1074,9 @@ Category {i}:
                         tools=[extraction_config['tool']],
                         context=context,
                         llm_params={
-                            "model": get_model_for_stage("CATEGORY_EXTRACTION_MODEL", category["category_name"])
+                            "model": get_model_for_stage("CATEGORY_EXTRACTION_MODEL", category["category_name"]),
+                            "temperature": TEMPERATURE,
+                            "max_tokens": MAX_TOKENS
                         }
                     )
 

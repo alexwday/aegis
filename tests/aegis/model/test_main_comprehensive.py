@@ -132,7 +132,7 @@ class TestModelOrchestrator:
         async def mock_response_gen():
             yield {"type": "agent", "name": "aegis", "content": "RBC's revenue is $12B"}
 
-        mock_generate_response.return_value = mock_response_gen
+        mock_generate_response.return_value = mock_response_gen()
         mock_post_monitor.return_value = 5  # 5 entries posted
 
         # Execute
@@ -227,13 +227,13 @@ class TestModelOrchestrator:
         async def mock_subagent_gen():
             yield {"type": "subagent", "name": "benchmarking", "content": "Revenue: $12B"}
 
-        mock_run_subagent.return_value = mock_subagent_gen
+        mock_run_subagent.return_value = mock_subagent_gen()
 
         # Setup synthesizer
         async def mock_synthesis_gen():
             yield {"type": "agent", "name": "aegis", "content": "Based on the data, RBC's revenue is $12B"}
 
-        mock_synthesize.return_value = mock_synthesis_gen
+        mock_synthesize.return_value = mock_synthesis_gen()
         mock_post_monitor.return_value = 8  # 8 entries posted
 
         # Execute

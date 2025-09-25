@@ -45,6 +45,7 @@ from aegis.connections.oauth_connector import setup_authentication
 from aegis.connections.llm_connector import complete, complete_with_tools
 from aegis.connections.postgres_connector import get_connection
 from aegis.utils.logging import setup_logging, get_logger
+from aegis.etls.key_themes.config import MODELS, TEMPERATURE, MAX_TOKENS
 
 # Initialize logging
 setup_logging()
@@ -290,7 +291,7 @@ async def extract_theme_and_summary(qa_block: QABlock, context: Dict[str, Any]):
             messages=messages,
             tools=[tool_config['tool']],
             context=context,
-            llm_params={"model": "gpt-4o-mini"}
+            llm_params={"model": MODELS["theme_extraction"], "temperature": TEMPERATURE, "max_tokens": MAX_TOKENS}
         )
 
         if response:
@@ -327,7 +328,7 @@ async def format_qa_markdown(qa_block: QABlock, context: Dict[str, Any]):
     ]
 
     try:
-        response = await complete(messages, context, {"model": "gpt-4o"})
+        response = await complete(messages, context, {"model": MODELS["formatting"], "temperature": TEMPERATURE, "max_tokens": MAX_TOKENS})
 
         if isinstance(response, dict):
             qa_block.formatted_content = response.get('choices', [{}])[0].get('message', {}).get('content', '')
@@ -409,7 +410,7 @@ async def determine_comprehensive_grouping(
             messages=messages,
             tools=[tool_config['tool']],
             context=context,
-            llm_params={"model": "gpt-4o-mini"}
+            llm_params={"model": MODELS["theme_extraction"], "temperature": TEMPERATURE, "max_tokens": MAX_TOKENS}
         )
 
         if response:

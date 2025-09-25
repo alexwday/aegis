@@ -312,23 +312,18 @@ class TestRetrieveReportsByType:
         mock_row_1.markdown_content = "RBC Q3 content"
         mock_row_1.generation_date = datetime(2024, 11, 1, 14, 30)
         mock_row_1.date_last_modified = datetime(2024, 11, 1, 14, 30)
+        mock_row_1.generated_by = "ETL"
         mock_row_1.metadata = {"version": "1.0"}
 
-        # Configure mock to return different results for different calls
-        mock_results = [mock_row_1, None]  # First call returns report, second returns None
-        call_count = 0
+        # Create mock results for each execute call
+        mock_result_1 = MagicMock()
+        mock_result_1.fetchone.return_value = mock_row_1
 
-        def side_effect(*args, **kwargs):
-            nonlocal call_count
-            result = AsyncMock()
-            if call_count < len(mock_results) and mock_results[call_count] is not None:
-                result.fetchone.return_value = mock_results[call_count]
-            else:
-                result.fetchone.return_value = None
-            call_count += 1
-            return result
+        mock_result_2 = MagicMock()
+        mock_result_2.fetchone.return_value = None
 
-        mock_conn.execute.side_effect = side_effect
+        # Configure execute to return different results each time
+        mock_conn.execute.side_effect = [mock_result_1, mock_result_2]
 
         combinations = [
             {
@@ -386,7 +381,7 @@ class TestRetrieveReportsByType:
         mock_get_conn.return_value.__aexit__.return_value = None
 
         # Mock no results
-        mock_result = AsyncMock()
+        mock_result = MagicMock()
         mock_result.fetchone.return_value = None
         mock_conn.execute.return_value = mock_result
 
@@ -426,7 +421,7 @@ class TestRetrieveReportsByType:
                 raise Exception("Database connection failed")
             else:
                 call_count += 1
-                result = AsyncMock()
+                result = MagicMock()
                 result.fetchone.return_value = None
                 return result
 
@@ -475,10 +470,10 @@ class TestRetrieveReportsByType:
         # Set other required attributes
         for attr in ['report_description', 'bank_id', 'bank_name', 'fiscal_year', 'quarter',
                      'local_filepath', 's3_document_name', 's3_pdf_name', 'generation_date',
-                     'date_last_modified', 'metadata']:
+                     'date_last_modified', 'generated_by', 'metadata']:
             setattr(mock_row, attr, None)
 
-        mock_result = AsyncMock()
+        mock_result = MagicMock()
         mock_result.fetchone.return_value = mock_row
         mock_conn.execute.return_value = mock_result
 
