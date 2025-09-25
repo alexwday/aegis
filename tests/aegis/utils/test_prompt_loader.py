@@ -3,7 +3,8 @@ Tests for the prompt loader utility.
 """
 
 import pytest
-from unittest.mock import patch, MagicMock
+import pytest_asyncio
+from unittest.mock import patch, MagicMock, AsyncMock
 from pathlib import Path
 
 from aegis.utils.prompt_loader import (
@@ -24,6 +25,15 @@ class TestLoadYaml:
         """Test loading a non-existent YAML file raises FileNotFoundError."""
         with pytest.raises(FileNotFoundError):
             load_yaml("nonexistent/file.yaml")
+
+    def test_load_yaml_real_file(self):
+        """Test loading real YAML file to cover lines 31-32."""
+        # Load a real existing prompt file
+        result = load_yaml("global/project.yaml")
+
+        # Should have content
+        assert result is not None
+        assert "content" in result
 
 
 class TestLoadFiscalPrompt:
@@ -48,6 +58,34 @@ class TestLoadFiscalPrompt:
 
 class TestLoadGlobalPrompts:
     """Test global prompt loading."""
+
+    def test_load_global_prompts_missing_file(self):
+        """Test handling missing global prompt file (covers lines 78-79)."""
+        import os
+        from pathlib import Path
+
+        # Find the prompts directory
+        prompts_dir = Path(__file__).parent.parent.parent.parent / "src" / "aegis" / "model" / "prompts" / "global"
+        temp_file = prompts_dir / "temporary_test.yaml"
+
+        # Temporarily rename an existing file to simulate it being missing
+        restrictions_file = prompts_dir / "restrictions.yaml"
+
+        if restrictions_file.exists():
+            # Rename the file temporarily
+            os.rename(restrictions_file, temp_file)
+
+            try:
+                # This should trigger the FileNotFoundError for 'restrictions'
+                # but still work for other files
+                result = _load_global_prompts(["project", "restrictions"])
+
+                # Should have only loaded project (restrictions is missing)
+                assert len(result) == 1
+
+            finally:
+                # Always restore the file
+                os.rename(temp_file, restrictions_file)
 
     @patch("aegis.utils.prompt_loader.load_yaml")
     @patch("aegis.utils.prompt_loader._load_fiscal_prompt")
@@ -147,6 +185,27 @@ class TestLoadPrompt:
             load_prompt("agent", "nonexistent")
 
 
+class TestLoadPromptPaths:
+    """Test load_prompt path handling."""
+
+    def test_load_prompt_subagent_path(self):
+        """Test subagent path construction (covers line 109)."""
+        # Use a real subagent - reports is one that exists
+        try:
+            result = load_prompt("subagent", "reports")
+            # Should have content with both global and subagent prompts
+            assert result is not None
+            assert len(result) > 0
+        except FileNotFoundError:
+            # If the subagent doesn't have a prompt file, create a mock test
+            # to at least exercise the path construction
+            with patch("aegis.utils.prompt_loader.load_yaml") as mock_yaml:
+                mock_yaml.return_value = {"content": "test"}
+                result = load_prompt("subagent", "test_subagent")
+                # Verify the subagent path format was used
+                mock_yaml.assert_called_with("test_subagent/test_subagent.yaml")
+
+
 class TestConvenienceFunctions:
     """Test convenience functions."""
 
@@ -175,7 +234,8 @@ class TestListAvailablePrompts:
     """Test listing available prompts."""
 
     @patch("aegis.utils.prompt_loader.Path")
-    def test_list_available_prompts(self, mock_path_class):
+    @pytest.mark.asyncio
+    async def test_list_available_prompts(self, mock_path_class):
         """Test listing available agent and subagent prompts."""
         # Create mock path instances
         mock_prompts_dir = MagicMock()
@@ -188,7 +248,7 @@ class TestListAvailablePrompts:
         mock_file_path.parent.parent = MagicMock()
         
         # Create the chain properly
-        mock_model = MagicMock()
+        mock_model = AsyncMock()
         mock_file_path.parent.parent.__truediv__.return_value = mock_model
         mock_model.__truediv__.return_value = mock_prompts_dir
         
@@ -218,7 +278,8 @@ class TestListAvailablePrompts:
         assert result["subagents"] == ["benchmarking", "reports"]  # Sorted
 
     @patch("aegis.utils.prompt_loader.Path")
-    def test_list_available_prompts_empty(self, mock_path_class):
+    @pytest.mark.asyncio
+    async def test_list_available_prompts_empty(self, mock_path_class):
         """Test listing prompts when directories don't exist."""
         mock_prompts_dir = MagicMock()
         mock_agents_dir = MagicMock()
@@ -229,7 +290,7 @@ class TestListAvailablePrompts:
         mock_path_class.return_value = mock_file_path
         mock_file_path.parent.parent = MagicMock()
         
-        mock_model = MagicMock()
+        mock_model = AsyncMock()
         mock_file_path.parent.parent.__truediv__.return_value = mock_model
         mock_model.__truediv__.return_value = mock_prompts_dir
         

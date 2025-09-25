@@ -7,7 +7,7 @@ generated through ETL processes.
 """
 
 from datetime import datetime, timezone
-from typing import Any, Dict, Generator, List
+from typing import Any, AsyncGenerator, Dict, List
 import json
 
 # Import Aegis utilities
@@ -31,7 +31,7 @@ from .formatting import (
 )
 
 
-def reports_agent(
+async def reports_agent(
     conversation: List[Dict[str, str]],
     latest_message: str,
     bank_period_combinations: List[Dict[str, Any]],
@@ -39,7 +39,7 @@ def reports_agent(
     full_intent: str,
     database_id: str,
     context: Dict[str, Any],
-) -> Generator[Dict[str, str], None, None]:
+) -> AsyncGenerator[Dict[str, str], None]:
     """
     Reports subagent - retrieves pre-generated reports from database.
 
@@ -85,7 +85,7 @@ def reports_agent(
 
     try:
         # Step 1: Check what report types are available
-        unique_report_types = get_unique_report_types(bank_period_combinations, context)
+        unique_report_types = await get_unique_report_types(bank_period_combinations, context)
 
         if not unique_report_types:
             # No reports available - return informative message
@@ -95,7 +95,7 @@ def reports_agent(
                 combinations=len(bank_period_combinations)
             )
 
-            no_data_msg = format_no_data_message(bank_period_combinations, context)
+            no_data_msg = await format_no_data_message(bank_period_combinations, context)
             yield {
                 "type": "subagent",
                 "name": database_id,
@@ -148,7 +148,7 @@ def reports_agent(
             )
 
         # Step 3: Retrieve the selected reports
-        reports = retrieve_reports_by_type(
+        reports = await retrieve_reports_by_type(
             bank_period_combinations,
             selected_report_type,
             context
@@ -192,10 +192,10 @@ def reports_agent(
         # Check if we're dealing with a single report or multiple
         if len(reports) == 1:
             # Single report - format with full content
-            formatted_content = format_report_content(reports[0], include_links=True, context=context)
+            formatted_content = await format_report_content(reports[0], include_links=True, context=context)
         else:
             # Multiple reports - format consolidated view
-            formatted_content = format_multiple_reports(reports, context, bank_period_combinations)
+            formatted_content = await format_multiple_reports(reports, context, bank_period_combinations)
 
         # Stream the formatted content
         for line in formatted_content.split('\n'):
@@ -258,11 +258,11 @@ def reports_agent(
         yield {
             "type": "subagent",
             "name": database_id,
-            "content": format_error_message(error_msg, context)
+            "content": await format_error_message(error_msg, context)
         }
 
 
-def select_report_type(
+async def select_report_type(
     report_types: List[Dict[str, str]],
     user_intent: str,
     context: Dict[str, Any]
@@ -328,7 +328,7 @@ Select the report type that best matches what the user is looking for."""
     ]
 
     try:
-        response = complete_with_tools(
+        response = await complete_with_tools(
             messages=messages,
             tools=[tool],
             context=context,

@@ -7,10 +7,39 @@
     <!-- Include marked.js for markdown rendering -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
+        /* CSS Reset - but preserve content element spacing */
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
+        }
+
+        /* Restore default margins for content elements within message areas */
+        .message-bubble h1,
+        .message-bubble h2,
+        .message-bubble h3,
+        .message-bubble h4,
+        .message-bubble h5,
+        .message-bubble h6,
+        .message-bubble p,
+        .message-bubble ul,
+        .message-bubble ol,
+        .message-bubble blockquote,
+        .message-bubble pre,
+        .subagent-content h1,
+        .subagent-content h2,
+        .subagent-content h3,
+        .subagent-content h4,
+        .subagent-content h5,
+        .subagent-content h6,
+        .subagent-content p,
+        .subagent-content ul,
+        .subagent-content ol,
+        .subagent-content blockquote,
+        .subagent-content pre {
+            /* Use initial to allow our specific rules below to take effect */
+            margin: initial;
+            padding: initial;
         }
 
         body {

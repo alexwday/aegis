@@ -1,6 +1,8 @@
+aiofiles==24.1.0
 annotated-types==0.7.0
 anyio==4.10.0
 astroid==3.3.11
+asyncpg==0.30.0
 black==25.1.0
 certifi==2025.8.3
 charset-normalizer==3.4.3
@@ -8,6 +10,7 @@ click==8.2.1
 coverage==7.10.4
 dill==0.4.0
 distro==1.9.0
+fastapi==0.115.0
 flake8==7.3.0
 Flask==3.1.0
 h11==0.16.0
@@ -35,6 +38,7 @@ pyflakes==3.4.0
 Pygments==2.19.2
 pylint==3.3.8
 pytest==8.4.1
+pytest-asyncio==0.24.0
 pytest-cov==6.2.1
 python-docx==1.2.0
 python-dotenv==1.1.1
@@ -49,3 +53,5 @@ tqdm==4.67.1
 typing-inspection==0.4.1
 typing_extensions==4.14.1
 urllib3==2.5.0
+uvicorn[standard]==0.32.0
+websockets==13.1

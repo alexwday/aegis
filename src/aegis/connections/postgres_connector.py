@@ -1,73 +1,80 @@
 """
-PostgreSQL database connector using SQLAlchemy.
+PostgreSQL database connector using SQLAlchemy async.
 
-This module provides a functional interface for PostgreSQL operations
-using SQLAlchemy for connection management and query execution.
+This module provides an async functional interface for PostgreSQL operations
+using SQLAlchemy's async support for connection management and query execution.
 """
 
-from contextlib import contextmanager
-from typing import Any, Dict, Generator, List, Optional
+from contextlib import asynccontextmanager
+from typing import Any, AsyncGenerator, Dict, List, Optional
 
-from sqlalchemy import (
-    MetaData,
-    Table,
-    create_engine,
-    delete,
-    insert,
-    text,
-    update,
+from sqlalchemy import MetaData, Table, delete, insert, text, update
+from sqlalchemy.ext.asyncio import (
+    AsyncConnection,
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
 )
-from sqlalchemy.engine import Connection, Engine
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.pool import QueuePool
+from sqlalchemy.pool import NullPool, QueuePool
 
 from ..utils.logging import get_logger
 from ..utils.settings import config
 
 logger = get_logger()
 
-_engine: Optional[Engine] = None
+_async_engine: Optional[AsyncEngine] = None
+_async_session_factory: Optional[async_sessionmaker] = None
 
 
-def _get_engine() -> Engine:
+async def _get_async_engine() -> AsyncEngine:
     """
-    Get or create the SQLAlchemy engine with connection pooling.
+    Get or create the async SQLAlchemy engine with connection pooling.
 
     Returns:
-        SQLAlchemy Engine instance
+        Async SQLAlchemy Engine instance
 
     Raises:
         SQLAlchemyError: If unable to create engine
     """
-    global _engine  # pylint: disable=global-statement
+    global _async_engine, _async_session_factory  # pylint: disable=global-statement
     # Engine must be global singleton for connection pooling across the application.
 
-    if _engine is None:
+    if _async_engine is None:
         try:
+            # Use postgresql+asyncpg:// for async connections
             database_url = (
-                f"postgresql://{config.postgres_user}:{config.postgres_password}"
+                f"postgresql+asyncpg://{config.postgres_user}:{config.postgres_password}"
                 f"@{config.postgres_host}:{config.postgres_port}/{config.postgres_database}"
             )
 
-            _engine = create_engine(
+            _async_engine = create_async_engine(
                 database_url,
-                poolclass=QueuePool,
-                pool_size=5,
-                max_overflow=10,
+                pool_size=20,  # Increased for async concurrency
+                max_overflow=40,  # Increased for async concurrency
                 pool_timeout=30,
                 pool_recycle=3600,
+                pool_pre_ping=True,
                 echo=False,
             )
 
+            _async_session_factory = async_sessionmaker(
+                _async_engine,
+                class_=AsyncSession,
+                expire_on_commit=False,
+            )
+
             logger.info(
-                "PostgreSQL engine created",
+                "Async PostgreSQL engine created",
                 host=config.postgres_host,
                 port=config.postgres_port,
                 database=config.postgres_database,
+                pool_size=20,
             )
         except SQLAlchemyError as e:
             logger.error(
-                "Failed to create PostgreSQL engine",
+                "Failed to create async PostgreSQL engine",
                 error=str(e),
                 host=config.postgres_host,
                 port=config.postgres_port,
@@ -75,44 +82,41 @@ def _get_engine() -> Engine:
             )
             raise
 
-    return _engine
+    return _async_engine
 
 
-@contextmanager
-def get_connection(execution_id: Optional[str] = None) -> Generator[Connection, None, None]:
+@asynccontextmanager
+async def get_connection(execution_id: Optional[str] = None) -> AsyncGenerator[AsyncConnection, None]:
     """
-    Get a database connection from the pool.
+    Get an async database connection from the pool.
 
     Args:
         execution_id: Optional execution ID for logging
 
     Yields:
-        SQLAlchemy connection object
+        Async SQLAlchemy connection object
 
     Raises:
         SQLAlchemyError: If unable to get connection
     """
-    engine = _get_engine()
-    conn: Optional[Connection] = None
+    engine = await _get_async_engine()
 
-    try:
-        conn = engine.connect()
-        logger.debug("Got connection from pool", execution_id=execution_id)
-        yield conn
-    except SQLAlchemyError as e:
-        logger.error(
-            "Error with database connection",
-            execution_id=execution_id,
-            error=str(e),
-        )
-        raise
-    finally:
-        if conn:
-            conn.close()
-            logger.debug("Returned connection to pool", execution_id=execution_id)
+    async with engine.begin() as conn:
+        try:
+            logger.debug("Got async connection from pool", execution_id=execution_id)
+            yield conn
+        except SQLAlchemyError as e:
+            logger.error(
+                "Error with async database connection",
+                execution_id=execution_id,
+                error=str(e),
+            )
+            raise
+        finally:
+            logger.debug("Returned async connection to pool", execution_id=execution_id)
 
 
-def execute_query(
+async def execute_query(
     query: str,
     params: Optional[Dict[str, Any]] = None,
     execution_id: Optional[str] = None,
@@ -131,24 +135,21 @@ def execute_query(
     Raises:
         SQLAlchemyError: If query execution fails
     """
-    with get_connection(execution_id) as conn:
+    async with get_connection(execution_id) as conn:
         try:
-            result = conn.execute(text(query), params or {})
-            conn.commit()  # pylint: disable=no-member
-            # SQLAlchemy connection proxy has commit() but pylint can't detect it.
+            result = await conn.execute(text(query), params or {})
+            # No need to commit - using begin() context manager handles it
 
             logger.debug(
-                "Query executed",
+                "Async query executed",
                 execution_id=execution_id,
                 affected_rows=result.rowcount,
             )
 
             return result.rowcount
         except SQLAlchemyError as e:
-            conn.rollback()  # pylint: disable=no-member
-            # SQLAlchemy connection proxy has rollback() but pylint can't detect it.
             logger.error(
-                "Query execution failed",
+                "Async query execution failed",
                 execution_id=execution_id,
                 error=str(e),
                 query=query[:500],
@@ -156,7 +157,7 @@ def execute_query(
             raise
 
 
-def fetch_all(
+async def fetch_all(
     query: str,
     params: Optional[Dict[str, Any]] = None,
     execution_id: Optional[str] = None,
@@ -175,9 +176,9 @@ def fetch_all(
     Raises:
         SQLAlchemyError: If query execution fails
     """
-    with get_connection(execution_id) as conn:
+    async with get_connection(execution_id) as conn:
         try:
-            result = conn.execute(text(query), params or {})
+            result = await conn.execute(text(query), params or {})
             rows = result.fetchall()
 
             # SQLAlchemy's Row._mapping is the official way to convert to dict
@@ -185,7 +186,7 @@ def fetch_all(
             results = [dict(row._mapping) for row in rows]  # pylint: disable=protected-access
 
             logger.debug(
-                "Fetched all results",
+                "Async fetched all results",
                 execution_id=execution_id,
                 row_count=len(results),
             )
@@ -193,7 +194,7 @@ def fetch_all(
             return results
         except SQLAlchemyError as e:
             logger.error(
-                "Failed to fetch results",
+                "Failed to async fetch results",
                 execution_id=execution_id,
                 error=str(e),
                 query=query[:500],
@@ -201,7 +202,7 @@ def fetch_all(
             raise
 
 
-def fetch_one(
+async def fetch_one(
     query: str,
     params: Optional[Dict[str, Any]] = None,
     execution_id: Optional[str] = None,
@@ -220,13 +221,13 @@ def fetch_one(
     Raises:
         SQLAlchemyError: If query execution fails
     """
-    with get_connection(execution_id) as conn:
+    async with get_connection(execution_id) as conn:
         try:
-            result = conn.execute(text(query), params or {})
+            result = await conn.execute(text(query), params or {})
             row = result.fetchone()
 
             if row:
-                logger.debug("Fetched one result", execution_id=execution_id)
+                logger.debug("Async fetched one result", execution_id=execution_id)
                 # SQLAlchemy's Row._mapping is the official way to convert to dict
                 # It's a public API despite the underscore prefix
                 return dict(row._mapping)  # pylint: disable=protected-access
@@ -235,7 +236,7 @@ def fetch_one(
             return None
         except SQLAlchemyError as e:
             logger.error(
-                "Failed to fetch result",
+                "Failed to async fetch result",
                 execution_id=execution_id,
                 error=str(e),
                 query=query[:500],
@@ -243,7 +244,7 @@ def fetch_one(
             raise
 
 
-def insert_record(
+async def insert_record(
     table: str,
     data: Dict[str, Any],
     returning: Optional[str] = None,
@@ -264,23 +265,24 @@ def insert_record(
     Raises:
         SQLAlchemyError: If insertion fails
     """
-    with get_connection(execution_id) as conn:
+    async with get_connection(execution_id) as conn:
         try:
             metadata = MetaData()
-            table_obj = Table(table, metadata, autoload_with=conn)
+            # In async, we need to run sync_engine.run_sync for reflection
+            # or use async reflection if available
+            await conn.run_sync(metadata.reflect, only=[table])
+            table_obj = metadata.tables[table]
 
             stmt = insert(table_obj).values(**data)
 
             if returning:
                 stmt = stmt.returning(table_obj.c[returning])
-                result = conn.execute(stmt)
-                conn.commit()  # pylint: disable=no-member
-                # SQLAlchemy connection proxy has commit() but pylint can't detect it.
+                result = await conn.execute(stmt)
                 row = result.fetchone()
 
                 returning_value = row[0] if row else None
                 logger.info(
-                    "Record inserted with returning value",
+                    "Async record inserted with returning value",
                     execution_id=execution_id,
                     table=table,
                     returning_column=returning,
@@ -288,16 +290,12 @@ def insert_record(
                 )
                 return returning_value
 
-            conn.execute(stmt)
-            conn.commit()  # pylint: disable=no-member
-            # SQLAlchemy connection proxy has commit() but pylint can't detect it.
-            logger.info("Record inserted", execution_id=execution_id, table=table)
+            await conn.execute(stmt)
+            logger.info("Async record inserted", execution_id=execution_id, table=table)
             return None
         except SQLAlchemyError as e:
-            conn.rollback()  # pylint: disable=no-member
-            # SQLAlchemy connection proxy has rollback() but pylint can't detect it.
             logger.error(
-                "Failed to insert record",
+                "Failed to async insert record",
                 execution_id=execution_id,
                 table=table,
                 error=str(e),
@@ -305,7 +303,7 @@ def insert_record(
             raise
 
 
-def insert_many(
+async def insert_many(
     table: str,
     data_list: List[Dict[str, Any]],
     execution_id: Optional[str] = None,
@@ -328,18 +326,17 @@ def insert_many(
         logger.warning("No data to insert", execution_id=execution_id, table=table)
         return 0
 
-    with get_connection(execution_id) as conn:
+    async with get_connection(execution_id) as conn:
         try:
             metadata = MetaData()
-            table_obj = Table(table, metadata, autoload_with=conn)
+            await conn.run_sync(metadata.reflect, only=[table])
+            table_obj = metadata.tables[table]
 
             stmt = insert(table_obj)
-            result = conn.execute(stmt, data_list)
-            conn.commit()  # pylint: disable=no-member
-            # SQLAlchemy connection proxy has commit() but pylint can't detect it.
+            result = await conn.execute(stmt, data_list)
 
             logger.info(
-                "Multiple records inserted",
+                "Async multiple records inserted",
                 execution_id=execution_id,
                 table=table,
                 record_count=result.rowcount,
@@ -347,10 +344,8 @@ def insert_many(
 
             return result.rowcount
         except SQLAlchemyError as e:
-            conn.rollback()  # pylint: disable=no-member
-            # SQLAlchemy connection proxy has rollback() but pylint can't detect it.
             logger.error(
-                "Failed to insert multiple records",
+                "Failed to async insert multiple records",
                 execution_id=execution_id,
                 table=table,
                 error=str(e),
@@ -359,7 +354,7 @@ def insert_many(
             raise
 
 
-def update_record(
+async def update_record(
     table: str,
     data: Dict[str, Any],
     where: Dict[str, Any],
@@ -380,22 +375,21 @@ def update_record(
     Raises:
         SQLAlchemyError: If update fails
     """
-    with get_connection(execution_id) as conn:
+    async with get_connection(execution_id) as conn:
         try:
             metadata = MetaData()
-            table_obj = Table(table, metadata, autoload_with=conn)
+            await conn.run_sync(metadata.reflect, only=[table])
+            table_obj = metadata.tables[table]
 
             stmt = update(table_obj).values(**data)
 
             for col, val in where.items():
                 stmt = stmt.where(table_obj.c[col] == val)
 
-            result = conn.execute(stmt)
-            conn.commit()  # pylint: disable=no-member
-            # SQLAlchemy connection proxy has commit() but pylint can't detect it.
+            result = await conn.execute(stmt)
 
             logger.info(
-                "Records updated",
+                "Async records updated",
                 execution_id=execution_id,
                 table=table,
                 affected_rows=result.rowcount,
@@ -403,10 +397,8 @@ def update_record(
 
             return result.rowcount
         except SQLAlchemyError as e:
-            conn.rollback()  # pylint: disable=no-member
-            # SQLAlchemy connection proxy has rollback() but pylint can't detect it.
             logger.error(
-                "Failed to update records",
+                "Failed to async update records",
                 execution_id=execution_id,
                 table=table,
                 error=str(e),
@@ -414,7 +406,7 @@ def update_record(
             raise
 
 
-def delete_record(
+async def delete_record(
     table: str,
     where: Dict[str, Any],
     execution_id: Optional[str] = None,
@@ -433,22 +425,21 @@ def delete_record(
     Raises:
         SQLAlchemyError: If deletion fails
     """
-    with get_connection(execution_id) as conn:
+    async with get_connection(execution_id) as conn:
         try:
             metadata = MetaData()
-            table_obj = Table(table, metadata, autoload_with=conn)
+            await conn.run_sync(metadata.reflect, only=[table])
+            table_obj = metadata.tables[table]
 
             stmt = delete(table_obj)
 
             for col, val in where.items():
                 stmt = stmt.where(table_obj.c[col] == val)
 
-            result = conn.execute(stmt)
-            conn.commit()  # pylint: disable=no-member
-            # SQLAlchemy connection proxy has commit() but pylint can't detect it.
+            result = await conn.execute(stmt)
 
             logger.info(
-                "Records deleted",
+                "Async records deleted",
                 execution_id=execution_id,
                 table=table,
                 affected_rows=result.rowcount,
@@ -456,10 +447,8 @@ def delete_record(
 
             return result.rowcount
         except SQLAlchemyError as e:
-            conn.rollback()  # pylint: disable=no-member
-            # SQLAlchemy connection proxy has rollback() but pylint can't detect it.
             logger.error(
-                "Failed to delete records",
+                "Failed to async delete records",
                 execution_id=execution_id,
                 table=table,
                 error=str(e),
@@ -467,7 +456,7 @@ def delete_record(
             raise
 
 
-def table_exists(table: str, execution_id: Optional[str] = None) -> bool:
+async def table_exists(table: str, execution_id: Optional[str] = None) -> bool:
     """
     Check if a table exists in the database.
 
@@ -489,11 +478,11 @@ def table_exists(table: str, execution_id: Optional[str] = None) -> bool:
         )
     """
 
-    result = fetch_one(query, {"table_name": table}, execution_id)
+    result = await fetch_one(query, {"table_name": table}, execution_id)
     exists = result["exists"] if result else False
 
     logger.debug(
-        "Table existence check",
+        "Async table existence check",
         execution_id=execution_id,
         table=table,
         exists=exists,
@@ -502,7 +491,7 @@ def table_exists(table: str, execution_id: Optional[str] = None) -> bool:
     return exists
 
 
-def get_table_schema(table: str, execution_id: Optional[str] = None) -> List[Dict[str, Any]]:
+async def get_table_schema(table: str, execution_id: Optional[str] = None) -> List[Dict[str, Any]]:
     """
     Get the schema information for a table.
 
@@ -531,10 +520,10 @@ def get_table_schema(table: str, execution_id: Optional[str] = None) -> List[Dic
         ORDER BY ordinal_position
     """
 
-    schema = fetch_all(query, {"table_name": table}, execution_id)
+    schema = await fetch_all(query, {"table_name": table}, execution_id)
 
     logger.debug(
-        "Retrieved table schema",
+        "Retrieved async table schema",
         execution_id=execution_id,
         table=table,
         column_count=len(schema),
@@ -543,16 +532,89 @@ def get_table_schema(table: str, execution_id: Optional[str] = None) -> List[Dic
     return schema
 
 
-def close_all_connections():
+async def close_all_connections():
     """
-    Dispose of the connection pool and close all connections.
+    Dispose of the async connection pool and close all connections.
 
     This should be called when shutting down the application.
     """
-    global _engine  # pylint: disable=global-statement
+    global _async_engine  # pylint: disable=global-statement
     # Need to modify global engine instance to properly dispose of connection pool.
 
-    if _engine:
-        _engine.dispose()
-        _engine = None
-        logger.info("All PostgreSQL connections closed")
+    if _async_engine:
+        await _async_engine.dispose()
+        _async_engine = None
+        logger.info("All async PostgreSQL connections closed")
+
+
+async def insert_many_async(
+    table_name: str,
+    records: List[Dict[str, Any]],
+    execution_id: Optional[str] = None,
+) -> int:
+    """
+    Insert multiple records into a database table asynchronously.
+
+    Args:
+        table_name: Name of the table to insert into
+        records: List of dictionaries representing records to insert
+        execution_id: Optional execution ID for logging
+
+    Returns:
+        Number of rows inserted
+
+    Raises:
+        RuntimeError: If database operations fail
+    """
+    if not records:
+        logger.warning("postgres.insert_many_empty", table=table_name, execution_id=execution_id)
+        return 0
+
+    try:
+        # Get the async engine
+        engine = await _get_async_engine()
+
+        async with engine.begin() as conn:
+            # Convert dict and list fields to JSON for PostgreSQL columns
+            import json
+            processed_records = []
+            for record in records:
+                processed = record.copy()
+                for key, value in processed.items():
+                    if isinstance(value, (dict, list)):
+                        processed[key] = json.dumps(value)
+                processed_records.append(processed)
+
+            # Build insert statement using text SQL
+            columns = list(processed_records[0].keys())
+            placeholders = ", ".join([f":{col}" for col in columns])
+            column_names = ", ".join(columns)
+
+            query = text(f"""
+                INSERT INTO {table_name} ({column_names})
+                VALUES ({placeholders})
+            """)
+
+            # Execute batch insert
+            result = await conn.execute(query, processed_records)
+            rows_inserted = result.rowcount
+
+            logger.info(
+                "postgres.insert_many_success",
+                table=table_name,
+                rows_inserted=rows_inserted,
+                execution_id=execution_id,
+            )
+
+            return rows_inserted
+
+    except Exception as e:
+        logger.error(
+            "postgres.insert_many_error",
+            table=table_name,
+            record_count=len(records),
+            error=str(e),
+            execution_id=execution_id,
+            exc_info=True,
+        )
+        raise RuntimeError(f"Failed to insert records into {table_name}: {str(e)}") from e

@@ -6,10 +6,9 @@ the agent pipeline for processing requests.
 """
 
 import uuid
-import threading
+import asyncio
 from datetime import datetime, timezone
-from queue import Queue
-from typing import Any, Dict, Generator, List, Optional, Union
+from typing import Any, Dict, AsyncGenerator, List, Optional, Union
 
 from ..connections.oauth_connector import setup_authentication
 from ..utils.conversation import process_conversation
@@ -18,7 +17,7 @@ from ..utils.logging import setup_logging, get_logger
 from ..utils.monitor import (
     add_monitor_entry,
     initialize_monitor,
-    post_monitor_entries,
+    post_monitor_entries_async,
 )
 from ..utils.settings import config
 from ..utils.ssl import setup_ssl
@@ -37,16 +36,18 @@ def extract_s3_info(content: str) -> List[Dict[str, str]]:
         List of dicts with S3 file info
     """
     # Pattern to match markers: {{S3_LINK:action:type:key:text}}
-    pattern = r'\{\{S3_LINK:([^:]+):([^:]+):([^:]+):([^}]+)\}\}'
+    pattern = r"\{\{S3_LINK:([^:]+):([^:]+):([^:]+):([^}]+)\}\}"
 
     s3_files = []
     for match in re.finditer(pattern, content):
-        s3_files.append({
-            'action': match.group(1),     # download or open
-            'file_type': match.group(2),  # docx or pdf
-            's3_key': match.group(3),      # S3 filename
-            'display_text': match.group(4) # Text to display
-        })
+        s3_files.append(
+            {
+                "action": match.group(1),  # download or open
+                "file_type": match.group(2),  # docx or pdf
+                "s3_key": match.group(3),  # S3 filename
+                "display_text": match.group(4),  # Text to display
+            }
+        )
 
     return s3_files
 
@@ -66,33 +67,33 @@ def process_s3_links(content: str) -> str:
         Content with markers replaced by HTML links
     """
     # Pattern to match S3 link markers
-    pattern = r'\{\{S3_LINK:([^:]+):([^:]+):([^:]+):([^}]+)\}\}'
+    pattern = r"\{\{S3_LINK:([^:]+):([^:]+):([^:]+):([^}]+)\}\}"
 
     def replace_marker(match):
-        action = match.group(1)        # download or open
-        file_type = match.group(2)     # docx, pdf, etc.
-        s3_key = match.group(3)         # S3 filename
-        display_text = match.group(4)   # Text to display
+        action = match.group(1)  # download or open
+        file_type = match.group(2)  # docx, pdf, etc.
+        s3_key = match.group(3)  # S3 filename
+        display_text = match.group(4)  # Text to display
 
         # Get S3 base URL from config
         base_url = config.s3_reports_base_url
 
         if not base_url:
             # If no S3 URL configured, return a placeholder link
-            return f'[{display_text}](#no-s3-configured)'
+            return f"[{display_text}](#no-s3-configured)"
 
         # Ensure base URL ends with /
-        if not base_url.endswith('/'):
-            base_url += '/'
+        if not base_url.endswith("/"):
+            base_url += "/"
 
         # Construct full S3 URL
         full_url = f"{base_url}{s3_key}"
 
         # Generate HTML based on action type
-        if action == 'download':
+        if action == "download":
             # Standard download link
             return f'<a href="{full_url}" download>{display_text}</a>'
-        elif action == 'open':
+        elif action == "open":
             # Special format for PDF viewer (UI will handle this)
             return f'<a href="{full_url}" data-action="open-pdf" target="_blank">{display_text}</a>'
         else:
@@ -103,14 +104,14 @@ def process_s3_links(content: str) -> str:
     return re.sub(pattern, replace_marker, content)
 
 
-def model(
+async def model(
     conversation: Optional[Union[Dict[str, Any], List[Dict[str, str]]]] = None,
     db_names: Optional[List[str]] = None,
-) -> Generator[Dict[str, str], None, None]:
+) -> AsyncGenerator[Dict[str, str], None]:
     """
     Stream responses for the Aegis model with unified message schema.
 
-    This generator function streams responses with a consistent schema that allows
+    This async generator function streams responses with a consistent schema that allows
     the UI to route messages appropriately. All messages contain type, name, and content.
 
     Messages are streamed for:
@@ -138,7 +139,7 @@ def model(
 
     Example:
         >>> msgs = [{"role": "user", "content": "What is Q3 revenue?"}]
-        >>> for message in model({"messages": msgs}):
+        >>> async for message in model({"messages": msgs}):
         ...     print(f"[{message['type']}/{message['name']}]: {message['content']}")
         [agent/aegis]: Analyzing your query about Q3 revenue...
         [agent/aegis]: I'll check transcripts and RTS for details.
@@ -188,7 +189,7 @@ def model(
     # Stage 2: Setup authentication (internal - no yield)
     logger.info("model.stage.authentication.started", execution_id=execution_id)
     auth_start = datetime.now(timezone.utc)
-    auth_config = setup_authentication(execution_id, ssl_config)
+    auth_config = await setup_authentication(execution_id, ssl_config)
     logger.info(
         "model.stage.authentication.completed",
         execution_id=execution_id,
@@ -286,7 +287,7 @@ def model(
     }
 
     # Get routing decision
-    routing_decision = route_query(
+    routing_decision = await route_query(
         conversation_history=processed_conversation.get("messages", []),
         latest_message=processed_conversation.get("latest_message", {}).get("content", ""),
         context=router_context,
@@ -302,15 +303,17 @@ def model(
     # Format LLM call info if we have tokens
     llm_calls = None
     if routing_decision.get("tokens_used"):
-        llm_calls = [{
-            "model": routing_decision.get("model_used", "unknown"),
-            "prompt_tokens": 0,  # Would need breakdown from API
-            "completion_tokens": 0,  # Would need breakdown from API
-            "total_tokens": routing_decision.get("tokens_used", 0),
-            "cost": routing_decision.get("cost", 0),
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        }]
-    
+        llm_calls = [
+            {
+                "model": routing_decision.get("model_used", "unknown"),
+                "prompt_tokens": 0,  # Would need breakdown from API
+                "completion_tokens": 0,  # Would need breakdown from API
+                "total_tokens": routing_decision.get("tokens_used", 0),
+                "cost": routing_decision.get("cost", 0),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        ]
+
     add_monitor_entry(
         stage_name="Router",
         stage_start_time=router_start,
@@ -339,12 +342,13 @@ def model(
         }
 
         # Stream response from response agent
-        for chunk in generate_response(
+        response_generator = await generate_response(
             conversation_history=processed_conversation.get("messages", []),
             latest_message=processed_conversation.get("latest_message", {}).get("content", ""),
             context=response_context,
             streaming=True,
-        ):
+        )
+        async for chunk in response_generator:
             if chunk["type"] == "chunk":
                 # Stream content chunks
                 yield {
@@ -366,15 +370,17 @@ def model(
                 # Format LLM call info for response agent
                 llm_calls = None
                 if chunk.get("tokens_used"):
-                    llm_calls = [{
-                        "model": chunk.get("model_used", "unknown"),
-                        "prompt_tokens": 0,  # Would need breakdown
-                        "completion_tokens": 0,  # Would need breakdown
-                        "total_tokens": chunk.get("tokens_used", 0),
-                        "cost": chunk.get("cost", 0),
-                        "timestamp": datetime.now(timezone.utc).isoformat(),
-                    }]
-                
+                    llm_calls = [
+                        {
+                            "model": chunk.get("model_used", "unknown"),
+                            "prompt_tokens": 0,  # Would need breakdown
+                            "completion_tokens": 0,  # Would need breakdown
+                            "total_tokens": chunk.get("tokens_used", 0),
+                            "cost": chunk.get("cost", 0),
+                            "timestamp": datetime.now(timezone.utc).isoformat(),
+                        }
+                    ]
+
                 add_monitor_entry(
                     stage_name="Response_Agent",
                     stage_start_time=response_start,
@@ -406,7 +412,7 @@ def model(
         }
 
         # Run clarifier with available databases and full conversation
-        clarifier_result = clarify_query(
+        clarifier_result = await clarify_query(
             query=processed_conversation.get("latest_message", {}).get("content", ""),
             context=clarifier_context,
             available_databases=list(filtered_databases.keys()),
@@ -558,7 +564,7 @@ def model(
                 clarifier_intent = bank_period_combinations[0].get("query_intent")
 
             # Call planner with new standardized format
-            planner_result = plan_database_queries(
+            planner_result = await plan_database_queries(
                 query=processed_conversation.get("latest_message", {}).get("content", ""),
                 conversation=processed_conversation.get("messages", []),
                 bank_period_combinations=bank_period_combinations,
@@ -569,7 +575,7 @@ def model(
 
             # Record planner completion BEFORE subagents start
             planner_end = datetime.now(timezone.utc)
-            
+
             logger.info(
                 "model.stage.planner.completed",
                 execution_id=execution_id,
@@ -578,27 +584,37 @@ def model(
 
             # Determine decision details based on status
             if planner_result.get("status") == "success":
-                decision_details = f"Selected databases: {', '.join(planner_result.get('databases', []))}"
+                decision_details = (
+                    f"Selected databases: {', '.join(planner_result.get('databases', []))}"
+                )
             elif planner_result.get("status") == "no_data":
                 decision_details = planner_result.get("message", "No data available")
             elif planner_result.get("status") == "no_databases":
                 decision_details = planner_result.get("reason", "No databases needed")
             else:
                 decision_details = f"Error: {planner_result.get('error', 'Unknown error')}"
-            
+
             add_monitor_entry(
                 stage_name="Planner",
                 stage_start_time=planner_start,
                 stage_end_time=planner_end,
-                status="Success" if planner_result.get("status") == "success" else planner_result.get("status", "Error"),
+                status=(
+                    "Success"
+                    if planner_result.get("status") == "success"
+                    else planner_result.get("status", "Error")
+                ),
                 decision_details=decision_details,
                 custom_metadata={
                     "databases_selected": planner_result.get("databases", []),
                     "query_intent": clarifier_intent,
-                    "error_message": planner_result.get("error") if planner_result.get("status") == "error" else None,
+                    "error_message": (
+                        planner_result.get("error")
+                        if planner_result.get("status") == "error"
+                        else None
+                    ),
                 },
             )
-            
+
             # Stream planner output
             if planner_result.get("status") == "success":
                 databases = planner_result.get("databases", [])
@@ -627,115 +643,118 @@ def model(
                 from .subagents import SUBAGENT_MAPPING
 
                 # Create a queue for collecting subagent outputs
-                output_queue = Queue()
+                output_queue = asyncio.Queue()
                 # Collect all database responses for summarization
                 database_responses = []
 
-                def run_subagent(database_id, queue, response_collector):
+                async def run_subagent(database_id, queue, response_collector):
                     """Run a single subagent and put outputs in the queue."""
-                    subagent_start = datetime.now(timezone.utc)
-                    # Normalize database_id to lowercase for consistency
-                    normalized_db_id = database_id.lower()
-                    
-                    try:
-                        # Add monitoring entry for subagent start
-                        logger.info(
-                            f"subagent.{normalized_db_id}.started",
-                            execution_id=execution_id,
-                            database_id=normalized_db_id,
-                        )
-                        
-                        # Get the appropriate subagent function using normalized ID
-                        subagent_func = SUBAGENT_MAPPING.get(normalized_db_id)
+                    async with invocation_semaphore:  # Limit concurrency per request
+                        subagent_start = datetime.now(timezone.utc)
+                        # Normalize database_id to lowercase for consistency
+                        normalized_db_id = database_id.lower()
 
-                        if not subagent_func:
-                            queue.put(
+                        try:
+                            # Apply 200 second timeout for subagent execution
+                            async with asyncio.timeout(200):
+                                # Add monitoring entry for subagent start
+                                logger.info(
+                                    f"subagent.{normalized_db_id}.started",
+                                    execution_id=execution_id,
+                                    database_id=normalized_db_id,
+                                )
+
+                                # Get the appropriate subagent function using normalized ID
+                                subagent_func = SUBAGENT_MAPPING.get(normalized_db_id)
+
+                                if not subagent_func:
+                                    await queue.put(
+                                        {
+                                            "type": "subagent",
+                                            "name": normalized_db_id,
+                                            "content": (
+                                                f"⚠️ No subagent found for database: {normalized_db_id}\n"
+                                            ),
+                                        }
+                                    )
+                                    return
+
+                                # Collect the full response for this database
+                                full_response = ""
+
+                                # Call the subagent with new standardized format
+                                # Now both basic_intent and full_intent use the clarifier's comprehensive intent
+                                async for chunk in subagent_func(
+                                    conversation=processed_conversation.get("messages", []),
+                                    latest_message=processed_conversation.get("latest_message", {}).get(
+                                        "content", ""
+                                    ),
+                                    bank_period_combinations=bank_period_combinations,
+                                    basic_intent=clarifier_intent,  # Comprehensive intent from clarifier
+                                    full_intent=clarifier_intent,  # Same comprehensive intent
+                                    database_id=normalized_db_id,
+                                    context=planner_context,
+                                ):
+                                    await queue.put(chunk)
+                                    # Collect content for summarization
+                                    if chunk.get("type") == "subagent" and chunk.get("content"):
+                                        full_response += chunk["content"]
+
+                                # Store the complete response for summarization
+                                response_collector.append(
+                                    {
+                                        "database_id": normalized_db_id,
+                                        "full_intent": clarifier_intent,
+                                        "response": full_response,
+                                    }
+                                )
+
+                                # Add monitoring entry for successful subagent completion
+                                add_monitor_entry(
+                                    stage_name=f"Subagent_{normalized_db_id}",
+                                    stage_start_time=subagent_start,
+                                    stage_end_time=datetime.now(timezone.utc),
+                                    status="Success",
+                                    decision_details=f"Retrieved data from {normalized_db_id}",
+                                    custom_metadata={
+                                        "database_id": normalized_db_id,
+                                        "response_length": len(full_response),
+                                    },
+                                )
+
+                        except Exception as e:
+                            logger.error(f"subagent.{normalized_db_id}.error", error=str(e))
+                            await queue.put(
                                 {
                                     "type": "subagent",
                                     "name": normalized_db_id,
-                                    "content": (
-                                        f"⚠️ No subagent found for database: {normalized_db_id}\n"
-                                    ),
+                                    "content": f"⚠️ Error in {normalized_db_id}: {str(e)}\n",
                                 }
                             )
-                            return
+                            # Still add error response for summarization
+                            response_collector.append(
+                                {
+                                    "database_id": normalized_db_id,
+                                    "full_intent": clarifier_intent,
+                                    "response": f"Error retrieving data: {str(e)}",
+                                }
+                            )
 
-                        # Collect the full response for this database
-                        full_response = ""
-
-                        # Call the subagent with new standardized format
-                        # Now both basic_intent and full_intent use the clarifier's comprehensive intent
-                        for chunk in subagent_func(
-                            conversation=processed_conversation.get("messages", []),
-                            latest_message=processed_conversation.get("latest_message", {}).get(
-                                "content", ""
-                            ),
-                            bank_period_combinations=bank_period_combinations,
-                            basic_intent=clarifier_intent,  # Comprehensive intent from clarifier
-                            full_intent=clarifier_intent,  # Same comprehensive intent
-                            database_id=normalized_db_id,
-                            context=planner_context,
-                        ):
-                            queue.put(chunk)
-                            # Collect content for summarization
-                            if chunk.get("type") == "subagent" and chunk.get("content"):
-                                full_response += chunk["content"]
-
-                        # Store the complete response for summarization
-                        response_collector.append(
-                            {
-                                "database_id": normalized_db_id,
-                                "full_intent": clarifier_intent,
-                                "response": full_response,
-                            }
-                        )
-                        
-                        # Add monitoring entry for successful subagent completion
-                        add_monitor_entry(
-                            stage_name=f"Subagent_{normalized_db_id}",
-                            stage_start_time=subagent_start,
-                            stage_end_time=datetime.now(timezone.utc),
-                            status="Success",
-                            decision_details=f"Retrieved data from {normalized_db_id}",
-                            custom_metadata={
-                                "database_id": normalized_db_id,
-                                "response_length": len(full_response),
-                            },
-                        )
-
-                    except Exception as e:
-                        logger.error(f"subagent.{normalized_db_id}.error", error=str(e))
-                        queue.put(
-                            {
-                                "type": "subagent",
-                                "name": normalized_db_id,
-                                "content": f"⚠️ Error in {normalized_db_id}: {str(e)}\n",
-                            }
-                        )
-                        # Still add error response for summarization
-                        response_collector.append(
-                            {
-                                "database_id": normalized_db_id,
-                                "full_intent": clarifier_intent,
-                                "response": f"Error retrieving data: {str(e)}",
-                            }
-                        )
-                        
-                        # Add monitoring entry for failed subagent
-                        add_monitor_entry(
-                            stage_name=f"Subagent_{normalized_db_id}",
-                            stage_start_time=subagent_start,
-                            stage_end_time=datetime.now(timezone.utc),
-                            status="Error",
-                            decision_details=f"Failed to retrieve data from {normalized_db_id}",
-                            error_message=str(e),
-                            custom_metadata={
-                                "database_id": normalized_db_id,
-                            },
-                        )
-                    finally:
-                        # Signal this subagent is done
-                        queue.put({"type": "done", "database_id": normalized_db_id})
+                            # Add monitoring entry for failed subagent
+                            add_monitor_entry(
+                                stage_name=f"Subagent_{normalized_db_id}",
+                                stage_start_time=subagent_start,
+                                stage_end_time=datetime.now(timezone.utc),
+                                status="Error",
+                                decision_details=f"Failed to retrieve data from {normalized_db_id}",
+                                error_message=str(e),
+                                custom_metadata={
+                                    "database_id": normalized_db_id,
+                                },
+                            )
+                        finally:
+                            # Signal this subagent is done
+                            await queue.put({"type": "done", "database_id": normalized_db_id})
 
                 # Send ALL subagent_start signals at once (creates all dropdowns immediately)
                 # This ensures dropdowns appear simultaneously in the UI
@@ -747,20 +766,20 @@ def model(
                         "name": database_id.lower(),
                     }
 
-                # Now start threads for each subagent to run concurrently
-                threads = []
+                # Per-invocation concurrency limit (max 5 concurrent subagents per request)
+                invocation_semaphore = asyncio.Semaphore(5)
+
+                # Now start tasks for each subagent to run concurrently
+                tasks = []
                 active_subagents = set()
 
                 for database_id in databases:
                     active_subagents.add(database_id)
 
-                    thread = threading.Thread(
-                        target=run_subagent,
-                        args=(database_id, output_queue, database_responses),
-                        daemon=True,
+                    task = asyncio.create_task(
+                        run_subagent(database_id, output_queue, database_responses)
                     )
-                    thread.start()
-                    threads.append(thread)
+                    tasks.append(task)
 
                 # Collect S3 file info from reports subagent
                 s3_files_found = []
@@ -768,8 +787,8 @@ def model(
                 # Stream outputs from all subagents as they arrive
                 while active_subagents:
                     try:
-                        # Get next message from any subagent
-                        msg = output_queue.get(timeout=0.1)
+                        # Get next message from any subagent with timeout
+                        msg = await asyncio.wait_for(output_queue.get(), timeout=0.1)
 
                         if msg.get("type") == "done":
                             # A subagent finished
@@ -782,7 +801,11 @@ def model(
                             )
                         else:
                             # Extract S3 info before processing (only from reports subagent)
-                            if msg.get("type") == "subagent" and msg.get("name") == "reports" and msg.get("content"):
+                            if (
+                                msg.get("type") == "subagent"
+                                and msg.get("name") == "reports"
+                                and msg.get("content")
+                            ):
                                 found_files = extract_s3_info(msg["content"])
                                 if found_files:
                                     s3_files_found.extend(found_files)
@@ -792,14 +815,13 @@ def model(
                                 msg["content"] = process_s3_links(msg["content"])
                             # Stream the message
                             yield msg
-                    except Exception:
-                        # Timeout - check if threads are still alive
-                        if not any(t.is_alive() for t in threads):
+                    except asyncio.TimeoutError:
+                        # Timeout - check if tasks are still running
+                        if all(task.done() for task in tasks):
                             break
 
-                # Wait for all threads to complete
-                for thread in threads:
-                    thread.join(timeout=1.0)
+                # Wait for all tasks to complete
+                await asyncio.gather(*tasks, return_exceptions=True)
 
                 # After all subagents complete, synthesize the responses
                 if database_responses:
@@ -825,7 +847,7 @@ def model(
                     }
 
                     # Stream the synthesized response (continues in same bubble as "Retrieving...")
-                    for chunk in synthesize_responses(
+                    async for chunk in synthesize_responses(
                         conversation_history=processed_conversation.get("messages", []),
                         latest_message=processed_conversation.get("latest_message", {}).get(
                             "content", ""
@@ -838,31 +860,36 @@ def model(
                     # Programmatically add S3 links if we found any from reports subagent
                     if s3_files_found and config.s3_reports_base_url:
                         base_url = config.s3_reports_base_url
-                        if not base_url.endswith('/'):
-                            base_url += '/'
+                        if not base_url.endswith("/"):
+                            base_url += "/"
 
                         # Group links by document (pair DOCX and PDF for same report)
                         grouped_links = {}
                         for file_info in s3_files_found:
                             # Extract identifier from display text (e.g., "RY Q2 2025")
-                            display_text = file_info['display_text']
+                            display_text = file_info["display_text"]
                             # Find the part in parentheses if it exists
                             import re
-                            match = re.search(r'\((.*?)\)', display_text)
+
+                            match = re.search(r"\((.*?)\)", display_text)
                             if match:
                                 report_id = match.group(1)
                             else:
-                                report_id = 'Report'
+                                report_id = "Report"
 
                             if report_id not in grouped_links:
                                 grouped_links[report_id] = []
 
                             full_url = f"{base_url}{file_info['s3_key']}"
                             # Use the full display text which includes the report name
-                            if file_info['action'] == 'download':
-                                grouped_links[report_id].append(f'<a href="{full_url}" download>{file_info["display_text"]}</a>')
-                            elif file_info['action'] == 'open':
-                                grouped_links[report_id].append(f'<a href="{full_url}" data-action="open-pdf" target="_blank">{file_info["display_text"]}</a>')
+                            if file_info["action"] == "download":
+                                grouped_links[report_id].append(
+                                    f'<a href="{full_url}" download>{file_info["display_text"]}</a>'
+                                )
+                            elif file_info["action"] == "open":
+                                grouped_links[report_id].append(
+                                    f'<a href="{full_url}" data-action="open-pdf" target="_blank">{file_info["display_text"]}</a>'
+                                )
 
                         # Format output based on number of reports
                         if len(grouped_links) == 1:
@@ -871,7 +898,7 @@ def model(
                             yield {
                                 "type": "agent",
                                 "name": "aegis",
-                                "content": "\n\n**Available Downloads:** " + " | ".join(links)
+                                "content": "\n\n**Available Downloads:** " + " | ".join(links),
                             }
                         else:
                             # Multiple reports - organized format
@@ -882,7 +909,7 @@ def model(
                             yield {
                                 "type": "agent",
                                 "name": "aegis",
-                                "content": "\n".join(content_parts)
+                                "content": "\n".join(content_parts),
                             }
 
                     logger.info(
@@ -932,7 +959,7 @@ def model(
             # Planner monitoring was already added after planning finished
 
     # Post monitoring data to database
-    entries_posted = post_monitor_entries(execution_id)
+    entries_posted = await post_monitor_entries_async(execution_id)
     logger.info(
         "model.generator.completed",
         execution_id=execution_id,

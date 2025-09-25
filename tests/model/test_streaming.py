@@ -16,8 +16,9 @@ class TestModelStreaming:
     @mock.patch("aegis.model.main.post_monitor_entries")
     @mock.patch("aegis.model.main.add_monitor_entry")
     @mock.patch("aegis.model.main.initialize_monitor")
-    @mock.patch("aegis.model.main.setup_authentication")
-    def test_basic_streaming(self, mock_auth, mock_init, mock_add, mock_post):
+    @mock.patch("aegis.model.main.setup_authentication", new_callable=AsyncMock)
+    @pytest.mark.asyncio
+    async def test_basic_streaming(self, mock_auth, mock_init, mock_add, mock_post):
         """Test basic streaming with dictionary input."""
         mock_auth.return_value = {
             "success": True,
@@ -53,8 +54,9 @@ class TestModelStreaming:
     @mock.patch("aegis.model.main.post_monitor_entries")
     @mock.patch("aegis.model.main.add_monitor_entry")
     @mock.patch("aegis.model.main.initialize_monitor")
-    @mock.patch("aegis.model.main.setup_authentication")
-    def test_streaming_with_list_input(self, mock_auth, mock_init, mock_add, mock_post):
+    @mock.patch("aegis.model.main.setup_authentication", new_callable=AsyncMock)
+    @pytest.mark.asyncio
+    async def test_streaming_with_list_input(self, mock_auth, mock_init, mock_add, mock_post):
         """Test streaming with list format input."""
         mock_auth.return_value = {
             "success": True,
@@ -82,8 +84,9 @@ class TestModelStreaming:
     @mock.patch("aegis.model.main.post_monitor_entries")
     @mock.patch("aegis.model.main.add_monitor_entry")
     @mock.patch("aegis.model.main.initialize_monitor")
-    @mock.patch("aegis.model.main.setup_authentication")
-    def test_streaming_with_db_filters(self, mock_auth, mock_init, mock_add, mock_post):
+    @mock.patch("aegis.model.main.setup_authentication", new_callable=AsyncMock)
+    @pytest.mark.asyncio
+    async def test_streaming_with_db_filters(self, mock_auth, mock_init, mock_add, mock_post):
         """Test streaming with database filters."""
         mock_auth.return_value = {
             "success": True,
@@ -108,8 +111,9 @@ class TestModelStreaming:
     @mock.patch("aegis.model.main.post_monitor_entries")
     @mock.patch("aegis.model.main.add_monitor_entry")
     @mock.patch("aegis.model.main.initialize_monitor")
-    @mock.patch("aegis.model.main.setup_authentication")
-    def test_monitoring_integration(self, mock_auth, mock_init, mock_add, mock_post):
+    @mock.patch("aegis.model.main.setup_authentication", new_callable=AsyncMock)
+    @pytest.mark.asyncio
+    async def test_monitoring_integration(self, mock_auth, mock_init, mock_add, mock_post):
         """Test that monitoring is properly integrated."""
         mock_auth.return_value = {
             "success": True,

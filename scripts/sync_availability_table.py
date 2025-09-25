@@ -1,10 +1,10 @@
 #!/usr/bin/env python
 """
-Sync aegis_data_availability table with actual transcript data.
+Sync aegis_data_availability table with actual transcript and report data.
 
 This script:
-1. On first run (--rebuild): Wipes and rebuilds the entire table from transcript data
-2. On subsequent runs: Updates only the 'transcripts' tag in database_names array
+1. On first run (--rebuild): Wipes and rebuilds the entire table from transcript and report data
+2. On subsequent runs: Updates the 'transcripts' and 'reports' tags in database_names array
 3. For fixing mismatched IDs (--complete-wipe): DELETEs all records then rebuilds
 
 Usage:
@@ -36,7 +36,7 @@ logger = get_logger()
 def get_transcript_availability() -> Dict[Tuple[int, int, str], Dict]:
     """
     Query aegis_transcripts table to get all available bank/year/quarter combinations.
-    
+
     Returns:
         Dictionary keyed by (bank_id, fiscal_year, quarter) tuples
     """
@@ -54,7 +54,47 @@ def get_transcript_availability() -> Dict[Tuple[int, int, str], Dict]:
             AND fiscal_quarter IS NOT NULL
             ORDER BY institution_id, fiscal_year, fiscal_quarter
         """))
-        
+
+        availability = {}
+        for row in result:
+            # Convert bank_id to int since institution_id is TEXT in transcripts table
+            bank_id = int(row.bank_id) if row.bank_id else None
+            if bank_id is None:
+                continue
+            key = (bank_id, row.fiscal_year, row.quarter)
+            availability[key] = {
+                'bank_id': bank_id,
+                'bank_name': row.bank_name,
+                'bank_symbol': row.bank_symbol,
+                'fiscal_year': row.fiscal_year,
+                'quarter': row.quarter
+            }
+
+        return availability
+
+
+def get_report_availability() -> Dict[Tuple[int, int, str], Dict]:
+    """
+    Query aegis_reports table to get all available bank/year/quarter combinations.
+
+    Returns:
+        Dictionary keyed by (bank_id, fiscal_year, quarter) tuples
+    """
+    with get_connection() as conn:
+        result = conn.execute(text("""
+            SELECT DISTINCT
+                bank_id,
+                bank_name,
+                bank_symbol,
+                fiscal_year,
+                quarter
+            FROM aegis_reports
+            WHERE bank_id IS NOT NULL
+            AND fiscal_year IS NOT NULL
+            AND quarter IS NOT NULL
+            ORDER BY bank_id, fiscal_year, quarter
+        """))
+
         availability = {}
         for row in result:
             key = (row.bank_id, row.fiscal_year, row.quarter)
@@ -65,7 +105,7 @@ def get_transcript_availability() -> Dict[Tuple[int, int, str], Dict]:
                 'fiscal_year': row.fiscal_year,
                 'quarter': row.quarter
             }
-        
+
         return availability
 
 
@@ -103,12 +143,13 @@ def get_current_availability() -> Dict[Tuple[int, int, str], List[str]]:
         return current
 
 
-def rebuild_table(transcript_data: Dict, dry_run: bool = False, complete_wipe: bool = False):
+def rebuild_table(transcript_data: Dict, report_data: Dict, dry_run: bool = False, complete_wipe: bool = False):
     """
     Wipe and rebuild the entire aegis_data_availability table.
-    
+
     Args:
         transcript_data: Dictionary of transcript availability
+        report_data: Dictionary of report availability
         dry_run: If True, only show what would be done
         complete_wipe: If True, DELETE all records (slower but ensures clean state)
     """
@@ -117,15 +158,34 @@ def rebuild_table(transcript_data: Dict, dry_run: bool = False, complete_wipe: b
     else:
         logger.info("Starting REBUILD mode - will wipe and recreate table")
     
+    # Merge transcript and report data to get all unique bank/period combinations
+    all_combinations = {}
+    for key, data in transcript_data.items():
+        all_combinations[key] = data.copy()
+        all_combinations[key]['databases'] = ['transcripts']
+
+    for key, data in report_data.items():
+        if key in all_combinations:
+            # Add reports to existing entry
+            if 'reports' not in all_combinations[key]['databases']:
+                all_combinations[key]['databases'].append('reports')
+        else:
+            # New entry with only reports
+            all_combinations[key] = data.copy()
+            all_combinations[key]['databases'] = ['reports']
+
     if dry_run:
         logger.info("DRY RUN - No changes will be made")
         if complete_wipe:
             logger.info("Would DELETE all existing records")
-        logger.info(f"Would insert {len(transcript_data)} records")
-        for key, data in list(transcript_data.items())[:5]:  # Show first 5
-            logger.info(f"  Would insert: {data['bank_name']} - {data['fiscal_year']} {data['quarter']}")
-        if len(transcript_data) > 5:
-            logger.info(f"  ... and {len(transcript_data) - 5} more records")
+        logger.info(f"Would insert {len(all_combinations)} records")
+        logger.info(f"  - {len(transcript_data)} with transcripts")
+        logger.info(f"  - {len(report_data)} with reports")
+        for key, data in list(all_combinations.items())[:5]:  # Show first 5
+            databases = ', '.join(data['databases'])
+            logger.info(f"  Would insert: {data['bank_name']} - {data['fiscal_year']} {data['quarter']} [{databases}]")
+        if len(all_combinations) > 5:
+            logger.info(f"  ... and {len(all_combinations) - 5} more records")
         return
     
     with get_connection() as conn:
@@ -144,12 +204,12 @@ def rebuild_table(transcript_data: Dict, dry_run: bool = False, complete_wipe: b
                 result = conn.execute(text("DELETE FROM aegis_data_availability"))
                 logger.info(f"Deleted {result.rowcount} existing records")
             
-            # 2. Insert all transcript data
-            logger.info(f"Inserting {len(transcript_data)} records...")
-            
-            for data in transcript_data.values():
+            # 2. Insert all combined data
+            logger.info(f"Inserting {len(all_combinations)} records...")
+
+            for data in all_combinations.values():
                 conn.execute(text("""
-                    INSERT INTO aegis_data_availability 
+                    INSERT INTO aegis_data_availability
                     (bank_id, bank_name, bank_symbol, fiscal_year, quarter, database_names)
                     VALUES (:bank_id, :bank_name, :bank_symbol, :fiscal_year, :quarter, :database_names)
                 """), {
@@ -158,11 +218,13 @@ def rebuild_table(transcript_data: Dict, dry_run: bool = False, complete_wipe: b
                     'bank_symbol': data['bank_symbol'],
                     'fiscal_year': data['fiscal_year'],
                     'quarter': data['quarter'],
-                    'database_names': ['transcripts']  # Only transcripts tag for rebuild
+                    'database_names': data['databases']
                 })
-            
+
             trans.commit()
-            logger.info(f"✅ Successfully rebuilt table with {len(transcript_data)} records")
+            logger.info(f"✅ Successfully rebuilt table with {len(all_combinations)} records")
+            logger.info(f"  - {len(transcript_data)} periods have transcripts")
+            logger.info(f"  - {len(report_data)} periods have reports")
             
         except Exception as e:
             trans.rollback()
@@ -170,61 +232,91 @@ def rebuild_table(transcript_data: Dict, dry_run: bool = False, complete_wipe: b
             raise
 
 
-def update_transcript_tags(transcript_data: Dict, dry_run: bool = False):
+def update_database_tags(transcript_data: Dict, report_data: Dict, dry_run: bool = False):
     """
-    Update only the 'transcripts' tag in database_names array.
+    Update the 'transcripts' and 'reports' tags in database_names array.
     Preserves other subagent tags.
-    
+
     Args:
         transcript_data: Dictionary of transcript availability
+        report_data: Dictionary of report availability
         dry_run: If True, only show what would be done
     """
-    logger.info("Starting UPDATE mode - will only modify 'transcripts' tags")
+    logger.info("Starting UPDATE mode - will modify 'transcripts' and 'reports' tags")
     
     # Get current data
     current_data = get_current_availability()
     
-    # Track changes
-    to_add = []
-    to_remove = []
+    # Track changes separately for transcripts and reports
+    transcripts_to_add = []
+    transcripts_to_remove = []
+    reports_to_add = []
+    reports_to_remove = []
     to_insert = []
-    
-    # Find records where we need to ADD transcripts tag
+
+    # Process transcripts
     for key, data in transcript_data.items():
         if key in current_data:
             if 'transcripts' not in current_data[key]:
-                to_add.append(key)
+                transcripts_to_add.append(key)
         else:
             # Record doesn't exist, need to insert
-            to_insert.append((key, data))
-    
-    # Find records where we need to REMOVE transcripts tag
+            to_insert.append((key, data, ['transcripts']))
+
     for key, tags in current_data.items():
         if 'transcripts' in tags and key not in transcript_data:
-            to_remove.append(key)
+            transcripts_to_remove.append(key)
+
+    # Process reports
+    for key, data in report_data.items():
+        if key in current_data:
+            if 'reports' not in current_data[key]:
+                reports_to_add.append(key)
+        else:
+            # Check if this key is already in to_insert from transcripts
+            existing_insert = None
+            for i, (k, d, databases) in enumerate(to_insert):
+                if k == key:
+                    existing_insert = i
+                    break
+            if existing_insert is not None:
+                # Add reports to existing insert
+                to_insert[existing_insert] = (key, data, to_insert[existing_insert][2] + ['reports'])
+            else:
+                # New entry with only reports
+                to_insert.append((key, data, ['reports']))
+
+    for key, tags in current_data.items():
+        if 'reports' in tags and key not in report_data:
+            reports_to_remove.append(key)
     
     logger.info(f"Changes to make:")
-    logger.info(f"  - Add 'transcripts' tag to {len(to_add)} records")
-    logger.info(f"  - Remove 'transcripts' tag from {len(to_remove)} records")
+    logger.info(f"  Transcripts:")
+    logger.info(f"    - Add tag to {len(transcripts_to_add)} records")
+    logger.info(f"    - Remove tag from {len(transcripts_to_remove)} records")
+    logger.info(f"  Reports:")
+    logger.info(f"    - Add tag to {len(reports_to_add)} records")
+    logger.info(f"    - Remove tag from {len(reports_to_remove)} records")
     logger.info(f"  - Insert {len(to_insert)} new records")
     
     if dry_run:
         logger.info("DRY RUN - No changes will be made")
         
-        if to_add[:3]:
-            logger.info("Sample additions:")
-            for key in to_add[:3]:
+        if transcripts_to_add[:3]:
+            logger.info("Sample transcript additions:")
+            for key in transcripts_to_add[:3]:
                 logger.info(f"  Would add 'transcripts' to: bank_id={key[0]}, year={key[1]}, quarter={key[2]}")
-        
-        if to_remove[:3]:
-            logger.info("Sample removals:")
-            for key in to_remove[:3]:
-                logger.info(f"  Would remove 'transcripts' from: bank_id={key[0]}, year={key[1]}, quarter={key[2]}")
-        
+
+        if reports_to_add[:3]:
+            logger.info("Sample report additions:")
+            for key in reports_to_add[:3]:
+                logger.info(f"  Would add 'reports' to: bank_id={key[0]}, year={key[1]}, quarter={key[2]}")
+
         if to_insert[:3]:
             logger.info("Sample insertions:")
-            for key, data in to_insert[:3]:
-                logger.info(f"  Would insert: {data['bank_name']} - {data['fiscal_year']} {data['quarter']}")
+            for key, data, databases in to_insert[:3]:
+                db_str = ', '.join(databases)
+                logger.info(f"  Would insert: {data['bank_name']} - {data['fiscal_year']} {data['quarter']} [{db_str}]")
         
         return
     
@@ -233,12 +325,12 @@ def update_transcript_tags(transcript_data: Dict, dry_run: bool = False):
         
         try:
             # 1. Add 'transcripts' tag where needed
-            for key in to_add:
+            for key in transcripts_to_add:
                 conn.execute(text("""
                     UPDATE aegis_data_availability
                     SET database_names = array_append(database_names, 'transcripts')
-                    WHERE bank_id = :bank_id 
-                    AND fiscal_year = :fiscal_year 
+                    WHERE bank_id = :bank_id
+                    AND fiscal_year = :fiscal_year
                     AND quarter = :quarter
                     AND NOT ('transcripts' = ANY(database_names))
                 """), {
@@ -246,25 +338,54 @@ def update_transcript_tags(transcript_data: Dict, dry_run: bool = False):
                     'fiscal_year': key[1],
                     'quarter': key[2]
                 })
-            
+
             # 2. Remove 'transcripts' tag where needed
-            for key in to_remove:
+            for key in transcripts_to_remove:
                 conn.execute(text("""
                     UPDATE aegis_data_availability
                     SET database_names = array_remove(database_names, 'transcripts')
-                    WHERE bank_id = :bank_id 
-                    AND fiscal_year = :fiscal_year 
+                    WHERE bank_id = :bank_id
+                    AND fiscal_year = :fiscal_year
                     AND quarter = :quarter
                 """), {
                     'bank_id': key[0],
                     'fiscal_year': key[1],
                     'quarter': key[2]
                 })
-            
-            # 3. Insert new records
-            for key, data in to_insert:
+
+            # 3. Add 'reports' tag where needed
+            for key in reports_to_add:
                 conn.execute(text("""
-                    INSERT INTO aegis_data_availability 
+                    UPDATE aegis_data_availability
+                    SET database_names = array_append(database_names, 'reports')
+                    WHERE bank_id = :bank_id
+                    AND fiscal_year = :fiscal_year
+                    AND quarter = :quarter
+                    AND NOT ('reports' = ANY(database_names))
+                """), {
+                    'bank_id': key[0],
+                    'fiscal_year': key[1],
+                    'quarter': key[2]
+                })
+
+            # 4. Remove 'reports' tag where needed
+            for key in reports_to_remove:
+                conn.execute(text("""
+                    UPDATE aegis_data_availability
+                    SET database_names = array_remove(database_names, 'reports')
+                    WHERE bank_id = :bank_id
+                    AND fiscal_year = :fiscal_year
+                    AND quarter = :quarter
+                """), {
+                    'bank_id': key[0],
+                    'fiscal_year': key[1],
+                    'quarter': key[2]
+                })
+
+            # 5. Insert new records
+            for key, data, databases in to_insert:
+                conn.execute(text("""
+                    INSERT INTO aegis_data_availability
                     (bank_id, bank_name, bank_symbol, fiscal_year, quarter, database_names)
                     VALUES (:bank_id, :bank_name, :bank_symbol, :fiscal_year, :quarter, :database_names)
                 """), {
@@ -273,13 +394,17 @@ def update_transcript_tags(transcript_data: Dict, dry_run: bool = False):
                     'bank_symbol': data['bank_symbol'],
                     'fiscal_year': data['fiscal_year'],
                     'quarter': data['quarter'],
-                    'database_names': ['transcripts']
+                    'database_names': databases
                 })
-            
+
             trans.commit()
             logger.info(f"✅ Successfully updated table")
-            logger.info(f"  - Added 'transcripts' tag to {len(to_add)} records")
-            logger.info(f"  - Removed 'transcripts' tag from {len(to_remove)} records")
+            logger.info(f"  Transcripts:")
+            logger.info(f"    - Added tag to {len(transcripts_to_add)} records")
+            logger.info(f"    - Removed tag from {len(transcripts_to_remove)} records")
+            logger.info(f"  Reports:")
+            logger.info(f"    - Added tag to {len(reports_to_add)} records")
+            logger.info(f"    - Removed tag from {len(reports_to_remove)} records")
             logger.info(f"  - Inserted {len(to_insert)} new records")
             
         except Exception as e:
@@ -301,19 +426,28 @@ def verify_results():
         
         # Count records with transcripts tag
         result = conn.execute(text("""
-            SELECT COUNT(*) as with_transcripts 
-            FROM aegis_data_availability 
+            SELECT COUNT(*) as with_transcripts
+            FROM aegis_data_availability
             WHERE 'transcripts' = ANY(database_names)
         """))
         with_transcripts = result.scalar()
+
+        # Count records with reports tag
+        result = conn.execute(text("""
+            SELECT COUNT(*) as with_reports
+            FROM aegis_data_availability
+            WHERE 'reports' = ANY(database_names)
+        """))
+        with_reports = result.scalar()
         
         # Get bank summary
         result = conn.execute(text("""
-            SELECT 
+            SELECT
                 bank_name,
                 bank_symbol,
                 COUNT(*) as periods,
-                COUNT(CASE WHEN 'transcripts' = ANY(database_names) THEN 1 END) as with_transcripts
+                COUNT(CASE WHEN 'transcripts' = ANY(database_names) THEN 1 END) as with_transcripts,
+                COUNT(CASE WHEN 'reports' = ANY(database_names) THEN 1 END) as with_reports
             FROM aegis_data_availability
             GROUP BY bank_id, bank_name, bank_symbol
             ORDER BY bank_id
@@ -324,10 +458,11 @@ def verify_results():
         logger.info("="*60)
         logger.info(f"Total records: {total}")
         logger.info(f"Records with 'transcripts' tag: {with_transcripts}")
+        logger.info(f"Records with 'reports' tag: {with_reports}")
         logger.info("\nPer-bank summary:")
-        
+
         for row in result:
-            logger.info(f"  {row.bank_name} ({row.bank_symbol}): {row.periods} periods, {row.with_transcripts} with transcripts")
+            logger.info(f"  {row.bank_name} ({row.bank_symbol}): {row.periods} periods, {row.with_transcripts} transcripts, {row.with_reports} reports")
 
 
 def main():
@@ -335,7 +470,7 @@ def main():
     Main entry point for the sync script.
     """
     parser = argparse.ArgumentParser(
-        description="Sync aegis_data_availability with transcript data"
+        description="Sync aegis_data_availability with transcript and report data"
     )
     parser.add_argument(
         "--rebuild",
@@ -369,11 +504,16 @@ def main():
         logger.info("Fetching transcript availability data...")
         transcript_data = get_transcript_availability()
         logger.info(f"Found {len(transcript_data)} bank/period combinations in transcripts")
-        
+
+        # Get report data
+        logger.info("Fetching report availability data...")
+        report_data = get_report_availability()
+        logger.info(f"Found {len(report_data)} bank/period combinations in reports")
+
         if args.rebuild or args.complete_wipe:
-            rebuild_table(transcript_data, dry_run=args.dry_run, complete_wipe=args.complete_wipe)
+            rebuild_table(transcript_data, report_data, dry_run=args.dry_run, complete_wipe=args.complete_wipe)
         else:
-            update_transcript_tags(transcript_data, dry_run=args.dry_run)
+            update_database_tags(transcript_data, report_data, dry_run=args.dry_run)
         
         # Show verification unless dry-run
         if not args.dry_run:

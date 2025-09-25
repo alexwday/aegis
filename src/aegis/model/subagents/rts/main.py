@@ -24,7 +24,7 @@ TO REPLACE THIS: Keep the function name and signature exactly the same.
 """
 
 from datetime import datetime, timezone
-from typing import Any, Dict, Generator, List
+from typing import Any, AsyncGenerator, Dict, List
 
 # Import Aegis utilities
 from ....utils.logging import get_logger
@@ -34,7 +34,7 @@ from ....connections.llm_connector import stream
 from ....utils.monitor import add_monitor_entry, format_llm_call
 
 
-def rts_agent(
+async def rts_agent(
     conversation: List[Dict[str, str]],
     latest_message: str,
     bank_period_combinations: List[Dict[str, Any]],
@@ -42,7 +42,7 @@ def rts_agent(
     full_intent: str,
     database_id: str,
     context: Dict[str, Any],
-) -> Generator[Dict[str, str], None, None]:
+) -> AsyncGenerator[Dict[str, str], None]:
     """
     RTS subagent - generates placeholder rts data.
 
@@ -174,7 +174,7 @@ End with: *[RTS placeholder data - test mode]*"""
         )
 
         # Stream response from LLM
-        for chunk in stream(
+        async for chunk in stream(
             messages=messages,
             context=context,  # Contains auth_config and ssl_config
             llm_params={

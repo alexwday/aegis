@@ -5,10 +5,15 @@ This module provides common fixtures used across multiple test files to reduce
 duplication and ensure consistent test isolation.
 """
 
+import asyncio
 import pytest
+import pytest_asyncio
 
 from aegis.utils.settings import config
 from aegis.utils.monitor import clear_monitor_entries
+
+# Configure pytest-asyncio to auto-detect async tests
+pytest_plugins = ("pytest_asyncio",)
 
 
 @pytest.fixture(autouse=True)
@@ -141,3 +146,40 @@ def execution_id():
         String UUID for execution tracking.
     """
     return "test-exec-1234-5678-9abc-def012345678"
+
+
+@pytest_asyncio.fixture
+async def async_test_context(execution_id, mock_auth_config, mock_ssl_config):
+    """
+    Provide a standard async context for testing LLM and database operations.
+
+    Returns:
+        Dict with execution_id, auth_config, and ssl_config.
+    """
+    return {
+        "execution_id": execution_id,
+        "auth_config": mock_auth_config,
+        "ssl_config": mock_ssl_config
+    }
+
+
+@pytest_asyncio.fixture
+async def async_mock_oauth_response():
+    """
+    Mock OAuth token response for async testing.
+
+    Returns:
+        Dict with OAuth token data structure.
+    """
+    return {"access_token": "mock_async_token_123", "token_type": "Bearer", "expires_in": 3600}
+
+
+@pytest.fixture
+def event_loop():
+    """
+    Create an instance of the default event loop for the test session.
+    This ensures all async tests use the same event loop.
+    """
+    loop = asyncio.get_event_loop_policy().new_event_loop()
+    yield loop
+    loop.close()

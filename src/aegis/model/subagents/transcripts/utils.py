@@ -11,7 +11,7 @@ from ....utils.logging import get_logger
 from ....connections.postgres_connector import get_connection
 
 
-def load_financial_categories() -> Dict[int, Dict[str, str]]:
+async def load_financial_categories() -> Dict[int, Dict[str, str]]:
     """Load financial categories from YAML file."""
     yaml_path = Path(__file__).parent.parent.parent / "prompts" / "transcripts" / "financial_categories.yaml"
     
@@ -39,7 +39,7 @@ def load_financial_categories() -> Dict[int, Dict[str, str]]:
         }
 
 
-def get_filter_diagnostics(combo: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
+async def get_filter_diagnostics(combo: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
     """
     Get diagnostic counts for each filter to help debug why queries return 0 results.
     
@@ -56,89 +56,89 @@ def get_filter_diagnostics(combo: Dict[str, Any], context: Dict[str, Any]) -> Di
     diagnostics = {}
     
     try:
-        with get_connection() as conn:
+        async with get_connection() as conn:
             # Total records
-            result = conn.execute(text("SELECT COUNT(*) FROM aegis_transcripts"))
+            result = await conn.execute(text("SELECT COUNT(*) FROM aegis_transcripts"))
             diagnostics['total_records'] = result.scalar()
-            
+
             # Records matching bank_id
-            result = conn.execute(
+            result = await conn.execute(
                 text("SELECT COUNT(*) FROM aegis_transcripts WHERE institution_id = :bank_id_str OR institution_id::text = :bank_id_str"),
                 {"bank_id_str": str(combo["bank_id"])}
             )
             diagnostics['matching_bank_id'] = result.scalar()
-            
+
             # Records matching fiscal_year
-            result = conn.execute(
+            result = await conn.execute(
                 text("SELECT COUNT(*) FROM aegis_transcripts WHERE fiscal_year = :fiscal_year"),
                 {"fiscal_year": combo["fiscal_year"]}
             )
             diagnostics['matching_year'] = result.scalar()
-            
+
             # Records matching quarter
-            result = conn.execute(
+            result = await conn.execute(
                 text("SELECT COUNT(*) FROM aegis_transcripts WHERE fiscal_quarter = :quarter"),
                 {"quarter": combo["quarter"]}
             )
             diagnostics['matching_quarter'] = result.scalar()
-            
+
             # Records matching bank + year
-            result = conn.execute(
+            result = await conn.execute(
                 text("""
-                    SELECT COUNT(*) FROM aegis_transcripts 
+                    SELECT COUNT(*) FROM aegis_transcripts
                     WHERE (institution_id = :bank_id_str OR institution_id::text = :bank_id_str)
                     AND fiscal_year = :fiscal_year
                 """),
                 {"bank_id_str": str(combo["bank_id"]), "fiscal_year": combo["fiscal_year"]}
             )
             diagnostics['matching_bank_and_year'] = result.scalar()
-            
+
             # Records matching bank + quarter
-            result = conn.execute(
+            result = await conn.execute(
                 text("""
-                    SELECT COUNT(*) FROM aegis_transcripts 
+                    SELECT COUNT(*) FROM aegis_transcripts
                     WHERE (institution_id = :bank_id_str OR institution_id::text = :bank_id_str)
                     AND fiscal_quarter = :quarter
                 """),
                 {"bank_id_str": str(combo["bank_id"]), "quarter": combo["quarter"]}
             )
             diagnostics['matching_bank_and_quarter'] = result.scalar()
-            
+
             # Records matching year + quarter
-            result = conn.execute(
+            result = await conn.execute(
                 text("""
-                    SELECT COUNT(*) FROM aegis_transcripts 
+                    SELECT COUNT(*) FROM aegis_transcripts
                     WHERE fiscal_year = :fiscal_year
                     AND fiscal_quarter = :quarter
                 """),
                 {"fiscal_year": combo["fiscal_year"], "quarter": combo["quarter"]}
             )
             diagnostics['matching_year_and_quarter'] = result.scalar()
-            
+
             # Records matching all filters
-            result = conn.execute(
+            result = await conn.execute(
                 text("""
-                    SELECT COUNT(*) FROM aegis_transcripts 
+                    SELECT COUNT(*) FROM aegis_transcripts
                     WHERE (institution_id = :bank_id_str OR institution_id::text = :bank_id_str)
                     AND fiscal_year = :fiscal_year
                     AND fiscal_quarter = :quarter
                 """),
                 {
-                    "bank_id_str": str(combo["bank_id"]), 
+                    "bank_id_str": str(combo["bank_id"]),
                     "fiscal_year": combo["fiscal_year"],
                     "quarter": combo["quarter"]
                 }
             )
             diagnostics['matching_all_filters'] = result.scalar()
-            
+
             # Get sample institution_ids if no match
             if diagnostics['matching_all_filters'] == 0:
-                result = conn.execute(
+                result = await conn.execute(
                     text("""
-                        SELECT DISTINCT institution_id, company_name 
-                        FROM aegis_transcripts 
-                        WHERE fiscal_year = :fiscal_year 
-                        AND fiscal_quarter = :quarter 
+                        SELECT DISTINCT institution_id, company_name
+                        FROM aegis_transcripts
+                        WHERE fiscal_year = :fiscal_year
+                        AND fiscal_quarter = :quarter
                         LIMIT 5
                     """),
                     {"fiscal_year": combo["fiscal_year"], "quarter": combo["quarter"]}

@@ -127,10 +127,9 @@ def process_conversation(  # pylint: disable=too-many-branches
         logger.error("Failed to process conversation", error=error_msg)
 
         # Try to get original count for error response
+        # Note: conversation_input will always be dict here since lists are converted at line 61
         original_count = 0
-        if isinstance(conversation_input, list):
-            original_count = len(conversation_input)
-        elif isinstance(conversation_input, dict):
+        if isinstance(conversation_input, dict):
             original_count = len(conversation_input.get("messages", []))
 
         return {

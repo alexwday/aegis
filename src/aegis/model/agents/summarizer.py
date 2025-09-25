@@ -6,18 +6,18 @@ and creates a unified, coherent answer that addresses the user's
 original query while preserving source attribution.
 """
 
-from typing import Any, Dict, Generator, List
+from typing import Any, AsyncGenerator, Dict, List
 from ...connections.llm_connector import stream
 from ...utils.logging import get_logger
 from ...utils.prompt_loader import load_yaml
 
 
-def synthesize_responses(
+async def synthesize_responses(
     conversation_history: List[Dict[str, str]],
     latest_message: str,
     database_responses: List[Dict[str, Any]],
     context: Dict[str, Any],
-) -> Generator[Dict[str, str], None, None]:
+) -> AsyncGenerator[Dict[str, str], None]:
     """
     Synthesize multiple database responses into a unified answer.
 
@@ -177,7 +177,7 @@ Response:
         chunk_count = 0
         final_usage = None
 
-        for chunk in stream(messages=messages, context=context, llm_params=llm_params):
+        async for chunk in stream(messages=messages, context=context, llm_params=llm_params):
             # Handle OpenAI streaming chunk format
             if chunk.get("choices") and chunk["choices"][0].get("delta"):
                 delta = chunk["choices"][0]["delta"]

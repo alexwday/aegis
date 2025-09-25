@@ -3,18 +3,19 @@ LLM connector module for OpenAI API integration.
 
 This module handles all interactions with OpenAI's API, supporting both
 OAuth and API key authentication, with configurable model tiers.
+Fully async implementation with proper timeouts and error handling.
 """
 
-from typing import Any, Dict, Generator, List, Optional
+from typing import Any, AsyncGenerator, Dict, List, Optional
 import time
 import httpx
-from openai import OpenAI
+from openai import AsyncOpenAI
 
 from ..utils.logging import get_logger
 from ..utils.settings import config
 
 # Module-level client cache to reuse connections
-_client_cache: Dict[str, OpenAI] = {}
+_async_client_cache: Dict[str, AsyncOpenAI] = {}
 
 
 # Cost tracking utilities integrated directly
@@ -236,88 +237,51 @@ def _get_model_config(
     )
 
 
-def _get_llm_client(
-    auth_config: Dict[str, Any], ssl_config: Dict[str, Any], model_tier: str = "medium"
-) -> OpenAI:
+async def _get_or_create_async_client(auth_token: str) -> AsyncOpenAI:
     """
-    Get or create an OpenAI client with proper configuration.
+    Get or create an async OpenAI client with proper configuration.
 
-    Creates a cached OpenAI client configured with the appropriate
-    authentication and SSL settings. Clients are cached by auth token
+    Creates a cached AsyncOpenAI client configured with the appropriate
+    authentication and timeout settings. Clients are cached by auth token
     to enable connection reuse.
 
     Args:
-        auth_config: Authentication configuration from workflow.
-        ssl_config: SSL configuration from workflow.
-        model_tier: Model tier for timeout configuration ("small", "medium", "large").
+        auth_token: Authentication token from auth config
 
     Returns:
-        Configured OpenAI client instance.
-
-    Raises:
-        ValueError: If authentication configuration is invalid.
+        Configured AsyncOpenAI client instance.
     """
     logger = get_logger()
 
     # Use token as cache key
-    cache_key = auth_config.get("token", "no-auth")
+    cache_key = auth_token or "no-auth"
 
     # Return cached client if exists
-    if cache_key in _client_cache:
-        logger.debug("Using cached LLM client", cache_key=cache_key[:8] + "...")
-        return _client_cache[cache_key]
+    if cache_key in _async_client_cache:
+        logger.debug("Using cached async LLM client", cache_key=cache_key[:8] + "...")
+        return _async_client_cache[cache_key]
 
-    # Get timeout based on model tier
-    timeout_config = {
-        "small": config.llm.small.timeout,
-        "medium": config.llm.medium.timeout,
-        "large": config.llm.large.timeout,
-        "embedding": config.llm.embedding.timeout,
-    }
-    timeout = timeout_config.get(model_tier, config.llm.medium.timeout)
-
-    # Configure HTTP client with SSL settings
-    http_client_kwargs = {
-        "timeout": httpx.Timeout(timeout=timeout),
-    }
-
-    # Apply SSL configuration
-    if ssl_config.get("verify"):
-        if ssl_config.get("cert_path"):
-            # Use custom certificate
-            http_client_kwargs["verify"] = ssl_config["cert_path"]
-        else:
-            # Use system certificates
-            http_client_kwargs["verify"] = True
-    else:
-        # Disable SSL verification
-        http_client_kwargs["verify"] = False
-
-    # Create HTTP client
-    http_client = httpx.Client(**http_client_kwargs)
-
-    # Create OpenAI client
-    client = OpenAI(
-        api_key=auth_config.get("token", "no-token"),
+    # Create AsyncOpenAI client with 180 second timeout
+    client = AsyncOpenAI(
+        api_key=auth_token,
         base_url=config.llm.base_url,
-        http_client=http_client,
+        timeout=httpx.Timeout(180.0, connect=5.0),
+        max_retries=3,
     )
 
     # Cache the client
-    _client_cache[cache_key] = client
+    _async_client_cache[cache_key] = client
 
     logger.info(
-        "Created new LLM client",
+        "Created new async LLM client",
         base_url=config.llm.base_url,
-        auth_method=auth_config.get("method"),
-        ssl_verify=ssl_config.get("verify"),
-        timeout=timeout,
+        timeout=180,
     )
 
     return client
 
 
-def complete(
+async def complete(
     messages: List[Dict[str, str]],
     context: Dict[str, Any],
     llm_params: Optional[Dict[str, Any]] = None,
@@ -325,7 +289,7 @@ def complete(
     """
     Generate a non-streaming completion from the LLM.
 
-    Makes a synchronous call to the OpenAI API and returns the complete
+    Makes an async call to the OpenAI API and returns the complete
     response. Suitable for simple question-answering and short responses.
 
     Args:
@@ -343,12 +307,6 @@ def complete(
     Returns:
         Response dictionary containing the completion.
 
-        # Returns: {
-        #     "id": "chatcmpl-...",
-        #     "choices": [{"message": {"role": "assistant", "content": "..."}}],
-        #     "usage": {"prompt_tokens": 10, "completion_tokens": 20, "total_tokens": 30}
-        # }
-
     Raises:
         Exception: If the API call fails.
     """
@@ -361,7 +319,7 @@ def complete(
     )
 
     logger.info(
-        "Generating LLM completion",
+        "Generating async LLM completion",
         execution_id=context["execution_id"],
         model=model,
         temperature=temperature,
@@ -370,23 +328,23 @@ def complete(
     )
 
     try:
-        client = _get_llm_client(context["auth_config"], context["ssl_config"], model_tier)
+        client = await _get_or_create_async_client(context["auth_config"].get("token", "no-token"))
 
         # Check if it's an o-series model (reasoning models)
         # These models don't support the temperature parameter
         is_o_series = (
-            model in ['o1', 'o3', 'o4'] or 
-            model.startswith('o1-') or 
-            model.startswith('o3-') or 
+            model in ['o1', 'o3', 'o4'] or
+            model.startswith('o1-') or
+            model.startswith('o3-') or
             model.startswith('o4-')
         )
-        
+
         # Build API parameters based on model type
         api_params = {
             "model": model,
             "messages": messages,
         }
-        
+
         if is_o_series:
             # o-series models: no temperature, use max_completion_tokens
             if max_tokens:
@@ -395,7 +353,7 @@ def complete(
             # Regular models: standard parameters
             api_params["temperature"] = temperature
             api_params["max_tokens"] = max_tokens
-        
+
         # Add any extra parameters
         api_params.update({
             k: v
@@ -405,7 +363,7 @@ def complete(
 
         # Time the API call
         with ResponseTimer() as timer:
-            response = client.chat.completions.create(**api_params)
+            response = await client.chat.completions.create(**api_params)
 
         # Convert response to dict
         response_dict = response.model_dump()
@@ -420,14 +378,14 @@ def complete(
                 "execution_id": context["execution_id"],
                 "logger": logger,
             },
-            operation_type="completion",
+            operation_type="async completion",
         )
 
         return response_dict
 
     except Exception as e:
         logger.error(
-            "LLM completion failed",
+            "Async LLM completion failed",
             execution_id=context["execution_id"],
             model=model,
             error=str(e),
@@ -435,16 +393,15 @@ def complete(
         raise
 
 
-def stream(  # pylint: disable=too-many-locals
-    # Complex streaming logic requires multiple local vars for metrics, timing, and state tracking.
+async def stream(
     messages: List[Dict[str, str]],
     context: Dict[str, Any],
     llm_params: Optional[Dict[str, Any]] = None,
-) -> Generator[Dict[str, Any], None, None]:
+) -> AsyncGenerator[Dict[str, Any], None]:
     """
     Generate a streaming completion from the LLM.
 
-    Makes a streaming call to the OpenAI API and yields chunks as they
+    Makes an async streaming call to the OpenAI API and yields chunks as they
     arrive. Suitable for long responses where you want to show progress.
 
     Args:
@@ -462,12 +419,6 @@ def stream(  # pylint: disable=too-many-locals
     Yields:
         Response chunks as they arrive from the API.
 
-        # Yields: {
-        #     "id": "chatcmpl-...",
-        #     "choices": [{"delta": {"content": "Hello"}, "index": 0}],
-        #     "created": 1234567890
-        # }
-
     Raises:
         Exception: If the API call fails.
     """
@@ -480,7 +431,7 @@ def stream(  # pylint: disable=too-many-locals
     )
 
     logger.info(
-        "Starting LLM streaming",
+        "Starting async LLM streaming",
         execution_id=context["execution_id"],
         model=model,
         temperature=temperature,
@@ -489,7 +440,7 @@ def stream(  # pylint: disable=too-many-locals
     )
 
     try:
-        client = _get_llm_client(context["auth_config"], context["ssl_config"], model_tier)
+        client = await _get_or_create_async_client(context["auth_config"].get("token", "no-token"))
 
         # Start timing
         start_time = time.time()
@@ -497,19 +448,19 @@ def stream(  # pylint: disable=too-many-locals
         # Check if it's an o-series model (reasoning models)
         # These models don't support the temperature parameter
         is_o_series = (
-            model in ['o1', 'o3', 'o4'] or 
-            model.startswith('o1-') or 
-            model.startswith('o3-') or 
+            model in ['o1', 'o3', 'o4'] or
+            model.startswith('o1-') or
+            model.startswith('o3-') or
             model.startswith('o4-')
         )
-        
+
         # Build API parameters based on model type
         api_params = {
             "model": model,
             "messages": messages,
             "stream": True,
         }
-        
+
         if is_o_series:
             # o-series models: no temperature, use max_completion_tokens
             if max_tokens:
@@ -518,21 +469,21 @@ def stream(  # pylint: disable=too-many-locals
             # Regular models: standard parameters
             api_params["temperature"] = temperature
             api_params["max_tokens"] = max_tokens
-        
+
         # Add any extra parameters
         api_params.update({
             k: v
             for k, v in llm_params.items()
             if k not in ["model", "temperature", "max_tokens"]
         })
-        
-        # Remove our known params, pass rest as kwargs
-        stream_response = client.chat.completions.create(**api_params)
+
+        # Create async stream
+        stream_response = await client.chat.completions.create(**api_params)
 
         chunk_count = 0
         accumulated_usage = None
 
-        for chunk in stream_response:
+        async for chunk in stream_response:
             chunk_count += 1
             chunk_dict = chunk.model_dump()
 
@@ -556,11 +507,11 @@ def stream(  # pylint: disable=too-many-locals
                     "execution_id": context["execution_id"],
                     "logger": logger,
                 },
-                operation_type=f"streaming completed (chunks={chunk_count})",
+                operation_type=f"async streaming completed (chunks={chunk_count})",
             )
         else:
             logger.info(
-                "LLM streaming completed",
+                "Async LLM streaming completed",
                 execution_id=context["execution_id"],
                 model=model,
                 chunks=chunk_count,
@@ -569,7 +520,7 @@ def stream(  # pylint: disable=too-many-locals
 
     except Exception as e:
         logger.error(
-            "LLM streaming failed",
+            "Async LLM streaming failed",
             execution_id=context["execution_id"],
             model=model,
             error=str(e),
@@ -577,7 +528,7 @@ def stream(  # pylint: disable=too-many-locals
         raise
 
 
-def complete_with_tools(
+async def complete_with_tools(
     messages: List[Dict[str, str]],
     tools: List[Dict[str, Any]],
     context: Dict[str, Any],
@@ -586,7 +537,7 @@ def complete_with_tools(
     """
     Generate a completion with tool/function calling capabilities.
 
-    Makes a call to the OpenAI API with tools defined, allowing the model
+    Makes an async call to the OpenAI API with tools defined, allowing the model
     to call functions and return structured responses.
 
     Args:
@@ -605,17 +556,6 @@ def complete_with_tools(
     Returns:
         Response dictionary containing the completion with tool calls.
 
-        # Returns: {
-        #     "id": "chatcmpl-...",
-        #     "choices": [{
-        #         "message": {
-        #             "role": "assistant",
-        #             "tool_calls": [{"id": "...", "function": {"name": "...", "arguments": "..."}}]
-        #         }
-        #     }],
-        #     "usage": {"prompt_tokens": 10, "completion_tokens": 20, "total_tokens": 30}
-        # }
-
     Raises:
         Exception: If the API call fails.
     """
@@ -631,7 +571,7 @@ def complete_with_tools(
     )
 
     logger.info(
-        "Generating LLM completion with tools",
+        "Generating async LLM completion with tools",
         execution_id=context["execution_id"],
         model=model,
         temperature=temperature,
@@ -641,24 +581,24 @@ def complete_with_tools(
     )
 
     try:
-        client = _get_llm_client(context["auth_config"], context["ssl_config"], model_tier)
+        client = await _get_or_create_async_client(context["auth_config"].get("token", "no-token"))
 
         # Check if it's an o-series model (reasoning models)
         # These models don't support temperature parameter
         is_o_series = (
-            model in ['o1', 'o3', 'o4'] or 
-            model.startswith('o1-') or 
-            model.startswith('o3-') or 
+            model in ['o1', 'o3', 'o4'] or
+            model.startswith('o1-') or
+            model.startswith('o3-') or
             model.startswith('o4-')
         )
-        
+
         # Build API parameters based on model type
         api_params = {
             "model": model,
             "messages": messages,
             "tools": tools,
         }
-        
+
         if is_o_series:
             # O-series models: no temperature, use max_completion_tokens
             if max_tokens:
@@ -667,7 +607,7 @@ def complete_with_tools(
             # Regular models: standard parameters
             api_params["temperature"] = temperature
             api_params["max_tokens"] = max_tokens
-        
+
         # Add any extra parameters
         api_params.update({
             k: v
@@ -677,7 +617,7 @@ def complete_with_tools(
 
         # Time the API call
         with ResponseTimer() as timer:
-            response = client.chat.completions.create(**api_params)
+            response = await client.chat.completions.create(**api_params)
 
         # Convert response to dict
         response_dict = response.model_dump()
@@ -697,14 +637,14 @@ def complete_with_tools(
                 "execution_id": context["execution_id"],
                 "logger": logger,
             },
-            operation_type=f"tool completion (has_tool_calls={has_tool_calls})",
+            operation_type=f"async tool completion (has_tool_calls={has_tool_calls})",
         )
 
         return response_dict
 
     except Exception as e:
         logger.error(
-            "LLM tool completion failed",
+            "Async LLM tool completion failed",
             execution_id=context["execution_id"],
             model=model,
             error=str(e),
@@ -712,7 +652,7 @@ def complete_with_tools(
         raise
 
 
-def embed(
+async def embed(
     input_text: str,
     context: Dict[str, Any],
     embedding_params: Optional[Dict[str, Any]] = None,
@@ -738,16 +678,6 @@ def embed(
     Returns:
         Response dictionary containing the embedding vector.
 
-        # Returns: {
-        #     "data": [{
-        #         "embedding": [0.123, -0.456, ...],  # Vector of floats
-        #         "index": 0,
-        #         "object": "embedding"
-        #     }],
-        #     "model": "text-embedding-3-large",
-        #     "usage": {"prompt_tokens": 10, "total_tokens": 10}
-        # }
-
     Raises:
         Exception: If the API call fails.
     """
@@ -769,7 +699,7 @@ def embed(
         kwargs["dimensions"] = dimensions
 
     logger.info(
-        "Generating text embedding",
+        "Generating async text embedding",
         execution_id=context["execution_id"],
         model=model,
         dimensions=dimensions if "text-embedding-3" in model else "default",
@@ -777,12 +707,11 @@ def embed(
     )
 
     try:
-        # Use embedding timeout for client
-        client = _get_llm_client(context["auth_config"], context["ssl_config"], "embedding")
+        client = await _get_or_create_async_client(context["auth_config"].get("token", "no-token"))
 
         # Time the API call
         with ResponseTimer() as timer:
-            response = client.embeddings.create(model=model, input=input_text, **kwargs)
+            response = await client.embeddings.create(model=model, input=input_text, **kwargs)
 
         # Convert response to dict
         response_dict = response.model_dump()
@@ -797,14 +726,14 @@ def embed(
                 "logger": logger,
                 "vector_info": {"vector_length": len(response_dict["data"][0]["embedding"])},
             },
-            operation_type="Embedding generation",
+            operation_type="Async embedding generation",
         )
 
         return response_dict
 
     except Exception as e:
         logger.error(
-            "Embedding generation failed",
+            "Async embedding generation failed",
             execution_id=context["execution_id"],
             model=model,
             error=str(e),
@@ -812,7 +741,7 @@ def embed(
         raise
 
 
-def embed_batch(
+async def embed_batch(
     input_texts: List[str],
     context: Dict[str, Any],
     embedding_params: Optional[Dict[str, Any]] = None,
@@ -837,16 +766,6 @@ def embed_batch(
     Returns:
         Response dictionary containing embedding vectors for all inputs.
 
-        # Returns: {
-        #     "data": [
-        #         {"embedding": [...], "index": 0, "object": "embedding"},
-        #         {"embedding": [...], "index": 1, "object": "embedding"},
-        #         ...
-        #     ],
-        #     "model": "text-embedding-3-large",
-        #     "usage": {"prompt_tokens": 100, "total_tokens": 100}
-        # }
-
     Raises:
         Exception: If the API call fails.
     """
@@ -868,7 +787,7 @@ def embed_batch(
         kwargs["dimensions"] = dimensions
 
     logger.info(
-        "Generating batch embeddings",
+        "Generating async batch embeddings",
         execution_id=context["execution_id"],
         model=model,
         dimensions=dimensions if "text-embedding-3" in model else "default",
@@ -877,12 +796,11 @@ def embed_batch(
     )
 
     try:
-        # Use embedding timeout for client
-        client = _get_llm_client(context["auth_config"], context["ssl_config"], "embedding")
+        client = await _get_or_create_async_client(context["auth_config"].get("token", "no-token"))
 
         # Time the API call
         with ResponseTimer() as timer:
-            response = client.embeddings.create(model=model, input=input_texts, **kwargs)
+            response = await client.embeddings.create(model=model, input=input_texts, **kwargs)
 
         # Convert response to dict
         response_dict = response.model_dump()
@@ -902,14 +820,14 @@ def embed_batch(
                     ),
                 },
             },
-            operation_type="Batch embedding generation",
+            operation_type="Async batch embedding generation",
         )
 
         return response_dict
 
     except Exception as e:
         logger.error(
-            "Batch embedding generation failed",
+            "Async batch embedding generation failed",
             execution_id=context["execution_id"],
             model=model,
             batch_size=len(input_texts),
@@ -918,7 +836,7 @@ def embed_batch(
         raise
 
 
-def check_connection(context: Dict[str, Any]) -> Dict[str, Any]:
+async def check_connection(context: Dict[str, Any]) -> Dict[str, Any]:
     """
     Check the LLM connection with a simple prompt.
 
@@ -933,18 +851,11 @@ def check_connection(context: Dict[str, Any]) -> Dict[str, Any]:
 
     Returns:
         Test response with status and details.
-
-        # Returns: {
-        #     "status": "success",
-        #     "model": "gpt-3.5-turbo",
-        #     "response": "Hello! I'm working properly.",
-        #     "auth_method": "api_key"
-        # }
     """
     logger = get_logger()
 
     logger.info(
-        "Testing LLM connection",
+        "Testing async LLM connection",
         execution_id=context["execution_id"],
         auth_method=context["auth_config"].get("method"),
         base_url=config.llm.base_url,
@@ -957,7 +868,7 @@ def check_connection(context: Dict[str, Any]) -> Dict[str, Any]:
 
     try:
         # Use small model for testing (faster and cheaper)
-        response = complete(
+        response = await complete(
             messages=test_messages,
             context=context,
             llm_params={
@@ -978,7 +889,7 @@ def check_connection(context: Dict[str, Any]) -> Dict[str, Any]:
         }
 
         logger.info(
-            "LLM connection test successful",
+            "Async LLM connection test successful",
             execution_id=context["execution_id"],
             response=content,
         )
@@ -995,9 +906,33 @@ def check_connection(context: Dict[str, Any]) -> Dict[str, Any]:
         }
 
         logger.error(
-            "LLM connection test failed",
+            "Async LLM connection test failed",
             execution_id=context["execution_id"],
             error=str(e),
         )
 
         return result
+
+
+# Cleanup function for graceful shutdown
+async def close_all_clients():
+    """
+    Close all cached async OpenAI clients.
+
+    This should be called during application shutdown to ensure
+    proper cleanup of async resources.
+    """
+    global _async_client_cache
+
+    logger = get_logger()
+    logger.info(f"Closing {len(_async_client_cache)} async LLM client(s)")
+
+    # Close all clients
+    for key, client in _async_client_cache.items():
+        try:
+            await client.close()
+        except Exception as e:
+            logger.error(f"Error closing client {key[:8]}...: {e}")
+
+    # Clear the cache
+    _async_client_cache.clear()

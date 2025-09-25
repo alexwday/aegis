@@ -19,8 +19,8 @@ from ....utils.settings import config
 from sqlalchemy import text
 
 
-def format_full_section_chunks(
-    chunks: List[Dict[str, Any]], 
+async def format_full_section_chunks(
+    chunks: List[Dict[str, Any]],
     combo: Dict[str, Any],
     context: Dict[str, Any]
 ) -> str:
@@ -136,7 +136,7 @@ def format_full_section_chunks(
     return formatted
 
 
-def rerank_similarity_chunks(
+async def rerank_similarity_chunks(
     chunks: List[Dict[str, Any]],
     search_phrase: str,
     context: Dict[str, Any]
@@ -183,7 +183,7 @@ If all chunks are relevant, return: []"""
         messages = [{"role": "user", "content": rerank_prompt}]
         # Use large model for better reranking
         model_config = getattr(config.llm, "large")
-        response = complete(
+        response = await complete(
             messages=messages,
             context=context,
             llm_params={
@@ -231,7 +231,7 @@ If all chunks are relevant, return: []"""
     return chunks
 
 
-def expand_speaker_blocks(
+async def expand_speaker_blocks(
     chunks: List[Dict[str, Any]],
     combo: Dict[str, Any],
     context: Dict[str, Any]
@@ -270,7 +270,7 @@ def expand_speaker_blocks(
         if speaker_block_ids:
             # Fetch all chunks for these speaker blocks
             try:
-                with get_connection() as conn:
+                async with get_connection() as conn:
                     query = text("""
                         SELECT 
                             id,
@@ -292,7 +292,7 @@ def expand_speaker_blocks(
                         ORDER BY speaker_block_id, chunk_id
                     """)
                     
-                    result = conn.execute(query, {
+                    result = await conn.execute(query, {
                         "bank_id_str": str(combo["bank_id"]),
                         "fiscal_year": combo["fiscal_year"],
                         "quarter": combo["quarter"],
@@ -332,7 +332,7 @@ def expand_speaker_blocks(
     return expanded_chunks
 
 
-def fill_gaps_in_speaker_blocks(
+async def fill_gaps_in_speaker_blocks(
     chunks: List[Dict[str, Any]],
     combo: Dict[str, Any],
     context: Dict[str, Any]
@@ -437,7 +437,7 @@ def fill_gaps_in_speaker_blocks(
     return chunks
 
 
-def format_category_or_similarity_chunks(
+async def format_category_or_similarity_chunks(
     chunks: List[Dict[str, Any]],
     combo: Dict[str, Any],
     context: Dict[str, Any],
@@ -555,7 +555,7 @@ def format_category_or_similarity_chunks(
     return formatted
 
 
-def generate_research_statement(
+async def generate_research_statement(
     formatted_content: str,
     combo: Dict[str, Any],
     context: Dict[str, Any],
@@ -688,7 +688,7 @@ Based ONLY on the above transcript chunks, provide your synthesis:"""
         messages = [{"role": "user", "content": prompt}]
         # Use large model for better research generation
         model_config = getattr(config.llm, "large")
-        response = complete(
+        response = await complete(
             messages=messages,
             context=context,
             llm_params={

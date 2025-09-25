@@ -12,7 +12,7 @@ from ....connections.llm_connector import embed
 from .utils import get_filter_diagnostics
 
 
-def retrieve_full_section(combo: Dict[str, Any], sections: str, context: Dict[str, Any]) -> List[Dict[str, Any]]:
+async def retrieve_full_section(combo: Dict[str, Any], sections: str, context: Dict[str, Any]) -> List[Dict[str, Any]]:
     """
     Method 0: Retrieve full transcript sections.
     
@@ -37,7 +37,7 @@ def retrieve_full_section(combo: Dict[str, Any], sections: str, context: Dict[st
     sections_to_fetch = section_filter.get(sections, ["MANAGEMENT DISCUSSION SECTION", "Q&A"])
     
     # Get diagnostics if no results expected
-    diagnostics = get_filter_diagnostics(combo, context)
+    diagnostics = await get_filter_diagnostics(combo, context)
     
     # Log the filter parameters and diagnostic counts
     logger.info(
@@ -53,7 +53,7 @@ def retrieve_full_section(combo: Dict[str, Any], sections: str, context: Dict[st
     )
     
     try:
-        with get_connection() as conn:
+        async with get_connection() as conn:
             # Build query to fetch all chunks for specified sections
             # Handle both TEXT and INTEGER institution_id columns
             query = text("""
@@ -77,7 +77,7 @@ def retrieve_full_section(combo: Dict[str, Any], sections: str, context: Dict[st
                     chunk_id
             """)
             
-            result = conn.execute(query, {
+            result = await conn.execute(query, {
                 "bank_id_str": str(combo["bank_id"]),
                 "fiscal_year": combo["fiscal_year"],
                 "quarter": combo["quarter"],
@@ -136,7 +136,7 @@ def retrieve_full_section(combo: Dict[str, Any], sections: str, context: Dict[st
         return []
 
 
-def retrieve_by_categories(combo: Dict[str, Any], category_ids: List[int], context: Dict[str, Any]) -> List[Dict[str, Any]]:
+async def retrieve_by_categories(combo: Dict[str, Any], category_ids: List[int], context: Dict[str, Any]) -> List[Dict[str, Any]]:
     """
     Method 1: Retrieve chunks by category IDs.
     
@@ -152,7 +152,7 @@ def retrieve_by_categories(combo: Dict[str, Any], category_ids: List[int], conte
     execution_id = context.get("execution_id")
     
     # Get diagnostics
-    diagnostics = get_filter_diagnostics(combo, context)
+    diagnostics = await get_filter_diagnostics(combo, context)
     
     # Log the filter parameters and diagnostic counts
     logger.info(
@@ -168,7 +168,7 @@ def retrieve_by_categories(combo: Dict[str, Any], category_ids: List[int], conte
     )
     
     try:
-        with get_connection() as conn:
+        async with get_connection() as conn:
             # Query chunks that contain any of the specified category IDs
             # Convert integer array to text array for comparison
             category_ids_text = [str(cat_id) for cat_id in category_ids]
@@ -194,7 +194,7 @@ def retrieve_by_categories(combo: Dict[str, Any], category_ids: List[int], conte
                     chunk_id
             """)
             
-            result = conn.execute(query, {
+            result = await conn.execute(query, {
                 "bank_id_str": str(combo["bank_id"]),
                 "fiscal_year": combo["fiscal_year"],
                 "quarter": combo["quarter"],
@@ -254,7 +254,7 @@ def retrieve_by_categories(combo: Dict[str, Any], category_ids: List[int], conte
         return []
 
 
-def retrieve_by_similarity(combo: Dict[str, Any], search_phrase: str, context: Dict[str, Any], top_k: int = 20) -> List[Dict[str, Any]]:
+async def retrieve_by_similarity(combo: Dict[str, Any], search_phrase: str, context: Dict[str, Any], top_k: int = 20) -> List[Dict[str, Any]]:
     """
     Method 2: Retrieve chunks by similarity search.
     
@@ -271,7 +271,7 @@ def retrieve_by_similarity(combo: Dict[str, Any], search_phrase: str, context: D
     execution_id = context.get("execution_id")
     
     # Get diagnostics
-    diagnostics = get_filter_diagnostics(combo, context)
+    diagnostics = await get_filter_diagnostics(combo, context)
     
     # Log the filter parameters and diagnostic counts
     logger.info(
@@ -288,7 +288,7 @@ def retrieve_by_similarity(combo: Dict[str, Any], search_phrase: str, context: D
     
     try:
         # Create embedding for the search phrase
-        embedding_response = embed(
+        embedding_response = await embed(
             input_text=search_phrase,
             context=context
         )
@@ -302,7 +302,7 @@ def retrieve_by_similarity(combo: Dict[str, Any], search_phrase: str, context: D
         # Format embedding for PostgreSQL
         embedding_str = f"[{','.join(map(str, embedding_vector))}]"
         
-        with get_connection() as conn:
+        async with get_connection() as conn:
             # Similarity search using cosine distance (<=>)
             # Note: PostgreSQL pgvector uses <=> for cosine distance
             query = text("""
@@ -326,7 +326,7 @@ def retrieve_by_similarity(combo: Dict[str, Any], search_phrase: str, context: D
                 LIMIT :top_k
             """)
             
-            result = conn.execute(query, {
+            result = await conn.execute(query, {
                 "bank_id_str": str(combo["bank_id"]),
                 "fiscal_year": combo["fiscal_year"],
                 "quarter": combo["quarter"],

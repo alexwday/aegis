@@ -13,7 +13,7 @@ from ....connections.postgres_connector import get_connection
 from ....utils.logging import get_logger
 
 
-def get_available_reports(
+async def get_available_reports(
     combo: Dict[str, Any],
     context: Dict[str, Any]
 ) -> List[Dict[str, Any]]:
@@ -31,9 +31,9 @@ def get_available_reports(
     execution_id = context.get("execution_id")
 
     try:
-        with get_connection() as conn:
+        async with get_connection() as conn:
             # Query for reports matching the bank/period
-            result = conn.execute(text(
+            result = await conn.execute(text(
                 """
                 SELECT
                     id,
@@ -110,7 +110,7 @@ def get_available_reports(
         return []
 
 
-def get_unique_report_types(
+async def get_unique_report_types(
     bank_period_combinations: List[Dict[str, Any]],
     context: Dict[str, Any]
 ) -> List[Dict[str, str]]:
@@ -142,9 +142,9 @@ def get_unique_report_types(
 
         where_clause = " OR ".join(filter_conditions)
 
-        with get_connection() as conn:
+        async with get_connection() as conn:
             # Get unique report types
-            result = conn.execute(text(f"""
+            result = await conn.execute(text(f"""
                 SELECT DISTINCT
                     report_name,
                     report_description,
@@ -180,7 +180,7 @@ def get_unique_report_types(
         return []
 
 
-def retrieve_reports_by_type(
+async def retrieve_reports_by_type(
     bank_period_combinations: List[Dict[str, Any]],
     report_type: str,
     context: Dict[str, Any]
@@ -203,8 +203,8 @@ def retrieve_reports_by_type(
 
     for combo in bank_period_combinations:
         try:
-            with get_connection() as conn:
-                result = conn.execute(text(
+            async with get_connection() as conn:
+                result = await conn.execute(text(
                     """
                     SELECT
                         id,

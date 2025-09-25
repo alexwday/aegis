@@ -7,9 +7,10 @@ Tests all functions in monitor_setup.py.
 import uuid
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
-from unittest.mock import patch
+from unittest.mock import patch, AsyncMock, MagicMock
 
 import pytest
+import pytest_asyncio
 
 from aegis.utils.monitor import (
     add_monitor_entry,
@@ -19,6 +20,7 @@ from aegis.utils.monitor import (
     get_monitor_entries,
     initialize_monitor,
     post_monitor_entries,
+    post_monitor_entries_async,
 )
 
 
@@ -260,9 +262,9 @@ class TestFormatLLMCall:
 class TestPostMonitorEntries:
     """Tests for posting entries to database."""
 
-    @patch("aegis.utils.monitor.insert_many")
-    def test_post_entries_success(self, mock_insert, mock_run_uuid):
-        """Test successful posting to database."""
+    @patch("aegis.utils.monitor.insert_many", new_callable=MagicMock)
+    def test_post_entries_success_sync(self, mock_insert, mock_run_uuid):
+        """Test successful posting to database (sync version)."""
         mock_insert.return_value = 3
 
         initialize_monitor(mock_run_uuid, "test_model")
@@ -289,9 +291,39 @@ class TestPostMonitorEntries:
         entries = get_monitor_entries()
         assert len(entries) == 0
 
-    @patch("aegis.utils.monitor.insert_many")
-    def test_post_empty_entries(self, mock_insert, mock_run_uuid):
-        """Test posting with no entries."""
+    @pytest.mark.asyncio
+    @patch("aegis.connections.postgres_connector.insert_many_async", new_callable=AsyncMock)
+    async def test_post_entries_success_async(self, mock_insert_async, mock_run_uuid):
+        """Test successful posting to database (async version)."""
+        mock_insert_async.return_value = 3
+
+        initialize_monitor(mock_run_uuid, "test_model")
+
+        # Add multiple entries
+        for i in range(3):
+            add_monitor_entry(
+                stage_name=f"stage_{i}",
+                stage_start_time=datetime.now(timezone.utc),
+                status="Success",
+            )
+
+        # Post to database
+        count = await post_monitor_entries_async("exec-123")
+
+        assert count == 3
+        mock_insert_async.assert_called_once_with(
+            "process_monitor_logs",
+            mock_insert_async.call_args[0][1],  # The entries list
+            execution_id="exec-123",
+        )
+
+        # Entries should be cleared after posting
+        entries = get_monitor_entries()
+        assert len(entries) == 0
+
+    @patch("aegis.utils.monitor.insert_many", new_callable=MagicMock)
+    def test_post_empty_entries_sync(self, mock_insert, mock_run_uuid):
+        """Test posting with no entries (sync version)."""
         initialize_monitor(mock_run_uuid, "test_model")
 
         count = post_monitor_entries()
@@ -299,9 +331,20 @@ class TestPostMonitorEntries:
         assert count == 0
         mock_insert.assert_not_called()
 
-    @patch("aegis.utils.monitor.insert_many")
-    def test_post_entries_database_error(self, mock_insert, mock_run_uuid):
-        """Test handling database error during posting."""
+    @pytest.mark.asyncio
+    @patch("aegis.connections.postgres_connector.insert_many_async", new_callable=AsyncMock)
+    async def test_post_empty_entries_async(self, mock_insert_async, mock_run_uuid):
+        """Test posting with no entries (async version)."""
+        initialize_monitor(mock_run_uuid, "test_model")
+
+        count = await post_monitor_entries_async()
+
+        assert count == 0
+        mock_insert_async.assert_not_called()
+
+    @patch("aegis.utils.monitor.insert_many", new_callable=MagicMock)
+    def test_post_entries_database_error_sync(self, mock_insert, mock_run_uuid):
+        """Test handling database error during posting (sync version)."""
         mock_insert.side_effect = Exception("Database error")
 
         initialize_monitor(mock_run_uuid, "test_model")
@@ -312,6 +355,25 @@ class TestPostMonitorEntries:
 
         with pytest.raises(Exception, match="Database error"):
             post_monitor_entries()
+
+        # Entries should NOT be cleared on error
+        entries = get_monitor_entries()
+        assert len(entries) == 1
+
+    @pytest.mark.asyncio
+    @patch("aegis.connections.postgres_connector.insert_many_async", new_callable=AsyncMock)
+    async def test_post_entries_database_error_async(self, mock_insert_async, mock_run_uuid):
+        """Test handling database error during posting (async version)."""
+        mock_insert_async.side_effect = Exception("Database error")
+
+        initialize_monitor(mock_run_uuid, "test_model")
+        add_monitor_entry(
+            stage_name="test_stage",
+            stage_start_time=datetime.now(timezone.utc),
+        )
+
+        with pytest.raises(Exception, match="Database error"):
+            await post_monitor_entries_async()
 
         # Entries should NOT be cleared on error
         entries = get_monitor_entries()
@@ -407,7 +469,7 @@ class TestIntegrationScenarios:
         assert validation_entry["status"] == "Failure"
         assert validation_entry["error_message"] == "Validation failed"
 
-    @patch("aegis.utils.monitor.insert_many")
+    @patch("aegis.utils.monitor.insert_many", new_callable=MagicMock)
     def test_workflow_with_posting(self, mock_insert, mock_run_uuid):
         """Test complete workflow with database posting."""
         mock_insert.return_value = 2

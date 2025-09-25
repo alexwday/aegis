@@ -181,7 +181,7 @@ def list_available_prompts() -> Dict[str, list]:
     return {"agents": sorted(agents), "subagents": sorted(subagents)}
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     # Test the prompt loader
     available = list_available_prompts()
     print("Available prompts:")

@@ -173,6 +173,26 @@ class TestProcessConversation:
         assert result["messages"][0]["content"] == "Message 2"
         assert result["messages"][-1]["content"] == "Message 3"
 
+    def test_all_messages_filtered_out(self):
+        """Test error when all messages are filtered out (covers line 88)."""
+        # Configure to only allow 'tool' role which won't match any messages
+        config.allowed_roles = ["tool"]
+
+        conversation_input = {
+            "messages": [
+                {"role": "user", "content": "Message 1"},
+                {"role": "assistant", "content": "Response 1"},
+                {"role": "system", "content": "System message"},
+            ]
+        }
+        execution_id = "test-all-filtered"
+
+        result = process_conversation(conversation_input, execution_id)
+
+        # Should return error when no messages remain after filtering
+        assert result["success"] is False
+        assert "No valid messages after filtering" in result["error"]
+
 
 class TestValidationErrors:
     """Test cases for validation error handling."""
@@ -215,6 +235,21 @@ class TestValidationErrors:
 class TestLogging:
     """Test cases for logging in conversation processing."""
 
+    def test_process_error_with_list_input_coverage(self):
+        """Test error path when input is list format (covers line 132)."""
+        # Test with list input that will fail validation
+        invalid_list = [
+            {"role": "user", "content": "test"},
+            "not a dict"  # This will cause validation error
+        ]
+
+        result = process_conversation(invalid_list, "test-list-error")
+
+        # Should fail and track original count
+        assert result["success"] is False
+        assert result["original_message_count"] == 2
+        assert "Message at index 1 must be a dict" in result["error"]
+
     @mock.patch("aegis.utils.conversation.get_logger")
     def test_logs_processing_success(self, mock_get_logger):
         """Test that successful processing is logged."""
@@ -249,3 +284,49 @@ class TestLogging:
         error_call = mock_logger.error.call_args
         assert error_call[0][0] == "Failed to process conversation"
         assert "error" in error_call[1]
+
+    def test_process_long_message_truncation(self):
+        """Test that long message content is truncated in decision_details."""
+        conversation_input = {
+            "messages": [
+                {
+                    "role": "user",
+                    "content": "This is a very long message that exceeds fifty characters and should be truncated"
+                }
+            ]
+        }
+        execution_id = "test-truncate-123"
+
+        result = process_conversation(conversation_input, execution_id)
+
+        assert result["success"] is True
+        assert result["latest_message"]["content"] == "This is a very long message that exceeds fifty characters and should be truncated"
+        # The decision_details should contain truncated content with "..."
+        assert "This is a very long message that exceeds fifty cha..." in result["decision_details"]
+
+    @mock.patch("aegis.utils.conversation.get_logger")
+    @mock.patch("aegis.utils.conversation._validate_and_filter_message")
+    def test_process_error_with_list_input(self, mock_validate, mock_get_logger):
+        """Test error handling when input is a list (covers line 132)."""
+        mock_logger = mock.Mock()
+        mock_get_logger.return_value = mock_logger
+
+        # Make validation raise an exception to trigger error handling
+        mock_validate.side_effect = Exception("Validation failed")
+
+        # Use list input to trigger line 132 in error handling
+        conversation_input = [
+            {"role": "user", "content": "Valid message"},
+            {"role": "assistant", "content": "Response"}
+        ]
+        execution_id = "test-error-list-123"
+
+        result = process_conversation(conversation_input, execution_id)
+
+        assert result["success"] is False
+        assert result["original_message_count"] == 2  # Should count the list length
+        assert result["messages"] == []
+        assert result["error"] is not None
+
+        # Verify error was logged
+        mock_logger.error.assert_called_once()

@@ -5,19 +5,27 @@ Tests all subagents with their identical placeholder implementations.
 """
 
 import pytest
-from unittest.mock import Mock, patch, MagicMock
+import pytest_asyncio
+from unittest.mock import Mock, patch, MagicMock, AsyncMock
 from typing import Generator
 import importlib
 
 
-# List of all subagent modules
+# List of all subagent modules with their LLM function type
+# Format: (module_path, function_name, database_id, llm_function)
 SUBAGENT_MODULES = [
-    ("aegis.model.subagents.benchmarking.main", "benchmarking_agent", "benchmarking"),
-    ("aegis.model.subagents.reports.main", "reports_agent", "reports"),
-    ("aegis.model.subagents.rts.main", "rts_agent", "rts"),
-    ("aegis.model.subagents.transcripts.main", "transcripts_agent", "transcripts"),
-    ("aegis.model.subagents.pillar3.main", "pillar3_agent", "pillar3"),
+    ("aegis.model.subagents.supplementary.main", "supplementary_agent", "supplementary", "stream"),
+    ("aegis.model.subagents.reports.main", "reports_agent", "reports", "complete_with_tools"),
+    ("aegis.model.subagents.rts.main", "rts_agent", "rts", "stream"),
+    ("aegis.model.subagents.transcripts.main", "transcripts_agent", "transcripts", "complete_with_tools"),
+    ("aegis.model.subagents.pillar3.main", "pillar3_agent", "pillar3", "stream"),
 ]
+
+
+async def async_generator(items):
+    """Helper to create async generator from list."""
+    for item in items:
+        yield item
 
 
 class TestAllSubagents:
@@ -25,18 +33,69 @@ class TestAllSubagents:
     Comprehensive tests for all subagent implementations.
     """
     
-    @pytest.mark.parametrize("module_path,func_name,db_id", SUBAGENT_MODULES)
-    def test_subagent_basic_execution(self, module_path, func_name, db_id):
+    @pytest.mark.parametrize("module_path,func_name,db_id,llm_func", SUBAGENT_MODULES)
+    @pytest.mark.asyncio
+    async def test_subagent_basic_execution(self, module_path, func_name, db_id, llm_func):
         """
         Test basic execution of each subagent without external dependencies.
         """
-        with patch(f'{module_path}.stream') as mock_stream:
-            # Mock streaming response
-            mock_stream.return_value = [
-                {"choices": [{"delta": {"content": "Test "}}]},
-                {"choices": [{"delta": {"content": "response"}}]},
-                {"usage": {"total_tokens": 100}}
-            ]
+        async def run_test_with_patches():
+            # Mock LLM response based on function type
+            with patch(f'{module_path}.{llm_func}') as mock_llm:
+                if llm_func == "stream":
+                    # Fix AsyncMock streaming issue - use regular mock that returns async generator
+                    mock_llm.return_value = async_generator([
+                        {"choices": [{"delta": {"content": "Test "}}]},
+                        {"choices": [{"delta": {"content": "response"}}]},
+                        {"usage": {"total_tokens": 100}}
+                    ])
+                else:  # complete_with_tools
+                    mock_llm.return_value = {
+                        "choices": [{"message": {"tool_calls": []}}],
+                        "usage": {"total_tokens": 100}
+                    }
+
+                return await self._execute_subagent_test(module_path, func_name, db_id, mock_llm)
+
+        # Set up additional patches based on subagent type
+        if db_id == "reports":
+            # Mock database calls for reports subagent
+            with patch(f'{module_path}.get_available_reports') as mock_reports, \
+                 patch(f'{module_path}.get_unique_report_types') as mock_types, \
+                 patch(f'{module_path}.retrieve_reports_by_type') as mock_retrieve:
+
+                # Mock database functions to return data
+                mock_reports.return_value = [{
+                    "report_id": 1,
+                    "report_type": "call_summary",
+                    "content": "Sample report content",
+                    "bank_id": 1,
+                    "fiscal_year": 2024,
+                    "quarter": "Q1"
+                }]
+                mock_types.return_value = [{"report_type": "call_summary"}]
+                from datetime import datetime, timezone
+                mock_retrieve.return_value = [{
+                    "report_id": 1,
+                    "report_type": "call_summary",
+                    "report_name": "Test Bank Q1 2024 Call Summary",
+                    "content": "Sample report content for Test Bank Q1 2024",
+                    "bank_id": 1,
+                    "bank_name": "Test Bank",
+                    "bank_symbol": "TB",
+                    "fiscal_year": 2024,
+                    "quarter": "Q1",
+                    "created_at": datetime.now(timezone.utc),
+                    "generation_date": datetime.now(timezone.utc),
+                    "date_last_modified": datetime.now(timezone.utc),
+                    "s3_document_name": "test_report.docx"
+                }]
+
+                await run_test_with_patches()
+        else:
+            await run_test_with_patches()
+
+    async def _execute_subagent_test(self, module_path, func_name, db_id, mock_llm):
             
             # Import the module and get the function
             module = importlib.import_module(module_path)
@@ -59,27 +118,32 @@ class TestAllSubagents:
             context = {"execution_id": "test-123"}
             
             # Execute
-            results = list(agent_func(
+            results = []
+
+            async for item in agent_func(
                 conversation, latest_message, bank_period_combinations,
                 basic_intent, full_intent, db_id, context
-            ))
+            ):
+
+                results.append(item)
             
             # Verify results
             assert len(results) > 0
             assert all(r["type"] == "subagent" for r in results)
             assert all(r["name"] == db_id for r in results)
             
-            # Verify stream was called
-            mock_stream.assert_called_once()
+            # Verify LLM function was called
+            mock_llm.assert_called_once()
     
-    @pytest.mark.parametrize("module_path,func_name,db_id", SUBAGENT_MODULES)
-    def test_subagent_error_handling(self, module_path, func_name, db_id):
+    @pytest.mark.parametrize("module_path,func_name,db_id,llm_func", SUBAGENT_MODULES)
+    @pytest.mark.asyncio
+    async def test_subagent_error_handling(self, module_path, func_name, db_id, llm_func):
         """
         Test error handling in subagents with banks_detail present.
         """
-        with patch(f'{module_path}.stream') as mock_stream:
-            # Make stream raise an exception
-            mock_stream.side_effect = Exception("Connection error")
+        with patch(f'{module_path}.{llm_func}') as mock_llm:
+            # Make LLM function raise an exception
+            mock_llm.side_effect = Exception("Connection error")
             
             # Import the module and get the function
             module = importlib.import_module(module_path)
@@ -102,10 +166,14 @@ class TestAllSubagents:
             context = {"execution_id": "error-test"}
             
             # Execute - should not raise, but yield error
-            results = list(agent_func(
+            results = []
+
+            async for item in agent_func(
                 conversation, latest_message, bank_period_combinations,
                 basic_intent, full_intent, db_id, context
-            ))
+            ):
+
+                results.append(item)
             
             # Should yield error message
             assert len(results) > 0
@@ -114,22 +182,23 @@ class TestAllSubagents:
             assert last_result["name"] == db_id
             assert "Error" in last_result["content"] or "error" in last_result["content"]
     
-    @pytest.mark.parametrize("module_path,func_name,db_id", SUBAGENT_MODULES)
-    def test_subagent_logging(self, module_path, func_name, db_id):
+    @pytest.mark.parametrize("module_path,func_name,db_id,llm_func", SUBAGENT_MODULES)
+    @pytest.mark.asyncio
+    async def test_subagent_logging(self, module_path, func_name, db_id, llm_func):
         """
         Test that subagents log appropriately.
         """
-        with patch(f'{module_path}.stream') as mock_stream, \
+        with patch(f'{module_path}.{llm_func}') as mock_llm, \
              patch(f'{module_path}.get_logger') as mock_logger:
             
             # Setup mocks
             mock_logger_instance = Mock()
             mock_logger.return_value = mock_logger_instance
             
-            mock_stream.return_value = [
+            mock_llm.return_value = async_generator([
                 {"choices": [{"delta": {"content": "Test"}}]},
                 {"usage": {"total_tokens": 50}}
-            ]
+            ])
             
             # Import and execute
             module = importlib.import_module(module_path)
@@ -159,16 +228,17 @@ class TestAllSubagents:
             info_calls = mock_logger_instance.info.call_args_list
             assert len(info_calls) >= 2  # Start and complete logs
     
-    @pytest.mark.parametrize("module_path,func_name,db_id", SUBAGENT_MODULES)
-    def test_subagent_complex_inputs(self, module_path, func_name, db_id):
+    @pytest.mark.parametrize("module_path,func_name,db_id,llm_func", SUBAGENT_MODULES)
+    @pytest.mark.asyncio
+    async def test_subagent_complex_inputs(self, module_path, func_name, db_id, llm_func):
         """
         Test subagents with complex multi-bank, multi-period inputs.
         """
-        with patch(f'{module_path}.stream') as mock_stream:
-            mock_stream.return_value = [
+        with patch(f'{module_path}.{llm_func}') as mock_llm:
+            mock_llm.return_value = async_generator([
                 {"choices": [{"delta": {"content": "Complex response"}}]},
                 {"usage": {"total_tokens": 200}}
-            ]
+            ])
             
             module = importlib.import_module(module_path)
             agent_func = getattr(module, func_name)
@@ -190,24 +260,31 @@ class TestAllSubagents:
             full_intent = "Complex multi-bank comparison"
             context = {"execution_id": "complex-test"}
             
-            results = list(agent_func(
+            results = []
+
+            
+            async for item in agent_func(
                 conversation, latest_message, bank_period_combinations,
                 basic_intent, full_intent, db_id, context
-            ))
+            ):
+
+            
+                results.append(item)
             
             assert len(results) > 0
             assert "Complex response" in "".join(r.get("content", "") for r in results)
     
-    @pytest.mark.parametrize("module_path,func_name,db_id", SUBAGENT_MODULES)
-    def test_subagent_empty_inputs(self, module_path, func_name, db_id):
+    @pytest.mark.parametrize("module_path,func_name,db_id,llm_func", SUBAGENT_MODULES)
+    @pytest.mark.asyncio
+    async def test_subagent_empty_inputs(self, module_path, func_name, db_id, llm_func):
         """
         Test subagents handle empty inputs gracefully.
         """
-        with patch(f'{module_path}.stream') as mock_stream:
-            mock_stream.return_value = [
+        with patch(f'{module_path}.{llm_func}') as mock_llm:
+            mock_llm.return_value = async_generator([
                 {"choices": [{"delta": {"content": "Empty"}}]},
                 {"usage": {"total_tokens": 10}}
-            ]
+            ])
             
             module = importlib.import_module(module_path)
             agent_func = getattr(module, func_name)
@@ -221,26 +298,31 @@ class TestAllSubagents:
             context = {"execution_id": "empty-test"}
             
             # Should not crash
-            results = list(agent_func(
+            results = []
+
+            async for item in agent_func(
                 conversation, latest_message, bank_period_combinations,
                 basic_intent, full_intent, db_id, context
-            ))
+            ):
+
+                results.append(item)
             
             assert len(results) > 0
     
-    @pytest.mark.parametrize("module_path,func_name,db_id", SUBAGENT_MODULES)
-    def test_subagent_generator_behavior(self, module_path, func_name, db_id):
+    @pytest.mark.parametrize("module_path,func_name,db_id,llm_func", SUBAGENT_MODULES)
+    @pytest.mark.asyncio
+    async def test_subagent_generator_behavior(self, module_path, func_name, db_id, llm_func):
         """
         Test that subagents properly yield chunks as generators.
         """
-        with patch(f'{module_path}.stream') as mock_stream:
+        with patch(f'{module_path}.{llm_func}') as mock_llm:
             # Multiple chunks
-            mock_stream.return_value = [
+            mock_llm.return_value = async_generator([
                 {"choices": [{"delta": {"content": "A"}}]},
                 {"choices": [{"delta": {"content": "B"}}]},
                 {"choices": [{"delta": {"content": "C"}}]},
                 {"usage": {"total_tokens": 3}}
-            ]
+            ])
             
             module = importlib.import_module(module_path)
             agent_func = getattr(module, func_name)
@@ -276,16 +358,17 @@ class TestAllSubagents:
             content = "".join(c.get("content", "") for c in chunks)
             assert "ABC" in content
     
-    @pytest.mark.parametrize("module_path,func_name,db_id", SUBAGENT_MODULES)
-    def test_subagent_message_construction(self, module_path, func_name, db_id):
+    @pytest.mark.parametrize("module_path,func_name,db_id,llm_func", SUBAGENT_MODULES)
+    @pytest.mark.asyncio
+    async def test_subagent_message_construction(self, module_path, func_name, db_id, llm_func):
         """
         Test that subagents construct proper messages for the LLM.
         """
-        with patch(f'{module_path}.stream') as mock_stream:
-            mock_stream.return_value = [
+        with patch(f'{module_path}.{llm_func}') as mock_llm:
+            mock_llm.return_value = async_generator([
                 {"choices": [{"delta": {"content": "Response"}}]},
                 {"usage": {"total_tokens": 50}}
-            ]
+            ])
             
             module = importlib.import_module(module_path)
             agent_func = getattr(module, func_name)
@@ -329,17 +412,18 @@ class TestAllSubagents:
             assert "2024" in all_content
             assert "efficiency" in all_content.lower()
     
-    @pytest.mark.parametrize("module_path,func_name,db_id", SUBAGENT_MODULES)
-    def test_subagent_no_usage_data(self, module_path, func_name, db_id):
+    @pytest.mark.parametrize("module_path,func_name,db_id,llm_func", SUBAGENT_MODULES)
+    @pytest.mark.asyncio
+    async def test_subagent_no_usage_data(self, module_path, func_name, db_id, llm_func):
         """
         Test subagents work when stream doesn't return usage data.
         """
-        with patch(f'{module_path}.stream') as mock_stream:
+        with patch(f'{module_path}.{llm_func}') as mock_llm:
             # No usage data
-            mock_stream.return_value = [
+            mock_llm.return_value = async_generator([
                 {"choices": [{"delta": {"content": "Data"}}]},
                 {"choices": [{"delta": {"content": " only"}}]}
-            ]
+            ])
             
             module = importlib.import_module(module_path)
             agent_func = getattr(module, func_name)
@@ -359,22 +443,29 @@ class TestAllSubagents:
             full_intent = "Test"
             context = {"execution_id": "no-usage"}
             
-            results = list(agent_func(
+            results = []
+
+            
+            async for item in agent_func(
                 conversation, latest_message, bank_period_combinations,
                 basic_intent, full_intent, db_id, context
-            ))
+            ):
+
+            
+                results.append(item)
             
             # Should still work
             assert len(results) > 0
             content = "".join(r.get("content", "") for r in results)
             assert "Data only" in content
     
-    @pytest.mark.parametrize("module_path,func_name,db_id", SUBAGENT_MODULES)
-    def test_subagent_llm_params(self, module_path, func_name, db_id):
+    @pytest.mark.parametrize("module_path,func_name,db_id,llm_func", SUBAGENT_MODULES)
+    @pytest.mark.asyncio
+    async def test_subagent_llm_params(self, module_path, func_name, db_id, llm_func):
         """
         Test that subagents use correct LLM parameters.
         """
-        with patch(f'{module_path}.stream') as mock_stream, \
+        with patch(f'{module_path}.{llm_func}') as mock_llm, \
              patch('aegis.utils.settings.config') as mock_config:
             
             # Setup config
@@ -382,10 +473,10 @@ class TestAllSubagents:
             mock_config.llm.medium.temperature = 0.5
             mock_config.llm.medium.max_tokens = 1000
             
-            mock_stream.return_value = [
+            mock_llm.return_value = async_generator([
                 {"choices": [{"delta": {"content": "Test"}}]},
                 {"usage": {"total_tokens": 50}}
-            ]
+            ])
             
             module = importlib.import_module(module_path)
             agent_func = getattr(module, func_name)

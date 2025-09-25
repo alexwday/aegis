@@ -4,9 +4,9 @@ Enhanced with pattern matching for better retrieval method selection.
 """
 
 from datetime import datetime, timezone
-from typing import Any, Dict, Generator, List
+from typing import Any, AsyncGenerator, Dict, List
 import json
-from concurrent.futures import ThreadPoolExecutor, as_completed
+import asyncio
 
 from ....utils.logging import get_logger
 from ....utils.prompt_loader import load_subagent_prompt
@@ -35,7 +35,7 @@ from .retrieval import (
 )
 
 
-def transcripts_agent(
+async def transcripts_agent(
     conversation: List[Dict[str, str]],
     latest_message: str,
     bank_period_combinations: List[Dict[str, Any]],
@@ -43,7 +43,7 @@ def transcripts_agent(
     full_intent: str,
     database_id: str,
     context: Dict[str, Any],
-) -> Generator[Dict[str, str], None, None]:
+) -> AsyncGenerator[Dict[str, str], None]:
     """
     Main transcripts agent with enhanced retrieval logic.
     
@@ -81,7 +81,7 @@ def transcripts_agent(
     
     try:
         # Load financial categories
-        categories = load_financial_categories()
+        categories = await load_financial_categories()
         
         # ==================================================
         # STEP 1: Enhanced prompt for retrieval method decision
@@ -153,7 +153,7 @@ Category mapping for method 1:
         # STEP 2: Parallel retrieval decisions with pattern matching
         # ==================================================
         
-        def determine_retrieval_method(combo):
+        async def determine_retrieval_method(combo):
             """Enhanced helper function with pattern matching for better decisions."""
             start_time = datetime.now(timezone.utc)
             
@@ -251,7 +251,7 @@ Select the method and provide reasoning for your choice."""
                 model_tier = "large"  # Use large model for better decision making
                 model_config = getattr(config.llm, model_tier)
                 
-                response = complete_with_tools(
+                response = await complete_with_tools(
                     messages=messages,
                     tools=[retrieval_tool],
                     context=context,
@@ -307,19 +307,21 @@ Select the method and provide reasoning for your choice."""
         
         # Execute parallel retrieval decisions
         retrieval_decisions = {}
-        
-        with ThreadPoolExecutor(max_workers=min(10, len(bank_period_combinations))) as executor:
-            future_to_combo = {
-                executor.submit(determine_retrieval_method, combo): combo 
-                for combo in bank_period_combinations
-            }
-            
-            # Collect results
-            for future in as_completed(future_to_combo):
-                result = future.result()
-                combo = result["combo"]
-                key = f"{combo['bank_id']}_{combo['fiscal_year']}_{combo['quarter']}"
-                retrieval_decisions[key] = result
+
+        # Create tasks for parallel execution
+        tasks = [
+            determine_retrieval_method(combo)
+            for combo in bank_period_combinations
+        ]
+
+        # Execute all tasks concurrently
+        results = await asyncio.gather(*tasks)
+
+        # Collect results
+        for result in results:
+            combo = result["combo"]
+            key = f"{combo['bank_id']}_{combo['fiscal_year']}_{combo['quarter']}"
+            retrieval_decisions[key] = result
         
         # ==================================================
         # STEP 3: Execute retrievals and format research statements
@@ -349,7 +351,7 @@ Select the method and provide reasoning for your choice."""
             if method == 0:
                 # Full Section Retrieval
                 sections = decision.get("sections", "ALL")
-                chunks = retrieve_full_section(combo, sections, context)
+                chunks = await retrieve_full_section(combo, sections, context)
                 
                 # Log what sections are in the retrieved chunks
                 sections_in_chunks = set(chunk.get('section_name', 'Unknown') for chunk in chunks)
@@ -363,13 +365,13 @@ Select the method and provide reasoning for your choice."""
                     reasoning=reasoning
                 )
                 
-                formatted_content = format_full_section_chunks(chunks, combo, context)
+                formatted_content = await format_full_section_chunks(chunks, combo, context)
                 
             elif method == 1:
                 # Category-based Retrieval
                 category_ids = decision.get("category_ids", [])
-                chunks = retrieve_by_categories(combo, category_ids, context)
-                
+                chunks = await retrieve_by_categories(combo, category_ids, context)
+
                 logger.info(
                     f"subagent.{database_id}.categories_retrieved",
                     execution_id=execution_id,
@@ -378,18 +380,18 @@ Select the method and provide reasoning for your choice."""
                     chunk_count=len(chunks),
                     reasoning=reasoning
                 )
-                
-                formatted_content = format_category_or_similarity_chunks(chunks, combo, context, note_gaps=True)
+
+                formatted_content = await format_category_or_similarity_chunks(chunks, combo, context, note_gaps=True)
                 
             elif method == 2:
                 # Similarity Search with full pipeline
                 search_phrase = decision.get("search_phrase", "")
-                chunks = retrieve_by_similarity(combo, search_phrase, context)
-                
+                chunks = await retrieve_by_similarity(combo, search_phrase, context)
+
                 # Apply reranking, expansion, and gap filling
-                chunks = rerank_similarity_chunks(chunks, search_phrase, context)
-                chunks = expand_speaker_blocks(chunks, combo, context)
-                chunks = fill_gaps_in_speaker_blocks(chunks, combo, context)
+                chunks = await rerank_similarity_chunks(chunks, search_phrase, context)
+                chunks = await expand_speaker_blocks(chunks, combo, context)
+                chunks = await fill_gaps_in_speaker_blocks(chunks, combo, context)
                 
                 logger.info(
                     f"subagent.{database_id}.similarity_retrieved",
@@ -400,15 +402,15 @@ Select the method and provide reasoning for your choice."""
                     reasoning=reasoning
                 )
                 
-                formatted_content = format_category_or_similarity_chunks(chunks, combo, context, note_gaps=True)
-            
+                formatted_content = await format_category_or_similarity_chunks(chunks, combo, context, note_gaps=True)
+
             # Generate research statement for this combination
             if chunks and formatted_content:
                 # Always generate a synthesized research statement
                 # Pass the method type to generate appropriate detail level
-                research_statement = generate_research_statement(
-                    formatted_content, 
-                    combo, 
+                research_statement = await generate_research_statement(
+                    formatted_content,
+                    combo,
                     context,
                     method=method,
                     method_reasoning=reasoning

@@ -234,6 +234,54 @@ def post_monitor_entries(execution_id: Optional[str] = None) -> int:
         raise
 
 
+async def post_monitor_entries_async(execution_id: Optional[str] = None) -> int:
+    """
+    Post all collected monitor entries to the database asynchronously.
+
+    Args:
+        execution_id: Optional execution ID for database operations
+
+    Returns:
+        Number of entries posted to database
+    """
+    global _monitor_entries  # pylint: disable=global-statement
+    # Access global entries list to post accumulated monitoring data to database.
+
+    if not _monitor_entries:
+        logger.info("No monitor entries to post")
+        return 0
+
+    try:
+        # Import async version
+        from ..connections.postgres_connector import insert_many_async
+
+        # Insert all entries to database
+        rows_inserted = await insert_many_async(
+            "process_monitor_logs",
+            _monitor_entries,
+            execution_id=execution_id,
+        )
+
+        logger.info(
+            "Monitor entries posted to database",
+            entries_posted=rows_inserted,
+            run_uuid=_run_uuid,
+        )
+
+        # Clear entries after successful post
+        _monitor_entries = []
+
+        return rows_inserted
+
+    except Exception as e:
+        logger.error(
+            "Failed to post monitor entries",
+            error=str(e),
+            entry_count=len(_monitor_entries),
+        )
+        raise
+
+
 def get_monitor_entries() -> List[Dict[str, Any]]:
     """
     Get current monitor entries without posting.

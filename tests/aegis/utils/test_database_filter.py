@@ -203,21 +203,44 @@ class TestGetDatabasePrompt:
         
         assert result == "No databases available for this query."
     
-    @patch('aegis.utils.database_filter.filter_databases')
-    def test_get_database_prompt_missing_content(self, mock_filter):
+    @patch('aegis.utils.database_filter.get_available_databases')
+    def test_get_database_prompt_missing_content(self, mock_get_dbs):
         """
         Test handling database without content field.
         """
-        mock_filter.return_value = {
+        mock_get_dbs.return_value = {
             "benchmarking": {
                 "id": "benchmarking",
                 "name": "Benchmarking Database"
                 # No 'content' field
             }
         }
-        
+
         result = get_database_prompt(["benchmarking"])
-        
-        assert "Benchmarking Database:" in result
-        # Should handle missing content gracefully
+
+    @patch('aegis.utils.database_filter.get_available_databases')
+    def test_get_database_prompt_none_db_names(self, mock_get_available):
+        """
+        Test generating prompt with None db_names (should use all databases).
+        """
+        mock_get_available.return_value = {
+            "benchmarking": {
+                "id": "benchmarking",
+                "name": "Benchmarking Database",
+                "content": "Contains financial metrics"
+            },
+            "reports": {
+                "id": "reports",
+                "name": "Reports Database",
+                "content": "Contains annual reports"
+            }
+        }
+
+        # Call with None (should use all available databases)
+        result = get_database_prompt(None)
+
         assert "Available Financial Databases:" in result
+        assert "Benchmarking Database:" in result
+        assert "Contains financial metrics" in result
+        assert "Reports Database:" in result
+        assert "Contains annual reports" in result

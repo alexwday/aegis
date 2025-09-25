@@ -4,7 +4,7 @@ Tests for the planner agent module.
 
 import json
 import pytest
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch, MagicMock, AsyncMock
 from sqlalchemy import create_engine
 
 from aegis.model.agents.planner import (
@@ -19,23 +19,21 @@ class TestGetFilteredAvailabilityTable:
     Tests for the get_filtered_availability_table function.
     """
     
-    @patch('aegis.model.agents.planner._get_engine')
-    def test_get_filtered_availability_table_success(self, mock_get_engine):
+    @patch('aegis.model.agents.planner.fetch_all')
+    @pytest.mark.asyncio
+
+    async def test_get_filtered_availability_table_success(self, mock_fetch_all):
         """
         Test successful retrieval of filtered availability table.
         """
         # Mock database results
-        mock_conn = Mock()
+        # Mock database results
         mock_result = [
-            (1, "Royal Bank", "RY", 2024, "Q1", ["benchmarking", "transcripts"]),
-            (1, "Royal Bank", "RY", 2024, "Q2", ["benchmarking"]),
-            (2, "TD Bank", "TD", 2024, "Q1", ["reports", "rts"])
+            {"bank_id": 1, "bank_name": "Royal Bank", "bank_symbol": "RY", "fiscal_year": 2024, "quarter": "Q1", "databases": ["benchmarking", "transcripts"]},
+            {"bank_id": 1, "bank_name": "Royal Bank", "bank_symbol": "RY", "fiscal_year": 2024, "quarter": "Q2", "databases": ["benchmarking"]},
+            {"bank_id": 2, "bank_name": "TD Bank", "bank_symbol": "TD", "fiscal_year": 2024, "quarter": "Q1", "databases": ["reports", "rts"]}
         ]
-        mock_conn.execute.return_value = mock_result
-        mock_engine = Mock()
-        mock_engine.connect.return_value.__enter__ = Mock(return_value=mock_conn)
-        mock_engine.connect.return_value.__exit__ = Mock(return_value=None)
-        mock_get_engine.return_value = mock_engine
+        mock_fetch_all.return_value = mock_result
         
         # Test with apply_all periods
         bank_ids = [1, 2]
@@ -46,7 +44,7 @@ class TestGetFilteredAvailabilityTable:
             }
         }
         
-        result = get_filtered_availability_table(bank_ids, periods)
+        result = await get_filtered_availability_table(bank_ids, periods)
         
         assert result["availability"]["1"]["name"] == "Royal Bank"
         assert result["availability"]["1"]["symbol"] == "RY"
@@ -55,47 +53,43 @@ class TestGetFilteredAvailabilityTable:
         assert "transcripts" in result["available_databases"]
         assert "<availability_table>" in result["table"]
     
-    @patch('aegis.model.agents.planner._get_engine')
-    def test_get_filtered_availability_table_with_database_filter(self, mock_get_engine):
+    @patch('aegis.model.agents.planner.fetch_all')
+    @pytest.mark.asyncio
+
+    async def test_get_filtered_availability_table_with_database_filter(self, mock_fetch_all):
         """
         Test filtering with available_databases parameter.
         """
-        mock_conn = Mock()
+        # Mock database results
         mock_result = [
-            (1, "Royal Bank", "RY", 2024, "Q1", ["benchmarking", "transcripts", "reports"])
+            {"bank_id": 1, "bank_name": "Royal Bank", "bank_symbol": "RY", "fiscal_year": 2024, "quarter": "Q1", "databases": ["benchmarking", "transcripts", "reports"]}
         ]
-        mock_conn.execute.return_value = mock_result
-        mock_engine = Mock()
-        mock_engine.connect.return_value.__enter__ = Mock(return_value=mock_conn)
-        mock_engine.connect.return_value.__exit__ = Mock(return_value=None)
-        mock_get_engine.return_value = mock_engine
+        mock_fetch_all.return_value = mock_result
         
         bank_ids = [1]
         periods = {"apply_all": {"fiscal_year": 2024, "quarters": ["Q1"]}}
         available_databases = ["benchmarking", "reports"]  # Filter out transcripts
         
-        result = get_filtered_availability_table(bank_ids, periods, available_databases)
+        result = await get_filtered_availability_table(bank_ids, periods, available_databases)
         
         assert "benchmarking" in result["available_databases"]
         assert "reports" in result["available_databases"]
         assert "transcripts" not in result["available_databases"]
     
-    @patch('aegis.model.agents.planner._get_engine')
-    def test_get_filtered_availability_table_bank_specific_periods(self, mock_get_engine):
+    @patch('aegis.model.agents.planner.fetch_all')
+    @pytest.mark.asyncio
+
+    async def test_get_filtered_availability_table_bank_specific_periods(self, mock_fetch_all):
         """
         Test with bank-specific periods.
         """
-        mock_conn = Mock()
+        # Mock database results
         mock_result = [
-            (1, "Royal Bank", "RY", 2024, "Q1", ["benchmarking"]),
-            (1, "Royal Bank", "RY", 2023, "Q4", ["benchmarking"]),
-            (2, "TD Bank", "TD", 2024, "Q2", ["reports"])
+            {"bank_id": 1, "bank_name": "Royal Bank", "bank_symbol": "RY", "fiscal_year": 2024, "quarter": "Q1", "databases": ["benchmarking"]},
+            {"bank_id": 1, "bank_name": "Royal Bank", "bank_symbol": "RY", "fiscal_year": 2023, "quarter": "Q4", "databases": ["benchmarking"]},
+            {"bank_id": 2, "bank_name": "TD Bank", "bank_symbol": "TD", "fiscal_year": 2024, "quarter": "Q2", "databases": ["reports"]}
         ]
-        mock_conn.execute.return_value = mock_result
-        mock_engine = Mock()
-        mock_engine.connect.return_value.__enter__ = Mock(return_value=mock_conn)
-        mock_engine.connect.return_value.__exit__ = Mock(return_value=None)
-        mock_get_engine.return_value = mock_engine
+        mock_fetch_all.return_value = mock_result
         
         bank_ids = [1, 2]
         periods = {
@@ -103,45 +97,44 @@ class TestGetFilteredAvailabilityTable:
             "2": {"fiscal_year": 2024, "quarters": ["Q2"]}
         }
         
-        result = get_filtered_availability_table(bank_ids, periods)
+        result = await get_filtered_availability_table(bank_ids, periods)
         
         assert "1" in result["availability"]
         assert "2" in result["availability"]
         assert len(result["availability"]["1"]["periods"]) == 1
         assert result["availability"]["1"]["periods"][0]["quarter"] == "Q1"
     
-    @patch('aegis.model.agents.planner._get_engine')
-    def test_get_filtered_availability_table_no_matches(self, mock_get_engine):
+    @patch('aegis.model.agents.planner.fetch_all')
+    @pytest.mark.asyncio
+
+    async def test_get_filtered_availability_table_no_matches(self, mock_fetch_all):
         """
         Test when no data matches the requested periods.
         """
-        mock_conn = Mock()
+        # Mock empty database results
         mock_result = []
-        mock_conn.execute.return_value = mock_result
-        mock_engine = Mock()
-        mock_engine.connect.return_value.__enter__ = Mock(return_value=mock_conn)
-        mock_engine.connect.return_value.__exit__ = Mock(return_value=None)
-        mock_get_engine.return_value = mock_engine
+        mock_fetch_all.return_value = mock_result
         
         bank_ids = [1]
         periods = {"apply_all": {"fiscal_year": 2025, "quarters": ["Q1"]}}
         
-        result = get_filtered_availability_table(bank_ids, periods)
+        result = await get_filtered_availability_table(bank_ids, periods)
         
         assert result["availability"] == {}
         assert result["available_databases"] == []
         assert "No data available" not in result["table"]
     
     @patch('aegis.model.agents.planner.get_logger')
-    @patch('aegis.model.agents.planner._get_engine')
-    def test_get_filtered_availability_table_exception(self, mock_get_engine, mock_logger):
+    @patch('aegis.model.agents.planner.fetch_all')
+    @pytest.mark.asyncio
+
+    async def test_get_filtered_availability_table_exception(self, mock_get_engine, mock_logger):
         """
         Test exception handling in database connection.
         """
         # Mock the engine to raise exception on connect
-        mock_engine = Mock()
-        mock_engine.connect.side_effect = Exception("Database error")
-        mock_get_engine.return_value = mock_engine
+        # Mock database exception
+        mock_get_engine.side_effect = Exception("Database error")
         
         mock_logger_instance = Mock()
         mock_logger.return_value = mock_logger_instance
@@ -149,7 +142,7 @@ class TestGetFilteredAvailabilityTable:
         bank_ids = [1]
         periods = {"apply_all": {"fiscal_year": 2024, "quarters": ["Q1"]}}
         
-        result = get_filtered_availability_table(bank_ids, periods)
+        result = await get_filtered_availability_table(bank_ids, periods)
         
         assert result["availability"] == {}
         assert result["available_databases"] == []
@@ -163,7 +156,9 @@ class TestGetFilteredDatabaseDescriptions:
     """
     
     @patch('aegis.model.agents.planner.load_yaml')
-    def test_get_filtered_database_descriptions_success(self, mock_load_yaml):
+    @pytest.mark.asyncio
+
+    async def test_get_filtered_database_descriptions_success(self, mock_load_yaml):
         """
         Test successful filtering of database descriptions.
         """
@@ -186,7 +181,9 @@ class TestGetFilteredDatabaseDescriptions:
         assert "</database_descriptions>" in result
     
     @patch('aegis.model.agents.planner.load_yaml')
-    def test_get_filtered_database_descriptions_no_databases_key(self, mock_load_yaml):
+    @pytest.mark.asyncio
+
+    async def test_get_filtered_database_descriptions_no_databases_key(self, mock_load_yaml):
         """
         Test when databases key is missing from YAML.
         """
@@ -198,7 +195,9 @@ class TestGetFilteredDatabaseDescriptions:
     
     @patch('aegis.model.agents.planner.load_yaml')
     @patch('aegis.model.agents.planner.get_logger')
-    def test_get_filtered_database_descriptions_exception(self, mock_logger, mock_load_yaml):
+    @pytest.mark.asyncio
+
+    async def test_get_filtered_database_descriptions_exception(self, mock_logger, mock_load_yaml):
         """
         Test exception handling.
         """
@@ -215,11 +214,12 @@ class TestPlanDatabaseQueries:
     Tests for the plan_database_queries function.
     """
     
-    @patch('aegis.model.agents.planner.complete_with_tools')
+    @pytest.mark.asyncio
+    @patch('aegis.model.agents.planner.complete_with_tools', new_callable=AsyncMock)
     @patch('aegis.model.agents.planner.get_filtered_database_descriptions')
-    @patch('aegis.model.agents.planner.get_filtered_availability_table')
+    @patch('aegis.model.agents.planner.get_filtered_availability_table', new_callable=AsyncMock)
     @patch('aegis.model.agents.planner.load_yaml')
-    def test_plan_database_queries_success(
+    async def test_plan_database_queries_success(
         self, mock_load_yaml, mock_get_availability, mock_get_descriptions, mock_complete
     ):
         """
@@ -265,7 +265,7 @@ class TestPlanDatabaseQueries:
             "ssl_config": {"verify": False}
         }
         
-        result = plan_database_queries(query, conversation, bank_period_combinations, context)
+        result = await plan_database_queries(query, conversation, bank_period_combinations, context)
         
         assert result["status"] == "success"
         assert len(result["databases"]) == 2
@@ -278,7 +278,8 @@ class TestPlanDatabaseQueries:
     @patch('aegis.model.agents.planner.get_filtered_database_descriptions')
     @patch('aegis.model.agents.planner.get_filtered_availability_table')
     @patch('aegis.model.agents.planner.load_yaml')
-    def test_plan_database_queries_with_filtering(
+    @pytest.mark.asyncio
+    async def test_plan_database_queries_with_filtering(
         self, mock_load_yaml, mock_get_availability, mock_get_descriptions, mock_complete
     ):
         """
@@ -322,7 +323,7 @@ class TestPlanDatabaseQueries:
             "ssl_config": {"verify": False}
         }
         
-        result = plan_database_queries(query, conversation, bank_period_combinations, context)
+        result = await plan_database_queries(query, conversation, bank_period_combinations, context)
         
         assert result["status"] == "success"
         assert len(result["databases"]) == 1  # Only benchmarking included
@@ -332,7 +333,8 @@ class TestPlanDatabaseQueries:
     @patch('aegis.model.agents.planner.get_filtered_database_descriptions')
     @patch('aegis.model.agents.planner.get_filtered_availability_table')
     @patch('aegis.model.agents.planner.load_yaml')
-    def test_plan_database_queries_no_databases_needed(
+    @pytest.mark.asyncio
+    async def test_plan_database_queries_no_databases_needed(
         self, mock_load_yaml, mock_get_availability, mock_get_descriptions, mock_complete
     ):
         """
@@ -374,14 +376,16 @@ class TestPlanDatabaseQueries:
             "ssl_config": {"verify": False}
         }
         
-        result = plan_database_queries(query, conversation, bank_period_combinations, context)
+        result = await plan_database_queries(query, conversation, bank_period_combinations, context)
         
         assert result["status"] == "no_databases"
         assert result["reason"] == "Query is a greeting"
         assert result["databases"] == []
     
     @patch('aegis.model.agents.planner.get_filtered_availability_table')
-    def test_plan_database_queries_no_banks(self, mock_get_availability):
+    @pytest.mark.asyncio
+
+    async def test_plan_database_queries_no_banks(self, mock_get_availability):
         """
         Test when no banks are provided.
         """
@@ -394,13 +398,15 @@ class TestPlanDatabaseQueries:
             "ssl_config": {"verify": False}
         }
         
-        result = plan_database_queries(query, conversation, bank_period_combinations, context)
+        result = await plan_database_queries(query, conversation, bank_period_combinations, context)
         
         assert result["status"] == "error"
         assert "No bank-period combinations provided" in result["error"]
     
     @patch('aegis.model.agents.planner.get_filtered_availability_table')
-    def test_plan_database_queries_no_periods(self, mock_get_availability):
+    @pytest.mark.asyncio
+
+    async def test_plan_database_queries_no_periods(self, mock_get_availability):
         """
         Test when no periods are provided.
         """
@@ -413,13 +419,15 @@ class TestPlanDatabaseQueries:
             "ssl_config": {"verify": False}
         }
         
-        result = plan_database_queries(query, conversation, bank_period_combinations, context)
+        result = await plan_database_queries(query, conversation, bank_period_combinations, context)
         
         assert result["status"] == "error"
         assert "No bank-period combinations provided" in result["error"]
     
     @patch('aegis.model.agents.planner.get_filtered_availability_table')
-    def test_plan_database_queries_no_available_data(self, mock_get_availability):
+    @pytest.mark.asyncio
+
+    async def test_plan_database_queries_no_available_data(self, mock_get_availability):
         """
         Test when no databases have data for requested banks/periods.
         """
@@ -440,7 +448,7 @@ class TestPlanDatabaseQueries:
             "ssl_config": {"verify": False}
         }
         
-        result = plan_database_queries(query, conversation, bank_period_combinations, context)
+        result = await plan_database_queries(query, conversation, bank_period_combinations, context)
         
         assert result["status"] == "no_data"
         assert "No databases have data" in result["message"]
@@ -450,7 +458,8 @@ class TestPlanDatabaseQueries:
     @patch('aegis.model.agents.planner.get_filtered_database_descriptions')
     @patch('aegis.model.agents.planner.get_filtered_availability_table')
     @patch('aegis.model.agents.planner.load_yaml')
-    def test_plan_database_queries_with_query_intent(
+    @pytest.mark.asyncio
+    async def test_plan_database_queries_with_query_intent(
         self, mock_load_yaml, mock_get_availability, mock_get_descriptions, mock_complete
     ):
         """
@@ -494,7 +503,7 @@ class TestPlanDatabaseQueries:
         }
         query_intent = "efficiency ratio"  # Provided by clarifier
         
-        result = plan_database_queries(
+        result = await plan_database_queries(
             query, conversation, bank_period_combinations, context, 
             query_intent=query_intent
         )
@@ -511,7 +520,8 @@ class TestPlanDatabaseQueries:
     @patch('aegis.model.agents.planner.get_filtered_availability_table')
     @patch('aegis.model.agents.planner.load_yaml')
     @patch('aegis.model.agents.planner.config')
-    def test_plan_database_queries_model_tier_override(
+    @pytest.mark.asyncio
+    async def test_plan_database_queries_model_tier_override(
         self, mock_config, mock_load_yaml, mock_get_availability, mock_get_descriptions, mock_complete
     ):
         """
@@ -557,7 +567,7 @@ class TestPlanDatabaseQueries:
         bank_period_combinations = [
             {"bank_id": 1, "bank_name": "RBC", "bank_symbol": "RY", "fiscal_year": 2024, "quarter": "Q1"}
         ]
-        result = plan_database_queries(
+        result = await plan_database_queries(
             "Query", [], bank_period_combinations, context
         )
         
@@ -567,7 +577,7 @@ class TestPlanDatabaseQueries:
         
         # Test with large model override
         context["model_tier_override"] = "large"
-        result = plan_database_queries(
+        result = await plan_database_queries(
             "Query", [], bank_period_combinations, context
         )
         
@@ -580,7 +590,8 @@ class TestPlanDatabaseQueries:
     @patch('aegis.model.agents.planner.get_filtered_availability_table')
     @patch('aegis.model.agents.planner.load_yaml')
     @patch('aegis.model.agents.planner.get_logger')
-    def test_plan_database_queries_exception(
+    @pytest.mark.asyncio
+    async def test_plan_database_queries_exception(
         self, mock_logger, mock_load_yaml, mock_get_availability, mock_get_descriptions, mock_complete
     ):
         """
@@ -599,8 +610,97 @@ class TestPlanDatabaseQueries:
             "ssl_config": {"verify": False}
         }
         
-        result = plan_database_queries(query, conversation, bank_period_combinations, context)
+        result = await plan_database_queries(query, conversation, bank_period_combinations, context)
         
         assert result["status"] == "error"
         assert "Database error" in result["error"]
         mock_logger().error.assert_called_once()
+
+    @pytest.mark.asyncio
+    @patch('aegis.model.agents.planner.get_filtered_availability_table')
+    @patch('aegis.model.agents.planner.complete_with_tools', new_callable=AsyncMock)
+    @patch('aegis.model.agents.planner.get_logger')
+    async def test_bank_specific_periods_path(self, mock_logger, mock_complete, mock_get_availability):
+        """Test planner with bank-specific periods (covers lines 320-321)."""
+        # Mock the availability table
+        mock_get_availability.return_value = {
+            "availability": {
+                1: {"benchmarking": {"2024": ["Q1"]}, "rts": {"2024": ["Q1"]}},
+                2: {"benchmarking": {"2024": ["Q2"]}, "rts": {"2024": ["Q2"]}}
+            },
+            "available_databases": ["benchmarking", "rts"],
+            "table": "Availability table"
+        }
+
+        # Mock successful LLM response
+        mock_complete.return_value = {
+            "choices": [{
+                "message": {
+                    "tool_calls": [{
+                        "function": {
+                            "name": "databases_selected",
+                            "arguments": json.dumps({
+                                "databases": ["benchmarking", "rts"],
+                                "rationale": "Both databases have data"
+                            })
+                        }
+                    }]
+                }
+            }],
+            "metrics": {"total_cost": 0.05},
+            "usage": {"total_tokens": 1000}
+        }
+
+        # Different periods for different banks to trigger bank-specific path
+        bank_period_combinations = [
+            {"bank_id": 1, "bank_name": "RBC", "bank_symbol": "RY", "fiscal_year": 2024, "quarter": "Q1"},
+            {"bank_id": 2, "bank_name": "TD", "bank_symbol": "TD", "fiscal_year": 2024, "quarter": "Q2"}  # Different quarter
+        ]
+        context = {
+            "execution_id": "test-123",
+            "auth_config": {"api_key": "test-key"},
+            "ssl_config": {"verify": False}
+        }
+
+        result = await plan_database_queries("Query", [], bank_period_combinations, context)
+
+        assert result["status"] == "success"
+        assert result["databases"] == ["benchmarking", "rts"]
+
+    @pytest.mark.asyncio
+    @patch('aegis.model.agents.planner.get_filtered_availability_table')
+    @patch('aegis.model.agents.planner.complete_with_tools', new_callable=AsyncMock)
+    @patch('aegis.model.agents.planner.get_logger')
+    async def test_no_tool_response_fallback(self, mock_logger, mock_complete, mock_get_availability):
+        """Test fallback when LLM returns no tool response (covers line 533)."""
+        # Mock the availability table
+        mock_get_availability.return_value = {
+            "availability": {1: {"benchmarking": {"2024": ["Q1"]}}},
+            "available_databases": ["benchmarking"],
+            "table": "Availability table"
+        }
+
+        # Mock LLM response with no tool_calls
+        mock_complete.return_value = {
+            "choices": [{
+                "message": {}  # No tool_calls
+            }],
+            "metrics": {"total_cost": 0.02},
+            "usage": {"total_tokens": 500}
+        }
+
+        bank_period_combinations = [
+            {"bank_id": 1, "bank_name": "RBC", "bank_symbol": "RY", "fiscal_year": 2024, "quarter": "Q1"}
+        ]
+        context = {
+            "execution_id": "test-123",
+            "auth_config": {"api_key": "test-key"},
+            "ssl_config": {"verify": False}
+        }
+
+        result = await plan_database_queries("Query", [], bank_period_combinations, context)
+
+        assert result["status"] == "error"
+        assert result["error"] == "Failed to determine databases to query"
+        assert result["tokens_used"] == 500
+        assert result["cost"] == 0.02

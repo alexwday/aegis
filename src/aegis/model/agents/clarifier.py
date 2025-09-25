@@ -12,15 +12,14 @@ All bank and period data comes from the aegis_data_availability table.
 import json
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import text
-from ...connections.postgres_connector import _get_engine
+from ...connections.postgres_connector import fetch_all
 from ...connections.llm_connector import complete_with_tools
 from ...utils.logging import get_logger
 from ...utils.prompt_loader import load_yaml, _load_fiscal_prompt
 from ...utils.settings import config
 
 
-def load_banks_from_db(available_databases: Optional[List[str]] = None) -> Dict[str, Any]:
+async def load_banks_from_db(available_databases: Optional[List[str]] = None) -> Dict[str, Any]:
     """
     Load bank information from the aegis_data_availability table.
 
@@ -31,7 +30,6 @@ def load_banks_from_db(available_databases: Optional[List[str]] = None) -> Dict[
         Dictionary containing bank information and availability
     """
     logger = get_logger()
-    engine = _get_engine()
 
     try:
         # Build query to get unique banks with their info
@@ -58,75 +56,74 @@ def load_banks_from_db(available_databases: Optional[List[str]] = None) -> Dict[
         ORDER BY bank_id
         """
 
-        with engine.connect() as conn:
-            result = conn.execute(text(base_query))
+        result = await fetch_all(base_query, execution_id="clarifier_banks")
 
-            banks_data = {"banks": {}, "categories": {}}
+        banks_data = {"banks": {}, "categories": {}}
 
-            # Track categories/tags
-            tag_to_banks = {}
+        # Track categories/tags
+        tag_to_banks = {}
 
-            for row in result:
-                bank_id = row[0]
-                bank_name = row[1]
-                bank_symbol = row[2]
-                bank_aliases = row[3] or []
-                bank_tags = row[4] or []
-                all_databases = row[5] or []
+        for row in result:
+            bank_id = row["bank_id"]
+            bank_name = row["bank_name"]
+            bank_symbol = row["bank_symbol"]
+            bank_aliases = row["bank_aliases"] or []
+            bank_tags = row["bank_tags"] or []
+            all_databases = row["all_databases"] or []
 
-                # Filter by available databases if specified
-                if available_databases:
-                    # Check if bank has data in any of the requested databases
-                    if not any(db in all_databases for db in available_databases):
-                        continue
-                    # Filter to only show available databases
-                    bank_databases = [db for db in all_databases if db in available_databases]
-                else:
-                    bank_databases = all_databases
+            # Filter by available databases if specified
+            if available_databases:
+                # Check if bank has data in any of the requested databases
+                if not any(db in all_databases for db in available_databases):
+                    continue
+                # Filter to only show available databases
+                bank_databases = [db for db in all_databases if db in available_databases]
+            else:
+                bank_databases = all_databases
 
-                # Add bank to data structure
-                banks_data["banks"][bank_id] = {
-                    "id": bank_id,
-                    "name": bank_name,
-                    "symbol": bank_symbol,
-                    "aliases": bank_aliases,
-                    "tags": bank_tags,
-                    "databases": bank_databases,
+            # Add bank to data structure
+            banks_data["banks"][bank_id] = {
+                "id": bank_id,
+                "name": bank_name,
+                "symbol": bank_symbol,
+                "aliases": bank_aliases,
+                "tags": bank_tags,
+                "databases": bank_databases,
+            }
+
+            # Track tags for category building
+            for tag in bank_tags:
+                if tag not in tag_to_banks:
+                    tag_to_banks[tag] = []
+                tag_to_banks[tag].append(bank_id)
+
+        # Build categories from tags
+        for tag, bank_ids in tag_to_banks.items():
+            if tag == "canadian_big_six":
+                banks_data["categories"]["big_six"] = {
+                    "aliases": ["Big Six", "Canadian Big Six", "Big 6"],
+                    "bank_ids": sorted(bank_ids),
+                }
+            elif tag == "us_bank":
+                banks_data["categories"]["us_banks"] = {
+                    "aliases": ["US banks", "American banks"],
+                    "bank_ids": sorted(bank_ids),
                 }
 
-                # Track tags for category building
-                for tag in bank_tags:
-                    if tag not in tag_to_banks:
-                        tag_to_banks[tag] = []
-                    tag_to_banks[tag].append(bank_id)
+        logger.debug(
+            "Banks loaded from database",
+            bank_count=len(banks_data["banks"]),
+            filtered_by=available_databases,
+        )
 
-            # Build categories from tags
-            for tag, bank_ids in tag_to_banks.items():
-                if tag == "canadian_big_six":
-                    banks_data["categories"]["big_six"] = {
-                        "aliases": ["Big Six", "Canadian Big Six", "Big 6"],
-                        "bank_ids": sorted(bank_ids),
-                    }
-                elif tag == "us_bank":
-                    banks_data["categories"]["us_banks"] = {
-                        "aliases": ["US banks", "American banks"],
-                        "bank_ids": sorted(bank_ids),
-                    }
-
-            logger.debug(
-                "Banks loaded from database",
-                bank_count=len(banks_data["banks"]),
-                filtered_by=available_databases,
-            )
-
-            return banks_data
+        return banks_data
 
     except Exception as e:
         logger.error("Failed to load banks from database", error=str(e))
         return {"banks": {}, "categories": {}}
 
 
-def get_period_availability_from_db(
+async def get_period_availability_from_db(
     bank_ids: Optional[List[int]] = None, available_databases: Optional[List[str]] = None
 ) -> Dict[str, Any]:
     """
@@ -140,7 +137,6 @@ def get_period_availability_from_db(
         Dictionary with period availability by bank and database
     """
     logger = get_logger()
-    engine = _get_engine()
 
     try:
         # Build query
@@ -164,65 +160,64 @@ def get_period_availability_from_db(
 
         query += " ORDER BY bank_id, fiscal_year DESC, quarter DESC"
 
-        with engine.connect() as conn:
-            result = conn.execute(text(query), params)
+        result = await fetch_all(query, params, execution_id="clarifier_periods")
 
-            availability = {}
-            latest_year = None
-            latest_quarter = None
+        availability = {}
+        latest_year = None
+        latest_quarter = None
 
-            for row in result:
-                bank_id = str(row[0])
-                bank_name = row[1]
-                bank_symbol = row[2]
-                fiscal_year = row[3]
-                quarter = row[4]
-                database_names = row[5] or []
+        for row in result:
+            bank_id = str(row["bank_id"])
+            bank_name = row["bank_name"]
+            bank_symbol = row["bank_symbol"]
+            fiscal_year = row["fiscal_year"]
+            quarter = row["quarter"]
+            database_names = row["database_names"] or []
 
-                # Track latest available period
-                if latest_year is None or fiscal_year > latest_year:
-                    latest_year = fiscal_year
-                    latest_quarter = quarter
-                elif fiscal_year == latest_year and quarter > latest_quarter:
-                    latest_quarter = quarter
+            # Track latest available period
+            if latest_year is None or fiscal_year > latest_year:
+                latest_year = fiscal_year
+                latest_quarter = quarter
+            elif fiscal_year == latest_year and quarter > latest_quarter:
+                latest_quarter = quarter
 
-                # Filter databases if specified
-                if available_databases:
-                    filtered_dbs = [db for db in database_names if db in available_databases]
-                    if not filtered_dbs:
-                        continue
-                    database_names = filtered_dbs
+            # Filter databases if specified
+            if available_databases:
+                filtered_dbs = [db for db in database_names if db in available_databases]
+                if not filtered_dbs:
+                    continue
+                database_names = filtered_dbs
 
-                # Structure: bank_id -> {info, databases}
-                if bank_id not in availability:
-                    availability[bank_id] = {
-                        "name": bank_name,
-                        "symbol": bank_symbol,
-                        "databases": {},
-                    }
+            # Structure: bank_id -> {info, databases}
+            if bank_id not in availability:
+                availability[bank_id] = {
+                    "name": bank_name,
+                    "symbol": bank_symbol,
+                    "databases": {},
+                }
 
-                for db in database_names:
-                    if db not in availability[bank_id]["databases"]:
-                        availability[bank_id]["databases"][db] = {}
+            for db in database_names:
+                if db not in availability[bank_id]["databases"]:
+                    availability[bank_id]["databases"][db] = {}
 
-                    if fiscal_year not in availability[bank_id]["databases"][db]:
-                        availability[bank_id]["databases"][db][fiscal_year] = []
+                if fiscal_year not in availability[bank_id]["databases"][db]:
+                    availability[bank_id]["databases"][db][fiscal_year] = []
 
-                    if quarter not in availability[bank_id]["databases"][db][fiscal_year]:
-                        availability[bank_id]["databases"][db][fiscal_year].append(quarter)
+                if quarter not in availability[bank_id]["databases"][db][fiscal_year]:
+                    availability[bank_id]["databases"][db][fiscal_year].append(quarter)
 
-            # Sort quarters for each bank/db/year
-            for bank_id in availability:
-                for db in availability[bank_id]["databases"]:
-                    for year in availability[bank_id]["databases"][db]:
-                        availability[bank_id]["databases"][db][year].sort()
+        # Sort quarters for each bank/db/year
+        for bank_id in availability:
+            for db in availability[bank_id]["databases"]:
+                for year in availability[bank_id]["databases"][db]:
+                    availability[bank_id]["databases"][db][year].sort()
 
-            return {
-                "latest_reported": (
-                    {"fiscal_year": latest_year, "quarter": latest_quarter} if latest_year else {}
-                ),
-                "availability": availability,
-            }
+        return {
+            "latest_reported": (
+                {"fiscal_year": latest_year, "quarter": latest_quarter} if latest_year else {}
+            ),
+            "availability": availability,
+        }
 
     except Exception as e:
         logger.error("Failed to load period availability from database", error=str(e))
@@ -271,7 +266,7 @@ def create_bank_prompt(banks_data: Dict[str, Any], available_databases: List[str
     return "\n".join(lines)
 
 
-def extract_banks(
+async def extract_banks(
     query: str,
     context: Dict[str, Any],
     available_databases: Optional[List[str]] = None,
@@ -299,7 +294,7 @@ def extract_banks(
 
     try:
         # Load banks from database
-        banks_data = load_banks_from_db(available_databases)
+        banks_data = await load_banks_from_db(available_databases)
 
         if not banks_data.get("banks"):
             return {
@@ -425,7 +420,7 @@ def extract_banks(
         else:
             model = config.llm.large.model  # Default to large for better reasoning
 
-        response = complete_with_tools(
+        response = await complete_with_tools(
             messages=llm_messages,
             tools=tools,
             context=context,
@@ -571,7 +566,7 @@ def extract_banks(
         }
 
 
-def extract_periods(
+async def extract_periods(
     query: str,
     bank_ids: Optional[List[int]],
     context: Dict[str, Any],
@@ -604,7 +599,7 @@ def extract_periods(
         )
 
         # Load period availability from database
-        period_availability = get_period_availability_from_db(bank_ids, available_databases)
+        period_availability = await get_period_availability_from_db(bank_ids, available_databases)
 
         # Load clarifier period prompt
         clarifier_data = load_yaml("aegis/clarifier_periods.yaml")
@@ -825,7 +820,7 @@ def extract_periods(
         else:
             model = config.llm.large.model  # Default to large for complex period validation
 
-        response = complete_with_tools(
+        response = await complete_with_tools(
             messages=llm_messages,
             tools=tools,
             context=context,
@@ -1073,7 +1068,7 @@ def _create_bank_period_combinations(
     return combinations
 
 
-def clarify_query(
+async def clarify_query(
     query: str,
     context: Dict[str, Any],
     available_databases: Optional[List[str]] = None,
@@ -1122,13 +1117,13 @@ def clarify_query(
     )
 
     # Stage 1: Extract banks and query intent
-    bank_result = extract_banks(query, context, available_databases, messages)
+    bank_result = await extract_banks(query, context, available_databases, messages)
 
     # Stage 2: Extract or validate periods
     if bank_result["status"] == "success":
         # We have banks, extract periods for them
         bank_ids = bank_result.get("bank_ids", [])
-        period_result = extract_periods(query, bank_ids, context, available_databases, messages)
+        period_result = await extract_periods(query, bank_ids, context, available_databases, messages)
 
         # Check if we need any clarifications
         clarifications = []
@@ -1182,7 +1177,7 @@ def clarify_query(
             }
     else:
         # Banks need clarification, check if periods also need clarification
-        period_check = extract_periods(query, None, context, available_databases, messages)
+        period_check = await extract_periods(query, None, context, available_databases, messages)
 
         # Collect clarification questions
         clarifications = []

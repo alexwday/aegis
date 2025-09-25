@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Optional
 from ....utils.logging import get_logger
 
 
-def format_reports_list(
+async def format_reports_list(
     reports: List[Dict[str, Any]],
     context: Dict[str, Any]
 ) -> str:
@@ -48,7 +48,7 @@ def format_reports_list(
     return output
 
 
-def format_report_content(
+async def format_report_content(
     report: Dict[str, Any],
     include_links: bool = True,
     context: Optional[Dict[str, Any]] = None
@@ -116,7 +116,7 @@ def format_report_content(
     return "\n".join(output)
 
 
-def format_multiple_reports(
+async def format_multiple_reports(
     reports: List[Dict[str, Any]],
     context: Dict[str, Any],
     requested_combinations: Optional[List[Dict[str, Any]]] = None
@@ -235,7 +235,7 @@ def format_multiple_reports(
 # Becomes: <a href="https://s3.amazonaws.com/bucket/reports/RY_2025_Q2_abc123.docx">📄 Download Word</a>
 
 
-def format_no_data_message(
+async def format_no_data_message(
     bank_period_combinations: List[Dict[str, Any]],
     context: Dict[str, Any]
 ) -> str:
@@ -272,7 +272,7 @@ def format_no_data_message(
     return message
 
 
-def format_error_message(
+async def format_error_message(
     error: str,
     context: Dict[str, Any]
 ) -> str:

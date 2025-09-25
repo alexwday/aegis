@@ -8,6 +8,8 @@ import logging
 from io import StringIO
 from unittest import mock
 
+import pytest
+
 from aegis.utils.logging import setup_logging, get_logger, custom_renderer
 
 
@@ -93,7 +95,8 @@ class TestCustomRenderer:
 class TestIntegration:
     """Integration tests for logging system."""
 
-    def test_logging_workflow(self):
+    @pytest.mark.asyncio
+    async def test_logging_workflow(self):
         """Test complete logging workflow with execution_id."""
         # Capture stdout
         captured_output = StringIO()

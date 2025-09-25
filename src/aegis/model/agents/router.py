@@ -13,7 +13,7 @@ from ...utils.logging import get_logger
 from ...utils.prompt_loader import load_yaml
 
 
-def route_query(
+async def route_query(
     conversation_history: List[Dict[str, str]],
     latest_message: str,
     context: Dict[str, Any],
@@ -126,7 +126,7 @@ def route_query(
         else:
             model = config.llm.medium.model  # Default to medium
 
-        response = complete_with_tools(
+        response = await complete_with_tools(
             messages=messages,
             tools=tools,
             context=context,

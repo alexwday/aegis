@@ -4,7 +4,8 @@ Additional tests for OAuth connector to achieve 90%+ coverage.
 
 from unittest import mock
 import pytest
-import requests
+import pytest_asyncio
+import httpx
 from aegis.connections.oauth_connector import get_oauth_token, setup_authentication
 from aegis.utils.settings import config
 
@@ -30,8 +31,9 @@ def reset_config():
 class TestOAuthErrorHandling:
     """Test error handling in OAuth connector."""
     
-    @mock.patch("aegis.connections.oauth_connector.requests.Session")
-    def test_get_oauth_token_request_exception(self, mock_session_class):
+    @pytest.mark.asyncio
+    @mock.patch("aegis.connections.oauth_connector.httpx.AsyncClient")
+    async def test_get_oauth_token_request_exception(self, mock_client_class):
         """Test handling of request exceptions during token generation."""
         # Setup
         config.oauth_endpoint = "https://test.com/oauth"
@@ -40,24 +42,25 @@ class TestOAuthErrorHandling:
         config.oauth_grant_type = "client_credentials"
         config.oauth_max_retries = 1
         config.oauth_retry_delay = 0
-        
-        # Mock session to raise RequestException
-        mock_session = mock.Mock()
-        mock_session.post.side_effect = requests.exceptions.RequestException("Network error")
-        mock_session_class.return_value = mock_session
-        
+
+        # Mock async client to raise RequestError
+        mock_client = mock.AsyncMock()
+        mock_client.post.side_effect = httpx.RequestError("Network error")
+        mock_client_class.return_value.__aenter__.return_value = mock_client
+
         # Test - should raise the exception after retries
         ssl_config = {"verify": True, "cert_path": None}
-        with pytest.raises(requests.exceptions.RequestException):
-            get_oauth_token(execution_id="test-123", ssl_config=ssl_config)
-        
+        with pytest.raises(httpx.RequestError):
+            await get_oauth_token(execution_id="test-123", ssl_config=ssl_config)
+
         # Verify retry was attempted
-        assert mock_session.post.call_count == 1
+        assert mock_client.post.call_count == 1
     
-    
-    @mock.patch("aegis.connections.oauth_connector.requests.Session")
+
+    @mock.patch("aegis.connections.oauth_connector.httpx.AsyncClient")
     @mock.patch("aegis.connections.oauth_connector.get_logger")
-    def test_setup_authentication_oauth_value_error(self, mock_logger, mock_session_class):
+    @pytest.mark.asyncio
+    async def test_setup_authentication_oauth_value_error(self, mock_logger, mock_client_class):
         """Test handling of ValueError during OAuth authentication."""
         # Setup
         config.auth_method = "oauth"
@@ -65,31 +68,34 @@ class TestOAuthErrorHandling:
         config.oauth_endpoint = "https://test.com/oauth"
         config.oauth_client_id = "client"
         config.oauth_client_secret = "secret"
+        config.oauth_max_retries = 1
         mock_logger_instance = mock.Mock()
         mock_logger.return_value = mock_logger_instance
-        
-        # Mock session to return invalid JSON (will cause ValueError)
+
+        # Mock async client to return invalid JSON (will cause ValueError)
         mock_response = mock.Mock()
         mock_response.status_code = 200
         mock_response.json.side_effect = ValueError("Invalid JSON")
-        mock_session = mock.Mock()
-        mock_session.post.return_value = mock_response
-        mock_session_class.return_value = mock_session
-        
+        mock_response.raise_for_status = mock.Mock()
+        mock_client = mock.AsyncMock()
+        mock_client.post.return_value = mock_response
+        mock_client_class.return_value.__aenter__.return_value = mock_client
+
         # Test
         ssl_config = {"verify": True, "cert_path": None}
-        result = setup_authentication(execution_id="test-789", ssl_config=ssl_config)
-        
+        result = await setup_authentication(execution_id="test-789", ssl_config=ssl_config)
+
         # Should return error status
         assert result["status"] == "Failure"
         assert "OAuth authentication error" in result["error"]
-        
+
         # Should log the error
         mock_logger_instance.error.assert_called()
     
-    @mock.patch("aegis.connections.oauth_connector.requests.Session")
+    @mock.patch("aegis.connections.oauth_connector.httpx.AsyncClient")
     @mock.patch("aegis.connections.oauth_connector.get_logger")
-    def test_setup_authentication_oauth_request_exception(self, mock_logger, mock_session_class):
+    @pytest.mark.asyncio
+    async def test_setup_authentication_oauth_request_exception(self, mock_logger, mock_client_class):
         """Test handling of RequestException during OAuth authentication."""
         # Setup
         config.auth_method = "oauth"
@@ -101,27 +107,28 @@ class TestOAuthErrorHandling:
         config.oauth_retry_delay = 0
         mock_logger_instance = mock.Mock()
         mock_logger.return_value = mock_logger_instance
-        
-        # Mock session to raise RequestException
-        mock_session = mock.Mock()
-        mock_session.post.side_effect = requests.exceptions.RequestException("Connection failed")
-        mock_session_class.return_value = mock_session
-        
+
+        # Mock async client to raise RequestError
+        mock_client = mock.AsyncMock()
+        mock_client.post.side_effect = httpx.RequestError("Connection failed")
+        mock_client_class.return_value.__aenter__.return_value = mock_client
+
         # Test
         ssl_config = {"verify": True, "cert_path": None}
-        result = setup_authentication(execution_id="test-abc", ssl_config=ssl_config)
-        
+        result = await setup_authentication(execution_id="test-abc", ssl_config=ssl_config)
+
         # Should return error status
         assert result["status"] == "Failure"
         assert "OAuth authentication error" in result["error"]
         assert "Connection failed" in result["error"]
-        
+
         # Should log the error
         mock_logger_instance.error.assert_called()
     
     @mock.patch("aegis.connections.oauth_connector.get_oauth_token")
     @mock.patch("aegis.connections.oauth_connector.get_logger")
-    def test_setup_authentication_oauth_test_mode_with_error(self, mock_logger, mock_get_token):
+    @pytest.mark.asyncio
+    async def test_setup_authentication_oauth_test_mode_with_error(self, mock_logger, mock_get_token):
         """Test OAuth in test mode when token generation fails."""
         # Setup
         config.auth_method = "oauth"
@@ -134,7 +141,7 @@ class TestOAuthErrorHandling:
         
         # Test
         ssl_config = {"verify": True, "cert_path": None}
-        result = setup_authentication(execution_id="test-def", ssl_config=ssl_config)
+        result = await setup_authentication(execution_id="test-def", ssl_config=ssl_config)
         
         # Should return placeholder token despite error
         assert result["method"] == "placeholder"

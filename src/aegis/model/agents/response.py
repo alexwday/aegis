@@ -6,19 +6,19 @@ including greetings, clarifications, concept explanations, and general
 assistance about the Aegis system.
 """
 
-from typing import Any, Dict, Generator, List, Union
+from typing import Any, AsyncGenerator, Dict, List, Union
 
 from ...connections.llm_connector import complete, stream
 from ...utils.logging import get_logger
 from ...utils.prompt_loader import load_yaml
 
 
-def generate_response(
+async def generate_response(
     conversation_history: List[Dict[str, str]],
     latest_message: str,
     context: Dict[str, Any],
     streaming: bool = False,
-) -> Union[Dict[str, Any], Generator[Dict[str, Any], None, None]]:
+) -> Union[Dict[str, Any], AsyncGenerator[Dict[str, Any], None]]:
     """
     Generate a direct response without data retrieval.
 
@@ -136,7 +136,7 @@ def generate_response(
             )
         else:
             # Generate complete response
-            response = complete(
+            response = await complete(
                 messages=messages,
                 context=context,
                 llm_params=llm_params,
@@ -188,8 +188,8 @@ def generate_response(
         }
 
         if streaming:
-            # For streaming, return a generator that yields error as final chunk
-            def error_generator():
+            # For streaming, return an async generator that yields error as final chunk
+            async def error_generator():
                 yield {"type": "final", **error_response}
 
             return error_generator()
@@ -197,7 +197,7 @@ def generate_response(
             return error_response
 
 
-def _stream_response(
+async def _stream_response(
     messages: List[Dict[str, str]],
     context: Dict[str, Any],
     llm_params: Dict[str, Any],
@@ -205,7 +205,7 @@ def _stream_response(
     prompt_version: str,
     prompt_last_updated: str,
     model: str,
-) -> Generator[Dict[str, Any], None, None]:
+) -> AsyncGenerator[Dict[str, Any], None]:
     """
     Internal function to handle streaming responses.
 
@@ -221,7 +221,7 @@ def _stream_response(
         final_usage = None
 
         # Stream from LLM
-        for chunk in stream(messages=messages, context=context, llm_params=llm_params):
+        async for chunk in stream(messages=messages, context=context, llm_params=llm_params):
             if chunk.get("choices") and chunk["choices"][0].get("delta"):
                 delta = chunk["choices"][0]["delta"]
                 if "content" in delta and delta["content"] is not None:

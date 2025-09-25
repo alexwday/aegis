@@ -10,15 +10,14 @@ The planner analyzes the user's query and clarifier outputs to:
 import json
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import text
-from ...connections.postgres_connector import _get_engine
+from ...connections.postgres_connector import fetch_all
 from ...connections.llm_connector import complete_with_tools
 from ...utils.logging import get_logger
 from ...utils.prompt_loader import load_yaml
 from ...utils.settings import config
 
 
-def get_filtered_availability_table(
+async def get_filtered_availability_table(
     bank_ids: List[int], periods: Dict[str, Any], available_databases: Optional[List[str]] = None
 ) -> Dict[str, Any]:
     """
@@ -36,7 +35,6 @@ def get_filtered_availability_table(
         Dictionary with availability information and formatted table
     """
     logger = get_logger()
-    engine = _get_engine()
 
     try:
         # Build query to get availability for specific banks and periods
@@ -50,7 +48,7 @@ def get_filtered_availability_table(
                 quarter,
                 unnest(database_names) as database_name
             FROM aegis_data_availability
-            WHERE bank_id = ANY(:bank_ids)
+            WHERE bank_id = ANY(%(bank_ids)s)
         )
         SELECT
             bank_id,
@@ -66,102 +64,102 @@ def get_filtered_availability_table(
 
         params = {"bank_ids": bank_ids}
 
-        with engine.connect() as conn:
-            result = conn.execute(text(query), params)
+        # Use async database connection
+        rows = await fetch_all(query, params)
 
-            # Build availability structure
-            availability = {}
-            available_dbs_set = set()
+        # Build availability structure
+        availability = {}
+        available_dbs_set = set()
 
-            for row in result:
-                bank_id = str(row[0])
-                bank_name = row[1]
-                bank_symbol = row[2]
-                fiscal_year = row[3]
-                quarter = row[4]
-                databases = row[5] or []
+        for row in rows:
+            bank_id = str(row["bank_id"])
+            bank_name = row["bank_name"]
+            bank_symbol = row["bank_symbol"]
+            fiscal_year = row["fiscal_year"]
+            quarter = row["quarter"]
+            databases = row["databases"] or []
 
-                # Filter databases if specified
-                if available_databases:
-                    databases = [db for db in databases if db in available_databases]
+            # Filter databases if specified
+            if available_databases:
+                databases = [db for db in databases if db in available_databases]
 
-                # Check if this row matches the requested periods
-                period_match = False
+            # Check if this row matches the requested periods
+            period_match = False
 
-                if "apply_all" in periods:
-                    # Same period for all banks
-                    period_info = periods["apply_all"]
+            if "apply_all" in periods:
+                # Same period for all banks
+                period_info = periods["apply_all"]
+                if (
+                    fiscal_year == period_info["fiscal_year"]
+                    and quarter in period_info["quarters"]
+                ):
+                    period_match = True
+            else:
+                # Bank-specific periods
+                if bank_id in periods:
+                    period_info = periods[bank_id]
                     if (
                         fiscal_year == period_info["fiscal_year"]
                         and quarter in period_info["quarters"]
                     ):
                         period_match = True
-                else:
-                    # Bank-specific periods
-                    if bank_id in periods:
-                        period_info = periods[bank_id]
-                        if (
-                            fiscal_year == period_info["fiscal_year"]
-                            and quarter in period_info["quarters"]
-                        ):
-                            period_match = True
 
-                # Only include rows that match the requested periods
-                if period_match and databases:
-                    if bank_id not in availability:
-                        availability[bank_id] = {
-                            "name": bank_name,
-                            "symbol": bank_symbol,
-                            "periods": [],
-                        }
+            # Only include rows that match the requested periods
+            if period_match and databases:
+                if bank_id not in availability:
+                    availability[bank_id] = {
+                        "name": bank_name,
+                        "symbol": bank_symbol,
+                        "periods": [],
+                    }
 
-                    availability[bank_id]["periods"].append(
-                        {"fiscal_year": fiscal_year, "quarter": quarter, "databases": databases}
-                    )
+                availability[bank_id]["periods"].append(
+                    {"fiscal_year": fiscal_year, "quarter": quarter, "databases": databases}
+                )
 
-                    # Track all available databases (already filtered)
-                    available_dbs_set.update(databases)
+                # Track all available databases (already filtered)
+                available_dbs_set.update(databases)
 
-            # Format as table
-            table_lines = []
-            table_lines.append("\n<availability_table>")
-            table_lines.append("Filtered by requested banks and periods:")
-            table_lines.append(
-                "\nBank | Name                         | Year | Quarter | Available Databases"
-            )
-            table_lines.append(
-                "-----|------------------------------|------|---------|--------------------"
-            )
+        # Format as table
+        table_lines = []
+        table_lines.append("\n<availability_table>")
+        table_lines.append("Filtered by requested banks and periods:")
+        table_lines.append(
+            "\nBank | Name                         | Year | Quarter | Available Databases"
+        )
+        table_lines.append(
+            "-----|------------------------------|------|---------|--------------------"
+        )
 
-            for bank_id, bank_data in availability.items():
-                bank_name = bank_data["name"]
-                bank_symbol = bank_data["symbol"]
-                display_name = f"{bank_name} ({bank_symbol})"
+        for bank_id, bank_data in availability.items():
+            bank_name = bank_data["name"]
+            bank_symbol = bank_data["symbol"]
+            display_name = f"{bank_name} ({bank_symbol})"
 
-                for period in bank_data["periods"]:
-                    year = period["fiscal_year"]
-                    quarter = period["quarter"]
-                    dbs = ", ".join(sorted(period["databases"]))
-                    table_lines.append(
-                        f" {bank_id:^3} | {display_name:<28} | {year:^4} | {quarter:^7} | {dbs}"
-                    )
+            for period in bank_data["periods"]:
+                year = period["fiscal_year"]
+                quarter = period["quarter"]
+                dbs = ", ".join(sorted(period["databases"]))
+                table_lines.append(
+                    f" {bank_id:^3} | {display_name:<28} | {year:^4} | {quarter:^7} | {dbs}"
+                )
 
-            # Apply final filter to ensure we only return databases that were requested
-            final_available_dbs = available_dbs_set
-            if available_databases:
-                final_available_dbs = available_dbs_set.intersection(set(available_databases))
+        # Apply final filter to ensure we only return databases that were requested
+        final_available_dbs = available_dbs_set
+        if available_databases:
+            final_available_dbs = available_dbs_set.intersection(set(available_databases))
 
-            table_lines.append(
-                "\nSummary of available databases across all requested banks/periods:"
-            )
-            table_lines.append(", ".join(sorted(final_available_dbs)))
-            table_lines.append("</availability_table>\n")
+        table_lines.append(
+            "\nSummary of available databases across all requested banks/periods:"
+        )
+        table_lines.append(", ".join(sorted(final_available_dbs)))
+        table_lines.append("</availability_table>\n")
 
-            return {
-                "availability": availability,
-                "available_databases": sorted(list(final_available_dbs)),
-                "table": "\n".join(table_lines),
-            }
+        return {
+            "availability": availability,
+            "available_databases": sorted(list(final_available_dbs)),
+            "table": "\n".join(table_lines),
+        }
 
     except Exception as e:
         logger.error("Failed to get filtered availability", error=str(e))
@@ -211,7 +209,7 @@ def get_filtered_database_descriptions(available_databases: List[str]) -> str:
         return ""
 
 
-def plan_database_queries(
+async def plan_database_queries(
     query: str,
     conversation: List[Dict[str, str]],
     bank_period_combinations: List[Dict[str, Any]],
@@ -333,7 +331,7 @@ def plan_database_queries(
             )
 
         # Get filtered availability table
-        availability_data = get_filtered_availability_table(
+        availability_data = await get_filtered_availability_table(
             bank_ids=bank_ids, periods=period_info, available_databases=available_databases
         )
 
@@ -443,7 +441,7 @@ def plan_database_queries(
         else:
             model = config.llm.medium.model  # Default to medium for planning
 
-        response = complete_with_tools(
+        response = await complete_with_tools(
             messages=messages,
             tools=tools,
             context=context,
