@@ -101,15 +101,36 @@ async def resolve_bank_info(bank_input: str, context: Dict[str, Any]) -> Dict[st
         except ValueError:
             pass
 
-        # Try as ticker/symbol
+        # Try as exact ticker/symbol or name match first
         result = await conn.execute(
             text("""
                 SELECT DISTINCT bank_id, bank_name, bank_symbol
                 FROM aegis_data_availability
                 WHERE UPPER(bank_symbol) = UPPER(:symbol)
+                   OR LOWER(bank_name) = LOWER(:name)
                 LIMIT 1
             """),
-            {"symbol": bank_input}
+            {"symbol": bank_input, "name": bank_input}
+        )
+        row = result.fetchone()
+        if row:
+            return {
+                'id': row.bank_id,
+                'name': row.bank_name,
+                'ticker': row.bank_symbol,
+                'symbol': row.bank_symbol
+            }
+
+        # Try partial match on ticker/symbol (e.g. "RY" matches "RY-CA")
+        result = await conn.execute(
+            text("""
+                SELECT DISTINCT bank_id, bank_name, bank_symbol
+                FROM aegis_data_availability
+                WHERE UPPER(bank_symbol) LIKE UPPER(:pattern) || '%'
+                   OR UPPER(bank_symbol) LIKE '%' || UPPER(:pattern) || '%'
+                LIMIT 1
+            """),
+            {"pattern": bank_input}
         )
         row = result.fetchone()
         if row:
@@ -139,7 +160,16 @@ async def resolve_bank_info(bank_input: str, context: Dict[str, Any]) -> Dict[st
                 'symbol': row.bank_symbol
             }
 
-    raise ValueError(f"Could not resolve bank: {bank_input}")
+        # List available banks for user
+        available = await conn.execute(text("""
+            SELECT DISTINCT bank_symbol, bank_name
+            FROM aegis_data_availability
+            ORDER BY bank_symbol
+        """))
+        available_banks = available.fetchall()
+
+        bank_list = "\n".join([f"  - {r['bank_symbol']}: {r['bank_name']}" for r in available_banks])
+        raise ValueError(f"Could not resolve bank '{bank_input}'. Available banks:\n{bank_list}")
 
 
 async def load_qa_blocks(
@@ -171,35 +201,41 @@ async def load_qa_blocks(
         bank_info = await resolve_bank_info(bank_name, context)
         combo['bank_id'] = bank_info['id']
         combo['bank_symbol'] = bank_info['symbol']
+        logger.info(f"Resolved bank: {bank_name} -> bank_id={combo['bank_id']}, symbol={combo['bank_symbol']}")
     except Exception as e:
         logger.warning(f"Could not resolve bank info: {e}")
 
-    # For test data, we need to handle the institution_id field difference
-    # The aegis_transcripts table uses institution_id (string) not bank_id (integer)
-    # We'll query directly since retrieve_full_section expects bank_id
+    # Query transcripts - the table uses institution_id (string) not bank_id
     from sqlalchemy import text
 
     async with get_connection() as conn:
-        result = await conn.execute(
-            text("""
-                SELECT
-                    qa_group_id,
-                    chunk_content as content
-                FROM aegis_transcripts
-                WHERE institution_id = :institution_id
-                AND fiscal_year = :fiscal_year
-                AND fiscal_quarter = :fiscal_quarter
-                AND section_name = 'QA'
-                ORDER BY qa_group_id
-            """),
-            {
-                "institution_id": str(combo['bank_id']),
-                "fiscal_year": combo['fiscal_year'],
-                "fiscal_quarter": combo['quarter']
-            }
-        )
-        rows = result.fetchall()
-        chunks = [{"qa_group_id": row[0], "content": row[1]} for row in rows]
+        # Query using institution_id (the aegis_transcripts table doesn't have bank_id column)
+        logger.info(f"Querying Q&A data with institution_id={str(combo['bank_id'])}, year={combo['fiscal_year']}, quarter={combo['quarter']}")
+        try:
+            result = await conn.execute(
+                text("""
+                    SELECT
+                        qa_group_id,
+                        chunk_content as content
+                    FROM aegis_transcripts
+                    WHERE institution_id = :institution_id
+                    AND fiscal_year = :fiscal_year
+                    AND fiscal_quarter = :fiscal_quarter
+                    AND section_name = 'Q&A'
+                    ORDER BY qa_group_id
+                """),
+                {
+                    "institution_id": str(combo['bank_id']),  # Convert to string for institution_id
+                    "fiscal_year": combo['fiscal_year'],
+                    "fiscal_quarter": combo['quarter']
+                }
+            )
+            rows = result.fetchall()
+            chunks = [{"qa_group_id": row[0], "content": row[1]} for row in rows]
+            logger.info(f"Found {len(chunks)} Q&A chunks")
+        except Exception as e:
+            logger.warning(f"Failed to retrieve Q&A data: {e}")
+            chunks = []
 
     if not chunks:
         logger.warning(f"No Q&A data found for {bank_name} {fiscal_year} {quarter}")
