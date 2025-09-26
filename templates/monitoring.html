@@ -837,9 +837,24 @@
             modal.style.display = 'block';
             
             try {
-                const response = await fetch(`/api/monitoring/run/${runUuid}`);
+                const response = await fetch(`/api/monitoring/runs/${runUuid}`);
+
+                // Check if response is OK
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    const errorMessage = errorData.detail || errorData.error || 'Failed to load run details';
+                    runSummary.innerHTML = `<div class="error-message">⚠️ ${errorMessage}</div>`;
+                    return;
+                }
+
                 const data = await response.json();
-                
+
+                // Check if data has expected structure
+                if (!data.run_summary) {
+                    runSummary.innerHTML = `<div class="error-message">⚠️ Invalid response format</div>`;
+                    return;
+                }
+
                 if (data.error) {
                     runSummary.innerHTML = `<div class="error-message">⚠️ ${data.error}</div>`;
                     return;

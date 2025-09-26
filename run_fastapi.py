@@ -481,7 +481,76 @@ async def monitoring_summary(
 async def monitoring_run_details(run_uuid: str):
     """Get detailed information about a specific run."""
     try:
-        details = get_run_details(run_uuid)
+        from src.aegis.connections.postgres_connector import fetch_all
+        from datetime import datetime
+        from decimal import Decimal
+        import json
+
+        def serialize_for_json(obj):
+            """Convert datetime and Decimal objects for JSON serialization."""
+            if isinstance(obj, datetime):
+                return obj.isoformat()
+            elif isinstance(obj, Decimal):
+                return float(obj)
+            elif isinstance(obj, dict):
+                return {k: serialize_for_json(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [serialize_for_json(item) for item in obj]
+            return obj
+
+        # Query for all stages in the run
+        stages_query = """
+        SELECT
+            log_id,
+            stage_name,
+            stage_start_time,
+            stage_end_time,
+            duration_ms,
+            status,
+            total_tokens,
+            total_cost,
+            decision_details,
+            error_message,
+            custom_metadata,
+            llm_calls
+        FROM process_monitor_logs
+        WHERE run_uuid = :run_uuid
+        ORDER BY stage_start_time
+        """
+
+        stages = await fetch_all(
+            stages_query,
+            params={"run_uuid": run_uuid},
+            execution_id="monitoring"
+        )
+
+        # Serialize stages data
+        serialized_stages = serialize_for_json(stages) if stages else []
+
+        # Calculate run summary
+        if stages:
+            run_summary = {
+                "run_uuid": run_uuid,
+                "start_time": serialize_for_json(stages[0]["stage_start_time"]),
+                "end_time": serialize_for_json(stages[-1]["stage_end_time"]),
+                "total_duration_ms": sum(s["duration_ms"] or 0 for s in stages),
+                "total_stages": len(stages),
+                "total_tokens": sum(s["total_tokens"] or 0 for s in stages),
+                "total_cost": float(sum(serialize_for_json(s["total_cost"]) or 0 for s in stages)),
+                "has_errors": any(s["status"] != "Success" for s in stages),
+            }
+        else:
+            run_summary = {
+                "run_uuid": run_uuid,
+                "error": "Run not found",
+                "total_duration_ms": 0,
+                "total_stages": 0,
+                "total_tokens": 0,
+                "total_cost": 0,
+                "has_errors": False
+            }
+
+        details = {"run_summary": run_summary, "stages": serialized_stages}
         return JSONResponse(content=details, media_type="application/json")
     except Exception as e:
         logger.error(f"Error getting run details: {e}")
@@ -495,8 +564,40 @@ async def monitoring_stage_trends(
 ):
     """Get stage trends."""
     try:
-        trends = get_stage_trends(stage_name, hours)
-        return JSONResponse(content=trends, media_type="application/json")
+        from src.aegis.connections.postgres_connector import fetch_all
+        from datetime import datetime, timedelta, timezone
+
+        threshold = datetime.now(timezone.utc) - timedelta(hours=hours)
+
+        # Query for stage performance over time
+        trends_query = """
+        SELECT
+            DATE_TRUNC('hour', stage_start_time) as hour,
+            COUNT(*) as execution_count,
+            AVG(duration_ms) as avg_duration_ms,
+            MIN(duration_ms) as min_duration_ms,
+            MAX(duration_ms) as max_duration_ms,
+            SUM(CASE WHEN status = 'Success' THEN 1 ELSE 0 END) as success_count,
+            SUM(CASE WHEN status != 'Success' THEN 1 ELSE 0 END) as failure_count
+        FROM process_monitor_logs
+        WHERE stage_name = :stage_name AND stage_start_time >= :threshold
+        GROUP BY DATE_TRUNC('hour', stage_start_time)
+        ORDER BY hour
+        """
+
+        trends = await fetch_all(
+            trends_query,
+            params={"stage_name": stage_name, "threshold": threshold},
+            execution_id="monitoring"
+        )
+
+        result = {
+            "stage_name": stage_name,
+            "time_range_hours": hours,
+            "trends": trends if trends else [],
+        }
+
+        return JSONResponse(content=result, media_type="application/json")
     except Exception as e:
         logger.error(f"Error getting stage trends: {e}")
         raise HTTPException(status_code=500, detail=str(e))

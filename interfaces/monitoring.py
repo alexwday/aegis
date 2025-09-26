@@ -157,7 +157,7 @@ def get_run_details(run_uuid: str) -> Dict[str, Any]:
     try:
         # Query for all stages in the run
         stages_query = """
-        SELECT 
+        SELECT
             log_id,
             stage_name,
             stage_start_time,
@@ -176,8 +176,8 @@ def get_run_details(run_uuid: str) -> Dict[str, Any]:
         """
 
         stages = fetch_all(
-            stages_query, 
-            params={"run_uuid": run_uuid}, 
+            stages_query,
+            params={"run_uuid": run_uuid},
             execution_id="monitoring"
         )
 
@@ -194,9 +194,17 @@ def get_run_details(run_uuid: str) -> Dict[str, Any]:
                 "has_errors": any(s["status"] != "Success" for s in stages),
             }
         else:
-            run_summary = {"run_uuid": run_uuid, "error": "Run not found"}
+            run_summary = {
+                "run_uuid": run_uuid,
+                "error": "Run not found",
+                "total_duration_ms": 0,
+                "total_stages": 0,
+                "total_tokens": 0,
+                "total_cost": 0,
+                "has_errors": False
+            }
 
-        return {"run_summary": run_summary, "stages": stages}
+        return {"run_summary": run_summary, "stages": stages if stages else []}
 
     except Exception as e:
         logger.error(f"Failed to get run details for {run_uuid}", error=str(e))
