@@ -1,15 +1,15 @@
 """
-Key Themes ETL with Optimized Parallel Processing and Comprehensive Grouping
+Key Themes ETL - Extract and Group Earnings Call Themes
 
-This version uses a more efficient architecture:
+This ETL processes earnings call Q&A sessions to:
 1. Load all Q&A blocks into an index
 2. Process each independently to extract themes (parallelizable)
 3. Make ONE comprehensive grouping decision with full visibility
 4. Apply grouping programmatically
-5. Generate organized document
+5. Generate formatted document
 
 Usage:
-    python -m aegis.etls.key_themes.main_optimized --bank "Royal Bank of Canada" --year 2024 --quarter Q3
+    python -m aegis.etls.key_themes.main --bank "Royal Bank of Canada" --year 2024 --quarter Q3
 """
 
 import argparse
@@ -746,7 +746,7 @@ def add_theme_header_with_background(doc, theme_number, theme_title):
     return heading
 
 
-def create_optimized_document(
+def create_document(
     theme_groups: List[ThemeGroup],
     bank_name: str,
     fiscal_year: int,
@@ -883,9 +883,9 @@ def create_optimized_document(
 
 
 async def main():
-    """Main ETL function with optimized parallel processing."""
+    """Main ETL function for key themes extraction."""
     parser = argparse.ArgumentParser(
-        description='Generate key themes report with optimized grouping'
+        description='Generate key themes report from earnings call Q&A'
     )
     parser.add_argument('--bank', required=True,
                        help='Bank name, ticker, or ID')
@@ -947,11 +947,11 @@ async def main():
         # Step 5: Create output document
         os.makedirs(args.output_dir, exist_ok=True)
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        base_filename = f"{bank_info['ticker']}_{args.year}_{args.quarter}_optimized_themes_{timestamp}"
+        base_filename = f"{bank_info['ticker']}_{args.year}_{args.quarter}_key_themes_{timestamp}"
         docx_path = os.path.join(args.output_dir, f"{base_filename}.docx")
 
         logger.info(f"Generating Word document: {docx_path}")
-        create_optimized_document(
+        create_document(
             theme_groups,
             bank_info['name'],
             args.year,
@@ -979,7 +979,7 @@ async def main():
 
     except Exception as e:
         import traceback
-        logger.error(f"Error generating optimized themes report: {str(e)}")
+        logger.error(f"Error generating key themes report: {str(e)}")
         logger.error(f"Error type: {type(e).__name__}")
         logger.debug(f"Full traceback:\n{traceback.format_exc()}")
         return 1

@@ -20,7 +20,7 @@ tool:
       properties:
         theme_groups:
           type: array
-          description: Comprehensive list of theme groups optimized for executive reporting
+          description: Comprehensive list of theme groups for executive reporting
           minItems: 1
           maxItems: 50
           items:
@@ -64,7 +64,7 @@ system_template: |
   </style>
 
   <tone>
-  Strategic and professional, optimized for C-suite executive briefing materials
+  Strategic and professional, designed for C-suite executive briefing materials
   </tone>
 
   <audience>
