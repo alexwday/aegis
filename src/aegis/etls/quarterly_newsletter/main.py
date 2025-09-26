@@ -131,9 +131,9 @@ async def check_data_availability(bank_id: int, fiscal_year: int, quarter: str) 
             "quarter": quarter
         })
 
-        row = await result.fetchone()
-        if row and row['database_names']:
-            return 'transcripts' in row['database_names']
+        row = result.fetchone()
+        if row and row[0]:
+            return 'transcripts' in row[0]
 
         return False
 
