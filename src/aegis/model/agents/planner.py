@@ -36,8 +36,15 @@ async def get_filtered_availability_table(
     """
     logger = get_logger()
 
+    # Debug what we're receiving
+    logger.debug("get_filtered_availability_table params",
+                bank_ids=bank_ids,
+                periods=periods,
+                available_databases=available_databases)
+
     try:
         # Build query to get availability for specific banks and periods
+        # Using SQLAlchemy text() with named parameters for asyncpg
         query = """
         WITH unnested AS (
             SELECT
@@ -48,7 +55,7 @@ async def get_filtered_availability_table(
                 quarter,
                 unnest(database_names) as database_name
             FROM aegis_data_availability
-            WHERE bank_id = ANY(%(bank_ids)s)
+            WHERE bank_id = ANY(:bank_ids)
         )
         SELECT
             bank_id,
@@ -62,6 +69,7 @@ async def get_filtered_availability_table(
         ORDER BY bank_id, fiscal_year DESC, quarter DESC
         """
 
+        # SQLAlchemy text() with asyncpg uses :param named parameters
         params = {"bank_ids": bank_ids}
 
         # Use async database connection
@@ -89,9 +97,11 @@ async def get_filtered_availability_table(
             if "apply_all" in periods:
                 # Same period for all banks
                 period_info = periods["apply_all"]
+                # Debug logging
+                logger.debug("Checking apply_all period_info", period_info=period_info, fiscal_year=fiscal_year, quarter=quarter)
                 if (
-                    fiscal_year == period_info["fiscal_year"]
-                    and quarter in period_info["quarters"]
+                    fiscal_year == period_info.get("fiscal_year")
+                    and quarter in period_info.get("quarters", [])
                 ):
                     period_match = True
             else:
@@ -162,7 +172,11 @@ async def get_filtered_availability_table(
         }
 
     except Exception as e:
-        logger.error("Failed to get filtered availability", error=str(e))
+        import traceback
+        logger.error("Failed to get filtered availability",
+                    error=str(e),
+                    error_type=type(e).__name__,
+                    traceback=traceback.format_exc())
         return {
             "availability": {},
             "available_databases": [],
