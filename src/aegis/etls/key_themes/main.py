@@ -56,7 +56,7 @@ logger = get_logger()
 class HTMLToDocx(HTMLParser):
     """
     Parser to convert HTML-formatted text to Word document formatting.
-    Supports: <b>, <strong>, <i>, <em>, <u>, <mark> tags and their nesting.
+    Supports: <b>, <strong>, <i>, <em>, <u>, <mark>, <span style="..."> tags and their nesting.
     """
 
     def __init__(self, paragraph, font_size=Pt(9)):
@@ -65,6 +65,7 @@ class HTMLToDocx(HTMLParser):
         self.font_size = font_size
         self.text_buffer = ""
         self.format_stack = []  # Stack to track nested formatting
+        self.style_stack = []  # Stack for span styles
 
     def handle_starttag(self, tag, attrs):
         # Flush any pending text before changing format
@@ -78,7 +79,16 @@ class HTMLToDocx(HTMLParser):
         elif tag == 'u':
             self.format_stack.append('underline')
         elif tag == 'mark':
-            self.format_stack.append('highlight')
+            # Check for background-color style in mark tag
+            style_dict = self._parse_style(attrs)
+            if style_dict and 'background-color' in style_dict:
+                self.format_stack.append('highlight_yellow')
+            else:
+                self.format_stack.append('highlight')
+        elif tag == 'span':
+            # Parse style attribute for span tags
+            style_dict = self._parse_style(attrs)
+            self.style_stack.append(style_dict if style_dict else {})
 
     def handle_endtag(self, tag):
         # Flush any pending text before changing format
@@ -91,12 +101,30 @@ class HTMLToDocx(HTMLParser):
             self.format_stack.remove('italic')
         elif tag == 'u' and 'underline' in self.format_stack:
             self.format_stack.remove('underline')
-        elif tag == 'mark' and 'highlight' in self.format_stack:
-            self.format_stack.remove('highlight')
+        elif tag == 'mark':
+            if 'highlight_yellow' in self.format_stack:
+                self.format_stack.remove('highlight_yellow')
+            elif 'highlight' in self.format_stack:
+                self.format_stack.remove('highlight')
+        elif tag == 'span' and self.style_stack:
+            self.style_stack.pop()
 
     def handle_data(self, data):
         # Buffer text to handle whitespace properly
         self.text_buffer += data
+
+    def _parse_style(self, attrs):
+        """Parse style attribute from HTML tags."""
+        style_dict = {}
+        for attr_name, attr_value in attrs:
+            if attr_name == 'style':
+                # Parse CSS style string
+                styles = attr_value.split(';')
+                for style in styles:
+                    if ':' in style:
+                        prop, value = style.split(':', 1)
+                        style_dict[prop.strip().lower()] = value.strip()
+        return style_dict
 
     def _flush_text(self):
         """Apply formatting and add text to document."""
@@ -104,16 +132,44 @@ class HTMLToDocx(HTMLParser):
             return
 
         run = self.paragraph.add_run(self.text_buffer)
-        run.font.size = self.font_size
 
-        # Apply all active formats
+        # Apply span styles if present (from top of stack)
+        if self.style_stack:
+            current_style = self.style_stack[-1]
+
+            # Apply color
+            if 'color' in current_style:
+                color_hex = current_style['color'].lstrip('#')
+                if color_hex.startswith('0066cc'):  # Blue for key questions
+                    run.font.color.rgb = RGBColor(0x00, 0x66, 0xcc)
+                elif color_hex.startswith('006633'):  # Green for key answers
+                    run.font.color.rgb = RGBColor(0x00, 0x66, 0x33)
+
+            # Apply font size
+            if 'font-size' in current_style:
+                size_str = current_style['font-size']
+                if 'pt' in size_str:
+                    size = float(size_str.replace('pt', '').strip())
+                    run.font.size = Pt(size)
+                else:
+                    run.font.size = self.font_size
+            else:
+                run.font.size = self.font_size
+
+            # Apply font weight from span
+            if 'font-weight' in current_style and current_style['font-weight'] == 'bold':
+                run.font.bold = True
+        else:
+            run.font.size = self.font_size
+
+        # Apply all active formats from format stack
         if 'bold' in self.format_stack:
             run.font.bold = True
         if 'italic' in self.format_stack:
             run.font.italic = True
         if 'underline' in self.format_stack:
             run.font.underline = True
-        if 'highlight' in self.format_stack:
+        if 'highlight' in self.format_stack or 'highlight_yellow' in self.format_stack:
             run.font.highlight_color = 'yellow'
 
         self.text_buffer = ""
