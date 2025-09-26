@@ -25,7 +25,7 @@ from sqlalchemy import text
 import yaml
 from docx import Document
 from docx.shared import Pt, Inches, RGBColor
-from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_COLOR_INDEX
 from docx.oxml import OxmlElement, parse_xml
 from docx.oxml.ns import qn, nsdecls
 import hashlib
@@ -170,7 +170,7 @@ class HTMLToDocx(HTMLParser):
         if 'underline' in self.format_stack:
             run.font.underline = True
         if 'highlight' in self.format_stack or 'highlight_yellow' in self.format_stack:
-            run.font.highlight_color = 'yellow'
+            run.font.highlight_color = WD_COLOR_INDEX.YELLOW
 
         self.text_buffer = ""
 
