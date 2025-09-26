@@ -1,0 +1,1216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aegis Chat Interface</title>
+    <!-- Include marked.js for markdown rendering -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        /* CSS Reset - but preserve content element spacing */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        /* Restore default margins for content elements within message areas */
+        .message-bubble h1,
+        .message-bubble h2,
+        .message-bubble h3,
+        .message-bubble h4,
+        .message-bubble h5,
+        .message-bubble h6,
+        .message-bubble p,
+        .message-bubble ul,
+        .message-bubble ol,
+        .message-bubble blockquote,
+        .message-bubble pre,
+        .subagent-content h1,
+        .subagent-content h2,
+        .subagent-content h3,
+        .subagent-content h4,
+        .subagent-content h5,
+        .subagent-content h6,
+        .subagent-content p,
+        .subagent-content ul,
+        .subagent-content ol,
+        .subagent-content blockquote,
+        .subagent-content pre {
+            /* Use initial to allow our specific rules below to take effect */
+            margin: initial;
+            padding: initial;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .chat-container {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 1400px;
+            height: 85vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .chat-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .chat-header h1 {
+            font-size: 24px;
+            font-weight: 600;
+        }
+
+        .header-buttons {
+            display: flex;
+            gap: 10px;
+        }
+
+        .header-btn {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.3s;
+            font-size: 14px;
+        }
+
+        .header-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        /* Database Filters Section */
+        .filters-section {
+            background: #f8f9fa;
+            padding: 15px 20px;
+            border-bottom: 1px solid #e0e0e0;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .filters-label {
+            font-weight: 600;
+            color: #333;
+            font-size: 14px;
+        }
+
+        .database-filters {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .filter-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .filter-checkbox {
+            width: 18px;
+            height: 18px;
+            accent-color: #667eea;
+            cursor: pointer;
+        }
+
+        .filter-label {
+            font-size: 14px;
+            color: #555;
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+
+        .filter-label:hover {
+            color: #667eea;
+        }
+
+        .filter-controls {
+            margin-left: auto;
+            display: flex;
+            gap: 10px;
+        }
+
+        .filter-btn {
+            background: transparent;
+            color: #667eea;
+            border: 1px solid #667eea;
+            padding: 5px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s;
+        }
+
+        .filter-btn:hover {
+            background: #667eea;
+            color: white;
+        }
+
+        .active-filters-count {
+            background: #667eea;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            margin-left: 10px;
+        }
+
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+
+        .message {
+            display: flex;
+            margin-bottom: 16px;
+            animation: fadeIn 0.3s ease-in;
+            width: 100%;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message.user {
+            justify-content: flex-end;
+        }
+        
+        .message.assistant {
+            justify-content: flex-start;
+        }
+        
+        .message-wrapper {
+            max-width: 85%;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .message.user .message-wrapper {
+            align-items: flex-end;
+        }
+        
+        .message.assistant .message-wrapper {
+            align-items: flex-start;
+        }
+
+        .message-bubble {
+            padding: 12px 16px;
+            border-radius: 18px;
+            word-wrap: break-word;
+            word-break: break-word;
+            overflow-wrap: break-word;
+            width: fit-content;
+            max-width: 100%;
+            line-height: 1.6;
+        }
+
+        /* Heading styles with hierarchical spacing */
+        .message-bubble h1 {
+            font-size: 1.5em;
+            font-weight: 700;
+            margin-top: 1.5em;
+            margin-bottom: 0.75em;
+            line-height: 1.2;
+        }
+
+        .message-bubble h2 {
+            font-size: 1.3em;
+            font-weight: 600;
+            margin-top: 1.3em;
+            margin-bottom: 0.6em;
+            line-height: 1.25;
+        }
+
+        .message-bubble h3 {
+            font-size: 1.15em;
+            font-weight: 600;
+            margin-top: 1.1em;
+            margin-bottom: 0.5em;
+            line-height: 1.3;
+        }
+
+        .message-bubble h4 {
+            font-size: 1.05em;
+            font-weight: 600;
+            margin-top: 1em;
+            margin-bottom: 0.4em;
+            line-height: 1.35;
+        }
+
+        /* Remove top margin for first heading */
+        .message-bubble h1:first-child,
+        .message-bubble h2:first-child,
+        .message-bubble h3:first-child,
+        .message-bubble h4:first-child {
+            margin-top: 0;
+        }
+
+        /* Paragraphs with tighter spacing */
+        .message-bubble p {
+            margin-top: 0;
+            margin-bottom: 0.8em;
+            line-height: 1.6;
+        }
+
+        .message-bubble p:last-child {
+            margin-bottom: 0;
+        }
+
+        /* Reduce spacing between heading and immediately following paragraph */
+        .message-bubble h1 + p,
+        .message-bubble h2 + p,
+        .message-bubble h3 + p,
+        .message-bubble h4 + p {
+            margin-top: -0.2em;
+        }
+
+        /* Add more space before heading that follows a paragraph */
+        .message-bubble p + h1 { margin-top: 1.8em; }
+        .message-bubble p + h2 { margin-top: 1.5em; }
+        .message-bubble p + h3 { margin-top: 1.3em; }
+        .message-bubble p + h4 { margin-top: 1.1em; }
+
+        /* Lists with appropriate spacing */
+        .message-bubble ul, .message-bubble ol {
+            margin-top: 0.5em;
+            margin-bottom: 0.8em;
+            padding-left: 1.5em;
+        }
+
+        .message-bubble ul:last-child,
+        .message-bubble ol:last-child {
+            margin-bottom: 0;
+        }
+        
+        .message-bubble li {
+            margin: 0.2em 0;
+        }
+        
+        .message-bubble code {
+            background: #f4f4f4;
+            padding: 0.2em 0.4em;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            color: #d14;
+        }
+        
+        .message-bubble pre {
+            background: #f4f4f4;
+            padding: 1em;
+            border-radius: 5px;
+            overflow-x: auto;
+            margin: 0.5em 0;
+        }
+        
+        .message-bubble pre code {
+            background: none;
+            padding: 0;
+            color: inherit;
+        }
+        
+        .message-bubble blockquote {
+            border-left: 3px solid #667eea;
+            padding-left: 1em;
+            margin: 0.5em 0;
+            color: #666;
+        }
+
+        .message.user .message-bubble {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .message.assistant .message-bubble {
+            background: white;
+            color: #333;
+            border: 1px solid #e0e0e0;
+        }
+
+        .message-label {
+            font-size: 12px;
+            color: #999;
+            margin-bottom: 4px;
+            padding: 0 4px;
+        }
+
+        .typing-indicator {
+            display: none;
+            padding: 12px 20px;
+            background: white;
+        }
+
+        .typing-indicator.active {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .typing-indicator span {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #999;
+            margin: 0 2px;
+            animation: typing 1.4s infinite;
+        }
+
+        .typing-indicator span:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+
+        .typing-indicator span:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+
+        @keyframes typing {
+            0%, 60%, 100% {
+                transform: translateY(0);
+            }
+            30% {
+                transform: translateY(-10px);
+            }
+        }
+
+        .chat-input-container {
+            padding: 20px;
+            background: white;
+            border-top: 1px solid #e0e0e0;
+        }
+
+        .chat-input-form {
+            display: flex;
+            gap: 10px;
+        }
+
+        .chat-input {
+            flex: 1;
+            padding: 14px 20px;
+            border: 2px solid #e0e0e0;
+            border-radius: 25px;
+            font-size: 16px;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+
+        .chat-input:focus {
+            border-color: #667eea;
+        }
+
+        .send-button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 500;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .send-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .send-button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .error-message {
+            background: #ff6b6b;
+            color: white;
+            padding: 10px 16px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            animation: fadeIn 0.3s ease-in;
+        }
+
+        .status-bar {
+            padding: 8px 20px;
+            background: #f0f0f0;
+            font-size: 12px;
+            color: #666;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #4caf50;
+        }
+
+        .status-dot.error {
+            background: #ff6b6b;
+        }
+
+        /* Subagent styles */
+        .subagent-container {
+            margin-top: 15px;
+            background: #f7f8fa;
+            border-radius: 6px;
+            overflow: hidden;
+            border: 1px solid #e3e5e8;
+        }
+
+        .subagent-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 12px;
+            background: #f0f2f5;
+            cursor: pointer;
+            transition: background 0.3s;
+            border-bottom: 1px solid #e3e5e8;
+        }
+
+        .subagent-header:hover {
+            background: #e8ebef;
+        }
+
+        .subagent-title {
+            font-weight: 600;
+            font-size: 14px;
+            color: #333;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .subagent-badge {
+            background: #667eea;
+            color: white;
+            padding: 2px 6px;
+            border-radius: 10px;
+            font-size: 10px;
+            text-transform: uppercase;
+            font-weight: 500;
+        }
+
+        .subagent-toggle {
+            font-size: 12px;
+            color: #666;
+        }
+
+        .subagent-content {
+            padding: 10px 12px;
+            font-size: 13px;
+            line-height: 1.6;
+            color: #555;
+            background: white;
+            position: relative;
+            transition: max-height 0.3s ease-out;
+        }
+
+        /* Subagent heading styles with hierarchical spacing */
+        .subagent-content h1 {
+            font-size: 1.3em;
+            font-weight: 700;
+            margin-top: 1.2em;
+            margin-bottom: 0.6em;
+            line-height: 1.2;
+        }
+
+        .subagent-content h2 {
+            font-size: 1.15em;
+            font-weight: 600;
+            margin-top: 1em;
+            margin-bottom: 0.5em;
+            line-height: 1.25;
+        }
+
+        .subagent-content h3 {
+            font-size: 1.05em;
+            font-weight: 600;
+            margin-top: 0.9em;
+            margin-bottom: 0.4em;
+            line-height: 1.3;
+        }
+
+        .subagent-content h4 {
+            font-size: 1em;
+            font-weight: 600;
+            margin-top: 0.8em;
+            margin-bottom: 0.3em;
+            line-height: 1.35;
+        }
+
+        /* Remove top margin for first heading */
+        .subagent-content h1:first-child,
+        .subagent-content h2:first-child,
+        .subagent-content h3:first-child,
+        .subagent-content h4:first-child {
+            margin-top: 0;
+        }
+
+        /* Paragraphs with tighter spacing */
+        .subagent-content p {
+            margin-top: 0;
+            margin-bottom: 0.6em;
+            line-height: 1.5;
+        }
+
+        .subagent-content p:last-child {
+            margin-bottom: 0;
+        }
+
+        /* Reduce spacing between heading and immediately following paragraph */
+        .subagent-content h1 + p,
+        .subagent-content h2 + p,
+        .subagent-content h3 + p,
+        .subagent-content h4 + p {
+            margin-top: -0.15em;
+        }
+
+        /* Add more space before heading that follows a paragraph */
+        .subagent-content p + h1 { margin-top: 1.4em; }
+        .subagent-content p + h2 { margin-top: 1.2em; }
+        .subagent-content p + h3 { margin-top: 1em; }
+        .subagent-content p + h4 { margin-top: 0.9em; }
+
+        /* Lists with appropriate spacing */
+        .subagent-content ul, .subagent-content ol {
+            margin-top: 0.4em;
+            margin-bottom: 0.6em;
+            padding-left: 1.5em;
+        }
+
+        .subagent-content ul:last-child,
+        .subagent-content ol:last-child {
+            margin-bottom: 0;
+        }
+
+        .subagent-content li {
+            margin: 0.15em 0;
+        }
+
+        .subagent-content.collapsed {
+            max-height: 3em;
+            overflow: hidden;
+        }
+
+        .subagent-content.collapsed::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 2em;
+            background: linear-gradient(to bottom, transparent, white);
+            pointer-events: none;
+        }
+
+        .subagent-content.expanded {
+            max-height: 600px;
+            overflow-y: auto;
+        }
+
+        .subagent-streaming {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background: #4caf50;
+            border-radius: 50%;
+            margin-left: 8px;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% {
+                box-shadow: 0 0 0 0 rgba(76, 175, 80, 0.7);
+            }
+            70% {
+                box-shadow: 0 0 0 10px rgba(76, 175, 80, 0);
+            }
+            100% {
+                box-shadow: 0 0 0 0 rgba(76, 175, 80, 0);
+            }
+        }
+
+        @media (max-width: 768px) {
+            .chat-container {
+                height: 100vh;
+                max-width: 100%;
+                border-radius: 0;
+            }
+
+            .message-wrapper {
+                max-width: 90%;
+            }
+            
+            .filters-section {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
+            }
+            
+            .filter-controls {
+                margin-left: 0;
+                width: 100%;
+            }
+        }
+        
+        @media (min-width: 1600px) {
+            .chat-container {
+                max-width: 1600px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="chat-container">
+        <div class="chat-header">
+            <h1>AEGIS - Finance Assist</h1>
+            <div class="header-buttons">
+                <button class="header-btn" onclick="goToMonitoring()">📊 Monitoring</button>
+                <button class="header-btn" onclick="goToDatabase()">🗄️ Database</button>
+                <button class="header-btn" onclick="resetConversation()">Reset</button>
+            </div>
+        </div>
+        
+        <!-- Database Filters Section -->
+        <div class="filters-section">
+            <span class="filters-label">Databases:</span>
+            <div class="database-filters">
+                <label class="filter-item">
+                    <input type="checkbox" class="filter-checkbox" id="filter-transcripts" value="transcripts" checked>
+                    <span class="filter-label">Transcripts</span>
+                </label>
+                <label class="filter-item">
+                    <input type="checkbox" class="filter-checkbox" id="filter-rts" value="rts" checked>
+                    <span class="filter-label">RTS</span>
+                </label>
+                <label class="filter-item">
+                    <input type="checkbox" class="filter-checkbox" id="filter-supplementary" value="supplementary" checked>
+                    <span class="filter-label">Supplementary</span>
+                </label>
+                <label class="filter-item">
+                    <input type="checkbox" class="filter-checkbox" id="filter-pillar3" value="pillar3" checked>
+                    <span class="filter-label">Pillar 3</span>
+                </label>
+                <label class="filter-item">
+                    <input type="checkbox" class="filter-checkbox" id="filter-reports" value="reports" checked>
+                    <span class="filter-label">Reports</span>
+                </label>
+            </div>
+            <div class="filter-controls">
+                <button class="filter-btn" onclick="selectAllDatabases()">Select All</button>
+                <button class="filter-btn" onclick="clearAllDatabases()">Clear All</button>
+            </div>
+            <span class="active-filters-count" id="activeFiltersCount">5 active</span>
+        </div>
+        
+        <div class="chat-messages" id="chatMessages">
+            <div class="message assistant">
+                <div class="message-wrapper">
+                    <div class="message-label">Assistant</div>
+                    <div class="message-bubble">Hello! I'm Aegis, your financial data assistant. How can I help you today?</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="typing-indicator" id="typingIndicator">
+            <span></span>
+            <span></span>
+            <span></span>
+        </div>
+        
+        <div class="status-bar">
+            <div class="connection-status">
+                <span class="status-dot" id="statusDot"></span>
+                <span id="statusText">Connected</span>
+            </div>
+            <div id="messageCount">Messages: 1</div>
+        </div>
+        
+        <div class="chat-input-container">
+            <form class="chat-input-form" id="chatForm">
+                <input 
+                    type="text" 
+                    class="chat-input" 
+                    id="chatInput" 
+                    placeholder="Type your message here..."
+                    autocomplete="off"
+                    required
+                />
+                <button type="submit" class="send-button" id="sendButton">Send</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // Configure marked.js for safe markdown rendering
+        marked.setOptions({
+            breaks: false,  // Don't convert single line breaks to <br>
+            gfm: true,
+            sanitize: false,
+            smartLists: true,
+            smartypants: true,
+            highlight: function(code, lang) {
+                if (lang) {
+                    return `<code class="language-${lang}">${escapeHtml(code)}</code>`;
+                }
+                return `<code>${escapeHtml(code)}</code>`;
+            }
+        });
+        
+        function escapeHtml(text) {
+            const map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            };
+            return text.replace(/[&<>"']/g, m => map[m]);
+        }
+
+        let messageCount = 1;
+        let isProcessing = false;
+
+        const chatMessages = document.getElementById('chatMessages');
+        const chatForm = document.getElementById('chatForm');
+        const chatInput = document.getElementById('chatInput');
+        const sendButton = document.getElementById('sendButton');
+        const typingIndicator = document.getElementById('typingIndicator');
+        const statusDot = document.getElementById('statusDot');
+        const statusText = document.getElementById('statusText');
+        const messageCountElement = document.getElementById('messageCount');
+        const activeFiltersCount = document.getElementById('activeFiltersCount');
+
+        // Database filter management
+        const databaseCheckboxes = document.querySelectorAll('.filter-checkbox');
+        
+        function updateActiveFiltersCount() {
+            const checkedCount = document.querySelectorAll('.filter-checkbox:checked').length;
+            activeFiltersCount.textContent = `${checkedCount} active`;
+            activeFiltersCount.style.display = checkedCount > 0 ? 'inline-block' : 'none';
+        }
+        
+        function getSelectedDatabases() {
+            const selected = [];
+            databaseCheckboxes.forEach(checkbox => {
+                if (checkbox.checked) {
+                    selected.push(checkbox.value);
+                }
+            });
+            return selected;
+        }
+        
+        function selectAllDatabases() {
+            databaseCheckboxes.forEach(checkbox => {
+                checkbox.checked = true;
+            });
+            updateActiveFiltersCount();
+        }
+        
+        function clearAllDatabases() {
+            databaseCheckboxes.forEach(checkbox => {
+                checkbox.checked = false;
+            });
+            updateActiveFiltersCount();
+        }
+        
+        // Add event listeners to checkboxes
+        databaseCheckboxes.forEach(checkbox => {
+            checkbox.addEventListener('change', updateActiveFiltersCount);
+        });
+        
+        // Initialize filter count
+        updateActiveFiltersCount();
+
+        function addMessage(role, content, isHtml = false) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${role}`;
+            
+            const wrapperDiv = document.createElement('div');
+            wrapperDiv.className = 'message-wrapper';
+            
+            const labelDiv = document.createElement('div');
+            labelDiv.className = 'message-label';
+            labelDiv.textContent = role === 'user' ? 'You' : 'AEGIS - Finance Assist';
+            
+            const bubbleDiv = document.createElement('div');
+            bubbleDiv.className = 'message-bubble';
+            
+            if (isHtml) {
+                bubbleDiv.innerHTML = content;
+            } else {
+                // Render markdown for assistant messages
+                if (role === 'assistant') {
+                    bubbleDiv.innerHTML = marked.parse(content);
+                } else {
+                    bubbleDiv.textContent = content;
+                }
+            }
+            
+            wrapperDiv.appendChild(labelDiv);
+            wrapperDiv.appendChild(bubbleDiv);
+            messageDiv.appendChild(wrapperDiv);
+            
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+            
+            messageCount++;
+            messageCountElement.textContent = `Messages: ${messageCount}`;
+            
+            return { messageDiv, bubbleDiv };
+        }
+
+        function addSubagentContainer(name, bubbleDiv) {
+            const container = document.createElement('div');
+            container.className = 'subagent-container';
+            container.id = `subagent-${name}`;
+            
+            const header = document.createElement('div');
+            header.className = 'subagent-header';
+            header.onclick = () => toggleSubagentContent(name);
+            
+            const title = document.createElement('div');
+            title.className = 'subagent-title';
+            title.innerHTML = `
+                <span class="subagent-badge">${name.toUpperCase()}</span>
+                <span id="subagent-status-${name}"></span>
+            `;
+            
+            const toggle = document.createElement('div');
+            toggle.className = 'subagent-toggle';
+            toggle.id = `subagent-toggle-${name}`;
+            toggle.textContent = 'Click to expand';
+            
+            header.appendChild(title);
+            header.appendChild(toggle);
+            
+            const content = document.createElement('div');
+            content.className = 'subagent-content collapsed';
+            content.id = `subagent-content-${name}`;
+            
+            container.appendChild(header);
+            container.appendChild(content);
+            
+            bubbleDiv.appendChild(container);
+            
+            return content;
+        }
+
+        function toggleSubagentContent(name) {
+            const content = document.getElementById(`subagent-content-${name}`);
+            const toggle = document.getElementById(`subagent-toggle-${name}`);
+            
+            if (content.classList.contains('collapsed')) {
+                content.classList.remove('collapsed');
+                content.classList.add('expanded');
+                toggle.textContent = 'Click to collapse';
+            } else {
+                content.classList.remove('expanded');
+                content.classList.add('collapsed');
+                toggle.textContent = 'Click to expand';
+            }
+        }
+
+        function showTypingIndicator() {
+            typingIndicator.classList.add('active');
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        function hideTypingIndicator() {
+            typingIndicator.classList.remove('active');
+        }
+
+        function setStatus(connected, text = null) {
+            if (connected) {
+                statusDot.classList.remove('error');
+                statusText.textContent = text || 'Connected';
+            } else {
+                statusDot.classList.add('error');
+                statusText.textContent = text || 'Disconnected';
+            }
+        }
+
+        // WebSocket connection
+        let ws = null;
+        let reconnectAttempts = 0;
+        const maxReconnectAttempts = 5;
+        const reconnectDelay = 3000;
+
+        function connectWebSocket() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
+
+            ws.onopen = () => {
+                setStatus(true, 'Connected');
+                reconnectAttempts = 0;
+            };
+
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                handleWebSocketMessage(data);
+            };
+
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                setStatus(false, 'Connection error');
+            };
+
+            ws.onclose = () => {
+                setStatus(false, 'Disconnected');
+                if (reconnectAttempts < maxReconnectAttempts) {
+                    reconnectAttempts++;
+                    setTimeout(() => {
+                        setStatus(false, `Reconnecting... (${reconnectAttempts}/${maxReconnectAttempts})`);
+                        connectWebSocket();
+                    }, reconnectDelay);
+                }
+            };
+        }
+
+        // Initialize WebSocket connection
+        connectWebSocket();
+
+        let currentAssistantMessage = null;
+        let assistantContent = '';
+        let subagentContainers = {};
+        let subagentContent = {};
+
+        function handleWebSocketMessage(data) {
+            hideTypingIndicator();
+
+            if (data.type === 'status') {
+                setStatus(true, data.content);
+            } else if (data.type === 'error') {
+                addMessage('assistant', `Error: ${data.content}`);
+                isProcessing = false;
+                sendButton.disabled = false;
+            } else if (data.type === 'agent') {
+                if (!currentAssistantMessage) {
+                    // Create new assistant message
+                    const result = addAssistantMessageContainer();
+                    currentAssistantMessage = result;
+                    assistantContent = '';
+                    subagentContainers = {};
+                    subagentContent = {};
+                }
+
+                // Update main content
+                assistantContent += data.content || '';
+                currentAssistantMessage.mainContentDiv.innerHTML = marked.parse(assistantContent);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            } else if (data.type === 'subagent_start') {
+                if (currentAssistantMessage) {
+                    const name = data.name;
+                    if (!subagentContainers[name]) {
+                        const contentDiv = addSubagentContainer(name, currentAssistantMessage.dropdownContainer);
+                        subagentContainers[name] = contentDiv;
+                        subagentContent[name] = '';
+
+                        // Add streaming indicator
+                        const statusEl = document.getElementById(`subagent-status-${name}`);
+                        if (statusEl) {
+                            statusEl.innerHTML = '<span class="subagent-streaming"></span>';
+                        }
+                    }
+                }
+            } else if (data.type === 'subagent') {
+                if (currentAssistantMessage) {
+                    const name = data.name;
+                    if (!subagentContainers[name]) {
+                        const contentDiv = addSubagentContainer(name, currentAssistantMessage.dropdownContainer);
+                        subagentContainers[name] = contentDiv;
+                        subagentContent[name] = '';
+                    }
+
+                    // Accumulate and render content
+                    subagentContent[name] += data.content || '';
+                    subagentContainers[name].innerHTML = marked.parse(subagentContent[name]);
+                }
+            } else if (data.type === 'summarizer_start') {
+                // Summarizer starting, content continues in main area
+            }
+
+            // Check if this completes the message
+            if (data.type === 'status' && data.content === 'Ready') {
+                // Mark all subagents as done
+                for (const name in subagentContainers) {
+                    const statusEl = document.getElementById(`subagent-status-${name}`);
+                    if (statusEl) {
+                        statusEl.innerHTML = '';
+                    }
+                }
+
+                currentAssistantMessage = null;
+                isProcessing = false;
+                sendButton.disabled = false;
+                chatInput.focus();
+            }
+        }
+
+        function addAssistantMessageContainer() {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message assistant';
+
+            const wrapperDiv = document.createElement('div');
+            wrapperDiv.className = 'message-wrapper';
+
+            const labelDiv = document.createElement('div');
+            labelDiv.className = 'message-label';
+            labelDiv.textContent = 'AEGIS - Finance Assist';
+
+            const bubbleDiv = document.createElement('div');
+            bubbleDiv.className = 'message-bubble';
+
+            wrapperDiv.appendChild(labelDiv);
+            wrapperDiv.appendChild(bubbleDiv);
+            messageDiv.appendChild(wrapperDiv);
+
+            chatMessages.appendChild(messageDiv);
+            messageCount++;
+            messageCountElement.textContent = `Messages: ${messageCount}`;
+
+            // Create main content div
+            const mainContentDiv = document.createElement('div');
+            mainContentDiv.className = 'main-content';
+            bubbleDiv.appendChild(mainContentDiv);
+
+            // Create dropdown container
+            const dropdownContainer = document.createElement('div');
+            dropdownContainer.className = 'dropdown-container';
+            dropdownContainer.style.marginTop = '10px';
+            bubbleDiv.appendChild(dropdownContainer);
+
+            return { messageDiv, bubbleDiv, mainContentDiv, dropdownContainer };
+        }
+
+        async function sendMessage(message) {
+            if (isProcessing) return;
+
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                addMessage('assistant', 'Error: Not connected to server. Please refresh the page.');
+                return;
+            }
+
+            isProcessing = true;
+            sendButton.disabled = true;
+            showTypingIndicator();
+
+            // Get selected databases
+            const selectedDatabases = getSelectedDatabases();
+
+            // Send message via WebSocket
+            ws.send(JSON.stringify({
+                type: 'message',
+                content: message,
+                databases: selectedDatabases
+            }));
+        }
+
+        async function resetConversation() {
+            if (confirm('Are you sure you want to reset the conversation?')) {
+                try {
+                    const response = await fetch('/api/reset', {
+                        method: 'POST'
+                    });
+                    
+                    if (response.ok) {
+                        // Clear the chat messages except the initial greeting
+                        chatMessages.innerHTML = `
+                            <div class="message assistant">
+                                <div class="message-wrapper">
+                                    <div class="message-label">AEGIS - Finance Assist</div>
+                                    <div class="message-bubble">Hello! I'm Aegis, your financial data assistant. How can I help you today?</div>
+                                </div>
+                            </div>
+                        `;
+                        messageCount = 1;
+                        messageCountElement.textContent = 'Messages: 1';
+                        setStatus(true, 'Conversation reset');
+                    }
+                } catch (error) {
+                    setStatus(false, 'Reset failed');
+                }
+            }
+        }
+
+        // Navigate to monitoring dashboard
+        function goToMonitoring() {
+            window.location.href = '/monitoring';
+        }
+
+        function goToDatabase() {
+            window.location.href = '/database';
+        }
+
+        // Form submission
+        chatForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const message = chatInput.value.trim();
+            if (!message) return;
+            
+            // Add user message to chat
+            addMessage('user', message);
+            
+            // Clear input
+            chatInput.value = '';
+            
+            // Send message to server
+            await sendMessage(message);
+        });
+
+        // Allow Enter key to submit (without Shift)
+        chatInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                chatForm.dispatchEvent(new Event('submit'));
+            }
+        });
+        
+        // Focus input on load
+        chatInput.focus();
+    </script>
+</body>
+</html>
