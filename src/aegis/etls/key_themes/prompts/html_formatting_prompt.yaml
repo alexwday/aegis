@@ -25,15 +25,19 @@ system_template: |
 
   <objective>
   Transform raw Q&A transcript into polished, executive-ready format that:
+
+  CRITICAL INSTRUCTION: Apply formatting to the ACTUAL text. Never insert labels like "KEY QUESTION" or "KEY ANSWER".
+
   1. Uses inline speaker formatting: <b>Name</b> (Title/Firm): content
-  2. Identifies and highlights the KEY QUESTION (1-2 sentences) from analyst with special formatting
-  3. Identifies and highlights the KEY ANSWER (2-3 sentences) from executive with special formatting
-  4. Highlights key financial metrics with bold tags
-  5. Emphasizes forward guidance with bold+italic
-  6. Underlines critical commitments and targets
-  7. Removes ONLY filler words, acknowledgments, and non-substantive follow-ups
-  8. Creates separate paragraphs for each speaker
-  9. Maintains complete management explanations with full context and detail
+  2. Applies dark blue formatting to the analyst's main question sentences (NOT adding any labels)
+  3. Applies medium blue formatting to the executive's key answer sentences (NOT adding any labels)
+  4. Consistently bolds ALL financial metrics, numbers, and percentages
+  5. Consistently italicizes ALL business segments and divisions
+  6. Emphasizes forward guidance with bold+italic
+  7. Underlines critical commitments and targets
+  8. Removes ONLY filler words, acknowledgments, and non-substantive follow-ups
+  9. Creates separate paragraphs for each speaker
+  10. Maintains complete management explanations with full context and detail
   </objective>
 
   <style>
@@ -61,27 +65,33 @@ system_template: |
   </formatting_structure>
 
   <emphasis_strategy>
-  HTML tags for strategic emphasis:
+  HTML FORMATTING RULES - Apply to actual text, DO NOT insert labels:
 
-  SPECIAL FORMATTING FOR KEY CONTENT:
-  <span style="color: #1e4d8b; font-size: 11pt; font-weight: bold;">KEY QUESTION</span> = Analyst's main question (1-2 sentences) - Dark blue
-  <span style="color: #4d94ff; font-size: 11pt; font-weight: bold;">KEY ANSWER</span> = Executive's direct answer (2-3 sentences) - Medium blue
-  <mark style="background-color: #ffff99;">CRITICAL INSIGHT</mark> = Most important strategic revelation
+  CRITICAL: DO NOT INSERT THE WORDS "KEY QUESTION" OR "KEY ANSWER" INTO THE TEXT!
+  Instead, APPLY these formats to the actual question and answer sentences:
 
-  STANDARD EMPHASIS:
-  <b>text</b> = Bold (all numbers, metrics, percentages, ratios, dollar amounts)
-  <i>text</i> = Italic (business segments, programs, geographic regions)
-  <u>text</u> = Underline (firm commitments, specific targets, critical deadlines)
-  <b><i>text</i></b> = Bold + Italic (critical forward guidance and strategic announcements)
-  <b><u>text</u></b> = Bold + Underline (most important quantified commitments)
+  FOR THE MAIN QUESTION (1-2 most important sentences from analyst):
+  <span style="color: #1e4d8b; font-size: 11pt; font-weight: bold;">Apply this dark blue format to the actual question text</span>
 
-  Priority hierarchy:
-  1. KEY QUESTION/ANSWER with color and size enhancement
-  2. <b><i>Critical forward-looking guidance</i></b>
-  3. <b><u>Firm commitments with specific numbers</u></b>
-  4. <u>Important deadlines and targets</u>
-  5. <b>All quantitative data</b>
-  6. <i>Named initiatives and segments</i>
+  FOR THE MAIN ANSWER (2-3 most important sentences from executive):
+  <span style="color: #4d94ff; font-size: 11pt; font-weight: bold;">Apply this medium blue format to the actual answer text</span>
+
+  FOR CRITICAL STRATEGIC INSIGHTS (game-changing information):
+  <mark style="background-color: #ffff99;">Apply yellow highlight to the actual critical insight text</mark>
+
+  CONSISTENT STANDARD FORMATTING THROUGHOUT:
+  • <b>ALL numbers, metrics, percentages, dollar amounts</b> - Always bold
+  • <i>Business segments, divisions, product names, regions</i> - Always italic
+  • <u>Firm commitments, specific targets, deadlines</u> - Always underline
+  • <b><i>Forward-looking guidance and projections</i></b> - Bold + Italic
+  • <b><u>Quantified commitments with numbers</u></b> - Bold + Underline
+
+  FORMATTING PRIORITY (when multiple rules could apply):
+  1. Blue formatting for key question/answer sentences (overrides other formatting for those sentences)
+  2. Yellow highlight for critical insights
+  3. Bold+underline for quantified commitments
+  4. Bold+italic for forward guidance
+  5. Standard formatting (bold numbers, italic segments, underline commitments)
   </emphasis_strategy>
 
   <content_cleanup_rules>
@@ -125,13 +135,16 @@ system_template: |
   <quality_checklist>
   ✓ Speaker names are <b>bolded</b> and inline with content
   ✓ Each speaker is a separate paragraph
-  ✓ Every number/metric is <b>bolded</b>
+  ✓ Key question sentences have dark blue formatting (NO "KEY QUESTION" text added)
+  ✓ Key answer sentences have medium blue formatting (NO "KEY ANSWER" text added)
+  ✓ EVERY number/metric is <b>bolded</b> consistently
+  ✓ EVERY business segment/division is <i>italicized</i> consistently
   ✓ Forward guidance is <b><i>bold+italic</i></b>
   ✓ Commitments are <u>underlined</u> or <b><u>bold+underlined</u></b>
-  ✓ Business segments are <i>italicized</i>
-  ✓ No filler words remain
+  ✓ No filler words or non-substantive follow-ups remain
   ✓ All substantive content preserved verbatim
   ✓ HTML tags properly closed and nested
+  ✓ NO LABELS like "KEY QUESTION" or "KEY ANSWER" inserted into text
   </quality_checklist>
 
   <examples>
