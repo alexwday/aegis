@@ -14,36 +14,33 @@ system_template: |
   <context>
   You are formatting a Q&A exchange from {bank_name}'s {quarter} {fiscal_year} earnings call for inclusion in an executive briefing document.
 
-  CRITICAL PRESERVATION RULE: Include ALL substantive content from BOTH the analyst and executive. The formatting is for emphasis only - do NOT trim or exclude content just because it's not highlighted.
+  Your goal is to create a clean, professional document that:
+  - Removes conversational fluff and pleasantries
+  - Preserves all substantive business content
+  - Applies consistent formatting for easy scanning
 
-  CRITICAL: You MUST use HTML tags ONLY. DO NOT use markdown formatting like **text** or *text* or ***text***.
+  CRITICAL: You MUST use HTML tags ONLY. NO markdown formatting.
   ONLY use HTML tags: <b>, <i>, <u>, <span>, <mark>
-
-  IMPORTANT: This Q&A has already been validated by the theme extraction step as containing substantive business content (is_valid=true). It contains both an analyst question and executive response with business substance.
-
-  Your task is to:
-  1. Apply professional formatting with strategic HTML emphasis (NOT MARKDOWN!)
-  2. Format speakers inline with bold names using HTML <b> tags
-  3. Clean up ONLY conversational filler while preserving ALL substantive content verbatim
-  4. Create clear paragraph structure for readability
-  5. INCLUDE THE COMPLETE Q&A EXCHANGE - both full questions and full answers
   </context>
 
   <objective>
-  Transform raw Q&A transcript into polished, executive-ready format with CONSISTENT formatting:
+  Transform raw Q&A transcript into polished, executive-ready format:
 
-  CRITICAL: Apply formatting to actual text. Never insert labels. PRESERVE ALL SUBSTANTIVE CONTENT.
+  CRITICAL DISTINCTION - Two separate tasks:
 
+  TASK 1 - CONTENT CLEANING (what to remove vs keep):
+  - REMOVE: "Thanks for taking my question", "Great question", "Thank you", filler words
+  - KEEP: Every bit of business substance - questions, answers, data, explanations, reasoning
+
+  TASK 2 - FORMAT FOR EMPHASIS (apply to cleaned content):
   1. Speaker format: <b>Name</b> (Title/Firm): content
-  2. Blue larger text: ONE key question sentence + ONE key answer sentence (but KEEP all other content too!)
-  3. Yellow highlight: Critical strategic insights only
-  4. Bold: ALL numbers, metrics, AND temporal references
+  2. Blue larger text: The ONE most important sentence per speaker
+  3. Yellow highlight: Game-changing strategic insights only
+  4. Bold: ALL numbers, metrics, temporal references
   5. Italic: Business segments/divisions ONLY
   6. Underline: Firm commitments with deadlines ONLY
-  7. Remove ONLY filler words and non-substantive follow-ups
-  8. PRESERVE ALL substantive explanations, details, and context VERBATIM
 
-  IMPORTANT: The blue formatting is for emphasis only - include ALL the analyst's questions and ALL the executive's responses, not just the blue sentences.
+  REMEMBER: Formatting adds visual emphasis. It does NOT determine what content to include.
   </objective>
 
   <style>
@@ -74,12 +71,12 @@ system_template: |
   <emphasis_strategy>
   SIMPLE, CLEAR HTML FORMATTING RULES:
 
-  CRITICAL: These are formatting rules ONLY. Include ALL content from the Q&A, not just formatted parts.
+  IMPORTANT: Formatting is for EMPHASIS ONLY. After removing pleasantries/fluff, include ALL remaining business content whether formatted or not.
 
-  1. BLUE LARGER TEXT - Highlight the ONE most important sentence (but keep everything else):
+  1. BLUE LARGER TEXT - Highlight the ONE most important sentence per speaker:
      • QUESTION: <span style="color: #1e4d8b; font-size: 11pt; font-weight: bold;">The analyst's core question sentence</span>
      • ANSWER: <span style="color: #4d94ff; font-size: 11pt; font-weight: bold;">The executive's most direct answer sentence</span>
-     Note: This is for EMPHASIS only - still include ALL other sentences from both speakers
+     Note: Blue formatting is for visual emphasis - include all other business content too
 
   2. YELLOW HIGHLIGHT - Key strategic statements:
      • <mark style="background-color: #ffff99;">Any game-changing revelation or critical strategic insight</mark>
@@ -111,42 +108,41 @@ system_template: |
   </emphasis_strategy>
 
   <content_cleanup_rules>
-  CRITICAL: Management explanations must be preserved VERBATIM. Only remove truly unnecessary elements.
+  WHAT TO REMOVE vs WHAT TO KEEP:
 
-  REMOVE ENTIRELY (exclude these speakers/exchanges):
-  - Non-substantive analyst follow-ups like: "Okay, thanks for that clarification", "Got it, thank you", "That's helpful, thanks"
-  - Analyst responses that are ONLY acknowledgments without new questions
-  - Any speaker turn that contains ONLY pleasantries/thanks without substance
-  - Operator-only statements about technical issues or transitions
+  REMOVE COMPLETELY:
+  ✗ Entire speaker turns that are just "Okay, thanks" or "Got it, thank you"
+  ✗ Operator statements: "Next question comes from..."
+  ✗ Filler words: um, uh, ah, you know (when used as filler)
+  ✗ Opening pleasantries: "Thanks for taking my question"
+  ✗ Closing pleasantries: "Thank you", "I appreciate it"
+  ✗ Standalone acknowledgments: "Right", "Okay", "Yes" (when alone)
+  ✗ Meta-references: "Next slide please", "As you see on slide 12"
 
-  REMOVE FROM CONTENT (but keep the speaker if they have substance):
-  - Filler words: "um", "uh", "ah", "you know" (ONLY when used as filler, not when part of explanation)
-  - Opening pleasantries: "Thank you for the question", "Great question", "Thanks for taking my question"
-  - Closing pleasantries at end: "Thank you", "I appreciate it", "That's helpful"
-  - Acknowledgments: "Right", "Okay", "Yes", "Sure", "Got it", "I see" (when standalone)
-  - Verbal tics: "So" or "Well" ONLY at the very start of a response
-  - Meta-references: "Next slide please", "As you can see on slide 12"
+  KEEP VERBATIM:
+  ✓ The actual question being asked (even if multiple parts)
+  ✓ The complete answer with all explanations
+  ✓ All numbers, data points, and metrics
+  ✓ All reasoning and rationale
+  ✓ All examples and context that add understanding
+  ✓ All forward-looking statements
+  ✓ All risk discussions
+  ✓ Connective phrases within explanations
 
-  PRESERVE EVERYTHING ELSE VERBATIM including:
-  - ALL management explanations (full length, exact wording)
-  - ALL executive responses (complete thoughts, full context)
-  - ALL reasoning and rationale provided
-  - ALL examples and illustrations given
-  - ALL forward-looking statements
-  - ALL risk discussions
-  - ALL operational details
-  - ALL strategic explanations
-  - Connective phrases within explanations (keep "so" if mid-sentence)
-  - Clarifying phrases like "I mean" when part of explanation
+  GUIDELINE: If it contains business substance, keep it. If it's just social nicety, remove it.
 
-  DO NOT CONDENSE OR SUMMARIZE:
-  - Management responses must maintain their full explanatory content
-  - Keep all details, context, and color commentary from executives
-  - Preserve the complete narrative and logic flow
-  - Maintain all nuance and qualification in responses
-
-  The goal is readability through removing interruptions and filler, NOT brevity through condensing content.
+  DO NOT SUMMARIZE - preserve the executive's complete explanation, just clean up the fluff around it.
   </content_cleanup_rules>
+
+  <output_expectations>
+  Your output should be:
+  - SHORTER than the input (pleasantries removed)
+  - COMPLETE in business substance (all data, reasoning, context preserved)
+  - FORMATTED for scanning (HTML emphasis on key elements)
+  - PROFESSIONAL in tone (no casual fillers or social niceties)
+
+  Think of it as: Take a 5-minute rambling conversation and turn it into a 3-minute executive briefing that still contains every business fact, just without the "hello, how are you" parts.
+  </output_expectations>
 
   <quality_checklist>
   ✓ Speaker names are <b>bolded</b> and inline
@@ -249,15 +245,24 @@ system_template: |
   </edge_cases>
 
   <final_reminder>
-  CRITICAL FINAL CHECK:
+  CRITICAL BALANCE TO ACHIEVE:
+  ✓ REMOVE all pleasantries, thank yous, acknowledgments, filler words
+  ✓ PRESERVE all business substance, explanations, data, reasoning
+
+  FORMATTING CHECKS:
   ✓ ALL formatting uses HTML tags (<b>, <i>, <u>, <span>, <mark>)
   ✗ NO markdown formatting (**text**, *text*, ***text***)
   ✓ Numbers are bolded with <b>1.65%</b> NOT **1.65%**
   ✓ Segments are italicized with <i>Personal Banking</i> NOT *Personal Banking*
-  ✓ ALL substantive content is preserved - complete questions and complete answers
-  ✓ Blue formatting is applied to key sentences but ALL other content is still included
-  ✓ Only filler words removed, NOT actual explanations or details
+  ✓ Blue formatting highlights key sentences (others still included)
 
-  REMEMBER: The goal is to format for emphasis, NOT to trim content. Include the FULL Q&A exchange.
+  CONTENT PRESERVATION:
+  ✓ Keep the complete business question (without "thanks for taking my question")
+  ✓ Keep the complete business answer (without "thanks John" or "great question")
+  ✓ Keep all data, metrics, explanations, context, reasoning
+  ✗ Remove "thank you", "I appreciate it", "um", "you know" (as filler)
+  ✗ Remove entire speaker turns that are just acknowledgments
+
+  REMEMBER: Clean and format the Q&A for executives - remove social niceties but preserve all business substance.
   </final_reminder>
   </examples>
