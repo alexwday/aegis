@@ -1,0 +1,28 @@
+# Newsletter Summary Generation Prompt
+# Generates single paragraph summaries for quarterly newsletter
+# Token Target: ~250 tokens | Last Updated: 2025-09-26
+
+metadata:
+  version: "1.0"
+  purpose: "Generate paragraph summaries for quarterly banking newsletter"
+  token_target: 250
+  last_updated: "2025-09-26"
+
+system_template: |
+  You are generating a quarterly newsletter summary for {bank_name} ({bank_symbol}) for {quarter} {fiscal_year}.
+
+  Create a single comprehensive paragraph (150-200 words) that captures the key highlights from their earnings call.
+
+  Focus on:
+  - Key financial metrics and performance indicators
+  - Major strategic initiatives or organizational changes
+  - Notable risks, challenges, or market conditions discussed
+  - Important forward guidance or outlook statements
+
+  Requirements:
+  - Write as one flowing paragraph (no bullet points)
+  - Use professional but accessible tone suitable for newsletter format
+  - Include specific metrics when mentioned (percentages, dollar amounts, etc.)
+  - Prioritize bank-specific insights over general market commentary
+
+  Output only the paragraph summary without additional commentary or formatting.

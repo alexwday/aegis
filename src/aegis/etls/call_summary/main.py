@@ -498,9 +498,9 @@ def load_categories_from_xlsx(bank_type: str) -> List[Dict[str, str]]:
         # Default to US if unknown type
         file_name = "us_banks_categories.xlsx"
     
-    # Build path to XLSX file
+    # Build path to XLSX file in config folder
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    xlsx_path = os.path.join(current_dir, file_name)
+    xlsx_path = os.path.join(current_dir, 'config', file_name)
     
     if not os.path.exists(xlsx_path):
         error_msg = f"Categories file not found: {xlsx_path}. Cannot proceed without category definitions."
@@ -572,9 +572,9 @@ async def get_bank_info(bank_name: str) -> Dict[str, Any]:
                 WHERE bank_id = :bank_id
                 LIMIT 1
                 """
-            ))
-            result = await result.fetchone()
-            result = result._asdict() if result else None
+            ), {"bank_id": int(bank_name)})
+            row = result.fetchone()
+            result = row._asdict() if row else None
         else:
             # Try exact match first on name or symbol
             result = await conn.execute(text(
@@ -585,13 +585,13 @@ async def get_bank_info(bank_name: str) -> Dict[str, Any]:
                    OR LOWER(bank_symbol) = LOWER(:bank_name)
                 LIMIT 1
                 """
-            ))
-            result = await result.fetchone()
-            result = result._asdict() if result else None
+            ), {"bank_name": bank_name})
+            row = result.fetchone()
+            result = row._asdict() if row else None
             
             if not result:
                 # Try partial match
-                result = await conn.execute(text(
+                partial_result = await conn.execute(text(
                     """
                     SELECT DISTINCT bank_id, bank_name, bank_symbol
                     FROM aegis_data_availability
@@ -599,9 +599,9 @@ async def get_bank_info(bank_name: str) -> Dict[str, Any]:
                        OR LOWER(bank_symbol) LIKE LOWER(:pattern)
                     LIMIT 1
                     """
-                ))
-                result = await result.fetchone()
-                result = result._asdict() if result else None
+                ), {"pattern": f"%{bank_name}%"})
+                row = partial_result.fetchone()
+                result = row._asdict() if row else None
         
         if not result:
             # List available banks for user
@@ -647,11 +647,11 @@ async def verify_data_availability(bank_id: int, fiscal_year: int, quarter: str)
               AND fiscal_year = :fiscal_year
               AND quarter = :quarter
             """
-        ))
-        result = await result.fetchone()
+        ), {"bank_id": bank_id, "fiscal_year": fiscal_year, "quarter": quarter})
+        row = result.fetchone()
 
-        if result and result['database_names']:
-            return 'transcripts' in result['database_names']
+        if row and row[0]:  # row[0] is database_names column
+            return 'transcripts' in row[0]
 
         return False
 
