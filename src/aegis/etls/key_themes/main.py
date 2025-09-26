@@ -18,7 +18,7 @@ import json
 import sys
 import uuid
 import os
-import re
+# import re  # No longer needed - using HTML parser instead
 from datetime import datetime
 from typing import Dict, Any, List, Optional
 from sqlalchemy import text
@@ -30,6 +30,7 @@ from docx.oxml import OxmlElement, parse_xml
 from docx.oxml.ns import qn, nsdecls
 import hashlib
 from collections import defaultdict
+from html.parser import HTMLParser
 
 # Import document converter functions
 from aegis.etls.key_themes.document_converter import (
@@ -52,6 +53,77 @@ setup_logging()
 logger = get_logger()
 
 
+class HTMLToDocx(HTMLParser):
+    """
+    Parser to convert HTML-formatted text to Word document formatting.
+    Supports: <b>, <strong>, <i>, <em>, <u>, <mark> tags and their nesting.
+    """
+
+    def __init__(self, paragraph, font_size=Pt(9)):
+        super().__init__()
+        self.paragraph = paragraph
+        self.font_size = font_size
+        self.text_buffer = ""
+        self.format_stack = []  # Stack to track nested formatting
+
+    def handle_starttag(self, tag, attrs):
+        # Flush any pending text before changing format
+        self._flush_text()
+
+        # Add format to stack
+        if tag in ['b', 'strong']:
+            self.format_stack.append('bold')
+        elif tag in ['i', 'em']:
+            self.format_stack.append('italic')
+        elif tag == 'u':
+            self.format_stack.append('underline')
+        elif tag == 'mark':
+            self.format_stack.append('highlight')
+
+    def handle_endtag(self, tag):
+        # Flush any pending text before changing format
+        self._flush_text()
+
+        # Remove format from stack
+        if tag in ['b', 'strong'] and 'bold' in self.format_stack:
+            self.format_stack.remove('bold')
+        elif tag in ['i', 'em'] and 'italic' in self.format_stack:
+            self.format_stack.remove('italic')
+        elif tag == 'u' and 'underline' in self.format_stack:
+            self.format_stack.remove('underline')
+        elif tag == 'mark' and 'highlight' in self.format_stack:
+            self.format_stack.remove('highlight')
+
+    def handle_data(self, data):
+        # Buffer text to handle whitespace properly
+        self.text_buffer += data
+
+    def _flush_text(self):
+        """Apply formatting and add text to document."""
+        if not self.text_buffer:
+            return
+
+        run = self.paragraph.add_run(self.text_buffer)
+        run.font.size = self.font_size
+
+        # Apply all active formats
+        if 'bold' in self.format_stack:
+            run.font.bold = True
+        if 'italic' in self.format_stack:
+            run.font.italic = True
+        if 'underline' in self.format_stack:
+            run.font.underline = True
+        if 'highlight' in self.format_stack:
+            run.font.highlight_color = 'yellow'
+
+        self.text_buffer = ""
+
+    def close(self):
+        """Ensure any remaining text is flushed."""
+        self._flush_text()
+        super().close()
+
+
 class QABlock:
     """Represents a single Q&A block with its extracted information."""
 
@@ -63,6 +135,7 @@ class QABlock:
         self.summary = None
         self.formatted_content = None
         self.assigned_group = None
+        self.is_valid = True  # Default to valid until proven otherwise
 
 
 class ThemeGroup:
@@ -271,6 +344,7 @@ async def load_qa_blocks(
 async def extract_theme_and_summary(qa_block: QABlock, context: Dict[str, Any]):
     """
     Step 2A: Extract theme title and summary for a single Q&A block.
+    Validates content and skips invalid Q&A sessions.
     """
     # Load theme extraction tool
     tool_path = os.path.join(
@@ -280,9 +354,16 @@ async def extract_theme_and_summary(qa_block: QABlock, context: Dict[str, Any]):
     with open(tool_path, 'r') as f:
         tool_config = yaml.safe_load(f)
 
+    # Format the system template with actual values
+    system_prompt = tool_config['system_template'].format(
+        bank_name=context.get('bank_name', 'Bank'),
+        quarter=context.get('quarter', 'Q'),
+        fiscal_year=context.get('fiscal_year', 'Year')
+    )
+
     messages = [
-        {"role": "system", "content": tool_config['system_template']},
-        {"role": "user", "content": f"Extract theme from:\n\n{qa_block.original_content}"}
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": f"Extract theme from this Q&A session:\n\n{qa_block.original_content}"}
     ]
 
     try:
@@ -297,32 +378,60 @@ async def extract_theme_and_summary(qa_block: QABlock, context: Dict[str, Any]):
             tool_calls = response.get('choices', [{}])[0].get('message', {}).get('tool_calls', [])
             if tool_calls:
                 result = json.loads(tool_calls[0]['function']['arguments'])
-                qa_block.theme_title = result['theme_title']
-                qa_block.summary = result.get('summary', '')  # Use simplified schema
-                logger.debug(f"Extracted theme for {qa_block.qa_id}: {qa_block.theme_title}")
+
+                # Check if the Q&A is valid
+                is_valid = result.get('is_valid', True)
+
+                if is_valid:
+                    qa_block.theme_title = result['theme_title']
+                    qa_block.summary = result.get('summary', '')
+                    qa_block.is_valid = True
+                    logger.debug(f"Extracted theme for {qa_block.qa_id}: {qa_block.theme_title}")
+                else:
+                    # Mark as invalid and log the reason
+                    qa_block.is_valid = False
+                    rejection_reason = result.get('rejection_reason', 'Invalid Q&A content')
+                    logger.info(f"Skipping invalid Q&A {qa_block.qa_id}: {rejection_reason}")
+                    qa_block.theme_title = None
+                    qa_block.summary = None
 
     except Exception as e:
         logger.error(f"Error extracting theme for {qa_block.qa_id}: {str(e)}")
         # Set defaults on error
         qa_block.theme_title = f"Q&A Discussion {qa_block.position}"
         qa_block.summary = "Theme extraction failed"
+        qa_block.is_valid = True  # Assume valid on error to avoid losing data
 
 
-async def format_qa_markdown(qa_block: QABlock, context: Dict[str, Any]):
+async def format_qa_html(qa_block: QABlock, context: Dict[str, Any]):
     """
-    Step 2B: Format Q&A block with markdown emphasis.
+    Step 2B: Format Q&A block with HTML tags for emphasis.
+    Only formats valid Q&A blocks that passed validation.
     """
-    # Load markdown formatting config
+    # Skip formatting if the block is invalid
+    if not qa_block.is_valid:
+        logger.debug(f"Skipping formatting for invalid Q&A block {qa_block.qa_id}")
+        qa_block.formatted_content = None
+        return
+
+    # Load HTML formatting config
     format_path = os.path.join(
         os.path.dirname(os.path.abspath(__file__)),
-        'prompts', 'markdown_formatting_prompt.yaml'
+        'prompts', 'html_formatting_prompt.yaml'
     )
     with open(format_path, 'r') as f:
         format_config = yaml.safe_load(f)
 
+    # Format the system template with actual values
+    system_prompt = format_config['system_template'].format(
+        bank_name=context.get('bank_name', 'Bank'),
+        quarter=context.get('quarter', 'Q'),
+        fiscal_year=context.get('fiscal_year', 'Year')
+    )
+
     messages = [
-        {"role": "system", "content": format_config['system_template']},
-        {"role": "user", "content": f"Format with markdown emphasis:\n\n{qa_block.original_content}"}
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": f"Format this Q&A exchange with HTML tags for emphasis:\n\n{qa_block.original_content}"}
     ]
 
     try:
@@ -348,9 +457,9 @@ async def process_all_qa_blocks(qa_index: Dict[str, QABlock], context: Dict[str,
     # Create tasks for parallel processing
     tasks = []
     for qa_block in qa_index.values():
-        # Create coroutines for theme extraction and formatting
+        # Create coroutines for theme extraction and HTML formatting
         theme_task = extract_theme_and_summary(qa_block, context)
-        format_task = format_qa_markdown(qa_block, context)
+        format_task = format_qa_html(qa_block, context)
         tasks.extend([theme_task, format_task])
 
     # Execute all tasks in parallel
@@ -365,8 +474,20 @@ async def determine_comprehensive_grouping(
 ) -> List[ThemeGroup]:
     """
     Step 3: Make ONE comprehensive grouping decision for all themes.
+    Only processes valid Q&A blocks.
     """
-    logger.info("Determining comprehensive theme grouping")
+    # Filter out invalid Q&A blocks
+    valid_qa_blocks = {qa_id: qa_block for qa_id, qa_block in qa_index.items() if qa_block.is_valid}
+    invalid_count = len(qa_index) - len(valid_qa_blocks)
+
+    if invalid_count > 0:
+        logger.info(f"Filtered out {invalid_count} invalid Q&A blocks from grouping")
+
+    if not valid_qa_blocks:
+        logger.warning("No valid Q&A blocks to group")
+        return []
+
+    logger.info(f"Determining comprehensive theme grouping for {len(valid_qa_blocks)} valid Q&A blocks")
 
     # Load grouping tool
     tool_path = os.path.join(
@@ -376,14 +497,13 @@ async def determine_comprehensive_grouping(
     with open(tool_path, 'r') as f:
         tool_config = yaml.safe_load(f)
 
-    # Prepare Q&A blocks info for the LLM
+    # Prepare Q&A blocks info for the LLM - only valid blocks
     qa_blocks_info = []
-    for qa_id, qa_block in sorted(qa_index.items(), key=lambda x: x[1].position):
+    for qa_id, qa_block in sorted(valid_qa_blocks.items(), key=lambda x: x[1].position):
         qa_blocks_info.append(
             f"ID: {qa_id}\n"
             f"Title: {qa_block.theme_title}\n"
             f"Summary: {qa_block.summary}\n"
-            # Summary already included above
         )
 
     qa_blocks_str = "\n\n".join(qa_blocks_info)
@@ -394,7 +514,7 @@ async def determine_comprehensive_grouping(
         bank_symbol=context.get('bank_symbol', 'BANK'),
         quarter=context.get('quarter', 'Q'),
         fiscal_year=context.get('fiscal_year', 'Year'),
-        total_qa_blocks=len(qa_index),
+        total_qa_blocks=len(valid_qa_blocks),  # Use valid count
         qa_blocks_info=qa_blocks_str
     )
 
@@ -408,7 +528,7 @@ async def determine_comprehensive_grouping(
             messages=messages,
             tools=[tool_config['tool']],
             context=context,
-            llm_params={"model": MODELS["theme_extraction"], "temperature": TEMPERATURE, "max_tokens": MAX_TOKENS}
+            llm_params={"model": MODELS["grouping"], "temperature": TEMPERATURE, "max_tokens": MAX_TOKENS}
         )
 
         if response:
@@ -422,7 +542,7 @@ async def determine_comprehensive_grouping(
                     group = ThemeGroup(
                         group_title=group_data['group_title'],
                         qa_ids=group_data['qa_ids'],
-                        rationale=group_data.get('rationale', '')
+                        rationale=group_data.get('rationale', 'Grouped by topic similarity')
                     )
                     theme_groups.append(group)
 
@@ -432,10 +552,10 @@ async def determine_comprehensive_grouping(
     except Exception as e:
         logger.error(f"Error in comprehensive grouping: {str(e)}")
 
-    # Fallback: each Q&A gets its own theme
+    # Fallback: each valid Q&A gets its own theme
     logger.warning("Falling back to individual themes")
     theme_groups = []
-    for qa_id, qa_block in qa_index.items():
+    for qa_id, qa_block in valid_qa_blocks.items():  # Use valid_qa_blocks
         group = ThemeGroup(
             group_title=qa_block.theme_title,
             qa_ids=[qa_id],
@@ -646,78 +766,38 @@ def create_optimized_document(
             conv_run.font.size = Pt(11)
             conv_run.font.color.rgb = RGBColor(0, 0, 0)  # Black color
 
-            # Add the formatted content with markdown processing
+            # Add the formatted content with HTML processing and indentation
             content = qa_block.formatted_content or qa_block.original_content
             for line in content.split('\n'):
                 if line.strip():
-                    # Skip markdown horizontal rules (---)
-                    if line.strip() == '---' or line.strip() == '***' or line.strip() == '___':
+                    # Skip horizontal rules
+                    if line.strip() in ['---', '***', '___', '<hr>', '<hr/>', '<hr />']:
                         continue
 
-                    # Remove markdown headers if present
-                    clean_line = line.lstrip('#').strip()
-
-                    # Create paragraph
+                    # Create paragraph with indentation and parse HTML
                     p = doc.add_paragraph()
-
-                    # Process markdown formatting in the line
-                    # Pattern to match various markdown formats
-                    # **bold**, *italic*, ***bold+italic***
-                    pattern = r'(\*\*\*(.+?)\*\*\*|\*\*(.+?)\*\*|\*(.+?)\*|__(.+?)__|_(.+?)_)'
-
-                    last_end = 0
-                    for match in re.finditer(pattern, clean_line):
-                        # Add text before the match
-                        if match.start() > last_end:
-                            run = p.add_run(clean_line[last_end:match.start()])
-                            run.font.size = Pt(9)
-
-                        # Add formatted text
-                        if match.group(2):  # Bold + Italic (***text***)
-                            run = p.add_run(match.group(2))
-                            run.font.bold = True
-                            run.font.italic = True
-                            run.font.size = Pt(9)
-                        elif match.group(3):  # Bold (**text**)
-                            run = p.add_run(match.group(3))
-                            run.font.bold = True
-                            run.font.size = Pt(9)
-                        elif match.group(4):  # Italic (*text*)
-                            run = p.add_run(match.group(4))
-                            run.font.italic = True
-                            run.font.size = Pt(9)
-                        elif match.group(5):  # Bold alternative (__text__)
-                            run = p.add_run(match.group(5))
-                            run.font.bold = True
-                            run.font.size = Pt(9)
-                        elif match.group(6):  # Italic alternative (_text_)
-                            run = p.add_run(match.group(6))
-                            run.font.italic = True
-                            run.font.size = Pt(9)
-
-                        last_end = match.end()
-
-                    # Add remaining text after last match
-                    if last_end < len(clean_line):
-                        run = p.add_run(clean_line[last_end:])
-                        run.font.size = Pt(9)
-
-                    # If no markdown found, ensure we still have content
-                    if not p.runs:
-                        run = p.add_run(clean_line)
-                        run.font.size = Pt(9)
-
-                    # Set paragraph spacing for readability
+                    p.paragraph_format.left_indent = Inches(0.3)  # Indent conversation content
                     p.paragraph_format.space_after = Pt(3)
                     p.paragraph_format.line_spacing = 1.15
+
+                    # Use HTML parser to add formatted text
+                    parser = HTMLToDocx(p, font_size=Pt(9))
+                    parser.feed(line.strip())
+                    parser.close()
+
+                    # If no content was added (empty line), add it as plain text
+                    if not p.runs:
+                        run = p.add_run(line.strip())
+                        run.font.size = Pt(9)
 
             # Add subtle separator between conversations within the same theme
             if j < len(sorted_blocks):
                 separator = doc.add_paragraph()
+                separator.paragraph_format.left_indent = Inches(0.3)  # Match conversation indentation
                 separator.paragraph_format.space_before = Pt(6)
                 separator.paragraph_format.space_after = Pt(6)
                 # Add a subtle horizontal line
-                separator_run = separator.add_run("_" * 60)
+                separator_run = separator.add_run("_" * 50)
                 separator_run.font.size = Pt(8)
                 separator_run.font.color.rgb = RGBColor(200, 200, 200)
 
@@ -768,6 +848,12 @@ async def main():
         bank_info = await resolve_bank_info(args.bank, context)
         logger.info(f"Processing key themes for {bank_info['name']} ({bank_info['ticker']})")
 
+        # Add bank info to context for all prompts
+        context['bank_name'] = bank_info['name']
+        context['bank_symbol'] = bank_info['ticker']
+        context['quarter'] = args.quarter
+        context['fiscal_year'] = args.year
+
         # Step 1: Load all Q&A blocks into index
         qa_index = await load_qa_blocks(
             bank_info['name'],
@@ -784,11 +870,6 @@ async def main():
         await process_all_qa_blocks(qa_index, context)
 
         # Step 3: Determine comprehensive grouping
-        # Add bank info to context for grouping prompt
-        context['bank_name'] = bank_info['name']
-        context['bank_symbol'] = bank_info['ticker']
-        context['quarter'] = args.quarter
-        context['fiscal_year'] = args.year
         theme_groups = await determine_comprehensive_grouping(qa_index, context)
 
         # Step 4: Apply grouping to index
@@ -817,9 +898,12 @@ async def main():
 
         # Report statistics
         total_qa = sum(len(group.qa_blocks) for group in theme_groups)
+        invalid_qa = sum(1 for qa in qa_index.values() if not qa.is_valid)
         logger.info(f"✓ Key themes report generated successfully")
         logger.info(f"  Theme Groups: {len(theme_groups)}")
-        logger.info(f"  Total Q&As: {total_qa}")
+        logger.info(f"  Valid Q&As: {total_qa}")
+        if invalid_qa > 0:
+            logger.info(f"  Invalid Q&As filtered: {invalid_qa}")
         logger.info(f"  DOCX: {docx_path}")
 
         return 0
