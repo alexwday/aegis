@@ -45,7 +45,7 @@ from aegis.connections.oauth_connector import setup_authentication
 from aegis.connections.llm_connector import complete, complete_with_tools
 from aegis.connections.postgres_connector import get_connection
 from aegis.utils.logging import setup_logging, get_logger
-from aegis.etls.key_themes.config import MODELS, TEMPERATURE, MAX_TOKENS
+from aegis.etls.key_themes.config.config import MODELS, TEMPERATURE, MAX_TOKENS
 
 # Initialize logging
 setup_logging()
@@ -61,7 +61,6 @@ class QABlock:
         self.original_content = original_content
         self.theme_title = None
         self.summary = None
-        self.key_metrics = []
         self.formatted_content = None
         self.assigned_group = None
 
@@ -276,7 +275,7 @@ async def extract_theme_and_summary(qa_block: QABlock, context: Dict[str, Any]):
     # Load theme extraction tool
     tool_path = os.path.join(
         os.path.dirname(os.path.abspath(__file__)),
-        'theme_extraction_prompt.yaml'
+        'prompts', 'theme_extraction_prompt.yaml'
     )
     with open(tool_path, 'r') as f:
         tool_config = yaml.safe_load(f)
@@ -299,8 +298,7 @@ async def extract_theme_and_summary(qa_block: QABlock, context: Dict[str, Any]):
             if tool_calls:
                 result = json.loads(tool_calls[0]['function']['arguments'])
                 qa_block.theme_title = result['theme_title']
-                qa_block.summary = result.get('formatted_content', '')[:200]  # Brief summary
-                qa_block.key_metrics = result.get('key_points', [])
+                qa_block.summary = result.get('summary', '')  # Use simplified schema
                 logger.debug(f"Extracted theme for {qa_block.qa_id}: {qa_block.theme_title}")
 
     except Exception as e:
@@ -317,7 +315,7 @@ async def format_qa_markdown(qa_block: QABlock, context: Dict[str, Any]):
     # Load markdown formatting config
     format_path = os.path.join(
         os.path.dirname(os.path.abspath(__file__)),
-        'markdown_formatting_prompt.yaml'
+        'prompts', 'markdown_formatting_prompt.yaml'
     )
     with open(format_path, 'r') as f:
         format_config = yaml.safe_load(f)
@@ -373,7 +371,7 @@ async def determine_comprehensive_grouping(
     # Load grouping tool
     tool_path = os.path.join(
         os.path.dirname(os.path.abspath(__file__)),
-        'theme_grouping_prompt.yaml'
+        'prompts', 'theme_grouping_prompt.yaml'
     )
     with open(tool_path, 'r') as f:
         tool_config = yaml.safe_load(f)
@@ -385,7 +383,7 @@ async def determine_comprehensive_grouping(
             f"ID: {qa_id}\n"
             f"Title: {qa_block.theme_title}\n"
             f"Summary: {qa_block.summary}\n"
-            f"Key Points: {', '.join(qa_block.key_metrics[:3]) if qa_block.key_metrics else 'N/A'}"
+            # Summary already included above
         )
 
     qa_blocks_str = "\n\n".join(qa_blocks_info)

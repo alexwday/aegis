@@ -46,7 +46,7 @@ from aegis.connections.llm_connector import complete_with_tools
 from aegis.connections.postgres_connector import get_connection
 from aegis.utils.logging import setup_logging, get_logger
 from aegis.utils.settings import config
-from aegis.etls.call_summary.config import MODELS, TEMPERATURE, MAX_TOKENS
+from aegis.etls.call_summary.config.config import MODELS, TEMPERATURE, MAX_TOKENS
 
 # Initialize logging
 setup_logging()
@@ -126,8 +126,8 @@ def get_model_for_stage(stage: str, category_name: Optional[str] = None) -> str:
 def load_research_plan_config():
     """Load the research plan prompt and tool definition from YAML file."""
     prompt_path = os.path.join(
-        os.path.dirname(os.path.abspath(__file__)), 
-        'research_plan_prompt.yaml'
+        os.path.dirname(os.path.abspath(__file__)),
+        'prompts', 'research_plan_prompt.yaml'
     )
     with open(prompt_path, 'r') as f:
         config = yaml.safe_load(f)
@@ -140,8 +140,8 @@ def load_research_plan_config():
 def load_category_extraction_config():
     """Load the category extraction prompt and tool definition from YAML file."""
     prompt_path = os.path.join(
-        os.path.dirname(os.path.abspath(__file__)), 
-        'category_extraction_prompt.yaml'
+        os.path.dirname(os.path.abspath(__file__)),
+        'prompts', 'category_extraction_prompt.yaml'
     )
     with open(prompt_path, 'r') as f:
         config = yaml.safe_load(f)

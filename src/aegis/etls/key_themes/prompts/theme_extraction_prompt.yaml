@@ -1,0 +1,33 @@
+# Theme Extraction Prompt - Optimized v2.0
+# Purpose: Extract initial theme and summary for Q&A grouping
+# Token Target: ~80 tokens | Last Updated: 2024-09-25
+
+metadata:
+  version: "2.0"
+  purpose: "Extract theme title and summary from earnings Q&A"
+  token_target: 80
+  last_updated: "2024-09-25"
+
+tool:
+  type: function
+  function:
+    name: extract_qa_theme
+    description: Extract theme and summary from earnings Q&A
+    parameters:
+      type: object
+      properties:
+        theme_title:
+          type: string
+          description: "Format: 'Topic - Context' (5-12 words, dash required)"
+        summary:
+          type: string
+          description: "2-3 sentences capturing key points and context for grouping"
+      required: [theme_title, summary]
+
+system_template: |
+  Extract theme title and summary from {bank_name} {quarter} {fiscal_year} earnings call Q&A.
+
+  THEME FORMAT: "Topic - Context"
+  Examples: "Credit - Outlook Beyond Tariffs", "NIM - Forward Guidance"
+
+  SUMMARY: 2-3 sentences capturing key discussion points, metrics, and strategic context for grouping decisions.

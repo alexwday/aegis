@@ -1,5 +1,12 @@
 # Category Extraction Prompt - Quality Optimized
 # Enhanced for comprehensive, high-quality extraction with context awareness
+# Token Target: ~400 tokens | Last Updated: 2024-09-25
+
+metadata:
+  version: "2.0"
+  purpose: "Extract comprehensive category content from earnings calls"
+  token_target: 400
+  last_updated: "2024-09-25"
 
 tool:
   type: function

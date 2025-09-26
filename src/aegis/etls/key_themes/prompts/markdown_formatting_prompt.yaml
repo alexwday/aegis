@@ -1,0 +1,26 @@
+# Markdown Formatting Prompt - Optimized v2.0
+# Purpose: Transform Q&A content into executive-ready formatted documents
+# Token Target: ~60 tokens | Last Updated: 2024-09-25
+
+metadata:
+  version: "2.0"
+  purpose: "Format Q&A exchanges for executive document inclusion"
+  token_target: 60
+  last_updated: "2024-09-25"
+
+system_template: |
+  Transform {bank_name} {quarter} {fiscal_year} Q&A into professional executive format. Remove filler, preserve substance.
+
+  FORMAT:
+  [Analyst Name, Firm]
+  [Clean question]
+
+  [Executive Name, Title]:
+  [Response with emphasis]
+
+  EMPHASIS:
+  **Bold**: All metrics, numbers, dollars, percentages
+  __Underline__: Forward guidance and expectations
+  *Italic*: Business segments, initiatives, programs
+
+  Keep substantive content verbatim, remove pleasantries and filler only.

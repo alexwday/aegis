@@ -1,5 +1,12 @@
 # Research Plan Generation Prompt - Quality Optimized
 # Enhanced for comprehensive analysis with detailed guidance
+# Token Target: ~300 tokens | Last Updated: 2024-09-25
+
+metadata:
+  version: "2.0"
+  purpose: "Generate comprehensive research plan for earnings call analysis"
+  token_target: 300
+  last_updated: "2024-09-25"
 
 tool:
   type: function

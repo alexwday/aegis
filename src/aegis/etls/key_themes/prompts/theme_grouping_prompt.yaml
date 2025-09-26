@@ -1,0 +1,60 @@
+# Theme Grouping Prompt - Optimized v2.0
+# Purpose: Group related Q&As into coherent themes for executive reporting
+# Token Target: ~200 tokens | Last Updated: 2024-09-25
+
+metadata:
+  version: "2.0"
+  purpose: "Group Q&As into unified themes with banking domain expertise"
+  token_target: 200
+  last_updated: "2024-09-25"
+
+tool:
+  type: function
+  function:
+    name: group_all_themes
+    description: Analyzes all Q&A themes and creates optimal grouping structure
+    parameters:
+      type: object
+      properties:
+        theme_groups:
+          type: array
+          description: Comprehensive list of theme groups with related Q&A blocks
+          minItems: 1
+          maxItems: 12
+          items:
+            type: object
+            properties:
+              group_title:
+                type: string
+                description: "Unified theme title in format 'Topic - Context' encompassing the common thread"
+              qa_ids:
+                type: array
+                description: "Q&A IDs that belong in this theme group"
+                minItems: 1
+                items: {type: string}
+            required: [group_title, qa_ids]
+      required: [theme_groups]
+
+system_template: |
+  Analyze {bank_name} ({bank_symbol}) {quarter} {fiscal_year} Q&A blocks for optimal thematic grouping.
+  Total Q&A blocks: {total_qa_blocks}
+
+  {qa_blocks_info}
+
+  GROUPING FRAMEWORK:
+  Create 6-10 focused groups balancing specificity and coherence.
+
+  STANDARD BANKING THEMES:
+  • "Financial Performance - NII, NIM, and Efficiency"
+  • "Credit & Risk - PCL, Quality, and Provisions"
+  • "Capital Strategy - CET1, Deployment, and Returns"
+  • "Personal & Commercial Banking - Consumer and Business Lending"
+  • "Wealth Management - AUM Growth and Fee Income"
+  • "Capital Markets - Trading, Underwriting, and Advisory"
+  • "Corporate Banking - Commercial Lending and Treasury"
+  • "Digital & Technology - Transformation and Innovation"
+  • "Market Outlook - Economic Views and Guidance"
+
+  GROUP PRINCIPLES: Group related metrics/topics, preserve distinct insights, ensure complete coverage.
+
+  Create groups with clear focus, meaningful titles, and complete Q&A coverage. Use "Topic - Context" format.
