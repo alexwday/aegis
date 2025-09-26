@@ -117,9 +117,16 @@ def get_model_for_stage(stage: str, category_name: Optional[str] = None) -> str:
         logger.info(f"Using stage override model for {stage}: {stage_override}")
         return stage_override
 
-    # Use config model
-    model = MODELS["summarization"]
-    logger.debug(f"Using configured model for {stage}: {model}")
+    # Map stage names to config model keys
+    stage_to_config_map = {
+        "RESEARCH_PLAN_MODEL": "research_plan",
+        "CATEGORY_EXTRACTION_MODEL": "category_extraction",
+    }
+
+    # Use stage-specific config model if available
+    config_key = stage_to_config_map.get(stage, "summarization")
+    model = MODELS.get(config_key, MODELS["summarization"])
+    logger.debug(f"Using configured model for {stage}: {model} (config key: {config_key})")
     return model
 
 
@@ -1161,11 +1168,12 @@ Category {i}:
         add_page_numbers(doc)
         
         # Title Page with Banner
-        # Check for banner image in ETL folder
+        # Check for banner image in config folder
         etl_dir = os.path.dirname(os.path.abspath(__file__))
+        config_dir = os.path.join(etl_dir, 'config')
         banner_path = None
         for ext in ['jpg', 'jpeg', 'png']:
-            potential_banner = os.path.join(etl_dir, f'banner.{ext}')
+            potential_banner = os.path.join(config_dir, f'banner.{ext}')
             if os.path.exists(potential_banner):
                 banner_path = potential_banner
                 break

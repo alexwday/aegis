@@ -586,22 +586,23 @@ def create_optimized_document(
     # Add page numbers and footer
     add_page_numbers_with_footer(doc, bank_symbol, quarter, fiscal_year)
 
-    # Check for banner image (same location as call_summary)
+    # Check for banner image in config directories
     etl_dir = os.path.dirname(os.path.abspath(__file__))
     banner_path = None
 
-    # First check in key_themes directory
+    # First check in key_themes config directory
+    config_dir = os.path.join(etl_dir, 'config')
     for ext in ['jpg', 'jpeg', 'png']:
-        potential_banner = os.path.join(etl_dir, f'banner.{ext}')
+        potential_banner = os.path.join(config_dir, f'banner.{ext}')
         if os.path.exists(potential_banner):
             banner_path = potential_banner
             break
 
-    # If not found, check in call_summary directory
+    # If not found, check in call_summary config directory (fallback)
     if not banner_path:
-        call_summary_dir = os.path.join(os.path.dirname(etl_dir), 'call_summary')
+        call_summary_config_dir = os.path.join(os.path.dirname(etl_dir), 'call_summary', 'config')
         for ext in ['jpg', 'jpeg', 'png']:
-            potential_banner = os.path.join(call_summary_dir, f'banner.{ext}')
+            potential_banner = os.path.join(call_summary_config_dir, f'banner.{ext}')
             if os.path.exists(potential_banner):
                 banner_path = potential_banner
                 break
