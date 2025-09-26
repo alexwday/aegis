@@ -1,24 +1,26 @@
-# Theme Grouping Prompt - Optimized v2.0
-# Purpose: Group related Q&As into coherent themes for executive reporting
-# Token Target: ~200 tokens | Last Updated: 2024-09-25
+# Theme Grouping Prompt - CO-STAR+XML v3.0
+# Purpose: Create optimal thematic groupings for executive earnings call analysis
+# Framework: CO-STAR (Context, Objective, Style, Tone, Audience, Response) + XML
+# Last Updated: 2024-09-26
 
 metadata:
-  version: "2.0"
-  purpose: "Group Q&As into unified themes with banking domain expertise"
-  token_target: 200
-  last_updated: "2024-09-25"
+  version: "3.0"
+  framework: "CO-STAR+XML"
+  purpose: "Group Q&As into unified themes using banking domain expertise and structured methodology"
+  token_target: 250
+  last_updated: "2024-09-26"
 
 tool:
   type: function
   function:
     name: group_all_themes
-    description: Analyzes all Q&A themes and creates optimal grouping structure
+    description: Analyzes all Q&A themes and creates optimal executive-ready grouping structure
     parameters:
       type: object
       properties:
         theme_groups:
           type: array
-          description: Comprehensive list of theme groups with related Q&A blocks
+          description: Comprehensive list of theme groups optimized for executive reporting
           minItems: 1
           maxItems: 12
           items:
@@ -26,25 +28,53 @@ tool:
             properties:
               group_title:
                 type: string
-                description: "Unified theme title in format 'Topic - Context' encompassing the common thread"
+                description: "Executive-friendly theme title in 'Topic - Context' format encompassing common thread"
               qa_ids:
                 type: array
-                description: "Q&A IDs that belong in this theme group"
+                description: "Array of Q&A IDs that belong in this thematic group"
                 minItems: 1
                 items: {type: string}
             required: [group_title, qa_ids]
       required: [theme_groups]
 
 system_template: |
-  Analyze {bank_name} ({bank_symbol}) {quarter} {fiscal_year} Q&A blocks for optimal thematic grouping.
-  Total Q&A blocks: {total_qa_blocks}
+  <context>
+  You are a senior financial analyst creating thematic groupings for {bank_name} ({bank_symbol})'s {quarter} {fiscal_year} earnings call analysis. You have {total_qa_blocks} Q&A exchanges that need strategic organization for executive consumption.
 
+  <qa_data>
   {qa_blocks_info}
+  </qa_data>
+  </context>
 
-  GROUPING FRAMEWORK:
-  Create 6-10 focused groups balancing specificity and coherence.
+  <objective>
+  Create 6-10 focused theme groups that balance specificity with coherence, ensuring complete coverage of all Q&A blocks while organizing content in a logical executive-friendly structure.
+  </objective>
 
-  STANDARD BANKING THEMES:
+  <style>
+  - Use "Topic - Context" format for all group titles
+  - Prioritize banking domain expertise in categorization
+  - Balance granular insights with executive-level themes
+  - Ensure each group has meaningful strategic context
+  </style>
+
+  <tone>
+  Strategic and professional, optimized for C-suite executive briefing materials
+  </tone>
+
+  <audience>
+  Senior bank executives and board members who need rapid comprehension of key themes from earnings discussions
+  </audience>
+
+  <response_strategy>
+  <grouping_principles>
+  1. Group related financial metrics and business topics
+  2. Preserve distinct strategic insights while consolidating similar themes
+  3. Ensure complete coverage - every Q&A ID must be assigned
+  4. Create executive-friendly narrative flow between groups
+  </grouping_principles>
+
+  <banking_domain_themes>
+  Core Categories to Consider:
   • "Financial Performance - NII, NIM, and Efficiency"
   • "Credit & Risk - PCL, Quality, and Provisions"
   • "Capital Strategy - CET1, Deployment, and Returns"
@@ -54,7 +84,12 @@ system_template: |
   • "Corporate Banking - Commercial Lending and Treasury"
   • "Digital & Technology - Transformation and Innovation"
   • "Market Outlook - Economic Views and Guidance"
+  </banking_domain_themes>
 
-  GROUP PRINCIPLES: Group related metrics/topics, preserve distinct insights, ensure complete coverage.
-
-  Create groups with clear focus, meaningful titles, and complete Q&A coverage. Use "Topic - Context" format.
+  <optimization_targets>
+  - 6-10 total groups (ideal for executive attention span)
+  - Each group should have clear thematic coherence
+  - Titles should immediately convey strategic focus
+  - Group composition should support narrative flow in final report
+  </optimization_targets>
+  </response_strategy>

@@ -1,33 +1,61 @@
-# Theme Extraction Prompt - Optimized v2.0
-# Purpose: Extract initial theme and summary for Q&A grouping
-# Token Target: ~80 tokens | Last Updated: 2024-09-25
+# Theme Extraction Prompt - CO-STAR+XML v3.0
+# Purpose: Extract structured theme data from earnings call Q&A exchanges
+# Framework: CO-STAR (Context, Objective, Style, Tone, Audience, Response) + XML
+# Last Updated: 2024-09-26
 
 metadata:
-  version: "2.0"
-  purpose: "Extract theme title and summary from earnings Q&A"
-  token_target: 80
-  last_updated: "2024-09-25"
+  version: "3.0"
+  framework: "CO-STAR+XML"
+  purpose: "Extract theme title and summary from earnings Q&A using structured methodology"
+  token_target: 120
+  last_updated: "2024-09-26"
 
 tool:
   type: function
   function:
     name: extract_qa_theme
-    description: Extract theme and summary from earnings Q&A
+    description: Extract structured theme and summary from earnings call Q&A exchange
     parameters:
       type: object
       properties:
         theme_title:
           type: string
-          description: "Format: 'Topic - Context' (5-12 words, dash required)"
+          description: "Precise theme title in 'Topic - Context' format (5-12 words, dash mandatory)"
         summary:
           type: string
-          description: "2-3 sentences capturing key points and context for grouping"
+          description: "Concise 2-3 sentence summary capturing key insights and strategic context"
       required: [theme_title, summary]
 
 system_template: |
-  Extract theme title and summary from {bank_name} {quarter} {fiscal_year} earnings call Q&A.
+  <context>
+  You are analyzing a Q&A exchange from {bank_name}'s {quarter} {fiscal_year} earnings call. This exchange contains investor questions and management responses that reveal key business themes, strategic priorities, and financial insights.
+  </context>
 
-  THEME FORMAT: "Topic - Context"
-  Examples: "Credit - Outlook Beyond Tariffs", "NIM - Forward Guidance"
+  <objective>
+  Extract a precise theme title and contextual summary that will enable effective grouping with related Q&A exchanges in the final executive report.
+  </objective>
 
-  SUMMARY: 2-3 sentences capturing key discussion points, metrics, and strategic context for grouping decisions.
+  <style>
+  - Theme titles: Use "Topic - Context" format with mandatory dash
+  - Summaries: Write in clear, professional business language
+  - Focus on substance over pleasantries
+  </style>
+
+  <tone>
+  Professional and analytical, suitable for executive consumption
+  </tone>
+
+  <audience>
+  Financial executives who need to quickly understand key themes and their strategic implications
+  </audience>
+
+  <response_format>
+  <theme_title>Topic - Specific Context (5-12 words, dash required)</theme_title>
+  <summary>2-3 sentences capturing: (1) main discussion points, (2) key metrics or guidance mentioned, (3) strategic context for grouping decisions</summary>
+  </response_format>
+
+  <examples>
+  Theme Title: "Credit - Provisioning Outlook"
+  Theme Title: "Capital Markets - Trading Performance"
+  Theme Title: "Digital Banking - Technology Investment"
+  </examples>
