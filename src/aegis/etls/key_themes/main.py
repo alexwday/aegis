@@ -534,20 +534,33 @@ async def determine_comprehensive_grouping(
         if response:
             tool_calls = response.get('choices', [{}])[0].get('message', {}).get('tool_calls', [])
             if tool_calls:
-                result = json.loads(tool_calls[0]['function']['arguments'])
+                try:
+                    result = json.loads(tool_calls[0]['function']['arguments'])
+                    logger.debug(f"Grouping result keys: {result.keys()}")
 
-                # Create ThemeGroup objects from LLM response
-                theme_groups = []
-                for group_data in result['theme_groups']:
-                    group = ThemeGroup(
-                        group_title=group_data['group_title'],
-                        qa_ids=group_data['qa_ids'],
-                        rationale=group_data.get('rationale', 'Grouped by topic similarity')
-                    )
-                    theme_groups.append(group)
+                    # Check if the expected key exists
+                    if 'theme_groups' not in result:
+                        logger.error(f"Missing 'theme_groups' key in result. Available keys: {list(result.keys())}")
+                        logger.error(f"Full result: {json.dumps(result, indent=2)}")
+                        raise KeyError("'theme_groups' key not found in LLM response")
 
-                logger.info(f"Created {len(theme_groups)} theme groups")
-                return theme_groups
+                    # Create ThemeGroup objects from LLM response
+                    theme_groups = []
+                    for group_data in result['theme_groups']:
+                        group = ThemeGroup(
+                            group_title=group_data['group_title'],
+                            qa_ids=group_data['qa_ids'],
+                            rationale=group_data.get('rationale', 'Grouped by topic similarity')
+                        )
+                        theme_groups.append(group)
+
+                    logger.info(f"Created {len(theme_groups)} theme groups")
+                    return theme_groups
+                except (json.JSONDecodeError, KeyError) as e:
+                    logger.error(f"Error parsing grouping response: {str(e)}")
+                    if tool_calls:
+                        logger.error(f"Raw arguments: {tool_calls[0]['function'].get('arguments', 'N/A')}")
+                    raise
 
     except Exception as e:
         logger.error(f"Error in comprehensive grouping: {str(e)}")
@@ -909,7 +922,10 @@ async def main():
         return 0
 
     except Exception as e:
+        import traceback
         logger.error(f"Error generating optimized themes report: {str(e)}")
+        logger.error(f"Error type: {type(e).__name__}")
+        logger.debug(f"Full traceback:\n{traceback.format_exc()}")
         return 1
 
 

@@ -185,25 +185,25 @@ system_template: |
   - qa_5: "Digital Banking - Investment and Customer Adoption" (Summary: Digital transformation spending)
 
   OUTPUT GROUPING:
-  {
+  {{
     "theme_groups": [
-      {
+      {{
         "group_title": "Credit & Risk - PCL Outlook and Quality",
         "qa_ids": ["qa_2", "qa_4"],
         "rationale": "Both discuss credit risk metrics and forward outlook for provisions and credit quality"
-      },
-      {
+      }},
+      {{
         "group_title": "Capital Strategy - Deployment and Ratios",
         "qa_ids": ["qa_1", "qa_3"],
         "rationale": "Related discussions on capital allocation, regulatory ratios, and return targets"
-      },
-      {
+      }},
+      {{
         "group_title": "Digital Transformation - Investment Strategy",
         "qa_ids": ["qa_5"],
         "rationale": "Unique strategic topic on digital initiatives warranting separate focus"
-      }
+      }}
     ]
-  }
+  }}
   </concrete_example>
   </grouping_strategy>
 
