@@ -140,10 +140,10 @@ class HTMLToDocx(HTMLParser):
             # Apply color
             if 'color' in current_style:
                 color_hex = current_style['color'].lstrip('#')
-                if color_hex.startswith('0066cc'):  # Blue for key questions
-                    run.font.color.rgb = RGBColor(0x00, 0x66, 0xcc)
-                elif color_hex.startswith('006633'):  # Green for key answers
-                    run.font.color.rgb = RGBColor(0x00, 0x66, 0x33)
+                if color_hex.startswith('1e4d8b'):  # Dark blue for key questions
+                    run.font.color.rgb = RGBColor(0x1e, 0x4d, 0x8b)
+                elif color_hex.startswith('4d94ff'):  # Medium blue for key answers
+                    run.font.color.rgb = RGBColor(0x4d, 0x94, 0xff)
 
             # Apply font size
             if 'font-size' in current_style:
