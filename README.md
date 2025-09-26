@@ -244,28 +244,28 @@ python -m pytest tests/ --cov=aegis --cov-report=term-missing
 
 ## Running the Application
 
-### Option 1: Web Interface (Recommended)
+### Option 1: FastAPI Web Interface (Recommended)
 
 ```bash
 # Activate virtual environment
 source venv/bin/activate
 
-# Start the web server
-python run_web.py
+# Start the FastAPI server with WebSocket support
+python run_fastapi.py
 ```
 
 Open your browser and navigate to:
 - Local: http://localhost:8000
 - Network: http://your-ip-address:8000
 
-The web interface provides:
+The FastAPI interface provides:
 - Interactive chat with Aegis
+- Real-time WebSocket streaming responses
+- Automatic reconnection
+- Per-connection conversation state
 - Message history
-- Real-time streaming responses
-- Debug information toggle
 - Clean, modern UI
-- Process monitoring dashboard (available at http://localhost:8000/monitoring)
-- Database viewer (available at http://localhost:8000/database)
+- Health check endpoint at /health
 
 ### Option 2: Command Line Interface
 
@@ -570,6 +570,8 @@ aegis/
 │   │   ├── agents/       # Core decision agents
 │   │   ├── subagents/    # Database-specific agents
 │   │   └── prompts/      # YAML prompt templates
+│   ├── etls/             # ETL scripts for direct data access
+│   │   └── call_summary/ # Call summary report generation
 │   ├── connections/       # External service connectors
 │   │   ├── llm_connector.py
 │   │   ├── oauth_connector.py
@@ -579,11 +581,7 @@ aegis/
 │       ├── logging.py    # Structured logging
 │       ├── monitor.py    # Performance tracking
 │       └── ssl.py        # SSL configuration
-├── interfaces/            # Web interface modules
-│   ├── web.py           # Flask web server
-│   ├── monitoring.py    # Process monitoring dashboard
-│   └── database.py      # Database viewer interface
-├── templates/            # HTML templates
+├── run_fastapi.py        # FastAPI server with WebSocket support
 ├── tests/               # Test suite
 ├── data/                # SQL schemas and sample data
 ├── docs/                # Documentation
