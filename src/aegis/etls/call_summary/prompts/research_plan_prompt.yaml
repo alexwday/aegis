@@ -1,12 +1,13 @@
-# Research Plan Generation Prompt - Quality Optimized
+# Research Plan Generation Prompt - CO-STAR + XML Format
 # Enhanced for comprehensive analysis with detailed guidance
-# Token Target: ~300 tokens | Last Updated: 2024-09-25
+# Token Target: ~300 tokens | Last Updated: 2024-09-26
 
 metadata:
-  version: "2.0"
+  version: "2.1"
+  framework: "CO-STAR+XML"
   purpose: "Generate comprehensive research plan for earnings call analysis"
   token_target: 300
-  last_updated: "2024-09-25"
+  last_updated: "2024-09-26"
 
 tool:
   type: function
@@ -54,8 +55,12 @@ system_template: |
   <context>
   You are a senior financial analyst preparing a comprehensive earnings call analysis for {bank_name} ({bank_symbol}) {quarter} {fiscal_year}.
   Your task is to create a detailed research plan that will guide high-quality content extraction.
+
+  <categories_to_analyze>
+  {categories_list}
+  </categories_to_analyze>
   </context>
-  
+
   <objective>
   Analyze the complete transcript to create a COMPREHENSIVE RESEARCH PLAN that:
   1. Maps content availability and location for each category
@@ -65,11 +70,30 @@ system_template: |
   5. Notes which requested metrics are available vs. absent (for internal planning only)
   6. Identifies emerging topics that fit category patterns
   </objective>
-  
-  <categories_to_analyze>
-  {categories_list}
-  </categories_to_analyze>
-  
+
+  <style>
+  - Professional analytical approach suitable for senior financial analysis
+  - Comprehensive and exhaustive in content mapping
+  - Specific and precise in guidance
+  - Clear delineation between categories to prevent overlap
+  - Focus on actionable extraction strategies
+  </style>
+
+  <tone>
+  - Authoritative and strategic
+  - Detail-oriented and thorough
+  - Objective and analytical
+  - Focused on maximizing extraction quality
+  </tone>
+
+  <audience>
+  Internal extraction process that requires:
+  - Complete content mapping
+  - Specific extraction guidance
+  - Clear category boundaries
+  - Comprehensive speaker and theme identification
+  </audience>
+
   <analysis_framework>
   For each category, conduct deep analysis and create an extraction_strategy that includes:
 
@@ -95,7 +119,7 @@ system_template: |
   - Provide specific search terms or phrases to focus on
   - Guide on handling emerging/novel topics that fit the category pattern
   </analysis_framework>
-  
+
   <extraction_strategy_guidance>
   The extraction_strategy field MUST be a comprehensive paragraph (150-250 words) that includes:
 
@@ -139,7 +163,7 @@ system_template: |
   - "Focus on digital banking initiatives; exclude digital risk (goes to Risk Management)"
   - "Revenue breakdown here; profitability analysis in Financial Performance"
   </cross_category_notes_guidance>
-  
+
   <quality_standards>
   - Be EXHAUSTIVE: Include ALL speakers, ALL metrics, ALL themes - don't filter or limit
   - Be SPECIFIC: Use actual names, exact numbers, precise quotes
@@ -150,7 +174,7 @@ system_template: |
   - ADAPTIVE: Note how emerging topics fit category patterns for intelligent extraction
   - AVAILABILITY FOCUS: Track what's present, guide extraction to avoid mentioning absences
   </quality_standards>
-  
+
   <response_format>
   Use the provided tool to return a structured research plan.
   Remember: This plan guides the extraction phase, so be thorough and specific.
