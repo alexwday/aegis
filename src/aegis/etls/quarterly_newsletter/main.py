@@ -460,7 +460,7 @@ def add_page_numbers(doc):
         run._element.append(fldChar2)
 
 
-def create_newsletter_document(summaries: List[BankSummary], fiscal_year: int, quarter: str) -> Dict[str, Any]:
+async def create_newsletter_document(summaries: List[BankSummary], fiscal_year: int, quarter: str) -> Dict[str, Any]:
     """
     Generate Word document containing all bank summaries in newsletter format.
 
@@ -631,15 +631,15 @@ def create_newsletter_document(summaries: List[BankSummary], fiscal_year: int, q
     report_id = None
 
     try:
-        with get_connection() as conn:
-            # Since this is a multi-bank report, we use a special bank_id of -1
+        async with get_connection() as conn:
+            # Since this is a multi-bank report, we use a special bank_id of 0
             # to indicate it's a consolidated report
-            bank_id = -1  # Special ID for multi-bank reports
+            bank_id = 0  # Special ID for multi-bank reports (0 = all banks)
             bank_name = "All Monitored Banks"
             bank_symbol = "ALL"
 
             # Delete any existing quarterly newsletter for this period
-            deleted = conn.execute(text(
+            delete_result = await conn.execute(text(
                 """
                 DELETE FROM aegis_reports
                 WHERE bank_id = :bank_id
@@ -653,13 +653,14 @@ def create_newsletter_document(summaries: List[BankSummary], fiscal_year: int, q
                 "fiscal_year": fiscal_year,
                 "quarter": quarter,
                 "report_type": report_metadata["report_type"]
-            }).fetchall()
+            })
+            deleted = delete_result.fetchall()
 
             if deleted:
                 logger.info(f"Deleted {len(deleted)} existing quarterly newsletter(s)")
 
             # Insert new report
-            result = conn.execute(text(
+            result = await conn.execute(text(
                 """
                 INSERT INTO aegis_reports (
                 report_name,
@@ -722,8 +723,9 @@ def create_newsletter_document(summaries: List[BankSummary], fiscal_year: int, q
                     "us_banks": len(us_banks)
                 })
             })
-            conn.commit()
-            report_id = result.fetchone().id
+            report_row = result.fetchone()
+            await conn.commit()
+            report_id = report_row.id
             database_saved = True
             logger.info(f"Report saved to database with ID: {report_id}")
 
@@ -771,7 +773,7 @@ async def generate_quarterly_newsletter(fiscal_year: int, quarter: str) -> str:
         summaries = await process_all_banks(fiscal_year, quarter)
 
         # Generate consolidated document with PDF and database storage
-        document_result = create_newsletter_document(summaries, fiscal_year, quarter)
+        document_result = await create_newsletter_document(summaries, fiscal_year, quarter)
         document_path = document_result["filepath"]
         pdf_path = document_result.get("pdf_path")
 

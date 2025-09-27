@@ -1144,8 +1144,8 @@ async def main():
                         "invalid_qa_filtered": sum(1 for qa in qa_index.values() if not qa.is_valid)
                     })
                 })
-                await conn.commit()
-                report_id = result.fetchone().id
+                report_row = result.fetchone()
+                report_id = report_row.id
                 logger.info(f"Report saved to database with ID: {report_id}")
 
                 # Update aegis_data_availability to include 'reports' database
@@ -1166,10 +1166,13 @@ async def main():
                     "fiscal_year": args.year,
                     "quarter": args.quarter
                 })
+                update_count = update_result.rowcount
 
-                if update_result.rowcount > 0:
-                    await conn.commit()
+                if update_count > 0:
                     logger.info("Updated aegis_data_availability to include 'reports'")
+
+                # Commit all changes at once
+                await conn.commit()
 
         except Exception as e:
             logger.error(f"Database error: {str(e)}")

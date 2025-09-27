@@ -1333,9 +1333,9 @@ Category {i}:
         generation_timestamp = datetime.now()
 
         try:
-            with get_connection() as conn:
+            async with get_connection() as conn:
                 # Delete any existing report for this bank/period/type combination
-                deleted = conn.execute(text(
+                delete_result = await conn.execute(text(
                     """
                     DELETE FROM aegis_reports
                     WHERE bank_id = :bank_id
@@ -1349,7 +1349,8 @@ Category {i}:
                     "fiscal_year": fiscal_year,
                     "quarter": quarter,
                     "report_type": report_metadata["report_type"]
-                }).fetchall()
+                })
+                deleted = delete_result.fetchall()
 
                 if deleted:
                     logger.info(
@@ -1360,7 +1361,7 @@ Category {i}:
                     )
 
                     # Check if there are any other reports for this bank/period
-                    remaining_reports = conn.execute(text(
+                    remaining_result = await conn.execute(text(
                         """
                         SELECT COUNT(*) as count
                         FROM aegis_reports
@@ -1372,11 +1373,12 @@ Category {i}:
                         "bank_id": bank_info["bank_id"],
                         "fiscal_year": fiscal_year,
                         "quarter": quarter
-                    }).scalar()
+                    })
+                    remaining_reports = remaining_result.scalar()
 
                     # If no other reports exist, remove 'reports' from availability
                     if remaining_reports == 0:
-                        conn.execute(text(
+                        await conn.execute(text(
                             """
                             UPDATE aegis_data_availability
                             SET database_names = array_remove(database_names, 'reports')
@@ -1397,7 +1399,7 @@ Category {i}:
                         )
 
                 # Insert new report
-                result = conn.execute(text(
+                result = await conn.execute(text(
                     """
                     INSERT INTO aegis_reports (
                         report_name,
@@ -1459,8 +1461,8 @@ Category {i}:
                         "categories_rejected": len(category_results) - len(valid_categories)
                     })
                 })
-                conn.commit()
-                report_id = result.fetchone().id
+                report_row = result.fetchone()
+                report_id = report_row.id
                 logger.info(
                     "etl.call_summary.database_inserted",
                     execution_id=execution_id,
@@ -1468,7 +1470,7 @@ Category {i}:
                 )
 
                 # Update aegis_data_availability to include 'reports' database
-                update_result = conn.execute(text("""
+                update_result = await conn.execute(text("""
                     UPDATE aegis_data_availability
                     SET database_names =
                         CASE
@@ -1485,9 +1487,9 @@ Category {i}:
                     "fiscal_year": fiscal_year,
                     "quarter": quarter
                 })
+                update_count = update_result.rowcount
 
-                if update_result.rowcount > 0:
-                    conn.commit()
+                if update_count > 0:
                     logger.info(
                         "etl.call_summary.availability_updated",
                         execution_id=execution_id,
@@ -1495,6 +1497,9 @@ Category {i}:
                         fiscal_year=fiscal_year,
                         quarter=quarter
                     )
+
+                # Commit all changes at once
+                await conn.commit()
 
         except Exception as e:
             logger.error(
