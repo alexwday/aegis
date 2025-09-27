@@ -21,6 +21,7 @@ import sys
 import uuid
 import os
 import yaml
+import time
 from datetime import datetime
 from typing import Dict, Any, List, Optional
 from dataclasses import dataclass
@@ -28,6 +29,8 @@ from sqlalchemy import text
 from docx import Document
 from docx.shared import Inches, Pt, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
 import hashlib
 
 # Import existing Aegis infrastructure
@@ -41,6 +44,13 @@ from aegis.utils.logging import setup_logging, get_logger
 from aegis.utils.settings import config
 
 from aegis.etls.quarterly_newsletter.config.config import MODELS, TEMPERATURE, MAX_TOKENS
+
+# Import document converter functions
+from aegis.etls.quarterly_newsletter.document_converter import (
+    convert_docx_to_pdf,
+    get_standard_report_metadata,
+    bank_summaries_to_markdown
+)
 
 setup_logging()
 logger = get_logger()
@@ -232,19 +242,43 @@ async def generate_bank_summary(
         {"role": "user", "content": user_prompt}
     ]
 
-    # Generate summary using configured LLM parameters
-    response = await complete(
-        messages=messages,
-        context=context,
-        llm_params={
-            "model": MODELS["summary"],
-            "temperature": TEMPERATURE,
-            "max_tokens": MAX_TOKENS
-        }
-    )
+    # Generate summary using configured LLM parameters with retry logic
+    max_retries = 3
+    response = None
+
+    for attempt in range(max_retries):
+        try:
+            response = await complete(
+                messages=messages,
+                context=context,
+                llm_params={
+                    "model": MODELS["summary"],
+                    "temperature": TEMPERATURE,
+                    "max_tokens": MAX_TOKENS
+                }
+            )
+
+            if response:
+                break  # Success
+
+        except Exception as e:
+            if attempt < max_retries - 1:
+                logger.warning(
+                    f"Retry {attempt + 1}/{max_retries} for {bank_name} summary: {str(e)}"
+                )
+                await asyncio.sleep(2 ** attempt)  # Exponential backoff: 1s, 2s, 4s
+                continue
+            else:
+                error_msg = f"Failed after {max_retries} attempts: {str(e)}"
+                logger.error(
+                    "quarterly_newsletter.summary_failed_all_retries",
+                    bank_name=bank_name,
+                    error=error_msg
+                )
+                raise ValueError(error_msg)
 
     if not response:
-        raise ValueError(f"LLM returned no response for {bank_name}")
+        raise ValueError(f"LLM returned no response for {bank_name} after {max_retries} attempts")
 
     # Handle different response formats
     if isinstance(response, dict) and 'choices' in response:
@@ -399,7 +433,34 @@ async def process_all_banks(fiscal_year: int, quarter: str) -> List[BankSummary]
     return summaries
 
 
-def create_newsletter_document(summaries: List[BankSummary], fiscal_year: int, quarter: str) -> str:
+def add_page_numbers(doc):
+    """Add page numbers to the footer of the document."""
+    for section in doc.sections:
+        footer = section.footer
+
+        # Clear existing footer content
+        footer.paragraphs[0].clear()
+
+        # Create a paragraph for the page number
+        footer_para = footer.paragraphs[0]
+        footer_para.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+
+        # Add page number field
+        run = footer_para.add_run()
+        fldChar1 = OxmlElement('w:fldChar')
+        fldChar1.set(qn('w:fldCharType'), 'begin')
+        run._element.append(fldChar1)
+
+        instrText = OxmlElement('w:instrText')
+        instrText.text = 'PAGE'
+        run._element.append(instrText)
+
+        fldChar2 = OxmlElement('w:fldChar')
+        fldChar2.set(qn('w:fldCharType'), 'end')
+        run._element.append(fldChar2)
+
+
+def create_newsletter_document(summaries: List[BankSummary], fiscal_year: int, quarter: str) -> Dict[str, Any]:
     """
     Generate Word document containing all bank summaries in newsletter format.
 
@@ -418,7 +479,7 @@ def create_newsletter_document(summaries: List[BankSummary], fiscal_year: int, q
         quarter: Reporting quarter for document title
 
     Returns:
-        File path of created document
+        Dictionary containing document paths and metadata
     """
     logger.info(
         "quarterly_newsletter.creating_document",
@@ -427,12 +488,49 @@ def create_newsletter_document(summaries: List[BankSummary], fiscal_year: int, q
 
     doc = Document()
 
-    # Configure document margins
+    # Configure document margins (standardize with call_summary narrow margins)
     for section in doc.sections:
-        section.top_margin = Inches(0.5)
-        section.bottom_margin = Inches(0.5)
-        section.left_margin = Inches(0.75)
-        section.right_margin = Inches(0.75)
+        section.top_margin = Inches(0.4)
+        section.bottom_margin = Inches(0.4)
+        section.left_margin = Inches(0.6)
+        section.right_margin = Inches(0.5)
+        section.gutter = Inches(0)
+
+    # Add page numbers to footer
+    add_page_numbers(doc)
+
+    # Check for banner image in config folder
+    etl_dir = os.path.dirname(os.path.abspath(__file__))
+    config_dir = os.path.join(etl_dir, 'config')
+    banner_path = None
+
+    for ext in ['jpg', 'jpeg', 'png']:
+        potential_banner = os.path.join(config_dir, f'banner.{ext}')
+        if os.path.exists(potential_banner):
+            banner_path = potential_banner
+            break
+
+    # If not found, check in call_summary config directory (fallback)
+    if not banner_path:
+        call_summary_config_dir = os.path.join(os.path.dirname(os.path.dirname(etl_dir)), 'call_summary', 'config')
+        for ext in ['jpg', 'jpeg', 'png']:
+            potential_banner = os.path.join(call_summary_config_dir, f'banner.{ext}')
+            if os.path.exists(potential_banner):
+                banner_path = potential_banner
+                break
+
+    # Add banner image if found
+    if banner_path:
+        try:
+            # Add the banner image at the top, adjusted for narrow margins
+            doc.add_picture(banner_path, width=Inches(7.4))  # Full width with narrow margins
+            last_paragraph = doc.paragraphs[-1]
+            last_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            last_paragraph.paragraph_format.space_after = Pt(3)
+
+            logger.info(f"Banner added from: {banner_path}")
+        except Exception as e:
+            logger.warning(f"Could not add banner: {str(e)}")
 
     # Document title and metadata
     title_text = f"Quarterly Banking Newsletter - {quarter} {fiscal_year}"
@@ -493,8 +591,9 @@ def create_newsletter_document(summaries: List[BankSummary], fiscal_year: int, q
     os.makedirs(output_dir, exist_ok=True)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"Quarterly_Newsletter_{quarter}_{fiscal_year}_{timestamp}.docx"
-    filepath = os.path.join(output_dir, filename)
+    base_filename = f"Quarterly_Newsletter_{quarter}_{fiscal_year}_{timestamp}"
+    docx_filename = f"{base_filename}.docx"
+    filepath = os.path.join(output_dir, docx_filename)
 
     doc.save(filepath)
 
@@ -505,7 +604,146 @@ def create_newsletter_document(summaries: List[BankSummary], fiscal_year: int, q
         failed_banks=len(failed_summaries)
     )
 
-    return filepath
+    # Generate PDF
+    pdf_path = None
+    pdf_filename = None
+    pdf_path_target = os.path.join(output_dir, f"{base_filename}.pdf")
+    logger.info(f"Generating PDF: {pdf_path_target}")
+    pdf_result = convert_docx_to_pdf(filepath, pdf_path_target)
+    if pdf_result:
+        pdf_path = pdf_result
+        pdf_filename = f"{base_filename}.pdf"
+        logger.info(f"PDF generated successfully: {pdf_path}")
+    else:
+        logger.warning("PDF generation failed")
+
+    # Generate Markdown content for database storage
+    logger.info("Generating markdown for database storage")
+    markdown_content = bank_summaries_to_markdown(summaries, quarter, fiscal_year)
+
+    # Save to database
+    logger.info("Saving report to aegis_reports table")
+    report_metadata = get_standard_report_metadata()
+    generation_timestamp = datetime.now()
+    execution_id = str(uuid.uuid4())
+
+    database_saved = False
+    report_id = None
+
+    try:
+        with get_connection() as conn:
+            # Since this is a multi-bank report, we use a special bank_id of -1
+            # to indicate it's a consolidated report
+            bank_id = -1  # Special ID for multi-bank reports
+            bank_name = "All Monitored Banks"
+            bank_symbol = "ALL"
+
+            # Delete any existing quarterly newsletter for this period
+            deleted = conn.execute(text(
+                """
+                DELETE FROM aegis_reports
+                WHERE bank_id = :bank_id
+                  AND fiscal_year = :fiscal_year
+                  AND quarter = :quarter
+                  AND report_type = :report_type
+                RETURNING id
+                """
+            ), {
+                "bank_id": bank_id,
+                "fiscal_year": fiscal_year,
+                "quarter": quarter,
+                "report_type": report_metadata["report_type"]
+            }).fetchall()
+
+            if deleted:
+                logger.info(f"Deleted {len(deleted)} existing quarterly newsletter(s)")
+
+            # Insert new report
+            result = conn.execute(text(
+                """
+                INSERT INTO aegis_reports (
+                report_name,
+                report_description,
+                report_type,
+                bank_id,
+                bank_name,
+                bank_symbol,
+                fiscal_year,
+                quarter,
+                local_filepath,
+                s3_document_name,
+                s3_pdf_name,
+                markdown_content,
+                generation_date,
+                generated_by,
+                execution_id,
+                metadata
+            ) VALUES (
+                :report_name,
+                :report_description,
+                :report_type,
+                :bank_id,
+                :bank_name,
+                :bank_symbol,
+                :fiscal_year,
+                :quarter,
+                :local_filepath,
+                :s3_document_name,
+                :s3_pdf_name,
+                :markdown_content,
+                :generation_date,
+                :generated_by,
+                :execution_id,
+                :metadata
+                )
+                RETURNING id
+                """
+            ), {
+                "report_name": report_metadata["report_name"],
+                "report_description": report_metadata["report_description"],
+                "report_type": report_metadata["report_type"],
+                "bank_id": bank_id,
+                "bank_name": bank_name,
+                "bank_symbol": bank_symbol,
+                "fiscal_year": fiscal_year,
+                "quarter": quarter,
+                "local_filepath": filepath,
+                "s3_document_name": docx_filename,
+                "s3_pdf_name": pdf_filename,
+                "markdown_content": markdown_content,
+                "generation_date": generation_timestamp,
+                "generated_by": "quarterly_newsletter_etl",
+                "execution_id": execution_id,
+                "metadata": json.dumps({
+                    "total_banks": len(summaries),
+                    "successful_banks": len(successful_summaries),
+                    "failed_banks": len(failed_summaries),
+                    "canadian_banks": len(canadian_banks),
+                    "us_banks": len(us_banks)
+                })
+            })
+            conn.commit()
+            report_id = result.fetchone().id
+            database_saved = True
+            logger.info(f"Report saved to database with ID: {report_id}")
+
+    except Exception as e:
+        logger.error(f"Database error: {str(e)}")
+        # Continue even if database save fails
+
+    # Return comprehensive metadata
+    return {
+        "filepath": filepath,
+        "pdf_path": pdf_path,
+        "docx_filename": docx_filename,
+        "pdf_filename": pdf_filename,
+        "total_banks": len(summaries),
+        "successful_banks": len(successful_summaries),
+        "failed_banks": len(failed_summaries),
+        "execution_id": execution_id,
+        "database_saved": database_saved,
+        "report_id": report_id
+    }
 
 
 async def generate_quarterly_newsletter(fiscal_year: int, quarter: str) -> str:
@@ -532,8 +770,10 @@ async def generate_quarterly_newsletter(fiscal_year: int, quarter: str) -> str:
         # Execute multi-bank processing
         summaries = await process_all_banks(fiscal_year, quarter)
 
-        # Generate consolidated document
-        document_path = create_newsletter_document(summaries, fiscal_year, quarter)
+        # Generate consolidated document with PDF and database storage
+        document_result = create_newsletter_document(summaries, fiscal_year, quarter)
+        document_path = document_result["filepath"]
+        pdf_path = document_result.get("pdf_path")
 
         # Compile processing statistics
         successful = [s for s in summaries if s.processing_success]
@@ -545,8 +785,13 @@ QUARTERLY NEWSLETTER GENERATION COMPLETE
 ================================================================================
 Period: {quarter} {fiscal_year}
 Generated: {datetime.now().isoformat()}
-Document: {document_path}
+Execution ID: {document_result['execution_id']}
 ================================================================================
+
+DOCUMENT OUTPUTS:
+- Word Document: {document_path}
+- PDF Document: {pdf_path if pdf_path else 'PDF generation failed'}
+- Database Entry: {'Saved to aegis_reports table' if document_result['database_saved'] else 'Not saved'}
 
 PROCESSING RESULTS:
 - Total Banks: {len(summaries)}

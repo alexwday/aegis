@@ -18,12 +18,17 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.enum.style import WD_STYLE_TYPE
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak
+from reportlab.lib.pagesizes import letter
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import inch
+from reportlab.lib.colors import HexColor
 from aegis.utils.logging import get_logger
 
 logger = get_logger()
 
 
-def convert_docx_to_pdf(docx_path: str, pdf_path: str) -> bool:
+def convert_docx_to_pdf_native(docx_path: str, pdf_path: str) -> bool:
     """
     Convert DOCX to PDF using native OS tools if available.
 
@@ -65,14 +70,163 @@ def convert_docx_to_pdf(docx_path: str, pdf_path: str) -> bool:
                     logger.info(f"PDF created using LibreOffice: {pdf_path}")
                     return True
             except (FileNotFoundError, subprocess.TimeoutExpired):
-                logger.warning("LibreOffice not available, skipping PDF generation")
+                pass
 
-        logger.warning(f"PDF conversion not implemented for {system}")
-        return False
+        elif system == "Linux":
+            # Try LibreOffice
+            try:
+                result = subprocess.run(
+                    [
+                        "soffice",
+                        "--headless",
+                        "--convert-to",
+                        "pdf",
+                        "--outdir",
+                        os.path.dirname(pdf_path),
+                        docx_path
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=30
+                )
+                if result.returncode == 0:
+                    generated_pdf = os.path.join(
+                        os.path.dirname(pdf_path),
+                        Path(docx_path).stem + ".pdf"
+                    )
+                    if generated_pdf != pdf_path:
+                        os.rename(generated_pdf, pdf_path)
+                    logger.info(f"PDF created using LibreOffice: {pdf_path}")
+                    return True
+            except (FileNotFoundError, subprocess.TimeoutExpired):
+                pass
+
+        elif system == "Windows":
+            # Try using Word COM automation
+            try:
+                import win32com.client
+                word = win32com.client.Dispatch("Word.Application")
+                word.Visible = False
+                doc = word.Documents.Open(os.path.abspath(docx_path))
+                doc.SaveAs(os.path.abspath(pdf_path), FileFormat=17)  # 17 = PDF format
+                doc.Close()
+                word.Quit()
+                logger.info(f"PDF created using Word COM: {pdf_path}")
+                return True
+            except Exception:
+                pass
 
     except Exception as e:
-        logger.error(f"Error converting to PDF: {str(e)}")
+        logger.warning(f"Native PDF conversion failed: {e}")
+
+    return False
+
+
+def convert_docx_to_pdf_fallback(docx_path: str, pdf_path: str) -> bool:
+    """
+    Fallback PDF conversion using python-docx and reportlab.
+    This is a basic conversion that may not preserve all formatting.
+
+    Args:
+        docx_path: Path to input DOCX file
+        pdf_path: Path to output PDF file
+
+    Returns:
+        True if conversion succeeded, False otherwise
+    """
+    try:
+        # Read the DOCX file
+        doc = Document(docx_path)
+
+        # Create PDF
+        pdf = SimpleDocTemplate(
+            pdf_path,
+            pagesize=letter,
+            rightMargin=0.5*inch,
+            leftMargin=0.6*inch,
+            topMargin=0.4*inch,
+            bottomMargin=0.4*inch
+        )
+
+        # Get styles
+        styles = getSampleStyleSheet()
+        story = []
+
+        # Define custom styles
+        heading1_style = ParagraphStyle(
+            'CustomHeading1',
+            parent=styles['Heading1'],
+            fontSize=14,
+            textColor=HexColor('#000000'),
+            spaceAfter=10,
+            spaceBefore=10
+        )
+
+        heading2_style = ParagraphStyle(
+            'CustomHeading2',
+            parent=styles['Heading2'],
+            fontSize=11,
+            textColor=HexColor('#000000'),
+            spaceAfter=6,
+            spaceBefore=6
+        )
+
+        # Process each paragraph
+        for para in doc.paragraphs:
+            text = para.text.strip()
+            if not text:
+                continue
+
+            # Escape special characters for reportlab
+            text = text.replace('&', '&amp;')
+            text = text.replace('<', '&lt;')
+            text = text.replace('>', '&gt;')
+
+            # Determine style based on paragraph style
+            if para.style.name.startswith('Heading 1'):
+                story.append(Paragraph(text, heading1_style))
+            elif para.style.name.startswith('Heading 2'):
+                story.append(Paragraph(text, heading2_style))
+            else:
+                story.append(Paragraph(text, styles['BodyText']))
+
+            story.append(Spacer(1, 2))
+
+        # Build PDF
+        pdf.build(story)
+        logger.info(f"PDF created using fallback method: {pdf_path}")
+        return True
+
+    except Exception as e:
+        logger.error(f"Fallback PDF conversion failed: {e}")
         return False
+
+
+def convert_docx_to_pdf(docx_path: str, pdf_path: Optional[str] = None) -> Optional[str]:
+    """
+    Convert DOCX to PDF, trying native tools first, then fallback.
+
+    Args:
+        docx_path: Path to input DOCX file
+        pdf_path: Optional path to output PDF file (defaults to same name as DOCX)
+
+    Returns:
+        Path to created PDF file, or None if conversion failed
+    """
+    if not pdf_path:
+        pdf_path = docx_path.replace('.docx', '.pdf')
+
+    # Try native conversion first (better quality)
+    if convert_docx_to_pdf_native(docx_path, pdf_path):
+        return pdf_path
+
+    # Fallback to Python-based conversion
+    logger.info("Native PDF conversion unavailable, using fallback method")
+    if convert_docx_to_pdf_fallback(docx_path, pdf_path):
+        return pdf_path
+
+    logger.error(f"Failed to convert {docx_path} to PDF")
+    return None
 
 
 def create_key_themes_document(
@@ -345,55 +499,74 @@ def add_horizontal_line(doc: Document) -> None:
     run._r.append(fldChar2)
 
 
-def structured_data_to_markdown(themes_data: List[Dict[str, Any]]) -> str:
+def theme_groups_to_markdown(theme_groups, bank_info: Dict[str, str], quarter: str, fiscal_year: int) -> str:
     """
-    Convert structured themes data to markdown format.
+    Convert theme groups to markdown format matching the style of call_summary.
 
     Args:
-        themes_data: List of theme dictionaries
+        theme_groups: List of ThemeGroup objects with qa_blocks
+        bank_info: Dictionary with bank_name, bank_symbol, ticker
+        quarter: Quarter string (Q1-Q4)
+        fiscal_year: Year
 
     Returns:
-        Markdown formatted string
+        Markdown-formatted string
     """
-    markdown_parts = []
+    # Start with document header
+    markdown = f"# Key Themes Analysis - {bank_info.get('ticker', bank_info.get('bank_symbol', 'Unknown'))} {quarter} {fiscal_year}\n\n"
 
-    for idx, theme in enumerate(themes_data, 1):
-        theme_title = theme.get('theme_title', f'Theme {idx}')
-        formatted_content = theme.get('formatted_content', '')
+    # Add each theme group
+    for i, group in enumerate(theme_groups, 1):
+        # Add theme header
+        markdown += f"## Theme {i}: {group.group_title}\n\n"
 
-        markdown_parts.append(f"## {idx}. {theme_title}\n")
-        markdown_parts.append(formatted_content)
-        markdown_parts.append("\n---\n")
+        # Sort Q&A blocks by position
+        sorted_blocks = sorted(group.qa_blocks, key=lambda x: x.position)
 
-    return "\n".join(markdown_parts)
+        # Add each conversation in the theme
+        for j, qa_block in enumerate(sorted_blocks, 1):
+            markdown += f"### Conversation {j}\n\n"
+
+            # Get the formatted content or fallback to original
+            content = qa_block.formatted_content or qa_block.original_content
+
+            # Process the content line by line
+            for line in content.split('\n'):
+                if line.strip():
+                    # Skip horizontal rules
+                    if line.strip() in ['---', '***', '___', '<hr>', '<hr/>', '<hr />']:
+                        continue
+
+                    # Remove HTML tags for markdown
+                    import re
+                    clean_line = re.sub(r'<[^>]+>', '', line)
+
+                    # Convert HTML formatting to markdown
+                    clean_line = clean_line.replace('&lt;', '<').replace('&gt;', '>').replace('&amp;', '&')
+
+                    markdown += f"{clean_line}\n"
+
+            markdown += "\n"
+
+        markdown += "\n---\n\n"
+
+    return markdown
 
 
-def get_standard_report_metadata(
-    bank_name: str,
-    fiscal_year: int,
-    quarter: str,
-    report_type: str,
-    theme_count: int
-) -> Dict[str, Any]:
+def get_standard_report_metadata() -> Dict[str, str]:
     """
-    Generate standard metadata for a key themes report.
-
-    Args:
-        bank_name: Name of the bank
-        fiscal_year: Year of the report
-        quarter: Quarter identifier
-        report_type: Type of report (e.g., 'key_themes')
-        theme_count: Number of themes extracted
+    Get standard metadata for key themes reports.
 
     Returns:
-        Dictionary containing report metadata
+        Dictionary with report_name, report_description, and report_type
     """
     return {
-        'report_type': report_type,
-        'bank_name': bank_name,
-        'fiscal_year': fiscal_year,
-        'quarter': quarter,
-        'generated_at': datetime.now().isoformat(),
-        'theme_count': theme_count,
-        'version': '1.0'
+        "report_name": "Key Themes Analysis",
+        "report_description": (
+            "AI-generated thematic analysis of earnings call Q&A sessions, "
+            "identifying and grouping key discussion topics between analysts "
+            "and executives. Provides consolidated insights into major themes "
+            "with supporting conversation excerpts."
+        ),
+        "report_type": "key_themes"
     }

@@ -18,6 +18,7 @@ import json
 import sys
 import uuid
 import os
+import time
 # import re  # No longer needed - using HTML parser instead
 from datetime import datetime
 from typing import Dict, Any, List, Optional
@@ -35,7 +36,8 @@ from html.parser import HTMLParser
 # Import document converter functions
 from aegis.etls.key_themes.document_converter import (
     convert_docx_to_pdf,
-    get_standard_report_metadata
+    get_standard_report_metadata,
+    theme_groups_to_markdown
 )
 
 # Import direct transcript functions
@@ -422,41 +424,54 @@ async def extract_theme_and_summary(qa_block: QABlock, context: Dict[str, Any]):
         {"role": "user", "content": f"Extract theme from this Q&A session:\n\n{qa_block.original_content}"}
     ]
 
-    try:
-        response = await complete_with_tools(
-            messages=messages,
-            tools=[tool_config['tool']],
-            context=context,
-            llm_params={"model": get_model("theme_extraction"), "temperature": TEMPERATURE, "max_tokens": MAX_TOKENS}
-        )
+    # Retry logic for better reliability
+    max_retries = 3
+    result = None
 
-        if response:
-            tool_calls = response.get('choices', [{}])[0].get('message', {}).get('tool_calls', [])
-            if tool_calls:
-                result = json.loads(tool_calls[0]['function']['arguments'])
+    for attempt in range(max_retries):
+        try:
+            response = await complete_with_tools(
+                messages=messages,
+                tools=[tool_config['tool']],
+                context=context,
+                llm_params={"model": get_model("theme_extraction"), "temperature": TEMPERATURE, "max_tokens": MAX_TOKENS}
+            )
 
-                # Check if the Q&A is valid
-                is_valid = result.get('is_valid', True)
+            if response:
+                tool_calls = response.get('choices', [{}])[0].get('message', {}).get('tool_calls', [])
+                if tool_calls:
+                    result = json.loads(tool_calls[0]['function']['arguments'])
+                    break  # Success, exit retry loop
 
-                if is_valid:
-                    qa_block.theme_title = result['theme_title']
-                    qa_block.summary = result.get('summary', '')
-                    qa_block.is_valid = True
-                    logger.debug(f"Extracted theme for {qa_block.qa_id}: {qa_block.theme_title}")
-                else:
-                    # Mark as invalid and log the reason
-                    qa_block.is_valid = False
-                    rejection_reason = result.get('rejection_reason', 'Invalid Q&A content')
-                    logger.info(f"Skipping invalid Q&A {qa_block.qa_id}: {rejection_reason}")
-                    qa_block.theme_title = None
-                    qa_block.summary = None
+        except Exception as e:
+            if attempt < max_retries - 1:
+                logger.warning(f"Retry {attempt + 1}/{max_retries} for theme extraction {qa_block.qa_id}: {str(e)}")
+                await asyncio.sleep(2 ** attempt)  # Exponential backoff: 1s, 2s, 4s
+                continue
+            else:
+                logger.error(f"Error extracting theme for {qa_block.qa_id} after {max_retries} attempts: {str(e)}")
+                # Set defaults on error
+                qa_block.theme_title = f"Q&A Discussion {qa_block.position}"
+                qa_block.summary = "Theme extraction failed"
+                qa_block.is_valid = True  # Assume valid on error to avoid losing data
+                return
 
-    except Exception as e:
-        logger.error(f"Error extracting theme for {qa_block.qa_id}: {str(e)}")
-        # Set defaults on error
-        qa_block.theme_title = f"Q&A Discussion {qa_block.position}"
-        qa_block.summary = "Theme extraction failed"
-        qa_block.is_valid = True  # Assume valid on error to avoid losing data
+    if result:
+        # Check if the Q&A is valid
+        is_valid = result.get('is_valid', True)
+
+        if is_valid:
+            qa_block.theme_title = result['theme_title']
+            qa_block.summary = result.get('summary', '')
+            qa_block.is_valid = True
+            logger.debug(f"Extracted theme for {qa_block.qa_id}: {qa_block.theme_title}")
+        else:
+            # Mark as invalid and log the reason
+            qa_block.is_valid = False
+            rejection_reason = result.get('rejection_reason', 'Invalid Q&A content')
+            logger.info(f"Skipping invalid Q&A {qa_block.qa_id}: {rejection_reason}")
+            qa_block.theme_title = None
+            qa_block.summary = None
 
 
 async def format_qa_html(qa_block: QABlock, context: Dict[str, Any]):
@@ -490,17 +505,25 @@ async def format_qa_html(qa_block: QABlock, context: Dict[str, Any]):
         {"role": "user", "content": f"Format this Q&A exchange with HTML tags for emphasis:\n\n{qa_block.original_content}"}
     ]
 
-    try:
-        response = await complete(messages, context, {"model": get_model("formatting"), "temperature": TEMPERATURE, "max_tokens": MAX_TOKENS})
+    # Retry logic for formatting
+    max_retries = 2
+    for attempt in range(max_retries):
+        try:
+            response = await complete(messages, context, {"model": get_model("formatting"), "temperature": TEMPERATURE, "max_tokens": MAX_TOKENS})
 
-        if isinstance(response, dict):
-            qa_block.formatted_content = response.get('choices', [{}])[0].get('message', {}).get('content', '')
-        else:
-            qa_block.formatted_content = str(response)
+            if isinstance(response, dict):
+                qa_block.formatted_content = response.get('choices', [{}])[0].get('message', {}).get('content', '')
+            else:
+                qa_block.formatted_content = str(response)
+            break  # Success
 
-    except Exception as e:
-        logger.error(f"Error formatting {qa_block.qa_id}: {str(e)}")
-        qa_block.formatted_content = qa_block.original_content  # Fallback to original
+        except Exception as e:
+            if attempt < max_retries - 1:
+                logger.warning(f"Retry {attempt + 1}/{max_retries} for formatting {qa_block.qa_id}: {str(e)}")
+                await asyncio.sleep(2 ** attempt)  # Exponential backoff
+            else:
+                logger.error(f"Error formatting {qa_block.qa_id} after {max_retries} attempts: {str(e)}")
+                qa_block.formatted_content = qa_block.original_content  # Fallback to original
 
 
 async def process_all_qa_blocks(qa_index: Dict[str, QABlock], context: Dict[str, Any]):
@@ -579,47 +602,62 @@ async def determine_comprehensive_grouping(
         {"role": "user", "content": "Analyze all Q&A blocks and return optimal grouping instructions."}
     ]
 
-    try:
-        response = await complete_with_tools(
-            messages=messages,
-            tools=[tool_config['tool']],
-            context=context,
-            llm_params={"model": get_model("grouping"), "temperature": TEMPERATURE, "max_tokens": MAX_TOKENS}
-        )
+    # Retry logic for grouping (critical step)
+    max_retries = 3
+    result = None
 
-        if response:
-            tool_calls = response.get('choices', [{}])[0].get('message', {}).get('tool_calls', [])
-            if tool_calls:
-                try:
-                    result = json.loads(tool_calls[0]['function']['arguments'])
-                    logger.debug(f"Grouping result keys: {result.keys()}")
+    for attempt in range(max_retries):
+        try:
+            response = await complete_with_tools(
+                messages=messages,
+                tools=[tool_config['tool']],
+                context=context,
+                llm_params={"model": get_model("grouping"), "temperature": TEMPERATURE, "max_tokens": MAX_TOKENS}
+            )
 
-                    # Check if the expected key exists
-                    if 'theme_groups' not in result:
-                        logger.error(f"Missing 'theme_groups' key in result. Available keys: {list(result.keys())}")
-                        logger.error(f"Full result: {json.dumps(result, indent=2)}")
-                        raise KeyError("'theme_groups' key not found in LLM response")
+            if response:
+                tool_calls = response.get('choices', [{}])[0].get('message', {}).get('tool_calls', [])
+                if tool_calls:
+                    try:
+                        result = json.loads(tool_calls[0]['function']['arguments'])
+                        logger.debug(f"Grouping result keys: {result.keys()}")
+                        break  # Success
+                    except json.JSONDecodeError as je:
+                        if attempt < max_retries - 1:
+                            logger.warning(f"JSON decode error on attempt {attempt + 1}: {je}")
+                            await asyncio.sleep(2 ** attempt)
+                            continue
+                        else:
+                            raise
 
-                    # Create ThemeGroup objects from LLM response
-                    theme_groups = []
-                    for group_data in result['theme_groups']:
-                        group = ThemeGroup(
-                            group_title=group_data['group_title'],
-                            qa_ids=group_data['qa_ids'],
-                            rationale=group_data.get('rationale', 'Grouped by topic similarity')
-                        )
-                        theme_groups.append(group)
+        except Exception as e:
+            if attempt < max_retries - 1:
+                logger.warning(f"Retry {attempt + 1}/{max_retries} for grouping: {str(e)}")
+                await asyncio.sleep(2 ** attempt)
+                continue
+            else:
+                logger.error(f"Failed to group themes after {max_retries} attempts: {e}")
+                return None
 
-                    logger.info(f"Created {len(theme_groups)} theme groups")
-                    return theme_groups
-                except (json.JSONDecodeError, KeyError) as e:
-                    logger.error(f"Error parsing grouping response: {str(e)}")
-                    if tool_calls:
-                        logger.error(f"Raw arguments: {tool_calls[0]['function'].get('arguments', 'N/A')}")
-                    raise
+    if result:
+        # Check if the expected key exists
+        if 'theme_groups' not in result:
+            logger.error(f"Missing 'theme_groups' key in result. Available keys: {list(result.keys())}")
+            logger.error(f"Full result: {json.dumps(result, indent=2)}")
+            raise KeyError("'theme_groups' key not found in LLM response")
 
-    except Exception as e:
-        logger.error(f"Error in comprehensive grouping: {str(e)}")
+        # Create ThemeGroup objects from LLM response
+        theme_groups = []
+        for group_data in result['theme_groups']:
+            group = ThemeGroup(
+                group_title=group_data['group_title'],
+                qa_ids=group_data['qa_ids'],
+                rationale=group_data.get('rationale', 'Grouped by topic similarity')
+            )
+            theme_groups.append(group)
+
+        logger.info(f"Created {len(theme_groups)} theme groups")
+        return theme_groups
 
     # Fallback: each valid Q&A gets its own theme
     logger.warning("Falling back to individual themes")
@@ -960,10 +998,182 @@ async def main():
         )
 
         # Generate PDF if requested
+        pdf_path = None
+        pdf_filename = None
         if not args.no_pdf:
             pdf_path = os.path.join(args.output_dir, f"{base_filename}.pdf")
+            pdf_filename = f"{base_filename}.pdf"
             logger.info(f"Generating PDF: {pdf_path}")
-            convert_docx_to_pdf(docx_path, pdf_path)
+            pdf_result = convert_docx_to_pdf(docx_path, pdf_path)
+            if not pdf_result:
+                logger.warning("PDF generation failed")
+                pdf_path = None
+                pdf_filename = None
+
+        # Step 6: Generate Markdown content for database storage
+        logger.info("Generating markdown for database storage")
+        markdown_content = theme_groups_to_markdown(
+            theme_groups,
+            bank_info,
+            args.quarter,
+            args.year
+        )
+
+        # Step 7: Save to database
+        logger.info("Saving report to aegis_reports table")
+        report_metadata = get_standard_report_metadata()
+        generation_timestamp = datetime.now()
+        execution_id = str(uuid.uuid4())
+
+        try:
+            async with get_connection() as conn:
+                # Delete any existing report for this bank/period/type combination
+                deleted = await conn.execute(text(
+                    """
+                    DELETE FROM aegis_reports
+                    WHERE bank_id = :bank_id
+                      AND fiscal_year = :fiscal_year
+                      AND quarter = :quarter
+                      AND report_type = :report_type
+                    RETURNING id
+                    """
+                ), {
+                    "bank_id": bank_info["id"],
+                    "fiscal_year": args.year,
+                    "quarter": args.quarter,
+                    "report_type": report_metadata["report_type"]
+                })
+                deleted_rows = deleted.fetchall()
+
+                if deleted_rows:
+                    logger.info(f"Deleted {len(deleted_rows)} existing key_themes report(s)")
+
+                    # Check if there are any other reports for this bank/period
+                    remaining_reports = await conn.execute(text(
+                        """
+                        SELECT COUNT(*) as count
+                        FROM aegis_reports
+                        WHERE bank_id = :bank_id
+                          AND fiscal_year = :fiscal_year
+                          AND quarter = :quarter
+                        """
+                    ), {
+                        "bank_id": bank_info["id"],
+                        "fiscal_year": args.year,
+                        "quarter": args.quarter
+                    })
+                    count_result = remaining_reports.scalar()
+
+                    # If no other reports exist, remove 'reports' from availability
+                    if count_result == 0:
+                        await conn.execute(text(
+                            """
+                            UPDATE aegis_data_availability
+                            SET database_names = array_remove(database_names, 'reports')
+                            WHERE bank_id = :bank_id
+                              AND fiscal_year = :fiscal_year
+                              AND quarter = :quarter
+                              AND 'reports' = ANY(database_names)
+                            """
+                        ), {
+                            "bank_id": bank_info["id"],
+                            "fiscal_year": args.year,
+                            "quarter": args.quarter
+                        })
+                        logger.info("Removed 'reports' from aegis_data_availability")
+
+                # Insert new report
+                result = await conn.execute(text(
+                    """
+                    INSERT INTO aegis_reports (
+                        report_name,
+                        report_description,
+                        report_type,
+                        bank_id,
+                        bank_name,
+                        bank_symbol,
+                        fiscal_year,
+                        quarter,
+                        local_filepath,
+                        s3_document_name,
+                        s3_pdf_name,
+                        markdown_content,
+                        generation_date,
+                        generated_by,
+                        execution_id,
+                        metadata
+                    ) VALUES (
+                        :report_name,
+                        :report_description,
+                        :report_type,
+                        :bank_id,
+                        :bank_name,
+                        :bank_symbol,
+                        :fiscal_year,
+                        :quarter,
+                        :local_filepath,
+                        :s3_document_name,
+                        :s3_pdf_name,
+                        :markdown_content,
+                        :generation_date,
+                        :generated_by,
+                        :execution_id,
+                        :metadata
+                    )
+                    RETURNING id
+                    """
+                ), {
+                    "report_name": report_metadata["report_name"],
+                    "report_description": report_metadata["report_description"],
+                    "report_type": report_metadata["report_type"],
+                    "bank_id": bank_info["id"],
+                    "bank_name": bank_info["name"],
+                    "bank_symbol": bank_info.get("ticker", bank_info.get("symbol", "")),
+                    "fiscal_year": args.year,
+                    "quarter": args.quarter,
+                    "local_filepath": docx_path,
+                    "s3_document_name": f"{base_filename}.docx",
+                    "s3_pdf_name": pdf_filename,
+                    "markdown_content": markdown_content,
+                    "generation_date": generation_timestamp,
+                    "generated_by": "key_themes_etl",
+                    "execution_id": execution_id,
+                    "metadata": json.dumps({
+                        "theme_groups": len(theme_groups),
+                        "total_qa_blocks": sum(len(group.qa_blocks) for group in theme_groups),
+                        "invalid_qa_filtered": sum(1 for qa in qa_index.values() if not qa.is_valid)
+                    })
+                })
+                await conn.commit()
+                report_id = result.fetchone().id
+                logger.info(f"Report saved to database with ID: {report_id}")
+
+                # Update aegis_data_availability to include 'reports' database
+                update_result = await conn.execute(text("""
+                    UPDATE aegis_data_availability
+                    SET database_names =
+                        CASE
+                            WHEN 'reports' = ANY(database_names) THEN database_names
+                            ELSE array_append(database_names, 'reports')
+                        END
+                    WHERE bank_id = :bank_id
+                      AND fiscal_year = :fiscal_year
+                      AND quarter = :quarter
+                      AND NOT ('reports' = ANY(database_names))
+                    RETURNING bank_id
+                """), {
+                    "bank_id": bank_info["id"],
+                    "fiscal_year": args.year,
+                    "quarter": args.quarter
+                })
+
+                if update_result.rowcount > 0:
+                    await conn.commit()
+                    logger.info("Updated aegis_data_availability to include 'reports'")
+
+        except Exception as e:
+            logger.error(f"Database error: {str(e)}")
+            # Continue even if database save fails
 
         # Report statistics
         total_qa = sum(len(group.qa_blocks) for group in theme_groups)
