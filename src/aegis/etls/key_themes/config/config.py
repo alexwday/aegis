@@ -63,4 +63,4 @@ MODELS = {
 # Other configuration options
 MAX_PARALLEL_REQUESTS = int(os.getenv("KEY_THEMES_MAX_PARALLEL", "12"))
 TEMPERATURE = float(os.getenv("KEY_THEMES_TEMPERATURE", "0.5"))
-MAX_TOKENS = int(os.getenv("KEY_THEMES_MAX_TOKENS", "16384"))  # OpenAI model limit
+MAX_TOKENS = int(os.getenv("KEY_THEMES_MAX_TOKENS", "32768"))  # Standard max tokens for all ETLs

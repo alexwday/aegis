@@ -329,9 +329,7 @@ def structured_data_to_markdown(category_results: List[Dict[str, Any]],
                 # Add evidence as nested quotes
                 for evidence in statement_data.get('evidence', []):
                     content = evidence['content']
-                    # Truncate long evidence
-                    if len(content) > 500:
-                        content = content[:497] + '...'
+                    # Use full evidence content - no truncation
 
                     speaker = evidence['speaker']
 

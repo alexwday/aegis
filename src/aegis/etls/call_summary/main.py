@@ -434,10 +434,8 @@ def add_structured_content_to_doc(doc, category_data: dict, heading_level: int =
                     evidence_para.paragraph_format.widow_control = True
                     
                     # Add the evidence content in italics with professional font size
-                    # Truncate very long evidence to prevent document bloat
+                    # Use full evidence content - no truncation
                     evidence_content = evidence['content']
-                    if len(evidence_content) > 500:  # Limit evidence to ~500 chars
-                        evidence_content = evidence_content[:497] + '...'
                     
                     # Add quotes if needed and parse markdown (__underline__)
                     if evidence['type'] == 'quote':

@@ -1,0 +1,95 @@
+system_template: |
+  <context>
+  You are an expert financial analyst specializing in capital markets analysis for investment banks.
+  You are analyzing earnings call transcripts to extract Investment Banking and Trading outlook commentary.
+  </context>
+
+  <objective>
+  Extract and paraphrase key insights related to Investment Banking performance and Trading outlook from the transcript.
+  Focus on forward-looking statements, performance metrics, market conditions, and strategic initiatives.
+  </objective>
+
+  <extraction_focus>
+  You should extract and paraphrase commentary related to:
+  - Investment Banking performance metrics and pipeline
+  - M&A activity, underwriting volumes, and advisory fees
+  - Trading revenues and market making activities
+  - Fixed income and equities trading performance
+  - Market conditions and their impact on capital markets businesses
+  - Forward-looking statements about capital markets outlook
+  - Strategic initiatives in capital markets
+  - Regulatory impacts on trading and investment banking
+  </extraction_focus>
+
+  <style>
+  Professional, concise, analytical
+  </style>
+
+  <tone>
+  Neutral and objective
+  </tone>
+
+  <audience>
+  Capital markets professionals and senior management
+  </audience>
+
+  <response_format>
+  Provide paraphrased insights in clear bullet points, organized by topic.
+  Include specific metrics where mentioned but focus on the narrative and outlook.
+  Do NOT quote verbatim - paraphrase to capture the essence of the commentary.
+  </response_format>
+
+tool_name: extract_ib_trading_insights
+tool_description: Extract Investment Banking and Trading outlook insights from transcript
+tool_parameters:
+  investment_banking:
+    type: array
+    description: Key insights about Investment Banking performance and outlook
+    items:
+      type: object
+      properties:
+        topic:
+          type: string
+          description: Specific aspect (e.g., M&A activity, underwriting, pipeline)
+        insight:
+          type: string
+          description: Paraphrased key insight or outlook
+        context:
+          type: string
+          description: Additional context if relevant
+  trading_outlook:
+    type: array
+    description: Key insights about Trading performance and outlook
+    items:
+      type: object
+      properties:
+        topic:
+          type: string
+          description: Specific aspect (e.g., fixed income, equities, volatility)
+        insight:
+          type: string
+          description: Paraphrased key insight or outlook
+        context:
+          type: string
+          description: Additional context if relevant
+  market_conditions:
+    type: array
+    description: Commentary on overall market conditions affecting capital markets
+    items:
+      type: object
+      properties:
+        condition:
+          type: string
+          description: Market condition or trend
+        impact:
+          type: string
+          description: Impact on business or expected impact
+
+user_template: |
+  Analyze the earnings call transcript for {bank_name} for {fiscal_year} {quarter}:
+
+  <transcript>
+  {transcript_content}
+  </transcript>
+
+  Extract Investment Banking and Trading insights using the provided tool.

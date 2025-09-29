@@ -39,4 +39,4 @@ except ImportError:
 
 # Other configuration options
 TEMPERATURE = float(os.getenv("CALL_SUMMARY_TEMPERATURE", "0.7"))
-MAX_TOKENS = int(os.getenv("CALL_SUMMARY_MAX_TOKENS", "4000"))
+MAX_TOKENS = int(os.getenv("CALL_SUMMARY_MAX_TOKENS", "32768"))  # Standard max tokens for all ETLs

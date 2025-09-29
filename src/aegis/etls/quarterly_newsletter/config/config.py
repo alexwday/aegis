@@ -23,4 +23,4 @@ except ImportError:
 
 # Other configuration options
 TEMPERATURE = float(os.getenv("NEWSLETTER_TEMPERATURE", "0.7"))
-MAX_TOKENS = int(os.getenv("NEWSLETTER_MAX_TOKENS", "300"))
+MAX_TOKENS = int(os.getenv("NEWSLETTER_MAX_TOKENS", "32768"))  # Standard max tokens for all ETLs
