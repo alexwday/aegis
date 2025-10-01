@@ -72,19 +72,41 @@ def safe_parse_embedding(value):
     return None
 
 
+def wipe_table():
+    """
+    Delete all rows from aegis_transcripts table.
+
+    Returns:
+        Number of rows deleted
+    """
+    # Build connection
+    connection_string = (
+        f"postgresql://{config.postgres_user}:{config.postgres_password}"
+        f"@{config.postgres_host}:{config.postgres_port}/{config.postgres_database}"
+    )
+    engine = create_engine(connection_string)
+
+    with engine.begin() as conn:
+        result = conn.execute(text("DELETE FROM aegis_transcripts"))
+        rows_deleted = result.rowcount
+        logger.info(f"Deleted {rows_deleted} rows from aegis_transcripts table")
+
+    return rows_deleted
+
+
 def load_csv(csv_path: str, batch_size: int = 100, skip_errors: bool = True):
     """
     Load CSV data into aegis_transcripts table.
-    
+
     Args:
         csv_path: Path to CSV file
         batch_size: Number of rows to process at a time
         skip_errors: Whether to skip rows with errors
-        
+
     Returns:
         Number of rows successfully loaded
     """
-    
+
     # Build connection
     connection_string = (
         f"postgresql://{config.postgres_user}:{config.postgres_password}"
@@ -191,27 +213,35 @@ def main():
     parser.add_argument('csv_file', help='Path to CSV file')
     parser.add_argument('--batch-size', type=int, default=100, help='Batch size (default: 100)')
     parser.add_argument('--stop-on-error', action='store_true', help='Stop on first error')
-    
+    parser.add_argument('--wipe', action='store_true', help='Delete all existing rows before loading')
+
     args = parser.parse_args()
-    
+
     if not Path(args.csv_file).exists():
         logger.error(f"CSV file not found: {args.csv_file}")
         return 1
-    
+
     try:
+        # Wipe table if requested
+        if args.wipe:
+            logger.info("Wiping aegis_transcripts table...")
+            deleted = wipe_table()
+            logger.info(f"✅ Deleted {deleted} existing rows\n")
+
+        # Load CSV
         rows = load_csv(
             args.csv_file,
             batch_size=args.batch_size,
             skip_errors=not args.stop_on_error
         )
-        
+
         if rows > 0:
             logger.info(f"\n✅ Successfully loaded {rows} rows")
             return 0
         else:
             logger.error("\n❌ No rows were loaded")
             return 1
-            
+
     except Exception as e:
         logger.error(f"\n❌ Error: {e}")
         import traceback
