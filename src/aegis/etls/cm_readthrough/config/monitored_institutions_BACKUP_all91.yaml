@@ -1,0 +1,39 @@
+# Monitored Financial Institutions (91 Total)
+# Format: ticker: {id, name, type, path_safe_name}
+# IDs are unique sequential identifiers for each institution
+
+# U.S. Banks (7)
+JPM-US: {id: 8, name: "JPMorgan Chase & Co.", type: "US_Banks", path_safe_name: "JPM-US_JPMorgan_Chase_Co"}
+BAC-US: {id: 9, name: "Bank of America Corporation", type: "US_Banks", path_safe_name: "BAC-US_Bank_of_America_Corporation"}
+WFC-US: {id: 10, name: "Wells Fargo & Company", type: "US_Banks", path_safe_name: "WFC-US_Wells_Fargo_Company"}
+C-US: {id: 11, name: "Citigroup Inc.", type: "US_Banks", path_safe_name: "C-US_Citigroup_Inc"}
+MS-US: {id: 12, name: "Morgan Stanley", type: "US_Banks", path_safe_name: "MS-US_Morgan_Stanley"}
+GS-US: {id: 13, name: "Goldman Sachs Group Inc.", type: "US_Banks", path_safe_name: "GS-US_Goldman_Sachs_Group_Inc"}
+JEF-US: {id: 14, name: "Jefferies Financial Group Inc.", type: "US_Banks", path_safe_name: "JEF-US_Jefferies_Financial_Group_Inc"}
+
+# European Banks (14)
+UBS-US: {id: 15, name: "UBS Group AG", type: "European_Banks", path_safe_name: "UBS-US_UBS_Group_AG"}
+BCS-US: {id: 16, name: "Barclays PLC", type: "European_Banks", path_safe_name: "BCS-US_Barclays_PLC"}
+DBK-DE: {id: 17, name: "Deutsche Bank AG", type: "European_Banks", path_safe_name: "DBK-DE_Deutsche_Bank_AG"}
+GLE-FR: {id: 18, name: "Societe Generale", type: "European_Banks", path_safe_name: "GLE-FR_Societe_Generale"}
+BNP-FR: {id: 19, name: "BNP Paribas", type: "European_Banks", path_safe_name: "BNP-FR_BNP_Paribas"}
+BBVA-ES: {id: 20, name: "Banco Bilbao Vizcaya Argentaria S.A.", type: "European_Banks", path_safe_name: "BBVA-ES_Banco_Bilbao_Vizcaya_Argentaria_SA"}
+SAN-ES: {id: 21, name: "Banco Santander S.A.", type: "European_Banks", path_safe_name: "SAN-ES_Banco_Santander_SA"}
+HSBA-GB: {id: 22, name: "HSBC Holdings plc", type: "European_Banks", path_safe_name: "HSBA-GB_HSBC_Holdings_plc"}
+LLOY-GB: {id: 23, name: "Lloyds Banking Group plc", type: "European_Banks", path_safe_name: "LLOY-GB_Lloyds_Banking_Group_plc"}
+ING-US: {id: 24, name: "ING Groep N.V.", type: "European_Banks", path_safe_name: "ING-US_ING_Groep_NV"}
+STAN-GB: {id: 25, name: "Standard Chartered PLC", type: "European_Banks", path_safe_name: "STAN-GB_Standard_Chartered_PLC"}
+RBS-GB: {id: 26, name: "NatWest Group plc", type: "European_Banks", path_safe_name: "RBS-GB_NatWest_Group_plc"}
+UCG-IT: {id: 27, name: "UniCredit S.p.A.", type: "European_Banks", path_safe_name: "UCG-IT_UniCredit_SpA"}
+ISP-IT: {id: 28, name: "Intesa Sanpaolo", type: "European_Banks", path_safe_name: "ISP-IT_Intesa_Sanpaolo"}
+
+# U.S. Boutiques (9)
+LAZ-US: {id: 29, name: "Lazard Ltd", type: "US_Boutiques", path_safe_name: "LAZ-US_Lazard_Ltd"}
+EVR-US: {id: 30, name: "Evercore Inc", type: "US_Boutiques", path_safe_name: "EVR-US_Evercore_Inc"}
+HLI-US: {id: 31, name: "Houlihan Lokey Inc", type: "US_Boutiques", path_safe_name: "HLI-US_Houlihan_Lokey_Inc"}
+MC-US: {id: 32, name: "Moelis & Company", type: "US_Boutiques", path_safe_name: "MC-US_Moelis_Company"}
+PIPR-US: {id: 33, name: "Piper Sandler Companies", type: "US_Boutiques", path_safe_name: "PIPR-US_Piper_Sandler_Companies"}
+PJT-US: {id: 34, name: "PJT Partners Inc", type: "US_Boutiques", path_safe_name: "PJT-US_PJT_Partners_Inc"}
+SF-US: {id: 35, name: "Stifel Financial Corp", type: "US_Boutiques", path_safe_name: "SF-US_Stifel_Financial_Corp"}
+RJF-US: {id: 36, name: "Raymond James Financial Inc", type: "US_Boutiques", path_safe_name: "RJF-US_Raymond_James_Financial_Inc"}
+CF-CA: {id: 37, name: "Canaccord Genuity Group Inc", type: "US_Boutiques", path_safe_name: "CF-CA_Canaccord_Genuity_Group_Inc"}

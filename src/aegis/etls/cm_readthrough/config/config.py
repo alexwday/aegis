@@ -6,8 +6,10 @@ to extract Investment Banking & Trading outlook and categorized Q&A.
 """
 
 import os
+import yaml
 import pandas as pd
 from pathlib import Path
+from typing import List, Dict, Any
 
 # Model configuration for different LLM calls
 # The ETL uses two distinct model tiers:
@@ -27,19 +29,43 @@ MODELS = {
 TEMPERATURE = float(os.getenv("CM_READTHROUGH_TEMPERATURE", "0.7"))
 MAX_TOKENS = int(os.getenv("CM_READTHROUGH_MAX_TOKENS", "4096"))  # Max tokens supported by gpt-4-turbo
 
-def get_monitored_institutions():
-    """Load monitored institutions from Excel file."""
+def get_monitored_institutions() -> List[Dict[str, Any]]:
+    """
+    Load monitored institutions from YAML file.
+
+    Returns:
+        List of institution dictionaries with bank_id, bank_symbol, bank_name
+    """
     config_dir = Path(__file__).parent
-    monitored_file = config_dir / "monitored_institutions.xlsx"
+    monitored_file = config_dir / "monitored_institutions.yaml"
 
     if not monitored_file.exists():
         raise FileNotFoundError(f"Monitored institutions file not found: {monitored_file}")
 
-    df = pd.read_excel(monitored_file)
-    return df.to_dict('records')
+    with open(monitored_file, 'r') as f:
+        data = yaml.safe_load(f)
 
-def get_categories():
-    """Load capital markets categories from Excel file."""
+    # Convert YAML structure to list of dictionaries
+    # YAML format: ticker: {id, name, type, path_safe_name}
+    institutions = []
+    for ticker, info in data.items():
+        institutions.append({
+            "bank_id": info["id"],
+            "bank_symbol": ticker,
+            "bank_name": info["name"],
+            "type": info.get("type", ""),
+            "path_safe_name": info.get("path_safe_name", "")
+        })
+
+    return institutions
+
+def get_categories() -> List[Dict[str, Any]]:
+    """
+    Load capital markets categories from Excel file.
+
+    Returns:
+        List of category dictionaries with Category and Description
+    """
     config_dir = Path(__file__).parent
     categories_file = config_dir / "capital_markets_categories.xlsx"
 
@@ -47,5 +73,5 @@ def get_categories():
         raise FileNotFoundError(f"Categories file not found: {categories_file}")
 
     df = pd.read_excel(categories_file)
-    # Assuming the Excel has columns: Category, Description, Keywords
+    # Assuming the Excel has columns: Category, Description, etc.
     return df.to_dict('records')

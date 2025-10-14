@@ -9,14 +9,6 @@ system_template: |
   Only extract questions that are relevant to the provided categories.
   </objective>
 
-  <available_categories>
-  {categories_list}
-  </available_categories>
-
-  <previous_qa_context>
-  {previous_context}
-  </previous_qa_context>
-
   <style>
   Precise and analytical
   </style>
@@ -32,7 +24,18 @@ system_template: |
   <response_format>
   Return the exact category match and the complete verbatim question text.
   If the question doesn't fit any category, mark as not_relevant.
-  Note: The previous Q&A is provided for context only in case the current question is a follow-up.
+
+  <available_categories>
+  {categories_list}
+  </available_categories>
+
+  <context_note>
+  The previous Q&A exchange is provided for context only in case the current question is a follow-up.
+
+  <previous_exchange>
+  {previous_context}
+  </previous_exchange>
+  </context_note>
   </response_format>
 
 tool_name: categorize_qa
@@ -60,12 +63,16 @@ tool_parameters:
       type: string
 
 user_template: |
-  Analyze this Q&A exchange from {bank_name}'s earnings call for {fiscal_year} {quarter}:
+  <task>
+  Categorize this Q&A exchange from {bank_name}'s earnings call for {fiscal_year} {quarter}.
+  </task>
 
   <current_qa_exchange>
-  Analyst: {analyst_name} from {analyst_firm}
-  Question: {question_text}
-  Answer: {answer_text}
+  <qa_block>
+  {qa_block_content}
+  </qa_block>
   </current_qa_exchange>
 
-  Categorize this question and extract the verbatim question text using the provided tool.
+  <instructions>
+  Use the provided tool to categorize the question and extract the verbatim question text (analyst questions only, not management responses).
+  </instructions>
