@@ -11,6 +11,7 @@ Usage:
 
 import argparse
 import asyncio
+import hashlib
 import json
 import sys
 import uuid
@@ -18,7 +19,6 @@ import os
 from datetime import datetime
 from typing import Dict, Any, List, Optional, Tuple
 from sqlalchemy import text
-import pandas as pd
 import yaml
 from pathlib import Path
 
@@ -280,7 +280,7 @@ async def extract_ib_trading_outlook(
             "parameters": {
                 "type": "object",
                 "properties": prompt_template["tool_parameters"],
-                "required": list(prompt_template["tool_parameters"].keys())
+                "required": ["quotes"]  # Only quotes array is required
             }
         }
     }]
@@ -300,10 +300,16 @@ async def extract_ib_trading_outlook(
             llm_params=llm_params
         )
 
-        # Extract tool call results
-        if response.get("tool_calls"):
-            tool_call = response["tool_calls"][0]
-            return json.loads(tool_call["function"]["arguments"])
+        # Extract tool call results from OpenAI response structure
+        tool_calls = response.get("choices", [{}])[0].get("message", {}).get("tool_calls")
+        if tool_calls:
+            tool_call = tool_calls[0]
+            result = json.loads(tool_call["function"]["arguments"])
+            # Return empty dict if bank has no relevant content (will be filtered out later)
+            if not result.get("has_content", True):
+                logger.info(f"[NO IB CONTENT] {bank_info['bank_name']}: Transcript does not contain substantive IB/Trading outlook")
+                return {}
+            return result
         else:
             logger.warning(f"No tool calls in response for {bank_info['bank_name']}")
             return {}
@@ -312,24 +318,100 @@ async def extract_ib_trading_outlook(
         logger.error(f"Error extracting IB/Trading outlook for {bank_info['bank_name']}: {e}")
         return {}
 
+
+async def format_ib_quote(
+    quote_text: str,
+    context: Dict[str, Any]
+) -> str:
+    """
+    Format an IB/Trading quote with HTML emphasis tags.
+
+    Args:
+        quote_text: The paraphrased quote text
+        context: Execution context
+
+    Returns:
+        Formatted quote with HTML tags
+    """
+    # Load prompt template
+    prompt_template = load_prompt_template("ib_quote_formatting.yaml")
+
+    # Format messages
+    messages = [
+        {
+            "role": "system",
+            "content": prompt_template["system_template"]
+        },
+        {
+            "role": "user",
+            "content": prompt_template["user_template"].format(quote_text=quote_text)
+        }
+    ]
+
+    # Create tool definition
+    tools = [{
+        "type": "function",
+        "function": {
+            "name": prompt_template["tool_name"],
+            "description": prompt_template["tool_description"],
+            "parameters": {
+                "type": "object",
+                "properties": prompt_template["tool_parameters"],
+                "required": ["formatted_quote"]
+            }
+        }
+    }]
+
+    # Call LLM
+    llm_params = {
+        "model": MODELS["qa_categorization"],  # Use same model as QA (gpt-4-turbo)
+        "temperature": 0.3,  # Lower for consistent formatting
+        "max_tokens": MAX_TOKENS
+    }
+
+    try:
+        response = await complete_with_tools(
+            messages=messages,
+            tools=tools,
+            context=context,
+            llm_params=llm_params
+        )
+
+        # Extract tool call results from OpenAI response structure
+        tool_calls = response.get("choices", [{}])[0].get("message", {}).get("tool_calls")
+        if tool_calls:
+            tool_call = tool_calls[0]
+            result = json.loads(tool_call["function"]["arguments"])
+            return result.get("formatted_quote", quote_text)
+        else:
+            logger.warning("No tool call in formatting response, returning original")
+            return quote_text
+
+    except Exception as e:
+        logger.error(f"Error formatting quote: {e}")
+        return quote_text  # Fallback to original
+
+
 # =============================================================================
 # Q&A CATEGORIZATION
 # =============================================================================
 
-async def categorize_qa_question(
+async def categorize_qa_block(
     bank_info: Dict[str, Any],
-    qa_data: Dict[str, Any],
+    qa_block: Dict[str, Any],
+    previous_qa_block: Optional[Dict[str, Any]],
     categories: List[Dict[str, Any]],
     fiscal_year: int,
     quarter: str,
     context: Dict[str, Any]
 ) -> Dict[str, Any]:
     """
-    Categorize and extract a single Q&A question.
+    Categorize and extract a single Q&A block.
 
     Args:
         bank_info: Bank information
-        qa_data: Q&A exchange data
+        qa_block: Q&A block data with qa_group_id and qa_content
+        previous_qa_block: Previous Q&A block for context (or None)
         categories: List of category definitions
         fiscal_year: Year
         quarter: Quarter
@@ -348,11 +430,10 @@ async def categorize_qa_question(
     ])
 
     # Format previous context if available
-    if qa_data.get("previous_exchange"):
-        prev = qa_data["previous_exchange"]
-        previous_context = f"""Previous Analyst: {prev.get('analyst', 'Unknown')}
-Previous Question: {prev.get('question', '')}
-Previous Answer: {prev.get('answer', '')}"""
+    if previous_qa_block:
+        previous_context = f"""<previous_qa_block>
+{previous_qa_block.get('qa_content', '')}
+</previous_qa_block>"""
     else:
         previous_context = "This is the first question in the Q&A session."
 
@@ -371,10 +452,7 @@ Previous Answer: {prev.get('answer', '')}"""
                 bank_name=bank_info["bank_name"],
                 fiscal_year=fiscal_year,
                 quarter=quarter,
-                analyst_name=qa_data.get("analyst_name", "Unknown"),
-                analyst_firm=qa_data.get("analyst_firm", "Unknown"),
-                question_text=qa_data.get("question", ""),
-                answer_text=qa_data.get("answer", "")  # No truncation - full answer
+                qa_block_content=qa_block.get("qa_content", "")
             )
         }
     ]
@@ -397,7 +475,7 @@ Previous Answer: {prev.get('answer', '')}"""
     llm_params = {
         "model": MODELS["qa_categorization"],
         "temperature": 0.3,  # Lower temperature for categorization
-        "max_tokens": MAX_TOKENS  # Use config value (32768)
+        "max_tokens": MAX_TOKENS  # Use config value (4096)
     }
 
     try:
@@ -408,15 +486,17 @@ Previous Answer: {prev.get('answer', '')}"""
             llm_params=llm_params
         )
 
-        # Extract tool call results
-        if response.get("tool_calls"):
-            tool_call = response["tool_calls"][0]
+        # Extract tool call results from OpenAI response structure
+        tool_calls = response.get("choices", [{}])[0].get("message", {}).get("tool_calls")
+        if tool_calls:
+            tool_call = tool_calls[0]
             result = json.loads(tool_call["function"]["arguments"])
 
-            # Add bank info to result
+            # Add bank info and qa_group_id to result
             if result.get("is_relevant", False):
                 result["bank_name"] = bank_info["bank_name"]
                 result["bank_symbol"] = bank_info["bank_symbol"]
+                result["qa_group_id"] = qa_block.get("qa_group_id")
 
             return result
         else:
@@ -566,28 +646,85 @@ async def process_bank(
         context=context
     )
 
-    # Process Q&A questions
+    # Format quotes with HTML if extraction was successful
+    if ib_trading_insights and ib_trading_insights.get("quotes"):
+        logger.info(f"[IB FORMATTING] {bank_info['bank_name']}: Formatting {len(ib_trading_insights['quotes'])} quotes")
+        for quote_obj in ib_trading_insights['quotes']:
+            original_quote = quote_obj.get("quote", "")
+            if original_quote:
+                formatted_quote = await format_ib_quote(original_quote, context)
+                quote_obj["formatted_quote"] = formatted_quote
+                quote_obj["original_quote"] = original_quote  # Keep original for reference
+
+    # Process Q&A questions using qa_group_id blocks
     categorized_qas = []
 
-    # Parse Q&A content into individual exchanges
-    qa_exchanges = parse_qa_exchanges(qa_content)
+    # Retrieve Q&A chunks and group by qa_group_id (same approach as key_themes ETL)
+    try:
+        async with get_connection() as conn:
+            query = text("""
+                SELECT
+                    qa_group_id,
+                    chunk_content as content
+                FROM aegis_transcripts
+                WHERE (institution_id = :bank_id_str OR institution_id::text = :bank_id_str)
+                AND fiscal_year = :fiscal_year
+                AND fiscal_quarter = :quarter
+                AND section_name = 'Q&A'
+                ORDER BY qa_group_id, chunk_id
+            """)
+
+            result = await conn.execute(query, {
+                "bank_id_str": str(bank_info['bank_id']),
+                "fiscal_year": actual_year,
+                "quarter": actual_quarter
+            })
+
+            rows = result.fetchall()
+            chunks = [{"qa_group_id": row[0], "content": row[1]} for row in rows]
+    except Exception as e:
+        logger.error(f"Error retrieving Q&A chunks for {bank_info['bank_name']}: {e}")
+        chunks = []
+
+    # Group chunks by qa_group_id
+    qa_groups = {}
+    for chunk in chunks:
+        qa_group_id = chunk.get('qa_group_id')
+        if qa_group_id is not None:
+            if qa_group_id not in qa_groups:
+                qa_groups[qa_group_id] = []
+            qa_groups[qa_group_id].append(chunk)
+
+    # Convert to list of Q&A blocks with combined content
+    qa_blocks = []
+    for qa_group_id in sorted(qa_groups.keys()):
+        group_chunks = qa_groups[qa_group_id]
+        # Combine all chunks for this qa_group_id
+        qa_content = "\n".join([
+            chunk.get('content', '')
+            for chunk in group_chunks
+            if chunk.get('content')
+        ])
+
+        if qa_content:
+            qa_blocks.append({
+                "qa_group_id": qa_group_id,
+                "qa_content": qa_content
+            })
+
     logger.info(
-        f"[QA PARSING] {bank_info['bank_name']}: Parsed {len(qa_exchanges)} Q&A exchanges"
+        f"[QA BLOCKS] {bank_info['bank_name']}: Retrieved {len(qa_blocks)} Q&A blocks"
     )
 
-    # Process each Q&A with previous context
-    for i, qa in enumerate(qa_exchanges):
-        # Add previous Q&A as context if available
-        if i > 0:
-            qa["previous_exchange"] = {
-                "analyst": qa_exchanges[i-1].get("analyst_name", ""),
-                "question": qa_exchanges[i-1].get("question", ""),
-                "answer": qa_exchanges[i-1].get("answer", "")  # Full answer for context
-            }
+    # Process each Q&A block with previous context
+    for i, qa_block in enumerate(qa_blocks):
+        # Get previous block for context if available
+        previous_block = qa_blocks[i-1] if i > 0 else None
 
-        result = await categorize_qa_question(
+        result = await categorize_qa_block(
             bank_info=bank_info,
-            qa_data=qa,
+            qa_block=qa_block,
+            previous_qa_block=previous_block,
             categories=categories,
             fiscal_year=actual_year,
             quarter=actual_quarter,
@@ -601,7 +738,7 @@ async def process_bank(
         f"[PROCESSING COMPLETE] {bank_info['bank_name']} {actual_year} {actual_quarter}: "
         f"{len(ib_trading_insights.get('investment_banking', []))} IB insights, "
         f"{len(ib_trading_insights.get('trading_outlook', []))} trading insights, "
-        f"{len(categorized_qas)} relevant Q&As from {len(qa_exchanges)} total"
+        f"{len(categorized_qas)} relevant Q&As from {len(qa_blocks)} total"
     )
 
     period_info = {
@@ -614,62 +751,6 @@ async def process_bank(
     }
 
     return ib_trading_insights, categorized_qas, period_info
-
-def parse_qa_exchanges(qa_content: str) -> List[Dict[str, Any]]:
-    """
-    Parse Q&A content into individual exchanges.
-
-    Args:
-        qa_content: Raw Q&A section text
-
-    Returns:
-        List of Q&A exchange dictionaries
-    """
-    exchanges = []
-
-    # Simple parsing - this would need to be more sophisticated
-    # for production use based on actual transcript format
-    lines = qa_content.split('\n')
-    current_exchange = {}
-
-    for line in lines:
-        if line.startswith("Analyst:"):
-            # Start new exchange
-            if current_exchange:
-                exchanges.append(current_exchange)
-            current_exchange = {
-                "analyst_info": line.replace("Analyst:", "").strip(),
-                "question": "",
-                "answer": ""
-            }
-
-            # Parse analyst name and firm
-            parts = current_exchange["analyst_info"].split(" from ")
-            if len(parts) == 2:
-                current_exchange["analyst_name"] = parts[0].strip()
-                current_exchange["analyst_firm"] = parts[1].strip()
-            else:
-                current_exchange["analyst_name"] = current_exchange["analyst_info"]
-                current_exchange["analyst_firm"] = "Unknown"
-
-        elif line.startswith("Question:"):
-            if current_exchange:
-                current_exchange["question"] = line.replace("Question:", "").strip()
-        elif line.startswith("Answer:"):
-            if current_exchange:
-                current_exchange["answer"] = line.replace("Answer:", "").strip()
-        elif current_exchange:
-            # Continue building current section
-            if not current_exchange.get("answer"):
-                current_exchange["question"] += " " + line
-            else:
-                current_exchange["answer"] += " " + line
-
-    # Add last exchange
-    if current_exchange:
-        exchanges.append(current_exchange)
-
-    return exchanges
 
 async def process_all_banks(
     fiscal_year: int,
@@ -729,8 +810,9 @@ async def process_all_banks(
             # Track period used for each bank
             period_tracking[bank_info["bank_name"]] = period_info
 
-            # Store results
+            # Store results with bank_symbol for ticker mapping
             if ib_trading:
+                ib_trading["bank_symbol"] = bank_info.get("bank_symbol", "")
                 all_ib_trading[bank_info["bank_name"]] = ib_trading
 
             all_qas.extend(qas)
@@ -829,15 +911,15 @@ async def save_to_database(
                 fiscal_year,
                 quarter,
                 markdown_content,
-                structured_data,
-                created_at
+                metadata,
+                generation_date
             ) VALUES (
                 :execution_id,
                 'cm_readthrough',
                 :fiscal_year,
                 :quarter,
                 :markdown_content,
-                :structured_data,
+                :metadata,
                 NOW()
             )
         """)
@@ -849,7 +931,7 @@ async def save_to_database(
                 "fiscal_year": fiscal_year,
                 "quarter": quarter,
                 "markdown_content": markdown_content,
-                "structured_data": json.dumps(results)
+                "metadata": json.dumps(results)
             }
         )
 
@@ -927,9 +1009,10 @@ async def main():
         output_dir = Path(__file__).parent / "output"
         output_dir.mkdir(exist_ok=True)
 
-        # Create filename with hash for uniqueness
+        # Create filename with timestamp for uniqueness (avoid sort_keys issue with None values)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         content_hash = hashlib.md5(
-            json.dumps(results, sort_keys=True).encode()
+            f"{args.year}_{args.quarter}_{timestamp}".encode()
         ).hexdigest()[:8]
 
         if args.output:

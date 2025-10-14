@@ -18,8 +18,44 @@ from docx.enum.section import WD_ORIENTATION
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from aegis.utils.logging import get_logger
+import re
 
 logger = get_logger()
+
+
+def add_html_formatted_runs(paragraph, text: str, font_size: int = 9) -> None:
+    """
+    Add formatted runs to a paragraph processing HTML tags.
+
+    Supports: <strong><u>text</u></strong> for bold+underline
+
+    Args:
+        paragraph: Document paragraph object
+        text: Text with HTML formatting
+        font_size: Font size in points
+    """
+    # Pattern to match <strong><u>...</u></strong>
+    pattern = r'<strong><u>(.*?)</u></strong>'
+
+    last_end = 0
+    for match in re.finditer(pattern, text):
+        # Add text before the match
+        if match.start() > last_end:
+            run = paragraph.add_run(text[last_end:match.start()])
+            run.font.size = Pt(font_size)
+
+        # Add bold+underlined text
+        run = paragraph.add_run(match.group(1))
+        run.font.bold = True
+        run.font.underline = True
+        run.font.size = Pt(font_size)
+
+        last_end = match.end()
+
+    # Add remaining text
+    if last_end < len(text):
+        run = paragraph.add_run(text[last_end:])
+        run.font.size = Pt(font_size)
 
 
 def convert_docx_to_pdf(docx_path: str, pdf_path: str) -> bool:
@@ -137,6 +173,11 @@ def convert_docx_to_pdf(docx_path: str, pdf_path: str) -> bool:
     return False
 
 
+def generate_main_title(quarter: str, year: int) -> str:
+    """Generate main title for the report."""
+    return f"Read Through For Capital Markets: {quarter}/{str(year)[2:]} Select U.S. & European Banks"
+
+
 def create_combined_document(results: Dict[str, Any], output_path: str) -> None:
     """
     Create a combined Word document for CM Readthrough analysis.
@@ -162,27 +203,34 @@ def create_combined_document(results: Dict[str, Any], output_path: str) -> None:
         section.left_margin = Inches(1)
         section.right_margin = Inches(1)
 
-    # Add title page
-    add_title_page(doc, results["metadata"])
+    # Add main title (no title page)
+    main_title = generate_main_title(results["metadata"]["quarter"], results["metadata"]["fiscal_year"])
+    title_para = doc.add_paragraph()
+    title_run = title_para.add_run(main_title)
+    title_run.font.size = Pt(16)
+    title_run.font.bold = True
+    title_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
-    # Add executive summary
-    add_executive_summary(doc, results)
+    # Add LLM-generated subtitle (from results metadata if available)
+    subtitle_text = results["metadata"].get("outlook_subtitle", "Outlook: Pipelines remain robust as some clients are taking a wait-and-see approach")
+    subtitle_para = doc.add_paragraph()
+    subtitle_run = subtitle_para.add_run(subtitle_text)
+    subtitle_run.font.size = Pt(12)
+    subtitle_run.font.bold = True
+    subtitle_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
-    # Add table of contents placeholder
-    doc.add_page_break()
-    doc.add_heading("Table of Contents", 1)
-    doc.add_paragraph("(Table of Contents will be generated here)")
+    doc.add_paragraph()  # Spacing
 
-    # Section 1: Investment Banking & Trading Outlook
-    doc.add_page_break()
-    add_ib_trading_section(doc, results.get("ib_trading_outlook", {}))
+    # Add horizontal line
+    doc.add_paragraph("_" * 100)
+    doc.add_paragraph()  # Spacing
+
+    # Section 1: Investment Banking & Trading Outlook (starts immediately)
+    add_ib_trading_section(doc, results.get("ib_trading_outlook", {}), results["metadata"])
 
     # Section 2: Analyst Questions by Category
     doc.add_page_break()
     add_qa_section(doc, results.get("categorized_qas", {}))
-
-    # Add appendix if needed
-    add_appendix(doc, results["metadata"])
 
     # Save document
     doc.save(output_path)
@@ -267,59 +315,121 @@ def add_executive_summary(doc: Document, results: Dict[str, Any]) -> None:
         doc.add_paragraph(f"• {category}: {count} questions")
 
 
-def add_ib_trading_section(doc: Document, ib_trading_data: Dict[str, Any]) -> None:
-    """Add Investment Banking & Trading Outlook section."""
-    doc.add_heading("Investment Banking & Trading Outlook", 1)
+def add_ib_trading_section(doc: Document, ib_trading_data: Dict[str, Any], metadata: Dict[str, Any]) -> None:
+    """Add Investment Banking & Trading Outlook section with custom formatting."""
 
     if not ib_trading_data:
-        doc.add_paragraph("No Investment Banking or Trading commentary identified.")
         return
 
-    for bank_name, insights in ib_trading_data.items():
-        # Bank heading
-        doc.add_heading(bank_name, 2)
+    # Filter to only banks with content (check for 'quotes' key from extraction)
+    banks_with_content = {bank: content for bank, content in ib_trading_data.items()
+                          if content.get("quotes")}
 
-        # Investment Banking insights
-        if insights.get("investment_banking"):
-            doc.add_heading("Investment Banking", 3)
-            for item in insights["investment_banking"]:
-                topic = item.get("topic", "General")
-                insight = item.get("insight", "")
-                context = item.get("context", "")
+    if not banks_with_content:
+        return
 
-                para = doc.add_paragraph()
-                para.add_run(f"{topic}: ").bold = True
-                para.add_run(insight)
+    # Get bank symbols for ticker mapping
+    bank_symbols = {data.get("bank_symbol", ""): bank_name
+                   for bank_name, data in ib_trading_data.items()
+                   if data.get("bank_symbol")}
 
-                if context:
-                    para.add_run(f" ({context})").font.italic = True
+    # Reverse mapping: bank_name -> symbol
+    name_to_symbol = {v: k for k, v in bank_symbols.items()}
 
-        # Trading outlook
-        if insights.get("trading_outlook"):
-            doc.add_heading("Trading Outlook", 3)
-            for item in insights["trading_outlook"]:
-                topic = item.get("topic", "General")
-                insight = item.get("insight", "")
-                context = item.get("context", "")
+    # Create table with 2 columns
+    table = doc.add_table(rows=len(banks_with_content) + 1, cols=2)
 
-                para = doc.add_paragraph()
-                para.add_run(f"{topic}: ").bold = True
-                para.add_run(insight)
+    # Set column widths: narrow for tickers, wide for content
+    table.columns[0].width = Inches(1.0)  # Narrow ticker column
+    table.columns[1].width = Inches(6.0)  # Wide content column
 
-                if context:
-                    para.add_run(f" ({context})").font.italic = True
+    # Header row styling - dark blue background with white text
+    header_cells = table.rows[0].cells
+    header_cells[0].text = "Banks/\nSegments"
+    header_cells[1].text = "Investment Banking and Trading Outlook"
 
-        # Market conditions
-        if insights.get("market_conditions"):
-            doc.add_heading("Market Conditions", 3)
-            for item in insights["market_conditions"]:
-                condition = item.get("condition", "")
-                impact = item.get("impact", "")
+    # Format header with dark blue background and white text
+    for cell in header_cells:
+        # Set dark blue background (RGB: 0, 32, 96 - professional dark blue)
+        shading_elm = parse_xml(r'<w:shd {} w:fill="002060"/>'.format(nsdecls('w')))
+        cell._tc.get_or_add_tcPr().append(shading_elm)
 
-                para = doc.add_paragraph()
-                para.add_run(f"Condition: ").bold = True
-                para.add_run(condition)
-                doc.add_paragraph(f"Impact: {impact}")
+        for paragraph in cell.paragraphs:
+            paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            for run in paragraph.runs:
+                run.font.bold = True
+                run.font.size = Pt(10)
+                run.font.color.rgb = RGBColor(255, 255, 255)  # White text
+
+    # Data rows
+    row_idx = 1
+    for bank_name, insights in banks_with_content.items():
+        row = table.rows[row_idx]
+
+        # Column 1: Bank ticker
+        ticker = name_to_symbol.get(bank_name, bank_name[:4].upper())
+        ticker_cell = row.cells[0]
+        ticker_para = ticker_cell.paragraphs[0]
+        ticker_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        ticker_run = ticker_para.add_run(ticker)
+        ticker_run.font.size = Pt(9)
+        ticker_run.font.bold = True
+
+        # Column 2: Key quotes content
+        content_cell = row.cells[1]
+        content_cell.text = ""  # Clear default text
+
+        # Add each quote as a bullet point
+        quotes = insights.get("quotes", [])
+        for quote in quotes:
+            theme = quote.get("theme", "")
+            # Use formatted_quote if available, otherwise fall back to quote
+            content_text = quote.get("formatted_quote", quote.get("quote", ""))
+
+            # Add bullet paragraph
+            bullet_para = content_cell.add_paragraph(style='List Bullet')
+
+            # Add theme in bold
+            theme_run = bullet_para.add_run(f"{theme}: ")
+            theme_run.font.bold = True
+            theme_run.font.size = Pt(9)
+
+            # Add formatted content, processing HTML tags
+            add_html_formatted_runs(bullet_para, content_text, font_size=9)
+
+        row_idx += 1
+
+    # Set table borders: inner borders + top/bottom, no left/right
+    tbl = table._element
+    tbl_pr = tbl.tblPr
+    if tbl_pr is None:
+        tbl_pr = parse_xml(r'<w:tblPr {}/> '.format(nsdecls('w')))
+        tbl.insert(0, tbl_pr)
+
+    # Define border style
+    tbl_borders = parse_xml(
+        r'<w:tblBorders {}>'
+        r'<w:top w:val="single" w:sz="4" w:color="000000"/>'
+        r'<w:bottom w:val="single" w:sz="4" w:color="000000"/>'
+        r'<w:insideH w:val="single" w:sz="4" w:color="000000"/>'
+        r'<w:insideV w:val="single" w:sz="4" w:color="000000"/>'
+        r'</w:tblBorders>'.format(nsdecls('w'))
+    )
+    tbl_pr.append(tbl_borders)
+
+    # Add footer with horizontal line
+    doc.add_paragraph()
+    doc.add_paragraph("_" * 100)
+
+    footer_table = doc.add_table(rows=1, cols=2)
+    footer_table.rows[0].cells[0].text = "Source: Company Reports, Transcripts"
+    footer_table.rows[0].cells[1].text = "RBC"
+
+    for cell in footer_table.rows[0].cells:
+        for paragraph in cell.paragraphs:
+            for run in paragraph.runs:
+                run.font.size = Pt(8)
+                run.font.italic = True
 
 
 def add_qa_section(doc: Document, categorized_qas: Dict[str, List[Dict[str, Any]]]) -> None:

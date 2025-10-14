@@ -5,21 +5,11 @@ system_template: |
   </context>
 
   <objective>
-  Extract and paraphrase key insights related to Investment Banking performance and Trading outlook from the transcript.
-  Focus on forward-looking statements, performance metrics, market conditions, and strategic initiatives.
+  Extract 3-5 quotes about Investment Banking and Trading outlook from the transcript.
+  IMPORTANT: Only extract if there is MEANINGFUL Investment Banking or Trading outlook commentary.
+  If the transcript does NOT contain substantive IB/Trading outlook, return an empty quotes array and set has_content to false.
+  DO NOT extract generic statements or force content where none exists.
   </objective>
-
-  <extraction_focus>
-  You should extract and paraphrase commentary related to:
-  - Investment Banking performance metrics and pipeline
-  - M&A activity, underwriting volumes, and advisory fees
-  - Trading revenues and market making activities
-  - Fixed income and equities trading performance
-  - Market conditions and their impact on capital markets businesses
-  - Forward-looking statements about capital markets outlook
-  - Strategic initiatives in capital markets
-  - Regulatory impacts on trading and investment banking
-  </extraction_focus>
 
   <style>
   Professional, concise, analytical
@@ -34,62 +24,57 @@ system_template: |
   </audience>
 
   <response_format>
-  Provide paraphrased insights in clear bullet points, organized by topic.
-  Include specific metrics where mentioned but focus on the narrative and outlook.
-  Do NOT quote verbatim - paraphrase to capture the essence of the commentary.
+  YOU MUST ALWAYS use the extract_ib_trading_insights tool to return your findings.
+
+  If the transcript contains substantive IB/Trading outlook:
+  - Extract 3-5 quotes about Investment Banking and/or Trading
+  - For each quote:
+    1. SHORT theme title (e.g., "Investment Banking activity", "Trading outlook")
+    2. Paraphrased content (2-3 sentences)
+  - Set has_content to true
+
+  If NO substantive IB/Trading outlook exists:
+  - Return empty quotes array []
+  - Set has_content to false
+  - DO NOT include explanatory text about why content is missing
+
+  <extraction_focus>
+  Look for mentions of:
+  - <category>M&A</category>: Pipelines, deal flow, backlog, conversions
+  - <category>Trading</category>: Trading revenue, volatility, FICC, equities
+  - <category>Capital Markets</category>: IPO market, underwriting, client activity
+  - <category>Outlook</category>: Forward guidance, market conditions
+  </extraction_focus>
   </response_format>
 
 tool_name: extract_ib_trading_insights
-tool_description: Extract Investment Banking and Trading outlook insights from transcript
+tool_description: Extract IB and Trading outlook quotes from transcript, or indicate no relevant content exists
 tool_parameters:
-  investment_banking:
+  has_content:
+    type: boolean
+    description: True if transcript contains substantive IB/Trading outlook, False otherwise
+  quotes:
     type: array
-    description: Key insights about Investment Banking performance and outlook
+    description: Array of 3-5 most relevant quotes about IB and Trading outlook (empty array if has_content is false)
     items:
       type: object
       properties:
-        topic:
+        theme:
           type: string
-          description: Specific aspect (e.g., M&A activity, underwriting, pipeline)
-        insight:
+          description: Short theme title (e.g., "Investment Banking activity", "Trading performance", "Pipeline outlook")
+        quote:
           type: string
-          description: Paraphrased key insight or outlook
-        context:
-          type: string
-          description: Additional context if relevant
-  trading_outlook:
-    type: array
-    description: Key insights about Trading performance and outlook
-    items:
-      type: object
-      properties:
-        topic:
-          type: string
-          description: Specific aspect (e.g., fixed income, equities, volatility)
-        insight:
-          type: string
-          description: Paraphrased key insight or outlook
-        context:
-          type: string
-          description: Additional context if relevant
-  market_conditions:
-    type: array
-    description: Commentary on overall market conditions affecting capital markets
-    items:
-      type: object
-      properties:
-        condition:
-          type: string
-          description: Market condition or trend
-        impact:
-          type: string
-          description: Impact on business or expected impact
+          description: Paraphrased quote for brevity (2-4 sentences). Include key metrics and forward-looking statements.
 
 user_template: |
-  Analyze the earnings call transcript for {bank_name} for {fiscal_year} {quarter}:
+  <task>
+  Analyze the earnings call transcript for {bank_name} for {fiscal_year} {quarter} and extract Investment Banking and Trading insights.
+  </task>
 
   <transcript>
   {transcript_content}
   </transcript>
 
-  Extract Investment Banking and Trading insights using the provided tool.
+  <instructions>
+  Use the provided tool to extract and structure the insights.
+  </instructions>
