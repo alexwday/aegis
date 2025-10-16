@@ -555,7 +555,7 @@ async def extract_questions_from_qa(
     # Call LLM
     llm_params = {
         "model": MODELS["qa_extraction"],
-        "temperature": 0.3,  # Lower temperature for extraction accuracy
+        "temperature": TEMPERATURE,
         "max_tokens": MAX_TOKENS
     }
 
@@ -734,7 +734,7 @@ async def generate_subtitle(
     # Call LLM
     llm_params = {
         "model": MODELS["batch_formatting"],  # Reuse formatting model
-        "temperature": 0.5,  # Medium temperature for creativity
+        "temperature": TEMPERATURE,
         "max_tokens": 100  # Subtitle is short
     }
 
@@ -829,7 +829,7 @@ async def format_outlook_batch(
     # Call LLM
     llm_params = {
         "model": MODELS["batch_formatting"],
-        "temperature": 0.3,  # Lower temperature for consistent formatting
+        "temperature": TEMPERATURE,
         "max_tokens": MAX_TOKENS
     }
 
