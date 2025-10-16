@@ -783,7 +783,7 @@ def add_section3_qa(doc: Document, results: Dict[str, Any]) -> None:
                     tcBorders = parse_xml(
                         r'<w:tcBorders {}>'
                         r'<w:bottom w:val="none"/>'
-                        r'</w:tblBorders>'.format(nsdecls('w'))
+                        r'</w:tcBorders>'.format(nsdecls('w'))
                     )
                     tcPr.append(tcBorders)
 
