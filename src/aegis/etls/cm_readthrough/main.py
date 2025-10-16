@@ -1124,32 +1124,46 @@ async def save_to_database(
         # Save to aegis_reports table
         query = text("""
             INSERT INTO aegis_reports (
-                execution_id,
+                report_name,
+                report_description,
                 report_type,
+                execution_id,
                 fiscal_year,
                 quarter,
                 markdown_content,
                 metadata,
-                generation_date
+                generation_date,
+                generated_by
             ) VALUES (
+                :report_name,
+                :report_description,
+                :report_type,
                 :execution_id,
-                'cm_readthrough',
                 :fiscal_year,
                 :quarter,
                 :markdown_content,
                 :metadata,
-                NOW()
+                NOW(),
+                :generated_by
             )
         """)
 
         await conn.execute(
             query,
             {
+                "report_name": "Capital Markets Readthrough",
+                "report_description": (
+                    "AI-generated analysis of capital markets commentary from quarterly earnings calls "
+                    "across major U.S. and European banks. Extracts investment banking and trading outlook, "
+                    "analyst questions on market dynamics, risk management, M&A pipelines, and transaction banking."
+                ),
+                "report_type": "cm_readthrough",
                 "execution_id": str(execution_id),
                 "fiscal_year": fiscal_year,
                 "quarter": quarter,
                 "markdown_content": markdown_content,
-                "metadata": json.dumps(results)
+                "metadata": json.dumps(results),
+                "generated_by": "cm_readthrough_etl"
             }
         )
 
