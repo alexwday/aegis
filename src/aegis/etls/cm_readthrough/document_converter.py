@@ -312,6 +312,9 @@ def create_combined_document(results: Dict[str, Any], output_path: str) -> None:
     # Section 3: Q&A (2 categories)
     add_section3_qa(doc, results)
 
+    # Add footer only once to the first section (applies to entire document)
+    add_page_footer(doc.sections[0])
+
     # Save document
     doc.save(output_path)
     logger.info(f"Document saved to {output_path}")
@@ -450,15 +453,17 @@ def add_section1_outlook(doc: Document, results: Dict[str, Any]) -> None:
 
     # Create table with 2 columns
     table = doc.add_table(rows=len(banks_with_content) + 1, cols=2)
-
-    # Set column widths: very narrow for tickers, maximize for content
-    table.columns[0].width = Inches(0.4)  # Minimal ticker column
-    table.columns[1].width = Inches(9.6)  # Maximum content column width
+    table.autofit = False
+    table.allow_autofit = False
 
     # Header row styling - dark blue background with white text
     header_cells = table.rows[0].cells
     header_cells[0].text = "Banks/\nSegments"
     header_cells[1].text = "Investment Banking and Trading Outlook"
+
+    # Set precise column widths at cell level
+    header_cells[0].width = Inches(0.4)  # Minimal ticker column
+    header_cells[1].width = Inches(9.6)  # Maximum content column width
 
     # Format header with dark blue background and white text
     for cell in header_cells:
@@ -478,6 +483,10 @@ def add_section1_outlook(doc: Document, results: Dict[str, Any]) -> None:
     for bank_name, bank_data in banks_with_content.items():
         row = table.rows[row_idx]
 
+        # Set cell widths for this row
+        row.cells[0].width = Inches(0.4)
+        row.cells[1].width = Inches(9.6)
+
         # Column 1: Bank ticker
         ticker = name_to_symbol.get(bank_name, bank_name[:4].upper())
         ticker_cell = row.cells[0]
@@ -489,7 +498,6 @@ def add_section1_outlook(doc: Document, results: Dict[str, Any]) -> None:
 
         # Column 2: Outlook statements content
         content_cell = row.cells[1]
-        content_cell.text = ""  # Clear default text
 
         # Group statements by category
         statements = bank_data.get("statements", [])
@@ -500,10 +508,15 @@ def add_section1_outlook(doc: Document, results: Dict[str, Any]) -> None:
                 statements_by_category[category] = []
             statements_by_category[category].append(statement)
 
-        # Add grouped statements
+        # Add grouped statements - use first paragraph, then add new ones
+        first_para = True
         for category_idx, (category, category_statements) in enumerate(statements_by_category.items()):
             # Add category heading (bold) only once per category
-            category_para = content_cell.add_paragraph()
+            if first_para:
+                category_para = content_cell.paragraphs[0]
+                first_para = False
+            else:
+                category_para = content_cell.add_paragraph()
             category_run = category_para.add_run(f"{category}:")
             category_run.font.bold = True
             category_run.font.size = Pt(9)
@@ -552,9 +565,6 @@ def add_section1_outlook(doc: Document, results: Dict[str, Any]) -> None:
         r'</w:tblBorders>'.format(nsdecls('w'))
     )
     tbl_pr.append(tbl_borders)
-
-    # Add page footer
-    add_page_footer(section)
 
 
 def add_section2_qa(doc: Document, results: Dict[str, Any]) -> None:
@@ -623,15 +633,19 @@ def add_section2_qa(doc: Document, results: Dict[str, Any]) -> None:
 
     # Create 3-column table: Themes | Banks | Relevant Questions
     table = doc.add_table(rows=total_rows + 1, cols=3)
-    table.columns[0].width = Inches(0.8)  # Themes (very narrow)
-    table.columns[1].width = Inches(0.4)  # Banks (minimal)
-    table.columns[2].width = Inches(8.8)  # Questions (maximum width)
+    table.autofit = False
+    table.allow_autofit = False
 
     # Header row
     header_cells = table.rows[0].cells
     header_cells[0].text = "Themes"
     header_cells[1].text = "Banks"
     header_cells[2].text = "Relevant Questions"
+
+    # Set precise column widths at cell level
+    header_cells[0].width = Inches(0.8)  # Themes (very narrow)
+    header_cells[1].width = Inches(0.4)  # Banks (minimal)
+    header_cells[2].width = Inches(8.8)  # Questions (maximum width)
 
     # Format header
     for cell in header_cells:
@@ -657,6 +671,11 @@ def add_section2_qa(doc: Document, results: Dict[str, Any]) -> None:
             is_first_in_category = (row_idx == category_start_row)
             is_last_in_category = (row_idx == category_end_row)
 
+            # Set cell widths for this row
+            row.cells[0].width = Inches(0.8)
+            row.cells[1].width = Inches(0.4)
+            row.cells[2].width = Inches(8.8)
+
             # Column 1: Theme/Category (only show on first row of category)
             if is_first_in_category:
                 row.cells[0].text = category
@@ -676,23 +695,41 @@ def add_section2_qa(doc: Document, results: Dict[str, Any]) -> None:
                     run.font.bold = True
 
             # Column 3: All questions for this bank in this category (as bullet points)
-            row.cells[2].text = ""  # Clear default text
+            # Use first paragraph, then add new ones to avoid blank space at top
+            first_question = True
             for i, question in enumerate(bank_data["questions"]):
                 question_text = question.get("verbatim_question", "")
                 # Clean the text
                 question_text = clean_xml_text(question_text)
 
-                # Add as bullet point
-                q_para = row.cells[2].add_paragraph(style='List Bullet')
+                # Add as bullet point - use first paragraph for first question
+                if first_question:
+                    q_para = row.cells[2].paragraphs[0]
+                    q_para.style = 'List Bullet'
+                    first_question = False
+                else:
+                    q_para = row.cells[2].add_paragraph(style='List Bullet')
                 q_run = q_para.add_run(question_text)
                 q_run.font.size = Pt(9)
                 # Remove spacing before/after
                 q_para.paragraph_format.space_before = Pt(0)
                 q_para.paragraph_format.space_after = Pt(0)
 
-            # Set cell borders: horizontal borders between banks, but not between categories
-            if not is_last_in_category:
-                # Add bottom border only to Banks and Questions columns (not Themes)
+            # Set cell borders
+            if is_last_in_category:
+                # Last row of category: add bottom border across all 3 columns
+                for col_idx in [0, 1, 2]:
+                    cell = row.cells[col_idx]
+                    tc = cell._tc
+                    tcPr = tc.get_or_add_tcPr()
+                    tcBorders = parse_xml(
+                        r'<w:tcBorders {}>'
+                        r'<w:bottom w:val="single" w:sz="4" w:color="000000"/>'
+                        r'</w:tcBorders>'.format(nsdecls('w'))
+                    )
+                    tcPr.append(tcBorders)
+            else:
+                # Within category: add bottom border only to Banks and Questions columns
                 for col_idx in [1, 2]:
                     cell = row.cells[col_idx]
                     tc = cell._tc
@@ -703,7 +740,7 @@ def add_section2_qa(doc: Document, results: Dict[str, Any]) -> None:
                         r'</w:tcBorders>'.format(nsdecls('w'))
                     )
                     tcPr.append(tcBorders)
-                # Remove border from Themes column
+                # No border for Themes column within category
                 cell = row.cells[0]
                 tc = cell._tc
                 tcPr = tc.get_or_add_tcPr()
@@ -716,7 +753,7 @@ def add_section2_qa(doc: Document, results: Dict[str, Any]) -> None:
 
             row_idx += 1
 
-    # Add table borders: no vertical borders, only horizontal
+    # Add table borders: only top and bottom, no inside borders (handled at cell level)
     tbl = table._element
     tbl_pr = tbl.tblPr
     if tbl_pr is None:
@@ -727,13 +764,9 @@ def add_section2_qa(doc: Document, results: Dict[str, Any]) -> None:
         r'<w:tblBorders {}>'
         r'<w:top w:val="single" w:sz="4" w:color="000000"/>'
         r'<w:bottom w:val="single" w:sz="4" w:color="000000"/>'
-        r'<w:insideH w:val="single" w:sz="4" w:color="000000"/>'
         r'</w:tblBorders>'.format(nsdecls('w'))
     )
     tbl_pr.append(tbl_borders)
-
-    # Add page footer
-    add_page_footer(section)
 
 
 def add_section3_qa(doc: Document, results: Dict[str, Any]) -> None:
@@ -802,15 +835,19 @@ def add_section3_qa(doc: Document, results: Dict[str, Any]) -> None:
 
     # Create 3-column table: Themes | Banks | Relevant Questions
     table = doc.add_table(rows=total_rows + 1, cols=3)
-    table.columns[0].width = Inches(0.8)  # Themes (very narrow)
-    table.columns[1].width = Inches(0.4)  # Banks (minimal)
-    table.columns[2].width = Inches(8.8)  # Questions (maximum width)
+    table.autofit = False
+    table.allow_autofit = False
 
     # Header row
     header_cells = table.rows[0].cells
     header_cells[0].text = "Themes"
     header_cells[1].text = "Banks"
     header_cells[2].text = "Relevant Questions"
+
+    # Set precise column widths at cell level
+    header_cells[0].width = Inches(0.8)  # Themes (very narrow)
+    header_cells[1].width = Inches(0.4)  # Banks (minimal)
+    header_cells[2].width = Inches(8.8)  # Questions (maximum width)
 
     # Format header
     for cell in header_cells:
@@ -836,6 +873,11 @@ def add_section3_qa(doc: Document, results: Dict[str, Any]) -> None:
             is_first_in_category = (row_idx == category_start_row)
             is_last_in_category = (row_idx == category_end_row)
 
+            # Set cell widths for this row
+            row.cells[0].width = Inches(0.8)
+            row.cells[1].width = Inches(0.4)
+            row.cells[2].width = Inches(8.8)
+
             # Column 1: Theme/Category (only show on first row of category)
             if is_first_in_category:
                 row.cells[0].text = category
@@ -855,23 +897,41 @@ def add_section3_qa(doc: Document, results: Dict[str, Any]) -> None:
                     run.font.bold = True
 
             # Column 3: All questions for this bank in this category (as bullet points)
-            row.cells[2].text = ""  # Clear default text
+            # Use first paragraph, then add new ones to avoid blank space at top
+            first_question = True
             for i, question in enumerate(bank_data["questions"]):
                 question_text = question.get("verbatim_question", "")
                 # Clean the text
                 question_text = clean_xml_text(question_text)
 
-                # Add as bullet point
-                q_para = row.cells[2].add_paragraph(style='List Bullet')
+                # Add as bullet point - use first paragraph for first question
+                if first_question:
+                    q_para = row.cells[2].paragraphs[0]
+                    q_para.style = 'List Bullet'
+                    first_question = False
+                else:
+                    q_para = row.cells[2].add_paragraph(style='List Bullet')
                 q_run = q_para.add_run(question_text)
                 q_run.font.size = Pt(9)
                 # Remove spacing before/after
                 q_para.paragraph_format.space_before = Pt(0)
                 q_para.paragraph_format.space_after = Pt(0)
 
-            # Set cell borders: horizontal borders between banks, but not between categories
-            if not is_last_in_category:
-                # Add bottom border only to Banks and Questions columns (not Themes)
+            # Set cell borders
+            if is_last_in_category:
+                # Last row of category: add bottom border across all 3 columns
+                for col_idx in [0, 1, 2]:
+                    cell = row.cells[col_idx]
+                    tc = cell._tc
+                    tcPr = tc.get_or_add_tcPr()
+                    tcBorders = parse_xml(
+                        r'<w:tcBorders {}>'
+                        r'<w:bottom w:val="single" w:sz="4" w:color="000000"/>'
+                        r'</w:tcBorders>'.format(nsdecls('w'))
+                    )
+                    tcPr.append(tcBorders)
+            else:
+                # Within category: add bottom border only to Banks and Questions columns
                 for col_idx in [1, 2]:
                     cell = row.cells[col_idx]
                     tc = cell._tc
@@ -882,7 +942,7 @@ def add_section3_qa(doc: Document, results: Dict[str, Any]) -> None:
                         r'</w:tcBorders>'.format(nsdecls('w'))
                     )
                     tcPr.append(tcBorders)
-                # Remove border from Themes column
+                # No border for Themes column within category
                 cell = row.cells[0]
                 tc = cell._tc
                 tcPr = tc.get_or_add_tcPr()
@@ -895,7 +955,7 @@ def add_section3_qa(doc: Document, results: Dict[str, Any]) -> None:
 
             row_idx += 1
 
-    # Add table borders: no vertical borders, only horizontal
+    # Add table borders: only top and bottom, no inside borders (handled at cell level)
     tbl = table._element
     tbl_pr = tbl.tblPr
     if tbl_pr is None:
@@ -906,13 +966,9 @@ def add_section3_qa(doc: Document, results: Dict[str, Any]) -> None:
         r'<w:tblBorders {}>'
         r'<w:top w:val="single" w:sz="4" w:color="000000"/>'
         r'<w:bottom w:val="single" w:sz="4" w:color="000000"/>'
-        r'<w:insideH w:val="single" w:sz="4" w:color="000000"/>'
         r'</w:tblBorders>'.format(nsdecls('w'))
     )
     tbl_pr.append(tbl_borders)
-
-    # Add page footer
-    add_page_footer(section)
 
 
 def add_qa_section(doc: Document, questions_data: Dict[str, Any]) -> None:
