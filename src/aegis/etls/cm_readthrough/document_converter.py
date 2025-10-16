@@ -222,6 +222,70 @@ def generate_main_title(quarter: str, year: int) -> str:
     return f"Read Through For Capital Markets: {quarter}/{str(year)[2:]} Select U.S. & European Banks"
 
 
+def add_page_footer(section) -> None:
+    """
+    Add footer to page with horizontal line, left-aligned source, and right-aligned RBC.
+
+    Args:
+        section: Document section object
+    """
+    footer = section.footer
+    footer.is_linked_to_previous = False
+
+    # Add horizontal line
+    line_para = footer.paragraphs[0] if footer.paragraphs else footer.add_paragraph()
+    line_para.paragraph_format.space_before = Pt(0)
+    line_para.paragraph_format.space_after = Pt(3)
+
+    # Add border above (horizontal line)
+    pPr = line_para._element.get_or_add_pPr()
+    pBdr = parse_xml(
+        r'<w:pBdr {}>'
+        r'<w:top w:val="single" w:sz="6" w:color="000000"/>'
+        r'</w:pBdr>'.format(nsdecls('w'))
+    )
+    pPr.append(pBdr)
+
+    # Create table for two-column footer
+    footer_table = footer.add_table(rows=1, cols=2, width=Inches(10))
+    footer_table.autofit = False
+
+    # Left cell: Source
+    left_cell = footer_table.rows[0].cells[0]
+    left_para = left_cell.paragraphs[0]
+    left_para.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    left_run = left_para.add_run("Source: Company Reports, Transcripts")
+    left_run.font.size = Pt(8)
+    left_run.font.italic = True
+
+    # Right cell: RBC
+    right_cell = footer_table.rows[0].cells[1]
+    right_para = right_cell.paragraphs[0]
+    right_para.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    right_run = right_para.add_run("RBC")
+    right_run.font.size = Pt(8)
+    right_run.font.italic = True
+
+    # Remove table borders
+    tbl = footer_table._element
+    tbl_pr = tbl.tblPr
+    if tbl_pr is None:
+        tbl_pr = parse_xml(r'<w:tblPr {}/> '.format(nsdecls('w')))
+        tbl.insert(0, tbl_pr)
+
+    tbl_borders = parse_xml(
+        r'<w:tblBorders {}>'
+        r'<w:top w:val="none"/>'
+        r'<w:bottom w:val="none"/>'
+        r'<w:left w:val="none"/>'
+        r'<w:right w:val="none"/>'
+        r'<w:insideH w:val="none"/>'
+        r'<w:insideV w:val="none"/>'
+        r'</w:tblBorders>'.format(nsdecls('w'))
+    )
+    tbl_pr.append(tbl_borders)
+
+
 def create_combined_document(results: Dict[str, Any], output_path: str) -> None:
     """
     Create a combined Word document for CM Readthrough analysis with 3 sections.
@@ -342,14 +406,14 @@ def add_section1_outlook(doc: Document, results: Dict[str, Any]) -> None:
     metadata = results["metadata"]
     outlook_data = results.get("outlook", {})
 
-    # Set landscape orientation for this section
+    # Set landscape orientation for this section with slim margins
     section = doc.sections[-1] if doc.sections else doc.sections[0]
     section.orientation = WD_ORIENTATION.LANDSCAPE
     section.page_width, section.page_height = section.page_height, section.page_width
-    section.top_margin = Inches(0.75)
-    section.bottom_margin = Inches(0.75)
-    section.left_margin = Inches(1)
-    section.right_margin = Inches(1)
+    section.top_margin = Inches(0.3)
+    section.bottom_margin = Inches(0.5)
+    section.left_margin = Inches(0.3)
+    section.right_margin = Inches(0.3)
 
     # Add main title
     main_title = generate_main_title(metadata["quarter"], metadata["fiscal_year"])
@@ -387,9 +451,9 @@ def add_section1_outlook(doc: Document, results: Dict[str, Any]) -> None:
     # Create table with 2 columns
     table = doc.add_table(rows=len(banks_with_content) + 1, cols=2)
 
-    # Set column widths: very narrow for tickers, wide for content
-    table.columns[0].width = Inches(0.5)  # Very narrow ticker column
-    table.columns[1].width = Inches(8.5)  # Maximum content column width
+    # Set column widths: very narrow for tickers, maximize for content
+    table.columns[0].width = Inches(0.4)  # Minimal ticker column
+    table.columns[1].width = Inches(9.6)  # Maximum content column width
 
     # Header row styling - dark blue background with white text
     header_cells = table.rows[0].cells
@@ -403,7 +467,7 @@ def add_section1_outlook(doc: Document, results: Dict[str, Any]) -> None:
         cell._tc.get_or_add_tcPr().append(shading_elm)
 
         for paragraph in cell.paragraphs:
-            paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
             for run in paragraph.runs:
                 run.font.bold = True
                 run.font.size = Pt(10)
@@ -427,23 +491,47 @@ def add_section1_outlook(doc: Document, results: Dict[str, Any]) -> None:
         content_cell = row.cells[1]
         content_cell.text = ""  # Clear default text
 
-        # Add each statement as a bullet point
+        # Group statements by category
         statements = bank_data.get("statements", [])
+        statements_by_category = {}
         for statement in statements:
             category = statement.get("category", "")
-            # Use formatted_quote if available, otherwise fall back to statement
-            content_text = statement.get("formatted_quote", statement.get("statement", ""))
+            if category not in statements_by_category:
+                statements_by_category[category] = []
+            statements_by_category[category].append(statement)
 
-            # Add bullet paragraph
-            bullet_para = content_cell.add_paragraph(style='List Bullet')
-
-            # Add category in bold (replacing old "theme")
-            category_run = bullet_para.add_run(f"{category}: ")
+        # Add grouped statements
+        for category_idx, (category, category_statements) in enumerate(statements_by_category.items()):
+            # Add category heading (bold) only once per category
+            category_para = content_cell.add_paragraph()
+            category_run = category_para.add_run(f"{category}:")
             category_run.font.bold = True
             category_run.font.size = Pt(9)
+            # Remove spacing before/after category paragraph
+            category_para.paragraph_format.space_before = Pt(0)
+            category_para.paragraph_format.space_after = Pt(0)
 
-            # Add formatted content, processing HTML tags
-            add_html_formatted_runs(bullet_para, content_text, font_size=9)
+            # Add all quotes for this category
+            for statement in category_statements:
+                # Use formatted_quote if available, otherwise fall back to statement
+                content_text = statement.get("formatted_quote", statement.get("statement", ""))
+
+                # Create paragraph for quote
+                quote_para = content_cell.add_paragraph()
+                # Remove spacing before/after quote paragraph
+                quote_para.paragraph_format.space_before = Pt(0)
+                quote_para.paragraph_format.space_after = Pt(0)
+
+                # Add opening quotation mark
+                opening_run = quote_para.add_run('"')
+                opening_run.font.size = Pt(9)
+
+                # Add formatted content, processing HTML tags
+                add_html_formatted_runs(quote_para, content_text, font_size=9)
+
+                # Add closing quotation mark
+                closing_run = quote_para.add_run('"')
+                closing_run.font.size = Pt(9)
 
         row_idx += 1
 
@@ -465,16 +553,8 @@ def add_section1_outlook(doc: Document, results: Dict[str, Any]) -> None:
     )
     tbl_pr.append(tbl_borders)
 
-    # Add footer (no horizontal line, more compact)
-    footer_table = doc.add_table(rows=1, cols=2)
-    footer_table.rows[0].cells[0].text = "Source: Company Reports, Transcripts"
-    footer_table.rows[0].cells[1].text = "RBC"
-
-    for cell in footer_table.rows[0].cells:
-        for paragraph in cell.paragraphs:
-            for run in paragraph.runs:
-                run.font.size = Pt(8)
-                run.font.italic = True
+    # Add page footer
+    add_page_footer(section)
 
 
 def add_section2_qa(doc: Document, results: Dict[str, Any]) -> None:
@@ -489,14 +569,14 @@ def add_section2_qa(doc: Document, results: Dict[str, Any]) -> None:
     metadata = results["metadata"]
     questions_data = results.get("section2_questions", {})
 
-    # Set landscape orientation
+    # Set landscape orientation with slim margins
     section = doc.sections[-1]
     section.orientation = WD_ORIENTATION.LANDSCAPE
     section.page_width, section.page_height = section.page_height, section.page_width
-    section.top_margin = Inches(0.75)
-    section.bottom_margin = Inches(0.75)
-    section.left_margin = Inches(1)
-    section.right_margin = Inches(1)
+    section.top_margin = Inches(0.3)
+    section.bottom_margin = Inches(0.5)
+    section.left_margin = Inches(0.3)
+    section.right_margin = Inches(0.3)
 
     # Add main title
     main_title = generate_main_title(metadata["quarter"], metadata["fiscal_year"])
@@ -543,9 +623,9 @@ def add_section2_qa(doc: Document, results: Dict[str, Any]) -> None:
 
     # Create 3-column table: Themes | Banks | Relevant Questions
     table = doc.add_table(rows=total_rows + 1, cols=3)
-    table.columns[0].width = Inches(1.0)  # Themes (minimal)
-    table.columns[1].width = Inches(0.5)  # Banks (very narrow)
-    table.columns[2].width = Inches(7.5)  # Questions (maximum width)
+    table.columns[0].width = Inches(0.8)  # Themes (very narrow)
+    table.columns[1].width = Inches(0.4)  # Banks (minimal)
+    table.columns[2].width = Inches(8.8)  # Questions (maximum width)
 
     # Header row
     header_cells = table.rows[0].cells
@@ -558,7 +638,7 @@ def add_section2_qa(doc: Document, results: Dict[str, Any]) -> None:
         shading_elm = parse_xml(r'<w:shd {} w:fill="002060"/>'.format(nsdecls('w')))
         cell._tc.get_or_add_tcPr().append(shading_elm)
         for paragraph in cell.paragraphs:
-            paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
             for run in paragraph.runs:
                 run.font.bold = True
                 run.font.size = Pt(10)
@@ -595,36 +675,48 @@ def add_section2_qa(doc: Document, results: Dict[str, Any]) -> None:
                     run.font.size = Pt(9)
                     run.font.bold = True
 
-            # Column 3: All questions for this bank in this category
+            # Column 3: All questions for this bank in this category (as bullet points)
             row.cells[2].text = ""  # Clear default text
             for i, question in enumerate(bank_data["questions"]):
                 question_text = question.get("verbatim_question", "")
                 # Clean the text
                 question_text = clean_xml_text(question_text)
 
-                if i > 0:
-                    # Add spacing between multiple questions
-                    row.cells[2].add_paragraph()
-
-                q_para = row.cells[2].paragraphs[i] if i == 0 else row.cells[2].add_paragraph()
+                # Add as bullet point
+                q_para = row.cells[2].add_paragraph(style='List Bullet')
                 q_run = q_para.add_run(question_text)
                 q_run.font.size = Pt(9)
+                # Remove spacing before/after
+                q_para.paragraph_format.space_before = Pt(0)
+                q_para.paragraph_format.space_after = Pt(0)
 
-            # Remove bottom border if not the last row in category
+            # Set cell borders: horizontal borders between banks, but not between categories
             if not is_last_in_category:
-                for cell in row.cells:
+                # Add bottom border only to Banks and Questions columns (not Themes)
+                for col_idx in [1, 2]:
+                    cell = row.cells[col_idx]
                     tc = cell._tc
                     tcPr = tc.get_or_add_tcPr()
                     tcBorders = parse_xml(
                         r'<w:tcBorders {}>'
-                        r'<w:bottom w:val="none"/>'
+                        r'<w:bottom w:val="single" w:sz="4" w:color="000000"/>'
                         r'</w:tcBorders>'.format(nsdecls('w'))
                     )
                     tcPr.append(tcBorders)
+                # Remove border from Themes column
+                cell = row.cells[0]
+                tc = cell._tc
+                tcPr = tc.get_or_add_tcPr()
+                tcBorders = parse_xml(
+                    r'<w:tcBorders {}>'
+                    r'<w:bottom w:val="none"/>'
+                    r'</w:tcBorders>'.format(nsdecls('w'))
+                )
+                tcPr.append(tcBorders)
 
             row_idx += 1
 
-    # Add table borders (all inside borders)
+    # Add table borders: no vertical borders, only horizontal
     tbl = table._element
     tbl_pr = tbl.tblPr
     if tbl_pr is None:
@@ -636,10 +728,12 @@ def add_section2_qa(doc: Document, results: Dict[str, Any]) -> None:
         r'<w:top w:val="single" w:sz="4" w:color="000000"/>'
         r'<w:bottom w:val="single" w:sz="4" w:color="000000"/>'
         r'<w:insideH w:val="single" w:sz="4" w:color="000000"/>'
-        r'<w:insideV w:val="single" w:sz="4" w:color="000000"/>'
         r'</w:tblBorders>'.format(nsdecls('w'))
     )
     tbl_pr.append(tbl_borders)
+
+    # Add page footer
+    add_page_footer(section)
 
 
 def add_section3_qa(doc: Document, results: Dict[str, Any]) -> None:
@@ -654,14 +748,14 @@ def add_section3_qa(doc: Document, results: Dict[str, Any]) -> None:
     metadata = results["metadata"]
     questions_data = results.get("section3_questions", {})
 
-    # Set landscape orientation
+    # Set landscape orientation with slim margins
     section = doc.sections[-1]
     section.orientation = WD_ORIENTATION.LANDSCAPE
     section.page_width, section.page_height = section.page_height, section.page_width
-    section.top_margin = Inches(0.75)
-    section.bottom_margin = Inches(0.75)
-    section.left_margin = Inches(1)
-    section.right_margin = Inches(1)
+    section.top_margin = Inches(0.3)
+    section.bottom_margin = Inches(0.5)
+    section.left_margin = Inches(0.3)
+    section.right_margin = Inches(0.3)
 
     # Add main title
     main_title = generate_main_title(metadata["quarter"], metadata["fiscal_year"])
@@ -708,9 +802,9 @@ def add_section3_qa(doc: Document, results: Dict[str, Any]) -> None:
 
     # Create 3-column table: Themes | Banks | Relevant Questions
     table = doc.add_table(rows=total_rows + 1, cols=3)
-    table.columns[0].width = Inches(1.0)  # Themes (minimal)
-    table.columns[1].width = Inches(0.5)  # Banks (very narrow)
-    table.columns[2].width = Inches(7.5)  # Questions (maximum width)
+    table.columns[0].width = Inches(0.8)  # Themes (very narrow)
+    table.columns[1].width = Inches(0.4)  # Banks (minimal)
+    table.columns[2].width = Inches(8.8)  # Questions (maximum width)
 
     # Header row
     header_cells = table.rows[0].cells
@@ -723,7 +817,7 @@ def add_section3_qa(doc: Document, results: Dict[str, Any]) -> None:
         shading_elm = parse_xml(r'<w:shd {} w:fill="002060"/>'.format(nsdecls('w')))
         cell._tc.get_or_add_tcPr().append(shading_elm)
         for paragraph in cell.paragraphs:
-            paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
             for run in paragraph.runs:
                 run.font.bold = True
                 run.font.size = Pt(10)
@@ -760,36 +854,48 @@ def add_section3_qa(doc: Document, results: Dict[str, Any]) -> None:
                     run.font.size = Pt(9)
                     run.font.bold = True
 
-            # Column 3: All questions for this bank in this category
+            # Column 3: All questions for this bank in this category (as bullet points)
             row.cells[2].text = ""  # Clear default text
             for i, question in enumerate(bank_data["questions"]):
                 question_text = question.get("verbatim_question", "")
                 # Clean the text
                 question_text = clean_xml_text(question_text)
 
-                if i > 0:
-                    # Add spacing between multiple questions
-                    row.cells[2].add_paragraph()
-
-                q_para = row.cells[2].paragraphs[i] if i == 0 else row.cells[2].add_paragraph()
+                # Add as bullet point
+                q_para = row.cells[2].add_paragraph(style='List Bullet')
                 q_run = q_para.add_run(question_text)
                 q_run.font.size = Pt(9)
+                # Remove spacing before/after
+                q_para.paragraph_format.space_before = Pt(0)
+                q_para.paragraph_format.space_after = Pt(0)
 
-            # Remove bottom border if not the last row in category
+            # Set cell borders: horizontal borders between banks, but not between categories
             if not is_last_in_category:
-                for cell in row.cells:
+                # Add bottom border only to Banks and Questions columns (not Themes)
+                for col_idx in [1, 2]:
+                    cell = row.cells[col_idx]
                     tc = cell._tc
                     tcPr = tc.get_or_add_tcPr()
                     tcBorders = parse_xml(
                         r'<w:tcBorders {}>'
-                        r'<w:bottom w:val="none"/>'
+                        r'<w:bottom w:val="single" w:sz="4" w:color="000000"/>'
                         r'</w:tcBorders>'.format(nsdecls('w'))
                     )
                     tcPr.append(tcBorders)
+                # Remove border from Themes column
+                cell = row.cells[0]
+                tc = cell._tc
+                tcPr = tc.get_or_add_tcPr()
+                tcBorders = parse_xml(
+                    r'<w:tcBorders {}>'
+                    r'<w:bottom w:val="none"/>'
+                    r'</w:tcBorders>'.format(nsdecls('w'))
+                )
+                tcPr.append(tcBorders)
 
             row_idx += 1
 
-    # Add table borders (all inside borders)
+    # Add table borders: no vertical borders, only horizontal
     tbl = table._element
     tbl_pr = tbl.tblPr
     if tbl_pr is None:
@@ -801,10 +907,12 @@ def add_section3_qa(doc: Document, results: Dict[str, Any]) -> None:
         r'<w:top w:val="single" w:sz="4" w:color="000000"/>'
         r'<w:bottom w:val="single" w:sz="4" w:color="000000"/>'
         r'<w:insideH w:val="single" w:sz="4" w:color="000000"/>'
-        r'<w:insideV w:val="single" w:sz="4" w:color="000000"/>'
         r'</w:tblBorders>'.format(nsdecls('w'))
     )
     tbl_pr.append(tbl_borders)
+
+    # Add page footer
+    add_page_footer(section)
 
 
 def add_qa_section(doc: Document, questions_data: Dict[str, Any]) -> None:
