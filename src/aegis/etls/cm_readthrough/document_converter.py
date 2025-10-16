@@ -368,12 +368,7 @@ def add_section1_outlook(doc: Document, results: Dict[str, Any]) -> None:
     subtitle_run.font.italic = True
     subtitle_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
-    doc.add_paragraph()  # Spacing
-
-    # Add horizontal line
-    doc.add_paragraph("_" * 100)
-    doc.add_paragraph()  # Spacing
-
+    # No spacing - go directly to table
     if not outlook_data:
         doc.add_paragraph("No outlook statements available.")
         return
@@ -392,9 +387,9 @@ def add_section1_outlook(doc: Document, results: Dict[str, Any]) -> None:
     # Create table with 2 columns
     table = doc.add_table(rows=len(banks_with_content) + 1, cols=2)
 
-    # Set column widths: narrow for tickers, wide for content
-    table.columns[0].width = Inches(1.0)  # Narrow ticker column
-    table.columns[1].width = Inches(6.0)  # Wide content column
+    # Set column widths: very narrow for tickers, wide for content
+    table.columns[0].width = Inches(0.5)  # Very narrow ticker column
+    table.columns[1].width = Inches(8.5)  # Maximum content column width
 
     # Header row styling - dark blue background with white text
     header_cells = table.rows[0].cells
@@ -470,10 +465,7 @@ def add_section1_outlook(doc: Document, results: Dict[str, Any]) -> None:
     )
     tbl_pr.append(tbl_borders)
 
-    # Add footer with horizontal line
-    doc.add_paragraph()
-    doc.add_paragraph("_" * 100)
-
+    # Add footer (no horizontal line, more compact)
     footer_table = doc.add_table(rows=1, cols=2)
     footer_table.rows[0].cells[0].text = "Source: Company Reports, Transcripts"
     footer_table.rows[0].cells[1].text = "RBC"
@@ -488,6 +480,7 @@ def add_section1_outlook(doc: Document, results: Dict[str, Any]) -> None:
 def add_section2_qa(doc: Document, results: Dict[str, Any]) -> None:
     """
     Add Section 2: Q&A for Global Markets, Risk Management, Corporate Banking, Regulatory Changes.
+    Sorted by theme first, then by bank within each theme.
 
     Args:
         doc: Document object
@@ -511,7 +504,7 @@ def add_section2_qa(doc: Document, results: Dict[str, Any]) -> None:
     title_run = title_para.add_run(main_title)
     title_run.font.size = Pt(16)
     title_run.font.bold = True
-    title_run.font.color.rgb = RGBColor(0, 32, 96)  # Dark blue
+    title_run.font.color.rgb = RGBColor(0, 32, 96)
     title_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
     # Add Section 2 subtitle
@@ -522,28 +515,37 @@ def add_section2_qa(doc: Document, results: Dict[str, Any]) -> None:
     subtitle_run.font.italic = True
     subtitle_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
-    doc.add_paragraph()  # Spacing
-
-    # Add horizontal line
-    doc.add_paragraph("_" * 100)
-    doc.add_paragraph()  # Spacing
-
+    # No spacing - go directly to table
     if not questions_data:
         doc.add_paragraph("No Section 2 questions available.")
         return
 
-    # Create 3-column table: Themes | Banks | Relevant Questions
-    # Count total questions first
-    total_questions = sum(len(data.get("questions", [])) for data in questions_data.values())
+    # Reorganize data: group by category first, then by bank
+    category_bank_questions = {}  # {category: {bank: [questions]}}
+    for bank_name, bank_data in questions_data.items():
+        ticker = bank_data.get("bank_symbol", "")
+        for question in bank_data.get("questions", []):
+            category = question.get("category", "Uncategorized")
+            if category not in category_bank_questions:
+                category_bank_questions[category] = {}
+            if bank_name not in category_bank_questions[category]:
+                category_bank_questions[category][bank_name] = {"ticker": ticker, "questions": []}
+            category_bank_questions[category][bank_name]["questions"].append(question)
 
-    if total_questions == 0:
+    if not category_bank_questions:
         doc.add_paragraph("No Section 2 questions available.")
         return
 
-    table = doc.add_table(rows=total_questions + 1, cols=3)
-    table.columns[0].width = Inches(2.0)  # Themes
-    table.columns[1].width = Inches(1.0)  # Banks
-    table.columns[2].width = Inches(5.5)  # Questions
+    # Count total rows
+    total_rows = sum(
+        len(banks) for banks in category_bank_questions.values()
+    )
+
+    # Create 3-column table: Themes | Banks | Relevant Questions
+    table = doc.add_table(rows=total_rows + 1, cols=3)
+    table.columns[0].width = Inches(1.8)  # Themes
+    table.columns[1].width = Inches(0.5)  # Banks (narrow)
+    table.columns[2].width = Inches(6.7)  # Questions (maximum width)
 
     # Header row
     header_cells = table.rows[0].cells
@@ -562,36 +564,52 @@ def add_section2_qa(doc: Document, results: Dict[str, Any]) -> None:
                 run.font.size = Pt(10)
                 run.font.color.rgb = RGBColor(255, 255, 255)
 
-    # Populate table rows
+    # Populate table rows (sorted by category, then by bank)
     row_idx = 1
-    for bank_name, bank_data in questions_data.items():
-        ticker = bank_data.get("bank_symbol", "")
-        for question in bank_data.get("questions", []):
+    for category in sorted(category_bank_questions.keys()):
+        banks_in_category = category_bank_questions[category]
+        category_start_row = row_idx
+
+        for bank_name in sorted(banks_in_category.keys()):
+            bank_data = banks_in_category[bank_name]
             row = table.rows[row_idx]
 
-            # Column 1: Theme/Category
-            row.cells[0].text = question.get("category", "")
-            for paragraph in row.cells[0].paragraphs:
-                for run in paragraph.runs:
-                    run.font.size = Pt(9)
-                    run.font.bold = True
+            # Column 1: Theme/Category (only show on first row of category)
+            if row_idx == category_start_row:
+                row.cells[0].text = category
+                for paragraph in row.cells[0].paragraphs:
+                    for run in paragraph.runs:
+                        run.font.size = Pt(9)
+                        run.font.bold = True
+            else:
+                row.cells[0].text = ""  # Empty for subsequent rows in same category
 
             # Column 2: Bank ticker
-            row.cells[1].text = ticker
+            row.cells[1].text = bank_data["ticker"]
             row.cells[1].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
             for paragraph in row.cells[1].paragraphs:
                 for run in paragraph.runs:
                     run.font.size = Pt(9)
+                    run.font.bold = True
 
-            # Column 3: Question text
-            row.cells[2].text = question.get("verbatim_question", "")
-            for paragraph in row.cells[2].paragraphs:
-                for run in paragraph.runs:
-                    run.font.size = Pt(9)
+            # Column 3: All questions for this bank in this category
+            row.cells[2].text = ""  # Clear default text
+            for i, question in enumerate(bank_data["questions"]):
+                question_text = question.get("verbatim_question", "")
+                # Clean the text
+                question_text = clean_xml_text(question_text)
+
+                if i > 0:
+                    # Add spacing between multiple questions
+                    row.cells[2].add_paragraph()
+
+                q_para = row.cells[2].paragraphs[i] if i == 0 else row.cells[2].add_paragraph()
+                q_run = q_para.add_run(question_text)
+                q_run.font.size = Pt(9)
 
             row_idx += 1
 
-    # Add table borders
+    # Add table borders (all inside borders)
     tbl = table._element
     tbl_pr = tbl.tblPr
     if tbl_pr is None:
@@ -612,6 +630,7 @@ def add_section2_qa(doc: Document, results: Dict[str, Any]) -> None:
 def add_section3_qa(doc: Document, results: Dict[str, Any]) -> None:
     """
     Add Section 3: Q&A for Investment Banking/M&A and Transaction Banking.
+    Sorted by theme first, then by bank within each theme.
 
     Args:
         doc: Document object
@@ -635,7 +654,7 @@ def add_section3_qa(doc: Document, results: Dict[str, Any]) -> None:
     title_run = title_para.add_run(main_title)
     title_run.font.size = Pt(16)
     title_run.font.bold = True
-    title_run.font.color.rgb = RGBColor(0, 32, 96)  # Dark blue
+    title_run.font.color.rgb = RGBColor(0, 32, 96)
     title_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
     # Add Section 3 subtitle
@@ -646,27 +665,37 @@ def add_section3_qa(doc: Document, results: Dict[str, Any]) -> None:
     subtitle_run.font.italic = True
     subtitle_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
-    doc.add_paragraph()  # Spacing
-
-    # Add horizontal line
-    doc.add_paragraph("_" * 100)
-    doc.add_paragraph()  # Spacing
-
+    # No spacing - go directly to table
     if not questions_data:
         doc.add_paragraph("No Section 3 questions available.")
         return
 
-    # Create 3-column table: Themes | Banks | Relevant Questions
-    total_questions = sum(len(data.get("questions", [])) for data in questions_data.values())
+    # Reorganize data: group by category first, then by bank
+    category_bank_questions = {}  # {category: {bank: [questions]}}
+    for bank_name, bank_data in questions_data.items():
+        ticker = bank_data.get("bank_symbol", "")
+        for question in bank_data.get("questions", []):
+            category = question.get("category", "Uncategorized")
+            if category not in category_bank_questions:
+                category_bank_questions[category] = {}
+            if bank_name not in category_bank_questions[category]:
+                category_bank_questions[category][bank_name] = {"ticker": ticker, "questions": []}
+            category_bank_questions[category][bank_name]["questions"].append(question)
 
-    if total_questions == 0:
+    if not category_bank_questions:
         doc.add_paragraph("No Section 3 questions available.")
         return
 
-    table = doc.add_table(rows=total_questions + 1, cols=3)
-    table.columns[0].width = Inches(2.0)  # Themes
-    table.columns[1].width = Inches(1.0)  # Banks
-    table.columns[2].width = Inches(5.5)  # Questions
+    # Count total rows
+    total_rows = sum(
+        len(banks) for banks in category_bank_questions.values()
+    )
+
+    # Create 3-column table: Themes | Banks | Relevant Questions
+    table = doc.add_table(rows=total_rows + 1, cols=3)
+    table.columns[0].width = Inches(1.8)  # Themes
+    table.columns[1].width = Inches(0.5)  # Banks (narrow)
+    table.columns[2].width = Inches(6.7)  # Questions (maximum width)
 
     # Header row
     header_cells = table.rows[0].cells
@@ -685,36 +714,52 @@ def add_section3_qa(doc: Document, results: Dict[str, Any]) -> None:
                 run.font.size = Pt(10)
                 run.font.color.rgb = RGBColor(255, 255, 255)
 
-    # Populate table rows
+    # Populate table rows (sorted by category, then by bank)
     row_idx = 1
-    for bank_name, bank_data in questions_data.items():
-        ticker = bank_data.get("bank_symbol", "")
-        for question in bank_data.get("questions", []):
+    for category in sorted(category_bank_questions.keys()):
+        banks_in_category = category_bank_questions[category]
+        category_start_row = row_idx
+
+        for bank_name in sorted(banks_in_category.keys()):
+            bank_data = banks_in_category[bank_name]
             row = table.rows[row_idx]
 
-            # Column 1: Theme/Category
-            row.cells[0].text = question.get("category", "")
-            for paragraph in row.cells[0].paragraphs:
-                for run in paragraph.runs:
-                    run.font.size = Pt(9)
-                    run.font.bold = True
+            # Column 1: Theme/Category (only show on first row of category)
+            if row_idx == category_start_row:
+                row.cells[0].text = category
+                for paragraph in row.cells[0].paragraphs:
+                    for run in paragraph.runs:
+                        run.font.size = Pt(9)
+                        run.font.bold = True
+            else:
+                row.cells[0].text = ""  # Empty for subsequent rows in same category
 
             # Column 2: Bank ticker
-            row.cells[1].text = ticker
+            row.cells[1].text = bank_data["ticker"]
             row.cells[1].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
             for paragraph in row.cells[1].paragraphs:
                 for run in paragraph.runs:
                     run.font.size = Pt(9)
+                    run.font.bold = True
 
-            # Column 3: Question text
-            row.cells[2].text = question.get("verbatim_question", "")
-            for paragraph in row.cells[2].paragraphs:
-                for run in paragraph.runs:
-                    run.font.size = Pt(9)
+            # Column 3: All questions for this bank in this category
+            row.cells[2].text = ""  # Clear default text
+            for i, question in enumerate(bank_data["questions"]):
+                question_text = question.get("verbatim_question", "")
+                # Clean the text
+                question_text = clean_xml_text(question_text)
+
+                if i > 0:
+                    # Add spacing between multiple questions
+                    row.cells[2].add_paragraph()
+
+                q_para = row.cells[2].paragraphs[i] if i == 0 else row.cells[2].add_paragraph()
+                q_run = q_para.add_run(question_text)
+                q_run.font.size = Pt(9)
 
             row_idx += 1
 
-    # Add table borders
+    # Add table borders (all inside borders)
     tbl = table._element
     tbl_pr = tbl.tblPr
     if tbl_pr is None:
