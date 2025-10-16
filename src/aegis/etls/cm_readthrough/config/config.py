@@ -13,16 +13,20 @@ from pathlib import Path
 from typing import List, Dict, Any
 
 # Model configuration for different LLM calls
-# The redesigned ETL uses three model configurations:
+# The redesigned ETL uses four model configurations:
 # 1. Outlook extraction from full transcripts
 # 2. Q&A question extraction
-# 3. Batch formatting of all outlook statements
+# 3. Subtitle generation (requires tool calling support)
+# 4. Batch formatting of all outlook statements
 MODELS = {
     # Model for outlook extraction - using gpt-4-turbo for 32768 token support
     "outlook_extraction": os.getenv("CM_READTHROUGH_OUTLOOK_MODEL", "gpt-4-turbo"),
 
     # Model for Q&A question extraction - using gpt-4-turbo for 32768 token support
     "qa_extraction": os.getenv("CM_READTHROUGH_QA_MODEL", "gpt-4-turbo"),
+
+    # Model for subtitle generation - using gpt-4.1 for tool calling support
+    "subtitle_generation": os.getenv("CM_READTHROUGH_SUBTITLE_MODEL", "gpt-4.1-2025-04-14"),
 
     # Model for batch formatting - using gpt-4-turbo for consistency
     "batch_formatting": os.getenv("CM_READTHROUGH_FORMAT_MODEL", "gpt-4-turbo"),

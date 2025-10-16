@@ -23,6 +23,37 @@ import re
 logger = get_logger()
 
 
+def clean_xml_text(text: str) -> str:
+    """
+    Clean text to be XML-compatible by removing NULL bytes and control characters.
+
+    Args:
+        text: Input text that may contain invalid XML characters
+
+    Returns:
+        Cleaned text safe for XML/Word document insertion
+    """
+    if not text:
+        return text
+
+    # Remove NULL bytes
+    text = text.replace('\x00', '')
+
+    # Remove other control characters except tab, newline, and carriage return
+    # XML 1.0 valid characters: #x9 | #xA | #xD | [#x20-#xD7FF] | [#xE000-#xFFFD]
+    cleaned = []
+    for char in text:
+        code = ord(char)
+        if (code == 0x9 or  # tab
+            code == 0xA or  # newline
+            code == 0xD or  # carriage return
+            (0x20 <= code <= 0xD7FF) or
+            (0xE000 <= code <= 0xFFFD)):
+            cleaned.append(char)
+
+    return ''.join(cleaned)
+
+
 def parse_xml(xml_string):
     """Parse XML string into OxmlElement using python-docx's parse_xml."""
     return docx_parse_xml(xml_string)
@@ -44,6 +75,9 @@ def add_html_formatted_runs(paragraph, text: str, font_size: int = 9) -> None:
         text: Text with HTML formatting
         font_size: Font size in points
     """
+    # Clean text of NULL bytes and control characters
+    text = clean_xml_text(text)
+
     # Pattern to match <strong><u>...</u></strong>
     pattern = r'<strong><u>(.*?)</u></strong>'
 

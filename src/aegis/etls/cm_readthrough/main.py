@@ -733,7 +733,7 @@ async def generate_subtitle(
 
     # Call LLM
     llm_params = {
-        "model": MODELS["batch_formatting"],  # Reuse formatting model
+        "model": MODELS["subtitle_generation"],  # Use dedicated subtitle model (GPT-4.1 for tool calling)
         "temperature": TEMPERATURE,
         "max_tokens": 100,  # Subtitle is short
         "tool_choice": "required"  # Force tool use
