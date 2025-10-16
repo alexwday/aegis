@@ -735,7 +735,8 @@ async def generate_subtitle(
     llm_params = {
         "model": MODELS["batch_formatting"],  # Reuse formatting model
         "temperature": TEMPERATURE,
-        "max_tokens": 100  # Subtitle is short
+        "max_tokens": 100,  # Subtitle is short
+        "tool_choice": "required"  # Force tool use
     }
 
     try:

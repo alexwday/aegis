@@ -69,10 +69,13 @@ user_template: |
   </content>
 
   <instructions>
-  Use the provided tool to return a single subtitle that synthesizes the dominant theme across all banks.
+  IMPORTANT: You MUST use the generate_subtitle tool to return your response. Do not provide the subtitle as text.
 
+  Requirements:
+  - Use the generate_subtitle tool with the "subtitle" parameter
   - If content_type is "outlook", the subtitle should start with "Outlook:" and focus on forward-looking themes
   - If content_type is "questions", the subtitle should start with "Conference calls:" and focus on what analysts are asking about
+  - The subtitle must be professional, concise (8-15 words), and capture the essence of the content
 
-  The subtitle should be professional, concise (8-15 words), and capture the essence of the content.
+  Call the tool now with your generated subtitle.
   </instructions>
