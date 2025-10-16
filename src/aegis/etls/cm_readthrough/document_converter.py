@@ -828,7 +828,8 @@ def structured_data_to_markdown(results: Dict[str, Any]) -> str:
     lines.append("## Executive Summary")
     lines.append(f"- Banks Analyzed: {results['metadata']['banks_processed']}")
     lines.append(f"- Banks with Outlook: {results['metadata']['banks_with_outlook']}")
-    lines.append(f"- Banks with Questions: {results['metadata']['banks_with_questions']}")
+    lines.append(f"- Banks with Section 2 Q&A: {results['metadata']['banks_with_section2']}")
+    lines.append(f"- Banks with Section 3 Q&A: {results['metadata']['banks_with_section3']}")
     lines.append("")
 
     # Outlook Section
