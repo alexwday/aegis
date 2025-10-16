@@ -358,7 +358,7 @@ def add_section1_outlook(doc: Document, results: Dict[str, Any]) -> None:
     title_run.font.size = Pt(16)
     title_run.font.bold = True
     title_run.font.color.rgb = RGBColor(0, 32, 96)  # Dark blue
-    title_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    title_para.alignment = WD_ALIGN_PARAGRAPH.LEFT
 
     # Add Section 1 subtitle
     subtitle_text = metadata.get("subtitle_section1", "Outlook: Capital markets activity")
@@ -366,7 +366,7 @@ def add_section1_outlook(doc: Document, results: Dict[str, Any]) -> None:
     subtitle_run = subtitle_para.add_run(subtitle_text)
     subtitle_run.font.size = Pt(12)
     subtitle_run.font.italic = True
-    subtitle_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    subtitle_para.alignment = WD_ALIGN_PARAGRAPH.LEFT
 
     # No spacing - go directly to table
     if not outlook_data:
@@ -505,7 +505,7 @@ def add_section2_qa(doc: Document, results: Dict[str, Any]) -> None:
     title_run.font.size = Pt(16)
     title_run.font.bold = True
     title_run.font.color.rgb = RGBColor(0, 32, 96)
-    title_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    title_para.alignment = WD_ALIGN_PARAGRAPH.LEFT
 
     # Add Section 2 subtitle
     subtitle_text = metadata.get("subtitle_section2", "Conference calls: Market dynamics")
@@ -513,7 +513,7 @@ def add_section2_qa(doc: Document, results: Dict[str, Any]) -> None:
     subtitle_run = subtitle_para.add_run(subtitle_text)
     subtitle_run.font.size = Pt(12)
     subtitle_run.font.italic = True
-    subtitle_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    subtitle_para.alignment = WD_ALIGN_PARAGRAPH.LEFT
 
     # No spacing - go directly to table
     if not questions_data:
@@ -569,13 +569,16 @@ def add_section2_qa(doc: Document, results: Dict[str, Any]) -> None:
     for category in sorted(category_bank_questions.keys()):
         banks_in_category = category_bank_questions[category]
         category_start_row = row_idx
+        category_end_row = category_start_row + len(banks_in_category) - 1
 
         for bank_name in sorted(banks_in_category.keys()):
             bank_data = banks_in_category[bank_name]
             row = table.rows[row_idx]
+            is_first_in_category = (row_idx == category_start_row)
+            is_last_in_category = (row_idx == category_end_row)
 
             # Column 1: Theme/Category (only show on first row of category)
-            if row_idx == category_start_row:
+            if is_first_in_category:
                 row.cells[0].text = category
                 for paragraph in row.cells[0].paragraphs:
                     for run in paragraph.runs:
@@ -606,6 +609,18 @@ def add_section2_qa(doc: Document, results: Dict[str, Any]) -> None:
                 q_para = row.cells[2].paragraphs[i] if i == 0 else row.cells[2].add_paragraph()
                 q_run = q_para.add_run(question_text)
                 q_run.font.size = Pt(9)
+
+            # Remove bottom border if not the last row in category
+            if not is_last_in_category:
+                for cell in row.cells:
+                    tc = cell._tc
+                    tcPr = tc.get_or_add_tcPr()
+                    tcBorders = parse_xml(
+                        r'<w:tcBorders {}>'
+                        r'<w:bottom w:val="none"/>'
+                        r'</w:tcBorders>'.format(nsdecls('w'))
+                    )
+                    tcPr.append(tcBorders)
 
             row_idx += 1
 
@@ -655,7 +670,7 @@ def add_section3_qa(doc: Document, results: Dict[str, Any]) -> None:
     title_run.font.size = Pt(16)
     title_run.font.bold = True
     title_run.font.color.rgb = RGBColor(0, 32, 96)
-    title_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    title_para.alignment = WD_ALIGN_PARAGRAPH.LEFT
 
     # Add Section 3 subtitle
     subtitle_text = metadata.get("subtitle_section3", "Conference calls: Pipeline dynamics")
@@ -663,7 +678,7 @@ def add_section3_qa(doc: Document, results: Dict[str, Any]) -> None:
     subtitle_run = subtitle_para.add_run(subtitle_text)
     subtitle_run.font.size = Pt(12)
     subtitle_run.font.italic = True
-    subtitle_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    subtitle_para.alignment = WD_ALIGN_PARAGRAPH.LEFT
 
     # No spacing - go directly to table
     if not questions_data:
@@ -719,13 +734,16 @@ def add_section3_qa(doc: Document, results: Dict[str, Any]) -> None:
     for category in sorted(category_bank_questions.keys()):
         banks_in_category = category_bank_questions[category]
         category_start_row = row_idx
+        category_end_row = category_start_row + len(banks_in_category) - 1
 
         for bank_name in sorted(banks_in_category.keys()):
             bank_data = banks_in_category[bank_name]
             row = table.rows[row_idx]
+            is_first_in_category = (row_idx == category_start_row)
+            is_last_in_category = (row_idx == category_end_row)
 
             # Column 1: Theme/Category (only show on first row of category)
-            if row_idx == category_start_row:
+            if is_first_in_category:
                 row.cells[0].text = category
                 for paragraph in row.cells[0].paragraphs:
                     for run in paragraph.runs:
@@ -756,6 +774,18 @@ def add_section3_qa(doc: Document, results: Dict[str, Any]) -> None:
                 q_para = row.cells[2].paragraphs[i] if i == 0 else row.cells[2].add_paragraph()
                 q_run = q_para.add_run(question_text)
                 q_run.font.size = Pt(9)
+
+            # Remove bottom border if not the last row in category
+            if not is_last_in_category:
+                for cell in row.cells:
+                    tc = cell._tc
+                    tcPr = tc.get_or_add_tcPr()
+                    tcBorders = parse_xml(
+                        r'<w:tcBorders {}>'
+                        r'<w:bottom w:val="none"/>'
+                        r'</w:tblBorders>'.format(nsdecls('w'))
+                    )
+                    tcPr.append(tcBorders)
 
             row_idx += 1
 

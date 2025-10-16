@@ -48,8 +48,9 @@ system_template: |
   - Extract the TOP 2-3 MOST IMPORTANT statements per category
   - For each statement:
     1. Use the category name EXACTLY as provided below
-    2. Paraphrase the statement for brevity (2-3 sentences maximum)
-    3. Focus on forward-looking commentary, specific metrics, and outlook guidance
+    2. Extract the EXACT VERBATIM quote from the transcript (no paraphrasing, no summarization)
+    3. Do NOT include quotation marks ("") - just the raw text
+    4. Focus on forward-looking commentary, specific metrics, and outlook guidance
   - Set has_content to true
   - Set is_new_category to false for ALL statements
 
@@ -74,7 +75,9 @@ system_template: |
   - Prioritize statements with specific metrics, percentages, or dollar amounts
   - Focus on management's forward-looking statements and guidance
   - Include commentary about market conditions, pipelines, and activity levels
-  - Paraphrase for brevity while maintaining key information
+  - Extract VERBATIM - copy the exact text from the transcript without modification
+  - Do NOT paraphrase, summarize, or modify the text in any way
+  - Do NOT include quotation marks around the extracted text
   - Do not extract vague or generic statements
   - Capture sentiment (positive, negative, cautious, optimistic)
   - MAXIMUM 2-3 statements per category
@@ -98,7 +101,7 @@ tool_parameters:
           description: Category name - MUST be an exact match from the allowed categories list (case-sensitive)
         statement:
           type: string
-          description: Paraphrased outlook statement for brevity (2-3 sentences). Include key metrics and forward-looking commentary.
+          description: EXACT VERBATIM quote from the transcript - no paraphrasing, no quotation marks, just the raw text as spoken
         is_new_category:
           type: boolean
           description: MUST always be false - new categories are not allowed
@@ -121,6 +124,8 @@ user_template: |
   Use the provided tool to extract and structure the outlook statements.
   - ONLY use categories from the allowed_categories list above
   - Extract TOP 2-3 statements per category maximum
+  - Extract VERBATIM quotes - do NOT paraphrase or summarize
+  - Do NOT include quotation marks in the extracted text
   - Set is_new_category to false for ALL statements
   - Skip statements that don't fit the provided categories
   </instructions>

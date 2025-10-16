@@ -44,13 +44,14 @@ system_template: |
   YOU MUST ALWAYS use the extract_analyst_questions tool to return your findings.
 
   If the Q&A section contains relevant capital markets questions:
-  - Extract the verbatim question text (QUESTION ONLY, not the answer)
+  - Extract just the question sentence(s) - NOT the full paragraph or exchange
   - Use ONLY the categories provided below - DO NOT create new categories
   - Extract TOP 2-3 questions per category maximum
   - For each question:
     1. Use the category name EXACTLY as provided below
-    2. Extract the complete verbatim question text
-    3. Identify the analyst name and firm
+    2. Extract the core question sentence(s) with minimal context if needed
+    3. Do NOT include quotation marks around the question text
+    4. Identify the analyst name and firm
   - Set has_content to true
   - Set is_new_category to false for ALL questions
 
@@ -73,7 +74,10 @@ system_template: |
 
   <extraction_guidelines>
   - Extract ONLY the analyst's question, not management's response
-  - Include the complete question text verbatim (do not paraphrase)
+  - Extract just the QUESTION SENTENCE(S) - not the full paragraph/exchange
+  - Include 1 leading or trailing sentence ONLY IF needed for context
+  - Focus on extracting the core question being asked
+  - Do NOT include quotation marks around the question text
   - If a question has multiple parts, include all parts
   - If a question touches multiple categories, assign to the MOST relevant category
   - Capture analyst name and firm accurately
@@ -99,7 +103,7 @@ tool_parameters:
           description: Category name - MUST be an exact match from the allowed categories list (case-sensitive)
         verbatim_question:
           type: string
-          description: Complete verbatim text of the analyst's question (question only, not answer)
+          description: Core question sentence(s) with minimal context if needed - NOT the full paragraph. No quotation marks.
         analyst_name:
           type: string
           description: Full name of the analyst asking the question
@@ -128,7 +132,9 @@ user_template: |
 
   <instructions>
   Use the provided tool to extract and structure the analyst questions.
-  - Extract ONLY the questions (not answers) that relate to capital markets
+  - Extract just the QUESTION SENTENCE(S) - not the full paragraph or exchange
+  - Include 1 leading/trailing sentence ONLY IF needed for context
+  - Do NOT include quotation marks around the question text
   - ONLY use categories from the allowed_categories list above
   - Extract TOP 2-3 questions per category maximum
   - Set is_new_category to false for ALL questions
