@@ -543,9 +543,9 @@ def add_section2_qa(doc: Document, results: Dict[str, Any]) -> None:
 
     # Create 3-column table: Themes | Banks | Relevant Questions
     table = doc.add_table(rows=total_rows + 1, cols=3)
-    table.columns[0].width = Inches(1.8)  # Themes
-    table.columns[1].width = Inches(0.5)  # Banks (narrow)
-    table.columns[2].width = Inches(6.7)  # Questions (maximum width)
+    table.columns[0].width = Inches(1.0)  # Themes (minimal)
+    table.columns[1].width = Inches(0.5)  # Banks (very narrow)
+    table.columns[2].width = Inches(7.5)  # Questions (maximum width)
 
     # Header row
     header_cells = table.rows[0].cells
@@ -708,9 +708,9 @@ def add_section3_qa(doc: Document, results: Dict[str, Any]) -> None:
 
     # Create 3-column table: Themes | Banks | Relevant Questions
     table = doc.add_table(rows=total_rows + 1, cols=3)
-    table.columns[0].width = Inches(1.8)  # Themes
-    table.columns[1].width = Inches(0.5)  # Banks (narrow)
-    table.columns[2].width = Inches(6.7)  # Questions (maximum width)
+    table.columns[0].width = Inches(1.0)  # Themes (minimal)
+    table.columns[1].width = Inches(0.5)  # Banks (very narrow)
+    table.columns[2].width = Inches(7.5)  # Questions (maximum width)
 
     # Header row
     header_cells = table.rows[0].cells
