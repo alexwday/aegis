@@ -1061,9 +1061,10 @@ async def process_all_banks_parallel(
         )
     )
 
-    # Phase 8: Batch formatting
-    logger.info("[PHASE 8] Batch formatting outlook...")
-    formatted_outlook = await format_outlook_batch(all_outlook, context)
+    # Phase 8: Batch formatting (DISABLED - takes too long)
+    logger.info("[PHASE 8] Skipping batch formatting (disabled for performance)")
+    # formatted_outlook = await format_outlook_batch(all_outlook, context)
+    formatted_outlook = all_outlook  # Use unformatted statements
 
     # Questions typically don't need formatting (verbatim extraction)
     formatted_section2 = all_section2
