@@ -2,7 +2,8 @@
 
 This config allows overriding the default model names used in the ETL
 for capital markets readthrough analysis. The ETL processes multiple banks
-to extract Investment Banking & Trading outlook and categorized Q&A.
+to extract capital markets outlook statements and categorized analyst questions
+across three sections: Outlook, Market Volatility/Regulatory Q&A, and Pipelines/Activity Q&A.
 """
 
 import os
@@ -12,22 +13,29 @@ from pathlib import Path
 from typing import List, Dict, Any
 
 # Model configuration for different LLM calls
-# The ETL uses two distinct model tiers:
-# 1. IB/Trading outlook extraction from transcripts
-# 2. Q&A categorization and extraction
+# The redesigned ETL uses three model configurations:
+# 1. Outlook extraction from full transcripts
+# 2. Q&A question extraction
+# 3. Batch formatting of all outlook statements
 MODELS = {
-    # Model for IB & Trading outlook extraction - using gpt-4-turbo for 32768 token support
-    "ib_trading_extraction": os.getenv("CM_READTHROUGH_IB_MODEL", "gpt-4-turbo"),
+    # Model for outlook extraction - using gpt-4-turbo for 32768 token support
+    "outlook_extraction": os.getenv("CM_READTHROUGH_OUTLOOK_MODEL", "gpt-4-turbo"),
 
-    # Model for Q&A categorization and extraction - using gpt-4-turbo for 32768 token support
-    "qa_categorization": os.getenv("CM_READTHROUGH_QA_MODEL", "gpt-4-turbo"),
+    # Model for Q&A question extraction - using gpt-4-turbo for 32768 token support
+    "qa_extraction": os.getenv("CM_READTHROUGH_QA_MODEL", "gpt-4-turbo"),
+
+    # Model for batch formatting - using gpt-4-turbo for consistency
+    "batch_formatting": os.getenv("CM_READTHROUGH_FORMAT_MODEL", "gpt-4-turbo"),
 }
 
 # No fallback to main config - each ETL has its own config
 
 # Other configuration options
 TEMPERATURE = float(os.getenv("CM_READTHROUGH_TEMPERATURE", "0.7"))
-MAX_TOKENS = int(os.getenv("CM_READTHROUGH_MAX_TOKENS", "4096"))  # Max tokens supported by gpt-4-turbo
+MAX_TOKENS = int(os.getenv("CM_READTHROUGH_MAX_TOKENS", "4096"))
+
+# Concurrency control
+MAX_CONCURRENT_BANKS = int(os.getenv("CM_READTHROUGH_MAX_CONCURRENT", "5"))
 
 def get_monitored_institutions() -> List[Dict[str, Any]]:
     """
@@ -59,19 +67,97 @@ def get_monitored_institutions() -> List[Dict[str, Any]]:
 
     return institutions
 
-def get_categories() -> List[Dict[str, Any]]:
+def load_categories(filename: str) -> List[Dict[str, Any]]:
     """
-    Load capital markets categories from Excel file.
+    Load category structure from Excel file.
+
+    Excel structure:
+    - Column A: Category (required)
+    - Column B: Description (required)
+    - Column C: Example 1 (optional)
+    - Column D: Example 2 (optional)
+    - Column E: Example 3 (optional)
+
+    Args:
+        filename: Excel file in config directory (e.g., "outlook_categories.xlsx")
 
     Returns:
-        List of category dictionaries with Category and Description
+        List of category dictionaries with structure:
+        {
+            "category": "M&A",
+            "description": "Mergers and acquisitions...",
+            "examples": ["Pipeline commentary", "Deal flow"]
+        }
     """
     config_dir = Path(__file__).parent
-    categories_file = config_dir / "capital_markets_categories.xlsx"
+    file_path = config_dir / filename
 
-    if not categories_file.exists():
-        raise FileNotFoundError(f"Categories file not found: {categories_file}")
+    if not file_path.exists():
+        raise FileNotFoundError(f"Categories file not found: {file_path}")
 
-    df = pd.read_excel(categories_file)
-    # Assuming the Excel has columns: Category, Description, etc.
-    return df.to_dict('records')
+    df = pd.read_excel(file_path)
+
+    # Expected columns: Category, Description, Example 1, Example 2, Example 3
+    categories = []
+    for _, row in df.iterrows():
+        # Skip rows without category or description
+        if pd.isna(row.iloc[0]) or pd.isna(row.iloc[1]):
+            continue
+
+        category = {
+            "category": str(row.iloc[0]).strip(),
+            "description": str(row.iloc[1]).strip(),
+            "examples": []
+        }
+
+        # Add examples (columns 2, 3, 4 - optional)
+        for i in range(2, min(5, len(row))):
+            if not pd.isna(row.iloc[i]):
+                example = str(row.iloc[i]).strip()
+                if example:  # Only add non-empty examples
+                    category["examples"].append(example)
+
+        categories.append(category)
+
+    return categories
+
+
+def get_outlook_categories() -> List[Dict[str, Any]]:
+    """
+    Load outlook categories from Excel file.
+
+    Section: Forward-looking outlook statements
+    Categories: Investment Banking activity, Global Markets, Sponsor activity, Market catalysts, Competition shifts
+
+    Returns:
+        List of category dictionaries for outlook extraction
+    """
+    return load_categories("outlook_categories.xlsx")
+
+
+def get_qa_market_volatility_regulatory_categories() -> List[Dict[str, Any]]:
+    """
+    Load Q&A categories for market volatility and regulatory themes.
+
+    Section: Market volatility, line-draws, and regulatory changes
+    Categories: Global Markets, Risk Management, Corporate Banking, Regulatory Changes
+
+    Returns:
+        List of category dictionaries for Q&A extraction
+    """
+    return load_categories("qa_market_volatility_regulatory_categories.xlsx")
+
+
+def get_qa_pipelines_activity_categories() -> List[Dict[str, Any]]:
+    """
+    Load Q&A categories for pipeline strength and activity levels.
+
+    Section: Pipeline resilience and areas of activity
+    Categories: Investment Banking and M&A activity, Transaction Banking
+
+    Returns:
+        List of category dictionaries for Q&A extraction
+    """
+    return load_categories("qa_pipelines_activity_categories.xlsx")
+
+

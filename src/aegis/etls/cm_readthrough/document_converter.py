@@ -15,12 +15,22 @@ from docx.shared import Inches, Pt, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.enum.style import WD_STYLE_TYPE
 from docx.enum.section import WD_ORIENTATION
-from docx.oxml import OxmlElement
-from docx.oxml.ns import qn
+from docx.oxml import OxmlElement, parse_xml as docx_parse_xml
+from docx.oxml.ns import qn, nsdecls as docx_nsdecls
 from aegis.utils.logging import get_logger
 import re
 
 logger = get_logger()
+
+
+def parse_xml(xml_string):
+    """Parse XML string into OxmlElement using python-docx's parse_xml."""
+    return docx_parse_xml(xml_string)
+
+
+def nsdecls(*prefixes):
+    """Generate namespace declarations for XML using python-docx's nsdecls."""
+    return docx_nsdecls(*prefixes)
 
 
 def add_html_formatted_runs(paragraph, text: str, font_size: int = 9) -> None:
@@ -180,57 +190,29 @@ def generate_main_title(quarter: str, year: int) -> str:
 
 def create_combined_document(results: Dict[str, Any], output_path: str) -> None:
     """
-    Create a combined Word document for CM Readthrough analysis.
+    Create a combined Word document for CM Readthrough analysis with 3 sections.
 
     Args:
-        results: Structured results from processing
+        results: Structured results from processing with 3 sections
         output_path: Path to save the document
     """
     # Create document
     doc = Document()
 
-    # Set landscape orientation and margins
-    sections = doc.sections
-    for section in sections:
-        # Set to landscape
-        section.orientation = WD_ORIENTATION.LANDSCAPE
-        # Swap width and height for landscape
-        section.page_width, section.page_height = section.page_height, section.page_width
+    # Section 1: Outlook
+    add_section1_outlook(doc, results)
 
-        # Set margins (adjusted for landscape)
-        section.top_margin = Inches(0.75)
-        section.bottom_margin = Inches(0.75)
-        section.left_margin = Inches(1)
-        section.right_margin = Inches(1)
-
-    # Add main title (no title page)
-    main_title = generate_main_title(results["metadata"]["quarter"], results["metadata"]["fiscal_year"])
-    title_para = doc.add_paragraph()
-    title_run = title_para.add_run(main_title)
-    title_run.font.size = Pt(16)
-    title_run.font.bold = True
-    title_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-
-    # Add LLM-generated subtitle (from results metadata if available)
-    subtitle_text = results["metadata"].get("outlook_subtitle", "Outlook: Pipelines remain robust as some clients are taking a wait-and-see approach")
-    subtitle_para = doc.add_paragraph()
-    subtitle_run = subtitle_para.add_run(subtitle_text)
-    subtitle_run.font.size = Pt(12)
-    subtitle_run.font.bold = True
-    subtitle_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-
-    doc.add_paragraph()  # Spacing
-
-    # Add horizontal line
-    doc.add_paragraph("_" * 100)
-    doc.add_paragraph()  # Spacing
-
-    # Section 1: Investment Banking & Trading Outlook (starts immediately)
-    add_ib_trading_section(doc, results.get("ib_trading_outlook", {}), results["metadata"])
-
-    # Section 2: Analyst Questions by Category
+    # Page break before Section 2
     doc.add_page_break()
-    add_qa_section(doc, results.get("categorized_qas", {}))
+
+    # Section 2: Q&A (4 categories)
+    add_section2_qa(doc, results)
+
+    # Page break before Section 3
+    doc.add_page_break()
+
+    # Section 3: Q&A (2 categories)
+    add_section3_qa(doc, results)
 
     # Save document
     doc.save(output_path)
@@ -315,26 +297,63 @@ def add_executive_summary(doc: Document, results: Dict[str, Any]) -> None:
         doc.add_paragraph(f"• {category}: {count} questions")
 
 
-def add_ib_trading_section(doc: Document, ib_trading_data: Dict[str, Any], metadata: Dict[str, Any]) -> None:
-    """Add Investment Banking & Trading Outlook section with custom formatting."""
+def add_section1_outlook(doc: Document, results: Dict[str, Any]) -> None:
+    """
+    Add Section 1: Investment Banking & Trading Outlook.
 
-    if not ib_trading_data:
+    Args:
+        doc: Document object
+        results: Full results dictionary
+    """
+    metadata = results["metadata"]
+    outlook_data = results.get("outlook", {})
+
+    # Set landscape orientation for this section
+    section = doc.sections[-1] if doc.sections else doc.sections[0]
+    section.orientation = WD_ORIENTATION.LANDSCAPE
+    section.page_width, section.page_height = section.page_height, section.page_width
+    section.top_margin = Inches(0.75)
+    section.bottom_margin = Inches(0.75)
+    section.left_margin = Inches(1)
+    section.right_margin = Inches(1)
+
+    # Add main title
+    main_title = generate_main_title(metadata["quarter"], metadata["fiscal_year"])
+    title_para = doc.add_paragraph()
+    title_run = title_para.add_run(main_title)
+    title_run.font.size = Pt(16)
+    title_run.font.bold = True
+    title_run.font.color.rgb = RGBColor(0, 32, 96)  # Dark blue
+    title_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+    # Add Section 1 subtitle
+    subtitle_text = metadata.get("subtitle_section1", "Outlook: Capital markets activity")
+    subtitle_para = doc.add_paragraph()
+    subtitle_run = subtitle_para.add_run(subtitle_text)
+    subtitle_run.font.size = Pt(12)
+    subtitle_run.font.italic = True
+    subtitle_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+    doc.add_paragraph()  # Spacing
+
+    # Add horizontal line
+    doc.add_paragraph("_" * 100)
+    doc.add_paragraph()  # Spacing
+
+    if not outlook_data:
+        doc.add_paragraph("No outlook statements available.")
         return
 
-    # Filter to only banks with content (check for 'quotes' key from extraction)
-    banks_with_content = {bank: content for bank, content in ib_trading_data.items()
-                          if content.get("quotes")}
+    # outlook_data structure: {bank_name: {"bank_symbol": "...", "statements": [...]}}
+    banks_with_content = {bank: content for bank, content in outlook_data.items()
+                          if content.get("statements")}
 
     if not banks_with_content:
         return
 
-    # Get bank symbols for ticker mapping
-    bank_symbols = {data.get("bank_symbol", ""): bank_name
-                   for bank_name, data in ib_trading_data.items()
-                   if data.get("bank_symbol")}
-
-    # Reverse mapping: bank_name -> symbol
-    name_to_symbol = {v: k for k, v in bank_symbols.items()}
+    # Get bank symbols for ticker mapping (already in the data structure)
+    name_to_symbol = {bank_name: data.get("bank_symbol", bank_name[:4].upper())
+                      for bank_name, data in outlook_data.items()}
 
     # Create table with 2 columns
     table = doc.add_table(rows=len(banks_with_content) + 1, cols=2)
@@ -363,7 +382,7 @@ def add_ib_trading_section(doc: Document, ib_trading_data: Dict[str, Any], metad
 
     # Data rows
     row_idx = 1
-    for bank_name, insights in banks_with_content.items():
+    for bank_name, bank_data in banks_with_content.items():
         row = table.rows[row_idx]
 
         # Column 1: Bank ticker
@@ -375,24 +394,24 @@ def add_ib_trading_section(doc: Document, ib_trading_data: Dict[str, Any], metad
         ticker_run.font.size = Pt(9)
         ticker_run.font.bold = True
 
-        # Column 2: Key quotes content
+        # Column 2: Outlook statements content
         content_cell = row.cells[1]
         content_cell.text = ""  # Clear default text
 
-        # Add each quote as a bullet point
-        quotes = insights.get("quotes", [])
-        for quote in quotes:
-            theme = quote.get("theme", "")
-            # Use formatted_quote if available, otherwise fall back to quote
-            content_text = quote.get("formatted_quote", quote.get("quote", ""))
+        # Add each statement as a bullet point
+        statements = bank_data.get("statements", [])
+        for statement in statements:
+            category = statement.get("category", "")
+            # Use formatted_quote if available, otherwise fall back to statement
+            content_text = statement.get("formatted_quote", statement.get("statement", ""))
 
             # Add bullet paragraph
             bullet_para = content_cell.add_paragraph(style='List Bullet')
 
-            # Add theme in bold
-            theme_run = bullet_para.add_run(f"{theme}: ")
-            theme_run.font.bold = True
-            theme_run.font.size = Pt(9)
+            # Add category in bold (replacing old "theme")
+            category_run = bullet_para.add_run(f"{category}: ")
+            category_run.font.bold = True
+            category_run.font.size = Pt(9)
 
             # Add formatted content, processing HTML tags
             add_html_formatted_runs(bullet_para, content_text, font_size=9)
@@ -432,15 +451,277 @@ def add_ib_trading_section(doc: Document, ib_trading_data: Dict[str, Any], metad
                 run.font.italic = True
 
 
-def add_qa_section(doc: Document, categorized_qas: Dict[str, List[Dict[str, Any]]]) -> None:
-    """Add Analyst Questions section organized by category."""
+def add_section2_qa(doc: Document, results: Dict[str, Any]) -> None:
+    """
+    Add Section 2: Q&A for Global Markets, Risk Management, Corporate Banking, Regulatory Changes.
+
+    Args:
+        doc: Document object
+        results: Full results dictionary
+    """
+    metadata = results["metadata"]
+    questions_data = results.get("section2_questions", {})
+
+    # Set landscape orientation
+    section = doc.sections[-1]
+    section.orientation = WD_ORIENTATION.LANDSCAPE
+    section.page_width, section.page_height = section.page_height, section.page_width
+    section.top_margin = Inches(0.75)
+    section.bottom_margin = Inches(0.75)
+    section.left_margin = Inches(1)
+    section.right_margin = Inches(1)
+
+    # Add main title
+    main_title = generate_main_title(metadata["quarter"], metadata["fiscal_year"])
+    title_para = doc.add_paragraph()
+    title_run = title_para.add_run(main_title)
+    title_run.font.size = Pt(16)
+    title_run.font.bold = True
+    title_run.font.color.rgb = RGBColor(0, 32, 96)  # Dark blue
+    title_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+    # Add Section 2 subtitle
+    subtitle_text = metadata.get("subtitle_section2", "Conference calls: Market dynamics")
+    subtitle_para = doc.add_paragraph()
+    subtitle_run = subtitle_para.add_run(subtitle_text)
+    subtitle_run.font.size = Pt(12)
+    subtitle_run.font.italic = True
+    subtitle_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+    doc.add_paragraph()  # Spacing
+
+    # Add horizontal line
+    doc.add_paragraph("_" * 100)
+    doc.add_paragraph()  # Spacing
+
+    if not questions_data:
+        doc.add_paragraph("No Section 2 questions available.")
+        return
+
+    # Create 3-column table: Themes | Banks | Relevant Questions
+    # Count total questions first
+    total_questions = sum(len(data.get("questions", [])) for data in questions_data.values())
+
+    if total_questions == 0:
+        doc.add_paragraph("No Section 2 questions available.")
+        return
+
+    table = doc.add_table(rows=total_questions + 1, cols=3)
+    table.columns[0].width = Inches(2.0)  # Themes
+    table.columns[1].width = Inches(1.0)  # Banks
+    table.columns[2].width = Inches(5.5)  # Questions
+
+    # Header row
+    header_cells = table.rows[0].cells
+    header_cells[0].text = "Themes"
+    header_cells[1].text = "Banks"
+    header_cells[2].text = "Relevant Questions"
+
+    # Format header
+    for cell in header_cells:
+        shading_elm = parse_xml(r'<w:shd {} w:fill="002060"/>'.format(nsdecls('w')))
+        cell._tc.get_or_add_tcPr().append(shading_elm)
+        for paragraph in cell.paragraphs:
+            paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            for run in paragraph.runs:
+                run.font.bold = True
+                run.font.size = Pt(10)
+                run.font.color.rgb = RGBColor(255, 255, 255)
+
+    # Populate table rows
+    row_idx = 1
+    for bank_name, bank_data in questions_data.items():
+        ticker = bank_data.get("bank_symbol", "")
+        for question in bank_data.get("questions", []):
+            row = table.rows[row_idx]
+
+            # Column 1: Theme/Category
+            row.cells[0].text = question.get("category", "")
+            for paragraph in row.cells[0].paragraphs:
+                for run in paragraph.runs:
+                    run.font.size = Pt(9)
+                    run.font.bold = True
+
+            # Column 2: Bank ticker
+            row.cells[1].text = ticker
+            row.cells[1].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+            for paragraph in row.cells[1].paragraphs:
+                for run in paragraph.runs:
+                    run.font.size = Pt(9)
+
+            # Column 3: Question text
+            row.cells[2].text = question.get("verbatim_question", "")
+            for paragraph in row.cells[2].paragraphs:
+                for run in paragraph.runs:
+                    run.font.size = Pt(9)
+
+            row_idx += 1
+
+    # Add table borders
+    tbl = table._element
+    tbl_pr = tbl.tblPr
+    if tbl_pr is None:
+        tbl_pr = parse_xml(r'<w:tblPr {}/> '.format(nsdecls('w')))
+        tbl.insert(0, tbl_pr)
+
+    tbl_borders = parse_xml(
+        r'<w:tblBorders {}>'
+        r'<w:top w:val="single" w:sz="4" w:color="000000"/>'
+        r'<w:bottom w:val="single" w:sz="4" w:color="000000"/>'
+        r'<w:insideH w:val="single" w:sz="4" w:color="000000"/>'
+        r'<w:insideV w:val="single" w:sz="4" w:color="000000"/>'
+        r'</w:tblBorders>'.format(nsdecls('w'))
+    )
+    tbl_pr.append(tbl_borders)
+
+
+def add_section3_qa(doc: Document, results: Dict[str, Any]) -> None:
+    """
+    Add Section 3: Q&A for Investment Banking/M&A and Transaction Banking.
+
+    Args:
+        doc: Document object
+        results: Full results dictionary
+    """
+    metadata = results["metadata"]
+    questions_data = results.get("section3_questions", {})
+
+    # Set landscape orientation
+    section = doc.sections[-1]
+    section.orientation = WD_ORIENTATION.LANDSCAPE
+    section.page_width, section.page_height = section.page_height, section.page_width
+    section.top_margin = Inches(0.75)
+    section.bottom_margin = Inches(0.75)
+    section.left_margin = Inches(1)
+    section.right_margin = Inches(1)
+
+    # Add main title
+    main_title = generate_main_title(metadata["quarter"], metadata["fiscal_year"])
+    title_para = doc.add_paragraph()
+    title_run = title_para.add_run(main_title)
+    title_run.font.size = Pt(16)
+    title_run.font.bold = True
+    title_run.font.color.rgb = RGBColor(0, 32, 96)  # Dark blue
+    title_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+    # Add Section 3 subtitle
+    subtitle_text = metadata.get("subtitle_section3", "Conference calls: Pipeline dynamics")
+    subtitle_para = doc.add_paragraph()
+    subtitle_run = subtitle_para.add_run(subtitle_text)
+    subtitle_run.font.size = Pt(12)
+    subtitle_run.font.italic = True
+    subtitle_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+    doc.add_paragraph()  # Spacing
+
+    # Add horizontal line
+    doc.add_paragraph("_" * 100)
+    doc.add_paragraph()  # Spacing
+
+    if not questions_data:
+        doc.add_paragraph("No Section 3 questions available.")
+        return
+
+    # Create 3-column table: Themes | Banks | Relevant Questions
+    total_questions = sum(len(data.get("questions", [])) for data in questions_data.values())
+
+    if total_questions == 0:
+        doc.add_paragraph("No Section 3 questions available.")
+        return
+
+    table = doc.add_table(rows=total_questions + 1, cols=3)
+    table.columns[0].width = Inches(2.0)  # Themes
+    table.columns[1].width = Inches(1.0)  # Banks
+    table.columns[2].width = Inches(5.5)  # Questions
+
+    # Header row
+    header_cells = table.rows[0].cells
+    header_cells[0].text = "Themes"
+    header_cells[1].text = "Banks"
+    header_cells[2].text = "Relevant Questions"
+
+    # Format header
+    for cell in header_cells:
+        shading_elm = parse_xml(r'<w:shd {} w:fill="002060"/>'.format(nsdecls('w')))
+        cell._tc.get_or_add_tcPr().append(shading_elm)
+        for paragraph in cell.paragraphs:
+            paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            for run in paragraph.runs:
+                run.font.bold = True
+                run.font.size = Pt(10)
+                run.font.color.rgb = RGBColor(255, 255, 255)
+
+    # Populate table rows
+    row_idx = 1
+    for bank_name, bank_data in questions_data.items():
+        ticker = bank_data.get("bank_symbol", "")
+        for question in bank_data.get("questions", []):
+            row = table.rows[row_idx]
+
+            # Column 1: Theme/Category
+            row.cells[0].text = question.get("category", "")
+            for paragraph in row.cells[0].paragraphs:
+                for run in paragraph.runs:
+                    run.font.size = Pt(9)
+                    run.font.bold = True
+
+            # Column 2: Bank ticker
+            row.cells[1].text = ticker
+            row.cells[1].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+            for paragraph in row.cells[1].paragraphs:
+                for run in paragraph.runs:
+                    run.font.size = Pt(9)
+
+            # Column 3: Question text
+            row.cells[2].text = question.get("verbatim_question", "")
+            for paragraph in row.cells[2].paragraphs:
+                for run in paragraph.runs:
+                    run.font.size = Pt(9)
+
+            row_idx += 1
+
+    # Add table borders
+    tbl = table._element
+    tbl_pr = tbl.tblPr
+    if tbl_pr is None:
+        tbl_pr = parse_xml(r'<w:tblPr {}/> '.format(nsdecls('w')))
+        tbl.insert(0, tbl_pr)
+
+    tbl_borders = parse_xml(
+        r'<w:tblBorders {}>'
+        r'<w:top w:val="single" w:sz="4" w:color="000000"/>'
+        r'<w:bottom w:val="single" w:sz="4" w:color="000000"/>'
+        r'<w:insideH w:val="single" w:sz="4" w:color="000000"/>'
+        r'<w:insideV w:val="single" w:sz="4" w:color="000000"/>'
+        r'</w:tblBorders>'.format(nsdecls('w'))
+    )
+    tbl_pr.append(tbl_borders)
+
+
+def add_qa_section(doc: Document, questions_data: Dict[str, Any]) -> None:
+    """Add Analyst Questions section organized by bank and category."""
     doc.add_heading("Analyst Questions by Category", 1)
 
-    if not categorized_qas:
+    if not questions_data:
         doc.add_paragraph("No relevant analyst questions identified.")
         return
 
-    for category, questions in categorized_qas.items():
+    # questions_data structure: {bank_name: {"bank_symbol": "...", "questions": [...]}}
+    # First, organize questions by category across all banks
+    categorized_questions = {}
+    for bank_name, bank_data in questions_data.items():
+        questions = bank_data.get("questions", [])
+        for question in questions:
+            category = question.get("category", "Other")
+            if category not in categorized_questions:
+                categorized_questions[category] = []
+            # Add bank name to question for display
+            question_with_bank = question.copy()
+            question_with_bank["bank_name"] = bank_name
+            categorized_questions[category].append(question_with_bank)
+
+    # Display by category
+    for category, questions in categorized_questions.items():
         # Category heading
         doc.add_heading(category, 2)
         doc.add_paragraph(f"({len(questions)} questions)")
@@ -450,7 +731,6 @@ def add_qa_section(doc: Document, categorized_qas: Dict[str, List[Dict[str, Any]
             analyst = question.get("analyst_name", "Unknown Analyst")
             firm = question.get("analyst_firm", "Unknown Firm")
             verbatim = question.get("verbatim_question", "")
-            topics = question.get("key_topics", [])
 
             # Question header
             para = doc.add_paragraph()
@@ -461,12 +741,6 @@ def add_qa_section(doc: Document, categorized_qas: Dict[str, List[Dict[str, Any]
             question_para = doc.add_paragraph()
             question_para.style = "Quote"
             question_para.add_run(f'"{verbatim}"')
-
-            # Key topics if available
-            if topics:
-                topics_para = doc.add_paragraph()
-                topics_para.add_run("Topics: ").font.italic = True
-                topics_para.add_run(", ".join(topics)).font.italic = True
 
             # Add spacing
             doc.add_paragraph()
@@ -519,34 +793,41 @@ def structured_data_to_markdown(results: Dict[str, Any]) -> str:
     # Summary
     lines.append("## Executive Summary")
     lines.append(f"- Banks Analyzed: {results['metadata']['banks_processed']}")
-    lines.append(f"- Total Questions: {results['metadata']['total_qas']}")
+    lines.append(f"- Banks with Outlook: {results['metadata']['banks_with_outlook']}")
+    lines.append(f"- Banks with Questions: {results['metadata']['banks_with_questions']}")
     lines.append("")
 
-    # IB & Trading Outlook
-    lines.append("## Investment Banking & Trading Outlook")
+    # Outlook Section
+    lines.append("## Capital Markets Outlook by Bank")
     lines.append("")
 
-    for bank_name, insights in results.get("ib_trading_outlook", {}).items():
+    for bank_name, bank_data in results.get("outlook", {}).items():
         lines.append(f"### {bank_name}")
         lines.append("")
 
-        if insights.get("investment_banking"):
-            lines.append("#### Investment Banking")
-            for item in insights["investment_banking"]:
-                lines.append(f"- **{item.get('topic', 'General')}**: {item.get('insight', '')}")
-            lines.append("")
+        for statement in bank_data.get("statements", []):
+            category = statement.get("category", "General")
+            statement_text = statement.get("statement", "")
+            lines.append(f"- **{category}**: {statement_text}")
 
-        if insights.get("trading_outlook"):
-            lines.append("#### Trading Outlook")
-            for item in insights["trading_outlook"]:
-                lines.append(f"- **{item.get('topic', 'General')}**: {item.get('insight', '')}")
-            lines.append("")
+        lines.append("")
 
-    # Analyst Questions
+    # Analyst Questions Section
     lines.append("## Analyst Questions by Category")
     lines.append("")
 
-    for category, questions in results.get("categorized_qas", {}).items():
+    # Organize questions by category
+    categorized_questions = {}
+    for bank_name, bank_data in results.get("questions", {}).items():
+        for question in bank_data.get("questions", []):
+            category = question.get("category", "Other")
+            if category not in categorized_questions:
+                categorized_questions[category] = []
+            question_with_bank = question.copy()
+            question_with_bank["bank_name"] = bank_name
+            categorized_questions[category].append(question_with_bank)
+
+    for category, questions in categorized_questions.items():
         lines.append(f"### {category}")
         lines.append(f"*({len(questions)} questions)*")
         lines.append("")

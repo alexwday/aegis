@@ -1,8 +1,20 @@
 """
 CM Readthrough ETL Script - Generates capital markets readthrough reports across multiple banks.
 
-This script processes earnings call transcripts for all monitored institutions to extract
-Investment Banking & Trading outlook commentary and categorized analyst questions.
+This redesigned script uses an 8-phase pipeline:
+1. Outlook extraction from full transcripts (parallel across banks)
+2. Q&A Section 2 extraction - 4 categories (parallel across banks)
+3. Q&A Section 3 extraction - 2 categories (parallel across banks)
+4. Aggregation and sorting (3 result sets)
+5. Subtitle generation - Section 1 (Outlook)
+6. Subtitle generation - Section 2 (Q&A themes)
+7. Subtitle generation - Section 3 (Q&A themes)
+8. Batch formatting and document generation (3 sections)
+
+Document Structure:
+- Section 1: Outlook statements (2-column table)
+- Section 2: Q&A for Global Markets, Risk Management, Corporate Banking, Regulatory Changes (3-column table)
+- Section 3: Q&A for Investment Banking/M&A, Transaction Banking (3-column table)
 
 Usage:
     python -m aegis.etls.cm_readthrough.main --year 2024 --quarter Q3
@@ -15,7 +27,6 @@ import hashlib
 import json
 import sys
 import uuid
-import os
 from datetime import datetime
 from typing import Dict, Any, List, Optional, Tuple
 from sqlalchemy import text
@@ -26,7 +37,6 @@ from pathlib import Path
 from aegis.etls.cm_readthrough.document_converter import (
     convert_docx_to_pdf,
     structured_data_to_markdown,
-    get_standard_report_metadata,
     create_combined_document
 )
 
@@ -35,7 +45,7 @@ from aegis.model.subagents.transcripts.retrieval import retrieve_full_section
 from aegis.model.subagents.transcripts.formatting import format_full_section_chunks
 from aegis.utils.ssl import setup_ssl
 from aegis.connections.oauth_connector import setup_authentication
-from aegis.connections.llm_connector import complete_with_tools, complete
+from aegis.connections.llm_connector import complete_with_tools
 from aegis.connections.postgres_connector import get_connection
 from aegis.utils.logging import setup_logging, get_logger
 from aegis.utils.settings import config
@@ -43,13 +53,47 @@ from aegis.etls.cm_readthrough.config.config import (
     MODELS,
     TEMPERATURE,
     MAX_TOKENS,
+    MAX_CONCURRENT_BANKS,
     get_monitored_institutions,
-    get_categories
+    get_outlook_categories,
+    get_qa_market_volatility_regulatory_categories,
+    get_qa_pipelines_activity_categories
 )
 
 # Initialize logging
 setup_logging()
 logger = get_logger()
+
+# =============================================================================
+# CATEGORY FORMATTING
+# =============================================================================
+
+def format_categories_for_prompt(categories: List[Dict[str, Any]]) -> str:
+    """
+    Format category dictionaries into a structured prompt format.
+
+    Args:
+        categories: List of category dicts with category, description, examples
+
+    Returns:
+        Formatted string for prompt injection
+    """
+    formatted_sections = []
+
+    for cat in categories:
+        section = f"<example_category>\n"
+        section += f"Category: {cat['category']}\n"
+        section += f"Description: {cat['description']}\n"
+
+        if cat.get('examples') and len(cat['examples']) > 0:
+            section += "Examples:\n"
+            for example in cat['examples']:
+                section += f"  - {example}\n"
+
+        section += "</example_category>"
+        formatted_sections.append(section)
+
+    return "\n\n".join(formatted_sections)
 
 # =============================================================================
 # HELPER FUNCTIONS
@@ -96,47 +140,6 @@ async def get_bank_info(bank_identifier: Any) -> Dict[str, Any]:
             "bank_name": row.bank_name,
             "bank_symbol": row.bank_symbol
         }
-
-async def verify_data_availability(
-    bank_id: int,
-    fiscal_year: int,
-    quarter: str
-) -> bool:
-    """
-    Verify that transcript data is available for the specified period.
-
-    Args:
-        bank_id: Bank ID
-        fiscal_year: Year (e.g., 2024)
-        quarter: Quarter (e.g., "Q3")
-
-    Returns:
-        True if data is available
-    """
-    async with get_connection() as conn:
-        query = text("""
-            SELECT database_names
-            FROM aegis_data_availability
-            WHERE bank_id = :bank_id
-              AND fiscal_year = :fiscal_year
-              AND quarter = :quarter
-        """)
-
-        result = await conn.execute(
-            query,
-            {
-                "bank_id": bank_id,
-                "fiscal_year": fiscal_year,
-                "quarter": quarter
-            }
-        )
-
-        row = result.first()
-        if not row or not row.database_names:
-            return False
-
-        # Check if transcripts database is available
-        return "transcripts" in row.database_names
 
 
 async def find_latest_available_quarter(
@@ -217,6 +220,7 @@ async def find_latest_available_quarter(
 
         return None
 
+
 def load_prompt_template(prompt_file: str) -> Dict[str, Any]:
     """Load prompt template from YAML file."""
     prompt_path = Path(__file__).parent / "prompts" / prompt_file
@@ -227,38 +231,186 @@ def load_prompt_template(prompt_file: str) -> Dict[str, Any]:
     with open(prompt_path, 'r') as f:
         return yaml.safe_load(f)
 
+
+async def retrieve_full_transcript(
+    bank_info: Dict[str, Any],
+    fiscal_year: int,
+    quarter: str,
+    context: Dict[str, Any],
+    use_latest: bool
+) -> Optional[str]:
+    """
+    Retrieve full transcript (MD + Q&A sections) as single string.
+
+    Args:
+        bank_info: Bank information dictionary
+        fiscal_year: Fiscal year
+        quarter: Quarter
+        context: Execution context
+        use_latest: Whether to use latest available quarter
+
+    Returns:
+        Combined transcript string or None if not available
+    """
+    # Determine which quarter to use
+    actual_year, actual_quarter = fiscal_year, quarter
+
+    if use_latest:
+        latest = await find_latest_available_quarter(
+            bank_id=bank_info["bank_id"],
+            min_fiscal_year=fiscal_year,
+            min_quarter=quarter,
+            bank_name=bank_info["bank_name"]
+        )
+        if latest:
+            actual_year, actual_quarter = latest
+        else:
+            logger.warning(
+                f"[NO DATA] {bank_info['bank_name']}: No transcript data available "
+                f"for {fiscal_year} {quarter} or later"
+            )
+            return None
+
+    # Build combo dict for transcript retrieval
+    combo = {
+        "bank_id": bank_info["bank_id"],
+        "bank_name": bank_info["bank_name"],
+        "bank_symbol": bank_info["bank_symbol"],
+        "fiscal_year": actual_year,
+        "quarter": actual_quarter
+    }
+
+    try:
+        # Get Management Discussion section
+        md_chunks = await retrieve_full_section(combo=combo, sections="MD", context=context)
+        md_content = await format_full_section_chunks(chunks=md_chunks, combo=combo, context=context)
+
+        # Get Q&A section
+        qa_chunks = await retrieve_full_section(combo=combo, sections="QA", context=context)
+        qa_content = await format_full_section_chunks(chunks=qa_chunks, combo=combo, context=context)
+
+        # Log retrieval
+        logger.info(
+            f"[TRANSCRIPT] {bank_info['bank_name']} {actual_year} {actual_quarter}: "
+            f"Retrieved {len(md_content)} MD chars + {len(qa_content)} QA chars"
+        )
+
+        return f"{md_content}\n\n{qa_content}"
+
+    except Exception as e:
+        logger.error(f"Error retrieving transcript for {bank_info['bank_name']}: {e}")
+        return None
+
+
+async def retrieve_qa_section(
+    bank_info: Dict[str, Any],
+    fiscal_year: int,
+    quarter: str,
+    context: Dict[str, Any],
+    use_latest: bool
+) -> Optional[str]:
+    """
+    Retrieve only Q&A section as single string.
+
+    Args:
+        bank_info: Bank information dictionary
+        fiscal_year: Fiscal year
+        quarter: Quarter
+        context: Execution context
+        use_latest: Whether to use latest available quarter
+
+    Returns:
+        Q&A section string or None if not available
+    """
+    # Determine which quarter to use
+    actual_year, actual_quarter = fiscal_year, quarter
+
+    if use_latest:
+        latest = await find_latest_available_quarter(
+            bank_id=bank_info["bank_id"],
+            min_fiscal_year=fiscal_year,
+            min_quarter=quarter,
+            bank_name=bank_info["bank_name"]
+        )
+        if latest:
+            actual_year, actual_quarter = latest
+        else:
+            logger.warning(
+                f"[NO DATA] {bank_info['bank_name']}: No Q&A data available "
+                f"for {fiscal_year} {quarter} or later"
+            )
+            return None
+
+    # Build combo dict
+    combo = {
+        "bank_id": bank_info["bank_id"],
+        "bank_name": bank_info["bank_name"],
+        "bank_symbol": bank_info["bank_symbol"],
+        "fiscal_year": actual_year,
+        "quarter": actual_quarter
+    }
+
+    try:
+        # Get Q&A section only
+        qa_chunks = await retrieve_full_section(combo=combo, sections="QA", context=context)
+        qa_content = await format_full_section_chunks(chunks=qa_chunks, combo=combo, context=context)
+
+        # Log retrieval
+        logger.info(
+            f"[Q&A SECTION] {bank_info['bank_name']} {actual_year} {actual_quarter}: "
+            f"Retrieved {len(qa_content)} chars"
+        )
+
+        return qa_content
+
+    except Exception as e:
+        logger.error(f"Error retrieving Q&A for {bank_info['bank_name']}: {e}")
+        return None
+
+
 # =============================================================================
-# IB & TRADING EXTRACTION
+# PHASE 1: OUTLOOK EXTRACTION
 # =============================================================================
 
-async def extract_ib_trading_outlook(
+async def extract_outlook_from_transcript(
     bank_info: Dict[str, Any],
     transcript_content: str,
+    categories: List[Dict[str, Any]],
     fiscal_year: int,
     quarter: str,
     context: Dict[str, Any]
 ) -> Dict[str, Any]:
     """
-    Extract Investment Banking and Trading outlook from transcript.
+    Extract categorized outlook statements from full transcript.
 
     Args:
         bank_info: Bank information dictionary
         transcript_content: Full transcript text
+        categories: List of category dicts with category, description, examples
         fiscal_year: Year
         quarter: Quarter
         context: Execution context
 
     Returns:
-        Extracted IB and Trading insights
+        {
+            "has_content": bool,
+            "statements": [
+                {"category": "M&A", "statement": "...", "is_new_category": false},
+                {"category": "Trading", "statement": "...", "is_new_category": false}
+            ]
+        }
     """
     # Load prompt template
-    prompt_template = load_prompt_template("ib_trading_extraction.yaml")
+    prompt_template = load_prompt_template("outlook_extraction.yaml")
+
+    # Format categories using helper function
+    categories_text = format_categories_for_prompt(categories)
 
     # Format messages
     messages = [
         {
             "role": "system",
-            "content": prompt_template["system_template"]
+            "content": prompt_template["system_template"].format(categories_list=categories_text)
         },
         {
             "role": "user",
@@ -266,7 +418,7 @@ async def extract_ib_trading_outlook(
                 bank_name=bank_info["bank_name"],
                 fiscal_year=fiscal_year,
                 quarter=quarter,
-                transcript_content=transcript_content  # No truncation - full transcript
+                transcript_content=transcript_content
             )
         }
     ]
@@ -280,14 +432,14 @@ async def extract_ib_trading_outlook(
             "parameters": {
                 "type": "object",
                 "properties": prompt_template["tool_parameters"],
-                "required": ["quotes"]  # Only quotes array is required
+                "required": ["has_content", "statements"]
             }
         }
     }]
 
     # Call LLM
     llm_params = {
-        "model": MODELS["ib_trading_extraction"],
+        "model": MODELS["outlook_extraction"],
         "temperature": TEMPERATURE,
         "max_tokens": MAX_TOKENS
     }
@@ -300,51 +452,89 @@ async def extract_ib_trading_outlook(
             llm_params=llm_params
         )
 
-        # Extract tool call results from OpenAI response structure
+        # Extract tool call results
         tool_calls = response.get("choices", [{}])[0].get("message", {}).get("tool_calls")
         if tool_calls:
             tool_call = tool_calls[0]
             result = json.loads(tool_call["function"]["arguments"])
-            # Return empty dict if bank has no relevant content (will be filtered out later)
-            if not result.get("has_content", True):
-                logger.info(f"[NO IB CONTENT] {bank_info['bank_name']}: Transcript does not contain substantive IB/Trading outlook")
-                return {}
+
+            if not result.get("has_content", False):
+                logger.info(f"[NO OUTLOOK] {bank_info['bank_name']}: No relevant outlook found")
+                return {"has_content": False, "statements": []}
+
+            statements = result.get("statements", [])
+            new_categories = [s["category"] for s in statements if s.get("is_new_category", False)]
+            if new_categories:
+                logger.info(f"[NEW CATEGORIES] {bank_info['bank_name']}: Identified new categories: {', '.join(new_categories)}")
+
+            logger.info(f"[OUTLOOK EXTRACTED] {bank_info['bank_name']}: {len(statements)} statements ({len(new_categories)} new categories)")
             return result
         else:
-            logger.warning(f"No tool calls in response for {bank_info['bank_name']}")
-            return {}
+            logger.warning(f"No tool call in response for {bank_info['bank_name']}")
+            return {"has_content": False, "statements": []}
 
     except Exception as e:
-        logger.error(f"Error extracting IB/Trading outlook for {bank_info['bank_name']}: {e}")
-        return {}
+        logger.error(f"Error extracting outlook for {bank_info['bank_name']}: {e}")
+        return {"has_content": False, "statements": []}
 
 
-async def format_ib_quote(
-    quote_text: str,
+# =============================================================================
+# PHASE 2: Q&A EXTRACTION
+# =============================================================================
+
+async def extract_questions_from_qa(
+    bank_info: Dict[str, Any],
+    qa_content: str,
+    categories: List[Dict[str, Any]],
+    fiscal_year: int,
+    quarter: str,
     context: Dict[str, Any]
-) -> str:
+) -> Dict[str, Any]:
     """
-    Format an IB/Trading quote with HTML emphasis tags.
+    Extract categorized analyst questions from Q&A section.
 
     Args:
-        quote_text: The paraphrased quote text
+        bank_info: Bank information dictionary
+        qa_content: Q&A section text
+        categories: List of category dicts with category, description, examples
+        fiscal_year: Year
+        quarter: Quarter
         context: Execution context
 
     Returns:
-        Formatted quote with HTML tags
+        {
+            "has_content": bool,
+            "questions": [
+                {
+                    "category": "M&A",
+                    "verbatim_question": "...",
+                    "analyst_name": "...",
+                    "analyst_firm": "...",
+                    "is_new_category": false
+                }
+            ]
+        }
     """
     # Load prompt template
-    prompt_template = load_prompt_template("ib_quote_formatting.yaml")
+    prompt_template = load_prompt_template("qa_extraction_dynamic.yaml")
+
+    # Format categories using helper function
+    categories_text = format_categories_for_prompt(categories)
 
     # Format messages
     messages = [
         {
             "role": "system",
-            "content": prompt_template["system_template"]
+            "content": prompt_template["system_template"].format(categories_list=categories_text)
         },
         {
             "role": "user",
-            "content": prompt_template["user_template"].format(quote_text=quote_text)
+            "content": prompt_template["user_template"].format(
+                bank_name=bank_info["bank_name"],
+                fiscal_year=fiscal_year,
+                quarter=quarter,
+                qa_content=qa_content
+            )
         }
     ]
 
@@ -357,15 +547,15 @@ async def format_ib_quote(
             "parameters": {
                 "type": "object",
                 "properties": prompt_template["tool_parameters"],
-                "required": ["formatted_quote"]
+                "required": ["has_content", "questions"]
             }
         }
     }]
 
     # Call LLM
     llm_params = {
-        "model": MODELS["qa_categorization"],  # Use same model as QA (gpt-4-turbo)
-        "temperature": 0.3,  # Lower for consistent formatting
+        "model": MODELS["qa_extraction"],
+        "temperature": 0.3,  # Lower temperature for extraction accuracy
         "max_tokens": MAX_TOKENS
     }
 
@@ -377,82 +567,152 @@ async def format_ib_quote(
             llm_params=llm_params
         )
 
-        # Extract tool call results from OpenAI response structure
+        # Extract tool call results
         tool_calls = response.get("choices", [{}])[0].get("message", {}).get("tool_calls")
         if tool_calls:
             tool_call = tool_calls[0]
             result = json.loads(tool_call["function"]["arguments"])
-            return result.get("formatted_quote", quote_text)
+
+            if not result.get("has_content", False):
+                logger.info(f"[NO QUESTIONS] {bank_info['bank_name']}: No relevant questions found")
+                return {"has_content": False, "questions": []}
+
+            questions = result.get("questions", [])
+            new_categories = [q["category"] for q in questions if q.get("is_new_category", False)]
+            if new_categories:
+                logger.info(f"[NEW CATEGORIES] {bank_info['bank_name']}: Identified new Q&A categories: {', '.join(set(new_categories))}")
+
+            logger.info(f"[QUESTIONS EXTRACTED] {bank_info['bank_name']}: {len(questions)} questions ({len(new_categories)} new categories)")
+            return result
         else:
-            logger.warning("No tool call in formatting response, returning original")
-            return quote_text
+            logger.warning(f"No tool call in response for {bank_info['bank_name']}")
+            return {"has_content": False, "questions": []}
 
     except Exception as e:
-        logger.error(f"Error formatting quote: {e}")
-        return quote_text  # Fallback to original
+        logger.error(f"Error extracting questions for {bank_info['bank_name']}: {e}")
+        return {"has_content": False, "questions": []}
 
 
 # =============================================================================
-# Q&A CATEGORIZATION
+# PHASE 3: AGGREGATION
 # =============================================================================
 
-async def categorize_qa_block(
-    bank_info: Dict[str, Any],
-    qa_block: Dict[str, Any],
-    previous_qa_block: Optional[Dict[str, Any]],
-    categories: List[Dict[str, Any]],
-    fiscal_year: int,
-    quarter: str,
-    context: Dict[str, Any]
-) -> Dict[str, Any]:
+def aggregate_results(
+    bank_outlook: List[Tuple[str, str, Dict]],  # [(bank_name, bank_symbol, outlook_result)]
+    bank_section2: List[Tuple[str, str, Dict]],  # [(bank_name, bank_symbol, section2_result)]
+    bank_section3: List[Tuple[str, str, Dict]]   # [(bank_name, bank_symbol, section3_result)]
+) -> Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]]:
     """
-    Categorize and extract a single Q&A block.
+    Aggregate and sort results by bank for all 3 sections.
 
     Args:
-        bank_info: Bank information
-        qa_block: Q&A block data with qa_group_id and qa_content
-        previous_qa_block: Previous Q&A block for context (or None)
-        categories: List of category definitions
-        fiscal_year: Year
-        quarter: Quarter
+        bank_outlook: List of tuples (bank_name, bank_symbol, outlook_result)
+        bank_section2: List of tuples (bank_name, bank_symbol, section2_result)
+        bank_section3: List of tuples (bank_name, bank_symbol, section3_result)
+
+    Returns:
+        (all_outlook, all_section2, all_section3) where each is:
+        {
+            "Bank of America": {
+                "bank_symbol": "BAC-US",
+                "statements" or "questions": [...]
+            }
+        }
+    """
+    all_outlook = {}
+    all_section2 = {}
+    all_section3 = {}
+
+    # Filter banks with content and organize
+    for bank_name, bank_symbol, result in bank_outlook:
+        if result.get("has_content") and result.get("statements"):
+            all_outlook[bank_name] = {
+                "bank_symbol": bank_symbol,
+                "statements": result["statements"]
+            }
+
+    for bank_name, bank_symbol, result in bank_section2:
+        if result.get("has_content") and result.get("questions"):
+            all_section2[bank_name] = {
+                "bank_symbol": bank_symbol,
+                "questions": result["questions"]
+            }
+
+    for bank_name, bank_symbol, result in bank_section3:
+        if result.get("has_content") and result.get("questions"):
+            all_section3[bank_name] = {
+                "bank_symbol": bank_symbol,
+                "questions": result["questions"]
+            }
+
+    logger.info(
+        f"[AGGREGATION] {len(all_outlook)} banks with outlook, "
+        f"{len(all_section2)} banks with section 2 questions, "
+        f"{len(all_section3)} banks with section 3 questions"
+    )
+
+    return all_outlook, all_section2, all_section3
+
+
+# =============================================================================
+# PHASES 5-7: SUBTITLE GENERATION (3 sections)
+# =============================================================================
+
+async def generate_subtitle(
+    content_data: Dict[str, Any],
+    content_type: str,
+    section_context: str,
+    default_subtitle: str,
+    context: Dict[str, Any]
+) -> str:
+    """
+    Universal subtitle generation function for any section.
+
+    Args:
+        content_data: Dictionary of content by bank (outlook or questions)
+        content_type: "outlook" or "questions"
+        section_context: Description of the section content
+        default_subtitle: Fallback subtitle if generation fails
         context: Execution context
 
     Returns:
-        Categorized question data
+        Generated subtitle string (8-15 words)
     """
-    # Load prompt template
-    prompt_template = load_prompt_template("qa_categorization.yaml")
+    if not content_data:
+        return default_subtitle
 
-    # Format categories list
-    categories_text = "\n".join([
-        f"- {cat.get('Category', '')}: {cat.get('Description', '')}"
-        for cat in categories
-    ])
+    # Load universal prompt template
+    prompt_template = load_prompt_template("subtitle_generation.yaml")
 
-    # Format previous context if available
-    if previous_qa_block:
-        previous_context = f"""<previous_qa_block>
-{previous_qa_block.get('qa_content', '')}
-</previous_qa_block>"""
-    else:
-        previous_context = "This is the first question in the Q&A session."
+    # Prepare content summary for subtitle generation
+    content_summary = {}
+    for bank_name, data in content_data.items():
+        # Handle both outlook (statements) and questions
+        if content_type == "outlook":
+            items = data.get("statements", [])
+            content_summary[bank_name] = [
+                {"category": item["category"], "text": item["statement"][:200]}
+                for item in items[:3]
+            ]
+        else:  # questions
+            items = data.get("questions", [])
+            content_summary[bank_name] = [
+                {"category": item["category"], "text": item["verbatim_question"][:200]}
+                for item in items[:3]
+            ]
 
-    # Format messages - categories and previous context go in system prompt
+    # Format messages
     messages = [
         {
             "role": "system",
-            "content": prompt_template["system_template"].format(
-                categories_list=categories_text,
-                previous_context=previous_context
-            )
+            "content": prompt_template["system_template"]
         },
         {
             "role": "user",
             "content": prompt_template["user_template"].format(
-                bank_name=bank_info["bank_name"],
-                fiscal_year=fiscal_year,
-                quarter=quarter,
-                qa_block_content=qa_block.get("qa_content", "")
+                content_type=content_type,
+                section_context=section_context,
+                content_json=json.dumps(content_summary, indent=2)
             )
         }
     ]
@@ -466,19 +726,21 @@ async def categorize_qa_block(
             "parameters": {
                 "type": "object",
                 "properties": prompt_template["tool_parameters"],
-                "required": ["is_relevant", "category", "verbatim_question"]
+                "required": ["subtitle"]
             }
         }
     }]
 
     # Call LLM
     llm_params = {
-        "model": MODELS["qa_categorization"],
-        "temperature": 0.3,  # Lower temperature for categorization
-        "max_tokens": MAX_TOKENS  # Use config value (4096)
+        "model": MODELS["batch_formatting"],  # Reuse formatting model
+        "temperature": 0.5,  # Medium temperature for creativity
+        "max_tokens": 100  # Subtitle is short
     }
 
     try:
+        logger.info(f"[SUBTITLE] Generating {content_type} subtitle from {len(content_data)} banks...")
+
         response = await complete_with_tools(
             messages=messages,
             tools=tools,
@@ -486,280 +748,143 @@ async def categorize_qa_block(
             llm_params=llm_params
         )
 
-        # Extract tool call results from OpenAI response structure
+        # Extract tool call results
         tool_calls = response.get("choices", [{}])[0].get("message", {}).get("tool_calls")
         if tool_calls:
             tool_call = tool_calls[0]
             result = json.loads(tool_call["function"]["arguments"])
+            subtitle = result.get("subtitle", default_subtitle)
 
-            # Add bank info and qa_group_id to result
-            if result.get("is_relevant", False):
-                result["bank_name"] = bank_info["bank_name"]
-                result["bank_symbol"] = bank_info["bank_symbol"]
-                result["qa_group_id"] = qa_block.get("qa_group_id")
-
-            return result
+            logger.info(f"[SUBTITLE GENERATED] {subtitle}")
+            return subtitle
         else:
-            return {"is_relevant": False}
+            logger.warning(f"No tool call in subtitle generation, using default: {default_subtitle}")
+            return default_subtitle
 
     except Exception as e:
-        logger.error(f"Error categorizing Q&A for {bank_info['bank_name']}: {e}")
-        return {"is_relevant": False}
+        logger.error(f"Error generating subtitle: {e}")
+        return default_subtitle
+
+
+
 
 # =============================================================================
-# MAIN PROCESSING
+# PHASE 8: BATCH FORMATTING
 # =============================================================================
 
-async def process_bank(
-    bank_info: Dict[str, Any],
-    fiscal_year: int,
-    quarter: str,
-    categories: List[Dict[str, Any]],
-    context: Dict[str, Any],
-    use_latest: bool = False
-) -> Tuple[Dict[str, Any], List[Dict[str, Any]], Dict[str, Any]]:
+async def format_outlook_batch(
+    all_outlook: Dict[str, Any],
+    context: Dict[str, Any]
+) -> Dict[str, Any]:
     """
-    Process a single bank's transcript for IB/Trading and Q&A extraction.
+    Single LLM call to format all outlook statements with HTML emphasis.
 
     Args:
-        bank_info: Bank information
-        fiscal_year: Year
-        quarter: Quarter
-        categories: Category definitions
+        all_outlook: Dictionary of outlook by bank
         context: Execution context
-        use_latest: If True, use latest available quarter >= specified quarter
 
     Returns:
-        Tuple of (IB/Trading insights, Categorized Q&As, Period info)
+        Same structure but with "formatted_statement" added to each statement dict
     """
-    logger.info(f"Processing {bank_info['bank_name']} for {fiscal_year} {quarter} (latest mode: {use_latest})")
+    if not all_outlook:
+        return {}
 
-    # Determine which quarter to use
-    actual_year = fiscal_year
-    actual_quarter = quarter
+    # Load prompt template
+    prompt_template = load_prompt_template("batch_formatting.yaml")
 
-    if use_latest:
-        latest_data = await find_latest_available_quarter(
-            bank_id=bank_info["bank_id"],
-            min_fiscal_year=fiscal_year,
-            min_quarter=quarter,
-            bank_name=bank_info["bank_name"]
-        )
-
-        if latest_data:
-            actual_year, actual_quarter = latest_data
-        else:
-            logger.warning(
-                f"[NO DATA] {bank_info['bank_name']}: No transcript data available "
-                f"for {fiscal_year} {quarter} or later"
-            )
-            return {}, [], {"year": fiscal_year, "quarter": quarter, "data_found": False}
-    else:
-        # Verify exact quarter availability
-        if not await verify_data_availability(bank_info["bank_id"], fiscal_year, quarter):
-            logger.warning(
-                f"[NO DATA] {bank_info['bank_name']}: No transcript data available "
-                f"for exact quarter {fiscal_year} {quarter}"
-            )
-            return {}, [], {"year": fiscal_year, "quarter": quarter, "data_found": False}
-
-    # Retrieve full transcript
-    try:
-        # Build combo dict for transcript retrieval
-        combo = {
-            "bank_id": bank_info["bank_id"],
-            "bank_name": bank_info["bank_name"],
-            "bank_symbol": bank_info["bank_symbol"],
-            "fiscal_year": actual_year,
-            "quarter": actual_quarter
-        }
-
-        # Get Management Discussion section
-        md_chunks = await retrieve_full_section(
-            combo=combo,
-            sections="MD",
-            context=context
-        )
-
-        md_content = await format_full_section_chunks(
-            chunks=md_chunks,
-            combo=combo,
-            context=context
-        )
-
-        # Log MD section details
-        md_block_count = len(md_chunks) if md_chunks else 0
-        if md_block_count > 0:
-            logger.info(
-                f"[TRANSCRIPT MD] {bank_info['bank_name']} {actual_year} {actual_quarter}: "
-                f"Found MD section with {md_block_count} blocks, {len(md_content)} characters"
-            )
-        else:
-            logger.warning(
-                f"[TRANSCRIPT MD] {bank_info['bank_name']} {actual_year} {actual_quarter}: "
-                f"No MD section found"
-            )
-
-        # Get Q&A section
-        qa_chunks = await retrieve_full_section(
-            combo=combo,
-            sections="QA",
-            context=context
-        )
-
-        qa_content = await format_full_section_chunks(
-            chunks=qa_chunks,
-            combo=combo,
-            context=context
-        )
-
-        # Log QA section details
-        qa_block_count = len(qa_chunks) if qa_chunks else 0
-        if qa_block_count > 0:
-            logger.info(
-                f"[TRANSCRIPT QA] {bank_info['bank_name']} {actual_year} {actual_quarter}: "
-                f"Found Q&A section with {qa_block_count} blocks, {len(qa_content)} characters"
-            )
-        else:
-            logger.warning(
-                f"[TRANSCRIPT QA] {bank_info['bank_name']} {actual_year} {actual_quarter}: "
-                f"No Q&A section found"
-            )
-
-        # Log combined transcript
-        logger.info(
-            f"[TRANSCRIPT COMBINED] {bank_info['bank_name']} {actual_year} {actual_quarter}: "
-            f"Combined transcript created with {len(md_content) + len(qa_content)} total characters"
-        )
-
-    except Exception as e:
-        logger.error(f"Error retrieving transcript for {bank_info['bank_name']}: {e}")
-        return {}, [], {"year": actual_year, "quarter": actual_quarter, "data_found": False}
-
-    # Extract IB & Trading outlook
-    full_transcript = f"{md_content}\n\n{qa_content}"
-    ib_trading_insights = await extract_ib_trading_outlook(
-        bank_info=bank_info,
-        transcript_content=full_transcript,
-        fiscal_year=actual_year,
-        quarter=actual_quarter,
-        context=context
-    )
-
-    # Format quotes with HTML if extraction was successful
-    if ib_trading_insights and ib_trading_insights.get("quotes"):
-        logger.info(f"[IB FORMATTING] {bank_info['bank_name']}: Formatting {len(ib_trading_insights['quotes'])} quotes")
-        for quote_obj in ib_trading_insights['quotes']:
-            original_quote = quote_obj.get("quote", "")
-            if original_quote:
-                formatted_quote = await format_ib_quote(original_quote, context)
-                quote_obj["formatted_quote"] = formatted_quote
-                quote_obj["original_quote"] = original_quote  # Keep original for reference
-
-    # Process Q&A questions using qa_group_id blocks
-    categorized_qas = []
-
-    # Retrieve Q&A chunks and group by qa_group_id (same approach as key_themes ETL)
-    try:
-        async with get_connection() as conn:
-            query = text("""
-                SELECT
-                    qa_group_id,
-                    chunk_content as content
-                FROM aegis_transcripts
-                WHERE (institution_id = :bank_id_str OR institution_id::text = :bank_id_str)
-                AND fiscal_year = :fiscal_year
-                AND fiscal_quarter = :quarter
-                AND section_name = 'Q&A'
-                ORDER BY qa_group_id, chunk_id
-            """)
-
-            result = await conn.execute(query, {
-                "bank_id_str": str(bank_info['bank_id']),
-                "fiscal_year": actual_year,
-                "quarter": actual_quarter
-            })
-
-            rows = result.fetchall()
-            chunks = [{"qa_group_id": row[0], "content": row[1]} for row in rows]
-    except Exception as e:
-        logger.error(f"Error retrieving Q&A chunks for {bank_info['bank_name']}: {e}")
-        chunks = []
-
-    # Group chunks by qa_group_id
-    qa_groups = {}
-    for chunk in chunks:
-        qa_group_id = chunk.get('qa_group_id')
-        if qa_group_id is not None:
-            if qa_group_id not in qa_groups:
-                qa_groups[qa_group_id] = []
-            qa_groups[qa_group_id].append(chunk)
-
-    # Convert to list of Q&A blocks with combined content
-    qa_blocks = []
-    for qa_group_id in sorted(qa_groups.keys()):
-        group_chunks = qa_groups[qa_group_id]
-        # Combine all chunks for this qa_group_id
-        qa_content = "\n".join([
-            chunk.get('content', '')
-            for chunk in group_chunks
-            if chunk.get('content')
-        ])
-
-        if qa_content:
-            qa_blocks.append({
-                "qa_group_id": qa_group_id,
-                "qa_content": qa_content
-            })
-
-    logger.info(
-        f"[QA BLOCKS] {bank_info['bank_name']}: Retrieved {len(qa_blocks)} Q&A blocks"
-    )
-
-    # Process each Q&A block with previous context
-    for i, qa_block in enumerate(qa_blocks):
-        # Get previous block for context if available
-        previous_block = qa_blocks[i-1] if i > 0 else None
-
-        result = await categorize_qa_block(
-            bank_info=bank_info,
-            qa_block=qa_block,
-            previous_qa_block=previous_block,
-            categories=categories,
-            fiscal_year=actual_year,
-            quarter=actual_quarter,
-            context=context
-        )
-
-        if result.get("is_relevant", False):
-            categorized_qas.append(result)
-
-    logger.info(
-        f"[PROCESSING COMPLETE] {bank_info['bank_name']} {actual_year} {actual_quarter}: "
-        f"{len(ib_trading_insights.get('investment_banking', []))} IB insights, "
-        f"{len(ib_trading_insights.get('trading_outlook', []))} trading insights, "
-        f"{len(categorized_qas)} relevant Q&As from {len(qa_blocks)} total"
-    )
-
-    period_info = {
-        "year": actual_year,
-        "quarter": actual_quarter,
-        "data_found": True,
-        "requested_year": fiscal_year,
-        "requested_quarter": quarter,
-        "used_latest": use_latest and (actual_year != fiscal_year or actual_quarter != quarter)
+    # Prepare outlook for formatting (remove bank_symbol for cleaner JSON)
+    outlook_for_formatting = {
+        bank_name: data["statements"]
+        for bank_name, data in all_outlook.items()
     }
 
-    return ib_trading_insights, categorized_qas, period_info
+    # Format messages
+    messages = [
+        {
+            "role": "system",
+            "content": prompt_template["system_template"]
+        },
+        {
+            "role": "user",
+            "content": prompt_template["user_template"].format(
+                quotes_json=json.dumps(outlook_for_formatting, indent=2)  # Note: template still says "quotes"
+            )
+        }
+    ]
 
-async def process_all_banks(
+    # Create tool definition
+    tools = [{
+        "type": "function",
+        "function": {
+            "name": prompt_template["tool_name"],
+            "description": prompt_template["tool_description"],
+            "parameters": {
+                "type": "object",
+                "properties": prompt_template["tool_parameters"],
+                "required": ["formatted_quotes"]  # Note: template still says "quotes"
+            }
+        }
+    }]
+
+    # Call LLM
+    llm_params = {
+        "model": MODELS["batch_formatting"],
+        "temperature": 0.3,  # Lower temperature for consistent formatting
+        "max_tokens": MAX_TOKENS
+    }
+
+    try:
+        logger.info(f"[BATCH FORMATTING] Formatting {len(all_outlook)} banks with outlook...")
+
+        response = await complete_with_tools(
+            messages=messages,
+            tools=tools,
+            context=context,
+            llm_params=llm_params
+        )
+
+        # Extract tool call results
+        tool_calls = response.get("choices", [{}])[0].get("message", {}).get("tool_calls")
+        if tool_calls:
+            tool_call = tool_calls[0]
+            formatted_result = json.loads(tool_call["function"]["arguments"])
+            formatted_outlook = formatted_result.get("formatted_quotes", {})  # Tool returns "quotes" key
+
+            # Merge formatted outlook back with bank_symbol
+            result = {}
+            for bank_name, data in all_outlook.items():
+                if bank_name in formatted_outlook:
+                    result[bank_name] = {
+                        "bank_symbol": data["bank_symbol"],
+                        "statements": formatted_outlook[bank_name]
+                    }
+                else:
+                    # Fallback: keep original if formatting failed for this bank
+                    result[bank_name] = data
+
+            logger.info(f"[BATCH FORMATTING] Successfully formatted outlook for {len(result)} banks")
+            return result
+        else:
+            logger.warning("No tool call in formatting response, returning original")
+            return all_outlook
+
+    except Exception as e:
+        logger.error(f"Error in batch formatting: {e}")
+        return all_outlook  # Fallback to original
+
+
+# =============================================================================
+# MAIN ORCHESTRATION
+# =============================================================================
+
+async def process_all_banks_parallel(
     fiscal_year: int,
     quarter: str,
     context: Dict[str, Any],
     use_latest: bool = False
 ) -> Dict[str, Any]:
     """
-    Process all monitored banks for the specified period.
+    Process all banks with concurrent execution.
 
     Args:
         fiscal_year: Year
@@ -768,118 +893,209 @@ async def process_all_banks(
         use_latest: If True, use latest available quarter >= specified quarter
 
     Returns:
-        Combined results from all banks
+        Combined results dictionary
     """
-    # Load monitored institutions
-    try:
-        monitored_banks = get_monitored_institutions()
-    except Exception as e:
-        logger.error(f"Error loading monitored institutions: {e}")
-        return {}
-
-    # Load categories
-    try:
-        categories = get_categories()
-    except Exception as e:
-        logger.error(f"Error loading categories: {e}")
-        return {}
+    # Load configuration
+    monitored_banks = get_monitored_institutions()
+    outlook_categories = get_outlook_categories()
+    qa_market_vol_reg_categories = get_qa_market_volatility_regulatory_categories()
+    qa_pipelines_activity_categories = get_qa_pipelines_activity_categories()
 
     logger.info(
-        f"Processing {len(monitored_banks)} monitored institutions for {fiscal_year} {quarter} "
+        f"Processing {len(monitored_banks)} banks for {fiscal_year} {quarter} "
         f"(mode: {'latest available' if use_latest else 'exact quarter'})"
     )
+    logger.info(
+        f"Categories - Outlook: {len(outlook_categories)}, "
+        f"Market Vol/Reg: {len(qa_market_vol_reg_categories)}, "
+        f"Pipelines/Activity: {len(qa_pipelines_activity_categories)}"
+    )
 
-    # Process each bank
-    all_ib_trading = {}
-    all_qas = []
-    period_tracking = {}
+    # Concurrency control
+    semaphore = asyncio.Semaphore(MAX_CONCURRENT_BANKS)
 
-    for bank_data in monitored_banks:
-        try:
-            bank_info = await get_bank_info(bank_data.get("bank_id") or bank_data.get("bank_symbol"))
+    # Phase 1: Extract outlook from all banks (concurrent)
+    async def process_bank_outlook(bank_data):
+        async with semaphore:
+            try:
+                bank_info = await get_bank_info(bank_data["bank_id"])
 
-            ib_trading, qas, period_info = await process_bank(
-                bank_info=bank_info,
-                fiscal_year=fiscal_year,
-                quarter=quarter,
-                categories=categories,
-                context=context,
-                use_latest=use_latest
-            )
+                # Get full transcript
+                transcript = await retrieve_full_transcript(
+                    bank_info, fiscal_year, quarter, context, use_latest
+                )
 
-            # Track period used for each bank
-            period_tracking[bank_info["bank_name"]] = period_info
+                if not transcript:
+                    return (bank_info["bank_name"], bank_info["bank_symbol"], {"has_content": False, "statements": []})
 
-            # Store results with bank_symbol for ticker mapping
-            if ib_trading:
-                ib_trading["bank_symbol"] = bank_info.get("bank_symbol", "")
-                all_ib_trading[bank_info["bank_name"]] = ib_trading
+                # Extract outlook
+                result = await extract_outlook_from_transcript(
+                    bank_info, transcript, outlook_categories,
+                    fiscal_year, quarter, context
+                )
 
-            all_qas.extend(qas)
+                return (bank_info["bank_name"], bank_info["bank_symbol"], result)
 
-        except Exception as e:
-            logger.error(f"Error processing bank {bank_data}: {e}")
-            continue
+            except Exception as e:
+                logger.error(f"Error processing outlook for bank {bank_data}: {e}")
+                return (bank_data.get("bank_name", "Unknown"), bank_data.get("bank_symbol", ""), {"has_content": False, "statements": []})
 
-    # Log summary of periods used
-    if use_latest:
-        banks_with_latest = [
-            f"{bank}: {info['year']} {info['quarter']}"
-            for bank, info in period_tracking.items()
-            if info.get('used_latest', False)
-        ]
-        if banks_with_latest:
-            logger.info(
-                f"[LATEST QUARTER SUMMARY] Banks using more recent data than requested:\n"
-                + "\n".join(banks_with_latest)
-            )
+    # Phase 2: Extract Section 2 questions from all banks (concurrent)
+    async def process_bank_section2(bank_data):
+        async with semaphore:
+            try:
+                bank_info = await get_bank_info(bank_data["bank_id"])
 
-    banks_without_data = [
-        bank for bank, info in period_tracking.items()
-        if not info.get('data_found', True)
-    ]
-    if banks_without_data:
-        logger.warning(
-            f"[NO DATA SUMMARY] Banks with no available data:\n"
-            + "\n".join(banks_without_data)
+                # Get Q&A section only
+                qa_content = await retrieve_qa_section(
+                    bank_info, fiscal_year, quarter, context, use_latest
+                )
+
+                if not qa_content:
+                    return (bank_info["bank_name"], bank_info["bank_symbol"], {"has_content": False, "questions": []})
+
+                # Extract Section 2 questions
+                result = await extract_questions_from_qa(
+                    bank_info, qa_content, qa_market_vol_reg_categories,
+                    fiscal_year, quarter, context
+                )
+
+                return (bank_info["bank_name"], bank_info["bank_symbol"], result)
+
+            except Exception as e:
+                logger.error(f"Error processing Section 2 for bank {bank_data}: {e}")
+                return (bank_data.get("bank_name", "Unknown"), bank_data.get("bank_symbol", ""), {"has_content": False, "questions": []})
+
+    # Phase 3: Extract Section 3 questions from all banks (concurrent)
+    async def process_bank_section3(bank_data):
+        async with semaphore:
+            try:
+                bank_info = await get_bank_info(bank_data["bank_id"])
+
+                # Get Q&A section only
+                qa_content = await retrieve_qa_section(
+                    bank_info, fiscal_year, quarter, context, use_latest
+                )
+
+                if not qa_content:
+                    return (bank_info["bank_name"], bank_info["bank_symbol"], {"has_content": False, "questions": []})
+
+                # Extract Section 3 questions
+                result = await extract_questions_from_qa(
+                    bank_info, qa_content, qa_pipelines_activity_categories,
+                    fiscal_year, quarter, context
+                )
+
+                return (bank_info["bank_name"], bank_info["bank_symbol"], result)
+
+            except Exception as e:
+                logger.error(f"Error processing Section 3 for bank {bank_data}: {e}")
+                return (bank_data.get("bank_name", "Unknown"), bank_data.get("bank_symbol", ""), {"has_content": False, "questions": []})
+
+    # Execute Phases 1, 2, 3 concurrently (all 3 extraction phases in parallel)
+    logger.info(f"[PHASES 1-3] Starting concurrent extraction for {len(monitored_banks)} banks...")
+
+    outlook_tasks = [process_bank_outlook(bank) for bank in monitored_banks]
+    section2_tasks = [process_bank_section2(bank) for bank in monitored_banks]
+    section3_tasks = [process_bank_section3(bank) for bank in monitored_banks]
+
+    # Run all 3 phases in parallel
+    bank_outlook, bank_section2, bank_section3 = await asyncio.gather(
+        asyncio.gather(*outlook_tasks, return_exceptions=True),
+        asyncio.gather(*section2_tasks, return_exceptions=True),
+        asyncio.gather(*section3_tasks, return_exceptions=True)
+    )
+
+    # Filter out exceptions and log
+    bank_outlook_clean = []
+    for r in bank_outlook:
+        if isinstance(r, Exception):
+            logger.error(f"Outlook extraction exception: {r}")
+        else:
+            bank_outlook_clean.append(r)
+
+    bank_section2_clean = []
+    for r in bank_section2:
+        if isinstance(r, Exception):
+            logger.error(f"Section 2 extraction exception: {r}")
+        else:
+            bank_section2_clean.append(r)
+
+    bank_section3_clean = []
+    for r in bank_section3:
+        if isinstance(r, Exception):
+            logger.error(f"Section 3 extraction exception: {r}")
+        else:
+            bank_section3_clean.append(r)
+
+    # Phase 4: Aggregation
+    logger.info("[PHASE 4] Aggregating results...")
+    all_outlook, all_section2, all_section3 = aggregate_results(
+        bank_outlook_clean, bank_section2_clean, bank_section3_clean
+    )
+
+    # Phases 5-7: Subtitle generation (all 3 in parallel using universal prompt)
+    logger.info("[PHASES 5-7] Generating subtitles for all 3 sections...")
+    subtitle1, subtitle2, subtitle3 = await asyncio.gather(
+        generate_subtitle(
+            all_outlook,
+            "outlook",
+            "Forward-looking outlook statements on IB activity, markets, pipelines",
+            "Outlook: Capital markets activity across major institutions",
+            context
+        ),
+        generate_subtitle(
+            all_section2,
+            "questions",
+            "Analyst questions on market volatility, risk management, regulatory changes",
+            "Conference calls: Benefits and threats of market volatility, line-draws and regulatory changes",
+            context
+        ),
+        generate_subtitle(
+            all_section3,
+            "questions",
+            "Analyst questions on pipeline strength, M&A activity, transaction banking",
+            "Conference calls: How well pipelines are holding up and areas of activity",
+            context
         )
+    )
 
-    # Organize results
+    # Phase 8: Batch formatting
+    logger.info("[PHASE 8] Batch formatting outlook...")
+    formatted_outlook = await format_outlook_batch(all_outlook, context)
+
+    # Questions typically don't need formatting (verbatim extraction)
+    formatted_section2 = all_section2
+    formatted_section3 = all_section3
+
+    # Prepare results for document generation
     results = {
         "metadata": {
             "fiscal_year": fiscal_year,
             "quarter": quarter,
-            "banks_processed": len(all_ib_trading),
-            "total_qas": len(all_qas),
+            "banks_processed": len(monitored_banks),
+            "banks_with_outlook": len(formatted_outlook),
+            "banks_with_section2": len(formatted_section2),
+            "banks_with_section3": len(formatted_section3),
             "generation_date": datetime.now().isoformat(),
             "mode": "latest_available" if use_latest else "exact_quarter",
-            "period_tracking": period_tracking
+            "subtitle_section1": f"Outlook: {subtitle1}",
+            "subtitle_section2": f"Conference calls: {subtitle2}",
+            "subtitle_section3": f"Conference calls: {subtitle3}"
         },
-        "ib_trading_outlook": all_ib_trading,
-        "categorized_qas": organize_qas_by_category(all_qas)
+        "outlook": formatted_outlook,
+        "section2_questions": formatted_section2,
+        "section3_questions": formatted_section3
     }
+
+    logger.info(
+        f"[PIPELINE COMPLETE] {results['metadata']['banks_with_outlook']} banks with outlook, "
+        f"{results['metadata']['banks_with_section2']} banks with section 2, "
+        f"{results['metadata']['banks_with_section3']} banks with section 3"
+    )
 
     return results
 
-def organize_qas_by_category(qas: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
-    """
-    Organize Q&As by category.
-
-    Args:
-        qas: List of categorized Q&As
-
-    Returns:
-        Dictionary organized by category
-    """
-    organized = {}
-
-    for qa in qas:
-        category = qa.get("category", "Other")
-        if category not in organized:
-            organized[category] = []
-        organized[category].append(qa)
-
-    return organized
 
 # =============================================================================
 # DATABASE STORAGE
@@ -939,6 +1155,7 @@ async def save_to_database(
 
     logger.info(f"Report saved to database with execution_id: {execution_id}")
 
+
 # =============================================================================
 # MAIN ENTRY POINT
 # =============================================================================
@@ -994,14 +1211,14 @@ async def main():
 
     # Process all banks
     try:
-        results = await process_all_banks(
+        results = await process_all_banks_parallel(
             fiscal_year=args.year,
             quarter=args.quarter,
             context=context,
             use_latest=args.use_latest
         )
 
-        if not results or not results.get("ib_trading_outlook"):
+        if not results or (not results.get("outlook") and not results.get("questions")):
             logger.warning("No results generated")
             return
 
@@ -1009,7 +1226,7 @@ async def main():
         output_dir = Path(__file__).parent / "output"
         output_dir.mkdir(exist_ok=True)
 
-        # Create filename with timestamp for uniqueness (avoid sort_keys issue with None values)
+        # Create filename with timestamp for uniqueness
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         content_hash = hashlib.md5(
             f"{args.year}_{args.quarter}_{timestamp}".encode()
@@ -1020,7 +1237,7 @@ async def main():
         else:
             docx_path = output_dir / f"CM_Readthrough_{args.year}_{args.quarter}_{content_hash}.docx"
 
-        # Create Word document (implement in document_converter.py)
+        # Create Word document
         create_combined_document(results, str(docx_path))
         logger.info(f"Word document created: {docx_path}")
 
