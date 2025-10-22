@@ -235,15 +235,14 @@ async def transcripts_agent(
             retrieval_decisions[key] = result
 
         # ==================================================
-        # STEP 3: Execute retrievals and format research statements
+        # STEP 3: Execute retrievals and format research statements (PARALLEL)
         # ==================================================
 
-        all_research_statements = []
-
-        for key, result in retrieval_decisions.items():
+        async def process_single_combo(result):
+            """Process a single bank-period combination: retrieve, format, and synthesize."""
             combo = result["combo"]
             decision = result["decision"]
-            priority_blocks = result.get("priority_blocks", [])  # Extract priority blocks
+            priority_blocks = result.get("priority_blocks", [])
             method = decision["method"]
 
             # Log the decision
@@ -258,7 +257,7 @@ async def transcripts_agent(
 
             # Execute the appropriate retrieval method
             chunks = []
-            formatted_content = ""  # Initialize to avoid undefined variable
+            formatted_content = ""
 
             if method == 0:
                 # Full Section Retrieval with Priority Blocks
@@ -339,7 +338,6 @@ async def transcripts_agent(
                 research_statement = await generate_research_statement(
                     formatted_content, combo, context
                 )
-                all_research_statements.append(research_statement)
 
                 logger.info(
                     f"subagent.{database_id}.research_generated",
@@ -349,12 +347,17 @@ async def transcripts_agent(
                     method=method,
                     chunks_used=len(chunks),
                 )
+                return research_statement
             else:
                 # No data found
-                all_research_statements.append(
+                return (
                     f"\n### {combo['bank_name']} - {combo['quarter']} {combo['fiscal_year']}\n"
                     f"No transcript data available for this period.\n"
                 )
+
+        # Execute all retrievals in parallel
+        retrieval_tasks = [process_single_combo(result) for result in retrieval_decisions.values()]
+        all_research_statements = await asyncio.gather(*retrieval_tasks)
 
         # ==================================================
         # STEP 4: Output final combined research
