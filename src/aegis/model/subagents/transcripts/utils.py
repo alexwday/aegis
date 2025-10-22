@@ -30,8 +30,8 @@ def load_transcripts_yaml(filename: str, compose_with_globals: bool = False) -> 
         FileNotFoundError: If YAML file doesn't exist
         yaml.YAMLError: If YAML file is malformed
     """
-    # Path to transcripts prompts: model/prompts/transcripts/
-    yaml_path = Path(__file__).parent.parent.parent / "prompts" / "transcripts" / filename
+    # Path to transcripts prompts: model/prompts/subagents/transcripts/
+    yaml_path = Path(__file__).parent.parent.parent / "prompts" / "subagents" / "transcripts" / filename
 
     if not yaml_path.exists():
         raise FileNotFoundError(f"Transcripts YAML file not found: {yaml_path}")
