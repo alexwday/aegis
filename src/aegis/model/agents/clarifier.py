@@ -385,20 +385,21 @@ async def extract_banks(
                     bank_ids = function_args.get("bank_ids", [])
                     query_intent = function_args.get("query_intent", "")
 
-                    # If no banks specified, need clarification
-                    if not bank_ids:
+                    # Validate query_intent is provided (required field in tool)
+                    if not query_intent:
+                        logger.error(
+                            "clarifier.banks.missing_intent",
+                            execution_id=execution_id,
+                            error="LLM called banks_found without query_intent (required field)",
+                        )
                         return {
-                            "status": "needs_clarification",
-                            "decision": "clarification_needed",
-                            "clarification": (
-                                "Which banks would you like to query? "
-                                "Please specify the bank names."
-                            ),
+                            "status": "error",
+                            "error": "LLM failed to provide query_intent in banks_found tool call",
                             "tokens_used": tokens_used,
                             "cost": cost,
                         }
 
-                    # Validate bank IDs exist in our data
+                    # Validate bank IDs exist in our data (filter to valid only)
                     valid_ids = [bid for bid in bank_ids if bid in banks_data["banks"]]
                     invalid_ids = [bid for bid in bank_ids if bid not in banks_data["banks"]]
 
@@ -409,61 +410,41 @@ async def extract_banks(
                             invalid_ids=invalid_ids,
                         )
 
-                    if valid_ids:
-                        # Get full bank details
-                        banks_detail = {bid: banks_data["banks"][bid] for bid in valid_ids}
-
-                        logger.info(
-                            "clarifier.banks.extracted",
+                    # If no valid banks after filtering, return error (LLM hallucinated)
+                    if not valid_ids:
+                        logger.error(
+                            "clarifier.banks.no_valid_banks",
                             execution_id=execution_id,
-                            bank_ids=valid_ids,
-                            count=len(valid_ids),
+                            attempted_ids=bank_ids,
+                            error="All bank IDs were invalid (LLM hallucination)",
                         )
-
-                        # Check if we need to clarify the intent
-                        if not query_intent:
-                            # We have banks but no clear intent
-                            intent_clarification = "What would you like to see for "
-                            if len(valid_ids) == 1:
-                                intent_clarification += f"{banks_detail[valid_ids[0]]['name']}?"
-                            else:
-                                bank_names = [banks_detail[bid]["name"] for bid in valid_ids[:3]]
-                                if len(valid_ids) > 3:
-                                    intent_clarification += (
-                                        f"{', '.join(bank_names[:2])}, and "
-                                        f"{len(valid_ids)-2} other banks?"
-                                    )
-                                else:
-                                    intent_clarification += (
-                                        f"{', '.join(bank_names[:-1])} and {bank_names[-1]}?"
-                                    )
-                            intent_clarification += (
-                                " (e.g., revenue, efficiency ratio, expenses, net income)"
-                            )
-                        else:
-                            intent_clarification = None
-
                         return {
-                            "status": "success",
-                            "decision": "banks_selected",
-                            "bank_ids": valid_ids,
-                            "banks_detail": banks_detail,
-                            "query_intent": query_intent,
-                            "intent_clarification": intent_clarification,
+                            "status": "error",
+                            "error": "No valid banks found (LLM hallucination)",
                             "tokens_used": tokens_used,
                             "cost": cost,
                         }
-                    else:
-                        return {
-                            "status": "needs_clarification",
-                            "decision": "clarification_needed",
-                            "clarification": (
-                                "No valid banks found. "
-                                "Please specify which banks you're interested in."
-                            ),
-                            "tokens_used": tokens_used,
-                            "cost": cost,
-                        }
+
+                    # Success - return validated banks and intent
+                    banks_detail = {bid: banks_data["banks"][bid] for bid in valid_ids}
+
+                    logger.info(
+                        "clarifier.banks.extracted",
+                        execution_id=execution_id,
+                        bank_ids=valid_ids,
+                        count=len(valid_ids),
+                        query_intent=query_intent[:100],
+                    )
+
+                    return {
+                        "status": "success",
+                        "decision": "banks_selected",
+                        "bank_ids": valid_ids,
+                        "banks_detail": banks_detail,
+                        "query_intent": query_intent,
+                        "tokens_used": tokens_used,
+                        "cost": cost,
+                    }
 
                 elif function_name == "clarification_needed":
                     question = function_args.get("question", "")
@@ -484,11 +465,15 @@ async def extract_banks(
                         "cost": cost,
                     }
 
-        # No tool response - need clarification
+        # No tool response - this is an error (LLM should have called a tool)
+        logger.error(
+            "clarifier.banks.no_tool_response",
+            execution_id=execution_id,
+            error="LLM did not call any tool",
+        )
         return {
-            "status": "needs_clarification",
-            "decision": "clarification_needed",
-            "clarification": "Please specify which banks you'd like to query.",
+            "status": "error",
+            "error": "LLM failed to call banks_found or clarification_needed tool",
             "tokens_used": tokens_used,
             "cost": cost,
         }
@@ -742,6 +727,10 @@ async def extract_periods(
 
                     if periods_clear:
                         # Periods are clear, no clarification needed
+                        logger.info(
+                            "clarifier.periods.valid",
+                            execution_id=execution_id,
+                        )
                         return {
                             "status": "success",
                             "decision": "periods_clear",
@@ -750,11 +739,15 @@ async def extract_periods(
                             "cost": cost,
                         }
                     else:
-                        # Need clarification
+                        # periods_clear=False means LLM should have called period_clarification instead
+                        logger.error(
+                            "clarifier.periods.invalid_tool_use",
+                            execution_id=execution_id,
+                            error="LLM called periods_valid with False (should use period_clarification)",
+                        )
                         return {
-                            "status": "needs_clarification",
-                            "decision": "clarification_needed",
-                            "clarification": "What time period would you like to query?",
+                            "status": "error",
+                            "error": "LLM called periods_valid with False (should use period_clarification tool)",
                             "tokens_used": tokens_used,
                             "cost": cost,
                         }
@@ -775,11 +768,15 @@ async def extract_periods(
                         "cost": cost,
                     }
 
-        # No tool response - need clarification
+        # No tool response - this is an error (LLM should have called a tool)
+        logger.error(
+            "clarifier.periods.no_tool_response",
+            execution_id=execution_id,
+            error="LLM did not call any tool",
+        )
         return {
-            "status": "needs_clarification",
-            "decision": "clarification_needed",
-            "clarification": "What time period would you like to query?",
+            "status": "error",
+            "error": "LLM failed to call a period extraction tool",
             "tokens_used": tokens_used,
             "cost": cost,
         }
@@ -962,30 +959,31 @@ async def clarify_query(
     # Stage 1: Extract banks and query intent
     bank_result = await extract_banks(query, context, available_databases, messages)
 
+    # Handle bank extraction error
+    if bank_result["status"] == "error":
+        return {
+            "status": "error",
+            "error": bank_result.get("error", "Failed to extract banks"),
+        }
+
     # Stage 2: Extract or validate periods
     if bank_result["status"] == "success":
         # We have banks, extract periods for them
         bank_ids = bank_result.get("bank_ids", [])
         period_result = await extract_periods(query, bank_ids, context, available_databases, messages)
 
-        # Check if we need any clarifications
-        clarifications = []
-
-        # Check for intent clarification
-        if bank_result.get("intent_clarification"):
-            clarifications.append(bank_result["intent_clarification"])
+        # Handle period extraction error
+        if period_result.get("status") == "error":
+            return {
+                "status": "error",
+                "error": period_result.get("error", "Failed to extract periods"),
+            }
 
         # Check if periods need clarification
         if period_result.get("status") == "needs_clarification":
-            clarifications.append(
-                period_result.get("clarification", "What time period would you like to query?")
-            )
-
-        # If we have any clarifications needed, return them
-        if clarifications:
             return {
                 "status": "needs_clarification",
-                "clarifications": clarifications,
+                "clarifications": [period_result.get("clarification")],
             }
 
         # Everything successful - create and return standardized combinations
@@ -1013,12 +1011,13 @@ async def clarify_query(
             # Return just the list of combinations
             return bank_period_combinations
         else:
-            # Period extraction had an error
+            # Unexpected status
             return {
                 "status": "error",
-                "error": period_result.get("error", "Failed to extract periods"),
+                "error": f"Unexpected period extraction status: {period_result.get('status')}",
             }
-    else:
+
+    elif bank_result["status"] == "needs_clarification":
         # Banks need clarification, check if periods also need clarification
         period_check = await extract_periods(query, None, context, available_databases, messages)
 
@@ -1031,11 +1030,21 @@ async def clarify_query(
         if period_check["status"] == "needs_clarification" and period_check.get("clarification"):
             clarifications.append(period_check["clarification"])
 
+        # Return clarifications (no fallback - trust LLM tools)
+        if clarifications:
+            return {
+                "status": "needs_clarification",
+                "clarifications": clarifications,
+            }
+        else:
+            # No clarifications provided - this is an error
+            return {
+                "status": "error",
+                "error": "Clarification needed but no questions provided by LLM",
+            }
+    else:
+        # Unexpected status
         return {
-            "status": "needs_clarification",
-            "clarifications": (
-                clarifications
-                if clarifications
-                else ["Please provide more details about your query."]
-            ),
+            "status": "error",
+            "error": f"Unexpected bank extraction status: {bank_result.get('status')}",
         }
