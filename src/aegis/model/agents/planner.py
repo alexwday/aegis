@@ -492,19 +492,6 @@ async def plan_database_queries(
                         "cost": cost,
                     }
 
-                elif function_name == "no_databases_needed":
-                    reason = function_args.get("reason", "")
-
-                    logger.info("planner.no_databases", execution_id=execution_id, reason=reason)
-
-                    return {
-                        "status": "no_databases",
-                        "reason": reason,
-                        "databases": [],
-                        "tokens_used": tokens_used,
-                        "cost": cost,
-                    }
-
         # Fallback if no tool response
         return {
             "status": "error",

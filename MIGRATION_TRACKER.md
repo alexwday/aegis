@@ -17,26 +17,29 @@ This document tracks ALL changes made during the YAML refactoring migration. Use
 ## 🎯 Changes Overview
 
 ### Bug Fixes
-- [ ] `clarifier.py` - Fix bank+year key bug
-- [ ] `planner.py` - Fix bank+year key bug
+- [x] `clarifier.py` - Fix bank+year key bug
+- [x] `planner.py` - Fix bank+year key bug (2 locations)
 
 ### Infrastructure Changes
-- [ ] `prompt_loader.py` - Add tool loading support (drop-in compatible)
+- [x] `prompt_loader.py` - Add tool loading support (drop-in compatible)
 
-### YAML Refactoring (with paste zones)
-- [ ] `router.yaml` - Restructure with tools section
-- [ ] `clarifier_banks.yaml` - Restructure with tools section
-- [ ] `clarifier_periods.yaml` - Restructure with tools section
-- [ ] `planner.yaml` - Restructure with tools section
-- [ ] `response.yaml` - Restructure with tools section
-- [ ] `summarizer.yaml` - Restructure with tools section
+### YAML Refactoring (complete builds, no fallbacks)
+- [x] `router.yaml` - Complete refactor with conversational user template
+- [x] `clarifier_banks.yaml` - Complete refactor with conversational user template
+- [x] `clarifier_periods.yaml` - Complete refactor with conversational user template
+- [x] `planner.yaml` - Complete refactor with conversational user template
+- [x] `response.yaml` - Complete refactor with conversational user template
+- [ ] `summarizer.yaml` - Pending (team modified this one)
 
 ### Agent Code Updates
-- [ ] `router.py` - Load tools from YAML
-- [ ] `clarifier.py` - Load tools from YAML
-- [ ] `planner.py` - Load tools from YAML
-- [ ] `response.py` - Load tools from YAML
-- [ ] `summarizer.py` - Load tools from YAML + extract hardcoded prompts
+- [x] `router.py` - Load tools from YAML (no fallback)
+- [x] `clarifier.py` - Load tools from YAML (no fallback)
+- [x] `planner.py` - Load tools from YAML (no fallback)
+- [x] `response.py` - Load tools from YAML (no fallback)
+- [ ] `summarizer.py` - Pending
+
+### Architectural Changes
+- [x] **Removed `no_databases_needed` tool from planner**: Router already decides if data is needed, so planner shouldn't have a "no databases" option. Cleaner architecture with single-purpose agents.
 
 ---
 

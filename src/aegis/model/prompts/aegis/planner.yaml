@@ -77,7 +77,6 @@ system_prompt: |
   ❌ DON'T select databases that are not in the available list
   ❌ DON'T ignore database pairing rules when both databases are available
   ❌ DON'T mix commentary databases with metric databases unnecessarily
-  ❌ DON'T return no_databases if ANY relevant database is available
   
   ═══════════════════════════════════════════════════════════════════════════
   VALIDATION CHECKLIST - MANDATORY VERIFICATION
@@ -130,15 +129,3 @@ tool_definitions:
             type: "string"
             description: "Brief explanation of why these databases were selected"
         required: ["databases"]
-
-  - type: "function"
-    function:
-      name: "no_databases_needed"
-      description: "Explain why no databases are needed for this query"
-      parameters:
-        type: "object"
-        properties:
-          reason:
-            type: "string"
-            description: "Explanation of why no databases are needed"
-        required: ["reason"]
