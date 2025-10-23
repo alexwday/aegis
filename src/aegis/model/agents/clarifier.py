@@ -325,12 +325,12 @@ async def extract_banks(
         if globals_prompt:
             prompt_parts.append(globals_prompt)
 
-        # Add bank index context (dynamic data)
-        prompt_parts.append(bank_prompt)
-
         # Add clarifier system prompt
         agent_system_prompt = clarifier_data.get("system_prompt", "")
         prompt_parts.append(agent_system_prompt.strip())
+
+        # Add bank index context (dynamic data at END)
+        prompt_parts.append(bank_prompt)
 
         system_prompt = "\n\n".join(prompt_parts)
 
@@ -540,7 +540,11 @@ async def extract_periods(
         if globals_prompt:
             prompt_parts.append(globals_prompt)
 
-        # Add period availability context if we have banks (dynamic data)
+        # Add clarifier system prompt
+        agent_system_prompt = clarifier_data.get("system_prompt", "")
+        prompt_parts.append(agent_system_prompt.strip())
+
+        # Add period availability context if we have banks (dynamic data at END)
         if bank_ids:
             availability_text = "\n<period_availability>\n"
 
@@ -590,10 +594,6 @@ async def extract_periods(
 
             availability_text += "</period_availability>\n"
             prompt_parts.append(availability_text)
-
-        # Add clarifier system prompt
-        agent_system_prompt = clarifier_data.get("system_prompt", "")
-        prompt_parts.append(agent_system_prompt.strip())
 
         # Add context about whether we have banks (dynamic data)
         if bank_ids:

@@ -337,12 +337,12 @@ async def plan_database_queries(
         if globals_prompt:
             prompt_parts.append(globals_prompt)
 
-        # Add availability table (dynamic data)
-        prompt_parts.append(availability_data["table"])
-
         # Add planner system prompt
         agent_system_prompt = planner_data.get("system_prompt", "")
         prompt_parts.append(agent_system_prompt.strip())
+
+        # Add availability table (dynamic data at END)
+        prompt_parts.append(availability_data["table"])
 
         system_prompt = "\n\n".join(prompt_parts)
 
