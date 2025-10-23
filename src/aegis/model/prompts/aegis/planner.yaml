@@ -101,13 +101,16 @@ system_prompt: |
   - Only select databases that are shown as available in the system
 
 user_prompt_template: |
+  I need to determine which databases to query for this user request.
+
+  Recent conversation context:
   {conversation_context}
 
-  Latest query: {query}
+  The user's latest query: "{query}"
 
-  Comprehensive intent: {query_intent}
+  After analyzing the conversation, I understand the comprehensive intent is: {query_intent}
 
-  Based on the comprehensive intent above and the availability table, determine which databases should be queried. Select ONLY the databases that have relevant data for this request.
+  Based on this intent, the availability table above, and the database descriptions, which databases should I query to fulfill this request?
 
 tool_definitions:
   - type: "function"

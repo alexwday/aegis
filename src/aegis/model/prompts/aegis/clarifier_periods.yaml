@@ -156,11 +156,12 @@ system_prompt: |
   5. Example: If Q4 2025 doesn't exist in ANY database, then clarify it's not available yet
   </validation_rules>
 
-user_prompt_template_with_history: |
-  Based on the conversation above and this latest message, extract the time periods being discussed: {query}
+user_prompt_template: |
+  I'm analyzing a query to identify which fiscal periods (years and quarters) the user is referring to.
 
-user_prompt_template_no_history: |
-  Extract periods from this query: {query}
+  The user asked: "{query}"
+
+  Based on the conversation context above and the fiscal period availability shown, which periods should be extracted for these banks?
 
 # All tool definitions - Python code will filter which ones to use based on bank_ids parameter
 tool_definitions:

@@ -87,3 +87,8 @@ system_prompt: |
       Response: "The efficiency ratio is a general financial metric that measures operational efficiency by comparing non-interest expenses to revenue. It shows what percentage of revenue is consumed by operating costs. For example, a 50% efficiency ratio means the bank spends $0.50 to generate $1 of revenue. Lower ratios indicate better efficiency. This is a general definition - would you like me to look up specific efficiency ratio data for any bank?"
     </examples>
   </prompt>
+
+user_prompt_template: |
+  The user just asked: "{latest_message}"
+
+  Based on the conversation context above, how should I respond to this query without accessing any databases?

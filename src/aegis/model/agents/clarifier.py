@@ -335,13 +335,9 @@ async def extract_banks(
             for msg in messages[:-1]:
                 llm_messages.append(msg)
 
-        # Load and format user prompt template based on conversation history
-        if messages and len(messages) > 1:
-            user_prompt_template = clarifier_data.get("user_prompt_template_with_history", "")
-            user_content = user_prompt_template.format(query=query)
-        else:
-            user_prompt_template = clarifier_data.get("user_prompt_template_no_history", "")
-            user_content = user_prompt_template.format(query=query)
+        # Load and format user prompt template
+        user_prompt_template = clarifier_data.get("user_prompt_template", "")
+        user_content = user_prompt_template.format(query=query)
 
         llm_messages.append({"role": "user", "content": user_content})
 
@@ -623,13 +619,9 @@ async def extract_periods(
             for msg in messages[:-1]:
                 llm_messages.append(msg)
 
-        # Load and format user prompt template based on conversation history
-        if messages and len(messages) > 1:
-            user_prompt_template = clarifier_data.get("user_prompt_template_with_history", "")
-            user_content = user_prompt_template.format(query=query)
-        else:
-            user_prompt_template = clarifier_data.get("user_prompt_template_no_history", "")
-            user_content = user_prompt_template.format(query=query)
+        # Load and format user prompt template
+        user_prompt_template = clarifier_data.get("user_prompt_template", "")
+        user_content = user_prompt_template.format(query=query)
 
         llm_messages.append({"role": "user", "content": user_content})
 

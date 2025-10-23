@@ -103,8 +103,14 @@ async def generate_response(
         for msg in conversation_history[-10:]:
             messages.append({"role": msg.get("role", "user"), "content": msg.get("content", "")})
 
-        # Add current query
-        messages.append({"role": "user", "content": latest_message})
+        # Load and format user prompt template
+        user_prompt_template = response_data.get("user_prompt_template", "")
+        if user_prompt_template:
+            user_content = user_prompt_template.format(latest_message=latest_message)
+            messages.append({"role": "user", "content": user_content})
+        else:
+            # Fallback to direct message if no template (shouldn't happen)
+            messages.append({"role": "user", "content": latest_message})
 
         # Determine model tier - response agent uses large model by default for best quality
         from ...utils.settings import config
