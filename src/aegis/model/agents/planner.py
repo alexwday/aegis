@@ -37,10 +37,12 @@ async def get_filtered_availability_table(
     logger = get_logger()
 
     # Debug what we're receiving
-    logger.debug("get_filtered_availability_table params",
-                bank_ids=bank_ids,
-                periods=periods,
-                available_databases=available_databases)
+    logger.debug(
+        "get_filtered_availability_table params",
+        bank_ids=bank_ids,
+        periods=periods,
+        available_databases=available_databases,
+    )
 
     try:
         # Build query to get availability for specific banks and periods
@@ -98,10 +100,14 @@ async def get_filtered_availability_table(
                 # Same period for all banks
                 period_info = periods["apply_all"]
                 # Debug logging
-                logger.debug("Checking apply_all period_info", period_info=period_info, fiscal_year=fiscal_year, quarter=quarter)
-                if (
-                    fiscal_year == period_info.get("fiscal_year")
-                    and quarter in period_info.get("quarters", [])
+                logger.debug(
+                    "Checking apply_all period_info",
+                    period_info=period_info,
+                    fiscal_year=fiscal_year,
+                    quarter=quarter,
+                )
+                if fiscal_year == period_info.get("fiscal_year") and quarter in period_info.get(
+                    "quarters", []
                 ):
                     period_match = True
             else:
@@ -159,9 +165,7 @@ async def get_filtered_availability_table(
         if available_databases:
             final_available_dbs = available_dbs_set.intersection(set(available_databases))
 
-        table_lines.append(
-            "\nSummary of available databases across all requested banks/periods:"
-        )
+        table_lines.append("\nSummary of available databases across all requested banks/periods:")
         table_lines.append(", ".join(sorted(final_available_dbs)))
         table_lines.append("</availability_table>\n")
 
@@ -173,10 +177,13 @@ async def get_filtered_availability_table(
 
     except Exception as e:
         import traceback
-        logger.error("Failed to get filtered availability",
-                    error=str(e),
-                    error_type=type(e).__name__,
-                    traceback=traceback.format_exc())
+
+        logger.error(
+            "Failed to get filtered availability",
+            error=str(e),
+            error_type=type(e).__name__,
+            traceback=traceback.format_exc(),
+        )
         return {
             "availability": {},
             "available_databases": [],
@@ -273,7 +280,7 @@ async def plan_database_queries(
                 bank_specific_periods[composite_key] = {
                     "bank_id": bank_id,
                     "fiscal_year": fiscal_year,
-                    "quarters": []
+                    "quarters": [],
                 }
             if quarter not in bank_specific_periods[composite_key]["quarters"]:
                 bank_specific_periods[composite_key]["quarters"].append(quarter)
@@ -304,7 +311,9 @@ async def plan_database_queries(
             )
         else:
             # Different periods per bank
-            period_info = {str(bid): period_data for bid, period_data in bank_specific_periods.items()}
+            period_info = {
+                str(bid): period_data for bid, period_data in bank_specific_periods.items()
+            }
             logger.debug(
                 "planner.period_structure",
                 execution_id=execution_id,
@@ -356,7 +365,7 @@ async def plan_database_queries(
         user_message = user_prompt_template.format(
             conversation_context=conversation_context,
             query=query,
-            query_intent=query_intent if query_intent else "not_specified"
+            query_intent=query_intent if query_intent else "not_specified",
         )
 
         # Create messages
@@ -462,5 +471,11 @@ async def plan_database_queries(
 
     except Exception as e:
         import traceback
-        logger.error("planner.error", execution_id=execution_id, error=str(e), traceback=traceback.format_exc())
+
+        logger.error(
+            "planner.error",
+            execution_id=execution_id,
+            error=str(e),
+            traceback=traceback.format_exc(),
+        )
         return {"status": "error", "error": str(e)}

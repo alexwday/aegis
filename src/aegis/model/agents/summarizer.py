@@ -98,8 +98,7 @@ Response:
         # Load and format user prompt template
         user_prompt_template = summarizer_data.get("user_prompt_template", "")
         user_message = user_prompt_template.format(
-            user_query=latest_message,
-            database_responses=all_responses
+            user_query=latest_message, database_responses=all_responses
         )
 
         # Build messages for the LLM

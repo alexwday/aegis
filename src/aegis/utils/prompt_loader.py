@@ -53,7 +53,9 @@ def _load_fiscal_prompt() -> str:
     return fiscal_module.get_fiscal_statement()
 
 
-def _load_global_prompts(uses_global: list, available_databases: Optional[List[str]] = None) -> list:
+def _load_global_prompts(
+    uses_global: list, available_databases: Optional[List[str]] = None
+) -> list:
     """
     Load global prompts in canonical order.
 
@@ -78,6 +80,7 @@ def _load_global_prompts(uses_global: list, available_databases: Optional[List[s
         elif global_name == "database":
             # Use filtered database prompt from database_filter utility
             from .database_filter import get_database_prompt
+
             database_prompt = get_database_prompt(available_databases)
             prompt_parts.append(database_prompt)
         else:
@@ -219,9 +222,7 @@ def list_available_prompts() -> Dict[str, list]:
 
 
 def load_tools_from_yaml(
-    prompt_name: str,
-    agent_type: str = "agent",
-    execution_id: Optional[str] = None
+    prompt_name: str, agent_type: str = "agent", execution_id: Optional[str] = None
 ) -> Optional[List[Dict[str, Any]]]:
     """
     Load tool definitions from a YAML file.
@@ -256,7 +257,7 @@ def load_tools_from_yaml(
                 "prompt_loader.load_tools.file_not_found",
                 prompt_name=prompt_name,
                 agent_type=agent_type,
-                execution_id=execution_id
+                execution_id=execution_id,
             )
             return None
 
@@ -269,7 +270,7 @@ def load_tools_from_yaml(
                 "prompt_loader.load_tools.loaded_singular",
                 prompt_name=prompt_name,
                 tool_count=1,
-                execution_id=execution_id
+                execution_id=execution_id,
             )
             return formatted
 
@@ -281,7 +282,7 @@ def load_tools_from_yaml(
                     "prompt_loader.load_tools.invalid_format",
                     prompt_name=prompt_name,
                     message="tool_definitions must be a list",
-                    execution_id=execution_id
+                    execution_id=execution_id,
                 )
                 return None
 
@@ -290,15 +291,13 @@ def load_tools_from_yaml(
                 "prompt_loader.load_tools.loaded_plural",
                 prompt_name=prompt_name,
                 tool_count=len(tool_defs),
-                execution_id=execution_id
+                execution_id=execution_id,
             )
             return formatted
 
         # No tools defined in YAML
         logger.debug(
-            "prompt_loader.load_tools.no_tools",
-            prompt_name=prompt_name,
-            execution_id=execution_id
+            "prompt_loader.load_tools.no_tools", prompt_name=prompt_name, execution_id=execution_id
         )
         return None
 
@@ -308,7 +307,7 @@ def load_tools_from_yaml(
             prompt_name=prompt_name,
             agent_type=agent_type,
             error=str(e),
-            execution_id=execution_id
+            execution_id=execution_id,
         )
         return None
 

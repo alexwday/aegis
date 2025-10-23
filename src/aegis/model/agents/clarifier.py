@@ -631,7 +631,8 @@ async def extract_periods(
             tools = [
                 tool
                 for tool in all_tools
-                if tool["function"]["name"] in ["periods_all", "periods_specific", "period_clarification"]
+                if tool["function"]["name"]
+                in ["periods_all", "periods_specific", "period_clarification"]
             ]
         else:
             # Limited tools when banks need clarification
@@ -750,15 +751,22 @@ async def extract_periods(
                             "cost": cost,
                         }
                     else:
-                        # periods_clear=False means LLM should have called period_clarification instead
+                        # periods_clear=False means LLM should have called
+                        # period_clarification instead
                         logger.error(
                             "clarifier.periods.invalid_tool_use",
                             execution_id=execution_id,
-                            error="LLM called periods_valid with False (should use period_clarification)",
+                            error=(
+                                "LLM called periods_valid with False "
+                                "(should use period_clarification)"
+                            ),
                         )
                         return {
                             "status": "error",
-                            "error": "LLM called periods_valid with False (should use period_clarification tool)",
+                            "error": (
+                                "LLM called periods_valid with False "
+                                "(should use period_clarification tool)"
+                            ),
                             "tokens_used": tokens_used,
                             "cost": cost,
                         }
@@ -981,7 +989,9 @@ async def clarify_query(
     if bank_result["status"] == "success":
         # We have banks, extract periods for them
         bank_ids = bank_result.get("bank_ids", [])
-        period_result = await extract_periods(query, bank_ids, context, available_databases, messages)
+        period_result = await extract_periods(
+            query, bank_ids, context, available_databases, messages
+        )
 
         # Handle period extraction error
         if period_result.get("status") == "error":

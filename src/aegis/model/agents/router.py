@@ -68,12 +68,10 @@ async def route_query(
         # Build user message from template (limit to last 10 messages for context)
         user_prompt_template = router_data.get("user_prompt_template", "")
         conversation_json = json.dumps(
-            conversation_history[-10:] if conversation_history else [],
-            indent=2
+            conversation_history[-10:] if conversation_history else [], indent=2
         )
         user_content = user_prompt_template.format(
-            conversation_history=conversation_json,
-            current_query=latest_message
+            conversation_history=conversation_json, current_query=latest_message
         )
 
         # Create messages for LLM

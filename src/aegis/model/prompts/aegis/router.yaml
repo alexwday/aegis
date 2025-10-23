@@ -176,27 +176,27 @@ user_prompt_template: |
 
   Based on this conversation context and the current query, should I route this to direct response (0) or research workflow (1)?
 
-tool_definition:
-  type: "function"
-  function:
-    name: "route"
-    description: |
-      Determine the optimal processing path for the user query.
-      Returns a binary routing decision to either handle the query directly
-      using conversation history or trigger the research workflow for database retrieval.
-    parameters:
-      type: "object"
-      properties:
-        routing_decision:
-          type: "integer"
-          enum: [0, 1]
-          description: |
-            Binary routing decision:
-            - 0 = direct_response: Handle query using conversation history only.
-                  Use for greetings, system questions, general definitions, and
-                  reformatting existing data. No database access required.
-            - 1 = research_workflow: Trigger database retrieval workflow.
-                  Use for specific financial data requests, entity mentions requiring
-                  current data, follow-up data requests, and any query where database
-                  access would provide value. When uncertain, choose 1.
-      required: ["routing_decision"]
+tool_definitions:
+  - type: "function"
+    function:
+      name: "route"
+      description: |
+        Determine the optimal processing path for the user query.
+        Returns a binary routing decision to either handle the query directly
+        using conversation history or trigger the research workflow for database retrieval.
+      parameters:
+        type: "object"
+        properties:
+          routing_decision:
+            type: "integer"
+            enum: [0, 1]
+            description: |
+              Binary routing decision:
+              - 0 = direct_response: Handle query using conversation history only.
+                    Use for greetings, system questions, general definitions, and
+                    reformatting existing data. No database access required.
+              - 1 = research_workflow: Trigger database retrieval workflow.
+                    Use for specific financial data requests, entity mentions requiring
+                    current data, follow-up data requests, and any query where database
+                    access would provide value. When uncertain, choose 1.
+        required: ["routing_decision"]
