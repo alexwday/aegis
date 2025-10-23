@@ -9,7 +9,7 @@ original query while preserving source attribution.
 from typing import Any, AsyncGenerator, Dict, List
 from ...connections.llm_connector import stream
 from ...utils.logging import get_logger
-from ...utils.prompt_loader import load_yaml
+from ...utils.prompt_loader import load_yaml, load_global_prompts_for_agent
 
 
 async def synthesize_responses(
@@ -54,62 +54,24 @@ async def synthesize_responses(
 
         # Load summarizer prompt
         summarizer_data = load_yaml("aegis/summarizer.yaml")
-        # prompt_version = summarizer_data.get("version", "unknown")
-        # prompt_last_updated = summarizer_data.get("last_updated", "unknown")
+
+        # Load global context (uses_global from YAML)
+        available_dbs = context.get("available_databases", [])
+        uses_global = summarizer_data.get("uses_global", [])
+        globals_prompt = load_global_prompts_for_agent(uses_global, available_dbs)
+
+        # Build system prompt
         prompt_parts = []
+        if globals_prompt:
+            prompt_parts.append(globals_prompt)
 
-        # Add global context prompts
-        try:
-            project_data = load_yaml("global/project.yaml")
-            if "content" in project_data:
-                prompt_parts.append(project_data["content"].strip())
-        except Exception:
-            pass
+        agent_system_prompt = summarizer_data.get("system_prompt", "")
+        if agent_system_prompt:
+            prompt_parts.append(agent_system_prompt.strip())
 
-        try:
-            restrictions_data = load_yaml("global/restrictions.yaml")
-            if "content" in restrictions_data:
-                prompt_parts.append(restrictions_data["content"].strip())
-        except Exception:
-            pass
+        system_prompt = "\n\n---\n\n".join(prompt_parts)
 
-        # Add summarizer-specific prompt
-        if "content" in summarizer_data:
-            prompt_parts.append(summarizer_data["content"].strip())
-
-        # Build the synthesis-specific instructions
-        synthesis_instructions = """
-<synthesis_instructions>
-You are providing a QUICK SUMMARY of the database responses. Full details are available in the
-dropdown menus BELOW this message.
-
-CRITICAL INSTRUCTION: The dropdown menus are positioned BELOW this summary message.
-NEVER say "above" - ALWAYS say "below" when referring to the dropdowns.
-
-Your task:
-1. Give a direct, one-sentence answer to the user's question
-2. Highlight 2-3 KEY findings only (the most important metrics/insights)
-3. Tell the user which dropdown BELOW contains which type of information
-4. Keep it BRIEF - under 200 words total
-
-User's Original Query: {user_query}
-
-Database Responses (full details in dropdowns BELOW):
-{database_responses}
-
-Format:
-- Paragraph 1: Direct answer with 2-3 key metrics
-- Paragraph 2: Brief guide to dropdowns BELOW (e.g., "See Benchmarking dropdown below for full
-  metrics, Transcripts dropdown below for management commentary")
-- DO NOT reproduce all the data - users can expand dropdowns BELOW for that
-- Focus on the ESSENTIAL takeaway only
-
-REMINDER: The dropdowns are BELOW this message. Always use "below" when referring to them.
-Never use "above".
-</synthesis_instructions>
-"""
-
-        # Format database responses for the prompt
+        # Format database responses for the user prompt
         formatted_responses = []
         for resp in database_responses:
             db_id = resp.get("database_id", "unknown")
@@ -133,10 +95,11 @@ Response:
         # Combine all responses
         all_responses = "\n".join(formatted_responses)
 
-        # Build the complete system prompt
-        system_prompt = "\n\n---\n\n".join(prompt_parts)
-        system_prompt += synthesis_instructions.format(
-            user_query=latest_message, database_responses=all_responses
+        # Load and format user prompt template
+        user_prompt_template = summarizer_data.get("user_prompt_template", "")
+        user_message = user_prompt_template.format(
+            user_query=latest_message,
+            database_responses=all_responses
         )
 
         # Build messages for the LLM
@@ -146,19 +109,8 @@ Response:
         for msg in conversation_history[-5:]:
             messages.append({"role": msg.get("role", "user"), "content": msg.get("content", "")})
 
-        # Add the synthesis request
-        messages.append(
-            {
-                "role": "user",
-                "content": (
-                    f"Provide a BRIEF summary (under 200 words) for: {latest_message}\n\n"
-                    "IMPORTANT: The dropdown menus are positioned BELOW this summary. "
-                    "When referencing them, ALWAYS say 'below' (e.g., 'See the Benchmarking "
-                    "dropdown below'). NEVER say 'above'. Give only key findings and direct "
-                    "users to the dropdowns BELOW for full details."
-                ),
-            }
-        )
+        # Add user message with database responses and synthesis request
+        messages.append({"role": "user", "content": user_message})
 
         # Determine model - use large model for best synthesis quality
         from ...utils.settings import config

@@ -5,7 +5,7 @@ uses_global:
   - project
   - restrictions
 
-content: |
+system_prompt: |
   <prompt>
     <context>
       You are the Quick Summary Agent for Aegis. Your role is to provide a concise, 
@@ -81,3 +81,14 @@ content: |
       <step>4. Craft concise summary with dropdown references</step>
     </chain_of_thought>
   </prompt>
+
+user_prompt_template: |
+  User's original query: "{user_query}"
+
+  Database responses (full details available in dropdowns below):
+  {database_responses}
+
+  Provide a concise summary that:
+  1. Directly answers the user's question with 2-3 key findings
+  2. Guides them to specific dropdowns below for detailed information
+  3. Keeps the summary under 200 words
