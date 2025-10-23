@@ -10,7 +10,7 @@ from typing import Any, Dict, List
 
 from ...connections.llm_connector import complete_with_tools
 from ...utils.logging import get_logger
-from ...utils.prompt_loader import load_yaml
+from ...utils.prompt_loader import load_yaml, load_tools_from_yaml
 
 
 async def route_query(
@@ -42,12 +42,14 @@ async def route_query(
     execution_id = context.get("execution_id")
 
     try:
-        # Load base router prompt with project context
+        # Load router YAML
         router_data = load_yaml("aegis/router.yaml")
 
         # Extract version info for tracking
         prompt_version = router_data.get("version", "unknown")
         prompt_last_updated = router_data.get("last_updated", "unknown")
+
+        # Load global context
         prompt_parts = []
 
         # Add project context
@@ -55,67 +57,42 @@ async def route_query(
         if "content" in project_data:
             prompt_parts.append(project_data["content"].strip())
 
-        # Add filtered database context from main
+        # Add database context from main
         if context.get("database_prompt"):
             prompt_parts.append(context["database_prompt"])
 
-        # Add router-specific content
-        if "content" in router_data:
-            prompt_parts.append(router_data["content"].strip())
-
-        router_prompt = "\n\n---\n\n".join(prompt_parts)
-
-        # Format conversation context for router
-        conversation_context = {
-            "conversation_history": conversation_history[-10:] if conversation_history else [],
-            "current_query": latest_message,
-        }
-
-        # Build user message content
-        conversation_json = json.dumps(conversation_context["conversation_history"], indent=2)
-        current_query = conversation_context["current_query"]
-        user_content = f"Conversation: {conversation_json}\nCurrent query: {current_query}"
-
-        # Add available databases from context
+        # Build system prompt with available databases
+        system_prompt_template = router_data.get("system_prompt", "")
         available_dbs = context.get("available_databases", [])
-        if available_dbs:
-            user_content += f"\nAvailable databases: {', '.join(available_dbs)}"
+        available_dbs_str = ', '.join(available_dbs) if available_dbs else "None specified"
+
+        system_prompt = system_prompt_template.format(available_databases=available_dbs_str)
+        prompt_parts.append(system_prompt)
+
+        # Join all parts
+        final_system_prompt = "\n\n---\n\n".join(prompt_parts)
+
+        # Build user message from template
+        user_prompt_template = router_data.get("user_prompt_template", "")
+        conversation_json = json.dumps(
+            conversation_history[-10:] if conversation_history else [],
+            indent=2
+        )
+        user_content = user_prompt_template.format(
+            conversation_history=conversation_json,
+            current_query=latest_message
+        )
 
         # Create messages for LLM
         messages = [
-            {"role": "system", "content": router_prompt},
+            {"role": "system", "content": final_system_prompt},
             {"role": "user", "content": user_content},
         ]
 
-        # Extract tool definition from prompt
-        tool_def = None
-        if "tool_definition: |" in router_prompt:
-            tool_json = router_prompt.split("tool_definition: |")[1].strip()
-            tool_def = json.loads(tool_json)
-        else:
-            # Fallback tool definition (binary)
-            tool_def = {
-                "name": "route",
-                "description": "Binary routing decision: 0=direct_response, 1=research_workflow",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "r": {
-                            "type": "integer",
-                            "enum": [0, 1],
-                            "description": "0=direct_response, 1=research_workflow",
-                        },
-                    },
-                    "required": ["r"],
-                },
-            }
+        # Load tools from YAML (no fallback - let it fail if missing)
+        tools = load_tools_from_yaml("router", execution_id=execution_id)
 
-        # Define the routing tool
-        tools = [{"type": "function", "function": tool_def}]
-
-        # Call LLM with tool
-        # Router uses medium model for fast, accurate binary decisions
-        # Get model based on override or default to medium
+        # Get model configuration
         from ...utils.settings import config
 
         model_tier_override = context.get("model_tier_override")
@@ -126,6 +103,7 @@ async def route_query(
         else:
             model = config.llm.medium.model  # Default to medium
 
+        # Call LLM with tools
         response = await complete_with_tools(
             messages=messages,
             tools=tools,
@@ -152,7 +130,7 @@ async def route_query(
                 binary_route = function_args.get("r")
                 route = "direct_response" if binary_route == 0 else "research_workflow"
 
-                # For binary response, we generate simple rationale based on route
+                # Generate simple rationale based on route
                 if binary_route == 0:
                     rationale = "Direct response from conversation history"
                 else:
@@ -202,9 +180,9 @@ async def route_query(
         "status": "Success",
         "route": "research_workflow",
         "rationale": "Defaulting to research workflow - no clear routing decision",
-        "tokens_used": usage.get("total_tokens", 0),
-        "cost": metrics.get("total_cost", 0),
-        "response_time_ms": metrics.get("response_time", 0) * 1000,
+        "tokens_used": usage.get("total_tokens", 0) if "usage" in locals() else 0,
+        "cost": metrics.get("total_cost", 0) if "metrics" in locals() else 0,
+        "response_time_ms": metrics.get("response_time", 0) * 1000 if "metrics" in locals() else 0,
         "prompt_version": prompt_version,
         "prompt_last_updated": prompt_last_updated,
     }
