@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Optional
 from ...connections.postgres_connector import fetch_all
 from ...connections.llm_connector import complete_with_tools
 from ...utils.logging import get_logger
-from ...utils.prompt_loader import load_yaml
+from ...utils.prompt_loader import load_yaml, load_tools_from_yaml
 from ...utils.settings import config
 
 
@@ -380,9 +380,9 @@ async def plan_database_queries(
         # Add database descriptions
         prompt_parts.append(database_descriptions)
 
-        # Add planner instructions
-        if "content" in planner_data:
-            prompt_parts.append(planner_data["content"].strip())
+        # Add planner system prompt
+        system_prompt_template = planner_data.get("system_prompt", "")
+        prompt_parts.append(system_prompt_template.strip())
 
         system_prompt = "\n\n".join(prompt_parts)
 
@@ -391,14 +391,12 @@ async def plan_database_queries(
         for msg in conversation[-5:]:  # Last 5 messages for context
             conversation_context += f"{msg['role']}: {msg['content']}\n"
 
-        # Build user message with intent if available
-        user_message = f"{conversation_context}\n\nLatest query: {query}\n\n"
-        if query_intent:
-            user_message += f"Comprehensive intent: {query_intent}\n\n"
-        user_message += (
-            "Based on the comprehensive intent above and the availability table, "
-            "determine which databases should be queried. "
-            "Select ONLY the databases that have relevant data for this request."
+        # Load and format user prompt template
+        user_prompt_template = planner_data.get("user_prompt_template", "")
+        user_message = user_prompt_template.format(
+            conversation_context=conversation_context,
+            query=query,
+            query_intent=query_intent if query_intent else "not_specified"
         )
 
         # Create messages
@@ -407,51 +405,8 @@ async def plan_database_queries(
             {"role": "user", "content": user_message},
         ]
 
-        # Define tools for database planning
-        tools = [
-            {
-                "type": "function",
-                "function": {
-                    "name": "databases_selected",
-                    "description": "Return the list of databases to query",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "databases": {
-                                "type": "array",
-                                "items": {
-                                    "type": "string",
-                                    "description": "The database ID (e.g., 'transcripts', 'supplementary', 'pillar3', 'reports', 'rts')",
-                                },
-                                "description": "List of database IDs to query",
-                            },
-                            "rationale": {
-                                "type": "string",
-                                "description": "Brief explanation of why these databases were selected",
-                            },
-                        },
-                        "required": ["databases"],
-                    },
-                },
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "no_databases_needed",
-                    "description": "Explain why no databases are needed for this query",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "reason": {
-                                "type": "string",
-                                "description": "Explanation of why no databases are needed",
-                            }
-                        },
-                        "required": ["reason"],
-                    },
-                },
-            },
-        ]
+        # Load tools from YAML (no fallback)
+        tools = load_tools_from_yaml("planner", execution_id=execution_id)
 
         # Call LLM with tools
         model_tier_override = context.get("model_tier_override")

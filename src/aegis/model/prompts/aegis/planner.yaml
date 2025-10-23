@@ -2,7 +2,8 @@ name: planner
 version: "1.0.0"
 last_updated: "2025-08-25"
 uses_global: []  # Database content will be dynamically inserted
-content: |
+
+system_prompt: |
   You are the Planner Agent responsible for selecting which databases to query.
   
   Your task is to:
@@ -98,3 +99,43 @@ content: |
   - Check the availability table to ensure the database has data for the requested banks/periods
   - If a database doesn't have coverage for the specific banks/periods, do NOT select it
   - Only select databases that are shown as available in the system
+
+user_prompt_template: |
+  {conversation_context}
+
+  Latest query: {query}
+
+  Comprehensive intent: {query_intent}
+
+  Based on the comprehensive intent above and the availability table, determine which databases should be queried. Select ONLY the databases that have relevant data for this request.
+
+tool_definitions:
+  - type: "function"
+    function:
+      name: "databases_selected"
+      description: "Return the list of databases to query"
+      parameters:
+        type: "object"
+        properties:
+          databases:
+            type: "array"
+            items:
+              type: "string"
+              description: "The database ID (e.g., 'transcripts', 'supplementary', 'pillar3', 'reports', 'rts')"
+            description: "List of database IDs to query"
+          rationale:
+            type: "string"
+            description: "Brief explanation of why these databases were selected"
+        required: ["databases"]
+
+  - type: "function"
+    function:
+      name: "no_databases_needed"
+      description: "Explain why no databases are needed for this query"
+      parameters:
+        type: "object"
+        properties:
+          reason:
+            type: "string"
+            description: "Explanation of why no databases are needed"
+        required: ["reason"]
