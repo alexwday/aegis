@@ -72,7 +72,7 @@ async def route_query(
         # Join all parts
         final_system_prompt = "\n\n---\n\n".join(prompt_parts)
 
-        # Build user message from template
+        # Build user message from template (limit to last 10 messages for context)
         user_prompt_template = router_data.get("user_prompt_template", "")
         conversation_json = json.dumps(
             conversation_history[-10:] if conversation_history else [],
@@ -92,7 +92,7 @@ async def route_query(
         # Load tools from YAML (no fallback - let it fail if missing)
         tools = load_tools_from_yaml("router", execution_id=execution_id)
 
-        # Get model configuration
+        # Get model configuration (medium is optimal for fast binary decisions)
         from ...utils.settings import config
 
         model_tier_override = context.get("model_tier_override")
@@ -101,7 +101,7 @@ async def route_query(
         elif model_tier_override == "large":
             model = config.llm.large.model
         else:
-            model = config.llm.medium.model  # Default to medium
+            model = config.llm.medium.model  # Default to medium for speed and accuracy balance
 
         # Call LLM with tools
         response = await complete_with_tools(
@@ -126,8 +126,8 @@ async def route_query(
                 tool_call = message["tool_calls"][0]
                 function_args = json.loads(tool_call["function"]["arguments"])
 
-                # Handle binary response
-                binary_route = function_args.get("r")
+                # Handle binary response (property name: routing_decision)
+                binary_route = function_args.get("routing_decision")
                 route = "direct_response" if binary_route == 0 else "research_workflow"
 
                 # Generate simple rationale based on route
