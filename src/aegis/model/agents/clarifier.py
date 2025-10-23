@@ -874,11 +874,17 @@ async def extract_periods(
                     bank_periods = function_args.get("bank_periods", [])
 
                     # Convert to dictionary format
+                    # FIX: Use composite key (bank_id + fiscal_year) to prevent
+                    # multiple years for same bank from overwriting each other
                     periods = {}
                     for bp in bank_periods:
                         bank_id = str(bp["bank_id"])
-                        periods[bank_id] = {
-                            "fiscal_year": bp["fiscal_year"],
+                        fiscal_year = bp["fiscal_year"]
+                        # Create composite key to support multiple years per bank
+                        composite_key = f"{bank_id}_{fiscal_year}"
+                        periods[composite_key] = {
+                            "bank_id": bank_id,
+                            "fiscal_year": fiscal_year,
                             "quarters": bp["quarters"],
                         }
 
