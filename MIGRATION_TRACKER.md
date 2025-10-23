@@ -126,31 +126,72 @@ git commit -m "Fix clarifier bank+year dictionary key bug
 
 ### 2. `/src/aegis/model/agents/planner.py`
 
-**Status**: ⏳ Pending
+**Status**: ✅ CHANGE #1 Complete | ⏳ CHANGE #2 Pending
 
 #### Changes Made:
 ```
-CHANGE #1: Fix bank+year dictionary key bug
-  LOCATION: Lines 293-335 (process bank-period combinations loop)
-  BEFORE: Used only bank_id as dictionary key
+CHANGE #1A: Fix bank+year dictionary key bug (reading from clarifier) ✅ COMPLETED
+  LOCATION: Lines 107-115 (get_filtered_availability_table function)
+  BEFORE: Used only bank_id to read from periods dict
+  AFTER: Use composite key f"{bank_id}_{fiscal_year}"
+  REASON: Clarifier now returns composite keys; this code reads from that dict
+
+  OLD CODE (lines 107-115):
+    else:
+        # Bank-specific periods
+        if bank_id in periods:
+            period_info = periods[bank_id]
+            if (
+                fiscal_year == period_info["fiscal_year"]
+                and quarter in period_info["quarters"]
+            ):
+                period_match = True
+
+  NEW CODE (lines 107-115):
+    else:
+        # Bank-specific periods
+        # FIX: After clarifier fix, periods dict uses composite keys (bank_id_fiscal_year)
+        # Build composite key to match clarifier's new format
+        composite_key = f"{bank_id}_{fiscal_year}"
+        if composite_key in periods:
+            period_info = periods[composite_key]
+            if quarter in period_info["quarters"]:
+                period_match = True
+
+CHANGE #1B: Fix bank+year dictionary key bug (building new dict) ✅ COMPLETED
+  LOCATION: Lines 299-313 (plan_database_queries function)
+  BEFORE: Used only bank_id as dictionary key when building bank_specific_periods
   AFTER: Use composite key f"{bank_id}_{fiscal_year}"
   REASON: Multiple years for same bank were overwriting each other
 
-  OLD CODE:
-    period_results[bank_id] = {
-        "bank_id": bank_id,
-        ...
-    }
+  OLD CODE (lines 299-313):
+    # Track all unique periods
+    unique_periods.add((fiscal_year, quarter))
 
-  NEW CODE:
+    # Track per-bank periods
+    if bank_id not in bank_specific_periods:
+        bank_specific_periods[bank_id] = {"fiscal_year": fiscal_year, "quarters": []}
+    if quarter not in bank_specific_periods[bank_id]["quarters"]:
+        bank_specific_periods[bank_id]["quarters"].append(quarter)
+
+  NEW CODE (lines 299-313):
+    # Track all unique periods
+    unique_periods.add((fiscal_year, quarter))
+
+    # Track per-bank periods
+    # FIX: Use composite key (bank_id + fiscal_year) to prevent
+    # multiple years for same bank from overwriting each other
     composite_key = f"{bank_id}_{fiscal_year}"
-    period_results[composite_key] = {
-        "bank_id": bank_id,
-        "fiscal_year": fiscal_year,
-        ...
-    }
+    if composite_key not in bank_specific_periods:
+        bank_specific_periods[composite_key] = {
+            "bank_id": bank_id,
+            "fiscal_year": fiscal_year,
+            "quarters": []
+        }
+    if quarter not in bank_specific_periods[composite_key]["quarters"]:
+        bank_specific_periods[composite_key]["quarters"].append(quarter)
 
-CHANGE #2: Load tools from YAML instead of hardcoded
+CHANGE #2: Load tools from YAML instead of hardcoded (PENDING)
   LOCATION: TBD (tool definition section)
   BEFORE: Hardcoded tool definitions in Python
   AFTER: Load from planner.yaml
@@ -170,9 +211,25 @@ CHANGE #2: Load tools from YAML instead of hardcoded
 ```
 
 #### Comparison Notes for Team's Code:
-- Check if team fixed the bank+year key bug the same way
+- ✅ Compare how team fixed both bank+year key bugs (should be same approach)
 - Check if team moved tools to YAML already
 - Verify tool definitions match between versions
+
+#### Git Commit for CHANGE #1:
+```bash
+git add src/aegis/model/agents/planner.py
+git commit -m "Fix planner bank+year dictionary key bugs
+
+- Fixed bug #1A: Reading from clarifier's periods dict (lines 107-115)
+  - Changed lookup from bank_id to composite key (bank_id_fiscal_year)
+  - Matches clarifier's new composite key format
+
+- Fixed bug #1B: Building bank_specific_periods dict (lines 299-313)
+  - Changed dictionary key from bank_id to composite key (bank_id_fiscal_year)
+  - Prevents multiple years for same bank from overwriting each other
+  - Added bank_id and fiscal_year fields to dictionary values
+"
+```
 
 ---
 

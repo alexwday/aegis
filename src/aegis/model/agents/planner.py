@@ -106,12 +106,12 @@ async def get_filtered_availability_table(
                     period_match = True
             else:
                 # Bank-specific periods
-                if bank_id in periods:
-                    period_info = periods[bank_id]
-                    if (
-                        fiscal_year == period_info["fiscal_year"]
-                        and quarter in period_info["quarters"]
-                    ):
+                # FIX: After clarifier fix, periods dict uses composite keys (bank_id_fiscal_year)
+                # Build composite key to match clarifier's new format
+                composite_key = f"{bank_id}_{fiscal_year}"
+                if composite_key in periods:
+                    period_info = periods[composite_key]
+                    if quarter in period_info["quarters"]:
                         period_match = True
 
             # Only include rows that match the requested periods
@@ -300,10 +300,17 @@ async def plan_database_queries(
             unique_periods.add((fiscal_year, quarter))
 
             # Track per-bank periods
-            if bank_id not in bank_specific_periods:
-                bank_specific_periods[bank_id] = {"fiscal_year": fiscal_year, "quarters": []}
-            if quarter not in bank_specific_periods[bank_id]["quarters"]:
-                bank_specific_periods[bank_id]["quarters"].append(quarter)
+            # FIX: Use composite key (bank_id + fiscal_year) to prevent
+            # multiple years for same bank from overwriting each other
+            composite_key = f"{bank_id}_{fiscal_year}"
+            if composite_key not in bank_specific_periods:
+                bank_specific_periods[composite_key] = {
+                    "bank_id": bank_id,
+                    "fiscal_year": fiscal_year,
+                    "quarters": []
+                }
+            if quarter not in bank_specific_periods[composite_key]["quarters"]:
+                bank_specific_periods[composite_key]["quarters"].append(quarter)
 
         # Check if all banks have same periods (apply_all case)
         period_info = {}
