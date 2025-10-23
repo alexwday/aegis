@@ -235,47 +235,74 @@ git commit -m "Fix planner bank+year dictionary key bugs
 
 ### 3. `/src/aegis/utils/prompt_loader.py`
 
-**Status**: ⏳ Pending
+**Status**: ✅ Complete
 
 #### Changes Made:
 ```
-CHANGE #1: Add load_tools_from_yaml() function
-  LOCATION: New function added to module
+CHANGE #1: Add imports for new functionality ✅ COMPLETED
+  LOCATION: Lines 1-12 (module header)
+  BEFORE:
+    from typing import Dict, Any
+    import yaml
+
+  AFTER:
+    from typing import Dict, Any, List, Optional
+    import yaml
+    from .logging import get_logger
+    logger = get_logger()
+
+CHANGE #2: Add load_tools_from_yaml() function ✅ COMPLETED
+  LOCATION: Lines 188-280 (new function added before main block)
   BEFORE: Did not exist
   AFTER: Loads tools section from YAML files
   REASON: Support YAML-based tool definitions
   COMPATIBILITY: Drop-in addition, no breaking changes
 
-  NEW CODE:
+  NEW FUNCTION SIGNATURE:
     def load_tools_from_yaml(
         prompt_name: str,
-        execution_id: str = None
+        agent_type: str = "agent",
+        execution_id: Optional[str] = None
     ) -> Optional[List[Dict[str, Any]]]:
         """
-        Load tool definitions from YAML file.
+        Load tool definitions from a YAML file.
+
+        Supports the new YAML format with tool_definition or tool_definitions sections.
+        This is a drop-in compatible addition that doesn't break existing functionality.
 
         Args:
-            prompt_name: Name of the prompt file
+            prompt_name: Name of the prompt file (e.g., "router", "clarifier_banks")
+            agent_type: Either "agent" or "subagent" (default: "agent")
             execution_id: Optional execution ID for logging
 
         Returns:
-            List of tool definitions in OpenAI format, or None if no tools
+            List of tool definitions in OpenAI format, or None if no tools defined
         """
-        # Implementation details below
 
-CHANGE #2: Add format_tools_for_openai() helper function
-  LOCATION: New function added to module
+  KEY FEATURES:
+    - Supports both tool_definition (singular) and tool_definitions (plural)
+    - Works with agent and subagent YAML files
+    - Returns None if no tools found (graceful fallback)
+    - Comprehensive logging at debug/warning/error levels
+    - Validates YAML structure before returning
+
+CHANGE #3: Add format_tools_for_openai() helper function ✅ COMPLETED
+  LOCATION: Lines 283-333 (new function added before main block)
   BEFORE: Did not exist
-  AFTER: Formats YAML tools for OpenAI API
-  REASON: Convert YAML format to OpenAI API format
+  AFTER: Validates and formats YAML tools for OpenAI API
+  REASON: Ensure tools have correct OpenAI API structure
   COMPATIBILITY: Drop-in addition, no breaking changes
 
-  NEW CODE:
+  NEW FUNCTION SIGNATURE:
     def format_tools_for_openai(
         tools: List[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
         """
         Format tool definitions for OpenAI API.
+
+        Ensures tools are in the correct format expected by the LLM connector.
+        The YAML format should already be OpenAI-compatible, but this function
+        validates and normalizes the structure.
 
         Args:
             tools: Raw tool definitions from YAML
@@ -283,13 +310,41 @@ CHANGE #2: Add format_tools_for_openai() helper function
         Returns:
             Formatted tools for OpenAI API
         """
-        # Implementation details below
+
+  VALIDATION:
+    - Checks each tool is a dictionary
+    - Ensures 'type' field exists
+    - Validates 'function' field for function tools
+    - Skips invalid tools with warnings
+    - Returns only validated tools
 ```
 
 #### Comparison Notes for Team's Code:
-- Check if team added similar tool loading functions
-- Verify function signatures match
-- Test that drop-in replacement works with their code
+- ✅ Check if team added similar tool loading functions
+- ✅ Verify function signatures match
+- ✅ Test that drop-in replacement works with their code
+- ✅ Ensure logging calls work in their environment
+
+#### Git Commit:
+```bash
+git add src/aegis/utils/prompt_loader.py
+git commit -m "Add tool loading support to prompt_loader
+
+- Added load_tools_from_yaml() function for loading tool definitions
+  - Supports both tool_definition and tool_definitions sections
+  - Works with agent and subagent YAML files
+  - Returns None for graceful fallback when no tools present
+  - Comprehensive debug/warning/error logging
+
+- Added format_tools_for_openai() helper function
+  - Validates tool structure (type, function fields)
+  - Normalizes YAML tools to OpenAI API format
+  - Skips invalid tools with warnings
+
+- Added necessary imports (List, Optional, logger)
+- Drop-in compatible - no breaking changes to existing functionality
+"
+```
 
 ---
 

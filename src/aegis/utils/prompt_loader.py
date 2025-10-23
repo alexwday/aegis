@@ -3,9 +3,13 @@ Prompt loader utility for composing agent and subagent prompts with global conte
 """
 
 from pathlib import Path
-from typing import Dict, Any
+from typing import Dict, Any, List, Optional
 
 import yaml
+
+from .logging import get_logger
+
+logger = get_logger()
 
 
 # Define the canonical order for global prompts
@@ -179,6 +183,154 @@ def list_available_prompts() -> Dict[str, list]:
         subagents = [f.stem for f in subagents_dir.glob("*.yaml")]
 
     return {"agents": sorted(agents), "subagents": sorted(subagents)}
+
+
+def load_tools_from_yaml(
+    prompt_name: str,
+    agent_type: str = "agent",
+    execution_id: Optional[str] = None
+) -> Optional[List[Dict[str, Any]]]:
+    """
+    Load tool definitions from a YAML file.
+
+    Supports the new YAML format with tool_definition or tool_definitions sections.
+    This is a drop-in compatible addition that doesn't break existing functionality.
+
+    Args:
+        prompt_name: Name of the prompt file (e.g., "router", "clarifier_banks")
+        agent_type: Either "agent" or "subagent" (default: "agent")
+        execution_id: Optional execution ID for logging
+
+    Returns:
+        List of tool definitions in OpenAI format, or None if no tools defined
+
+    Example:
+        >>> tools = load_tools_from_yaml("router")
+        >>> tools = load_tools_from_yaml("transcripts", agent_type="subagent")
+    """
+    try:
+        # Determine YAML path based on type
+        if agent_type == "subagent":
+            yaml_path = f"{prompt_name}/{prompt_name}.yaml"
+        else:
+            yaml_path = f"{agent_type}s/{prompt_name}.yaml"
+
+        # Load the YAML file
+        try:
+            agent_data = load_yaml(yaml_path)
+        except FileNotFoundError:
+            logger.warning(
+                "prompt_loader.load_tools.file_not_found",
+                prompt_name=prompt_name,
+                agent_type=agent_type,
+                execution_id=execution_id
+            )
+            return None
+
+        # Check for tool_definition (singular) - used by some agents
+        if "tool_definition" in agent_data:
+            tool_def = agent_data["tool_definition"]
+            # Format as OpenAI tool
+            formatted = format_tools_for_openai([tool_def])
+            logger.debug(
+                "prompt_loader.load_tools.loaded_singular",
+                prompt_name=prompt_name,
+                tool_count=1,
+                execution_id=execution_id
+            )
+            return formatted
+
+        # Check for tool_definitions (plural) - used by agents with multiple tools
+        if "tool_definitions" in agent_data:
+            tool_defs = agent_data["tool_definitions"]
+            if not isinstance(tool_defs, list):
+                logger.warning(
+                    "prompt_loader.load_tools.invalid_format",
+                    prompt_name=prompt_name,
+                    message="tool_definitions must be a list",
+                    execution_id=execution_id
+                )
+                return None
+
+            formatted = format_tools_for_openai(tool_defs)
+            logger.debug(
+                "prompt_loader.load_tools.loaded_plural",
+                prompt_name=prompt_name,
+                tool_count=len(tool_defs),
+                execution_id=execution_id
+            )
+            return formatted
+
+        # No tools defined in YAML
+        logger.debug(
+            "prompt_loader.load_tools.no_tools",
+            prompt_name=prompt_name,
+            execution_id=execution_id
+        )
+        return None
+
+    except Exception as e:
+        logger.error(
+            "prompt_loader.load_tools.error",
+            prompt_name=prompt_name,
+            agent_type=agent_type,
+            error=str(e),
+            execution_id=execution_id
+        )
+        return None
+
+
+def format_tools_for_openai(tools: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Format tool definitions for OpenAI API.
+
+    Ensures tools are in the correct format expected by the LLM connector.
+    The YAML format should already be OpenAI-compatible, but this function
+    validates and normalizes the structure.
+
+    Args:
+        tools: Raw tool definitions from YAML
+
+    Returns:
+        Formatted tools for OpenAI API
+
+    Example YAML format:
+        tool_definition:
+          type: "function"
+          function:
+            name: "route"
+            description: "Binary routing decision"
+            parameters:
+              type: "object"
+              properties:
+                r:
+                  type: "integer"
+                  enum: [0, 1]
+              required: ["r"]
+    """
+    formatted_tools = []
+
+    for tool in tools:
+        # Tool should already be in OpenAI format from YAML
+        # We just validate it has the required structure
+        if not isinstance(tool, dict):
+            logger.warning("prompt_loader.format_tools.invalid_tool", tool=tool)
+            continue
+
+        # Ensure 'type' field exists
+        if "type" not in tool:
+            logger.warning("prompt_loader.format_tools.missing_type", tool=tool)
+            continue
+
+        # Ensure 'function' field exists for function tools
+        if tool.get("type") == "function" and "function" not in tool:
+            logger.warning("prompt_loader.format_tools.missing_function", tool=tool)
+            continue
+
+        # Tool is valid, add to formatted list
+        formatted_tools.append(tool)
+
+    return formatted_tools
 
 
 if __name__ == "__main__":  # pragma: no cover
