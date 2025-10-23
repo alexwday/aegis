@@ -164,10 +164,6 @@ system_prompt: |
       12. Is it any other type of query?
           → Return 1 (default to research workflow when uncertain)
     </decision_tree>
-
-    <available_databases>
-      {available_databases}
-    </available_databases>
   </prompt>
 
 user_prompt_template: |

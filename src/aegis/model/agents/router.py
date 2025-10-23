@@ -50,14 +50,13 @@ async def route_query(
         prompt_last_updated = router_data.get("last_updated", "unknown")
 
         # Load global context (uses_global from YAML)
+        # Database descriptions come from the filtered database global
         available_dbs = context.get("available_databases", [])
         uses_global = router_data.get("uses_global", [])
         globals_prompt = load_global_prompts_for_agent(uses_global, available_dbs)
 
-        # Build system prompt with variable substitution
-        system_prompt_template = router_data.get("system_prompt", "")
-        available_dbs_str = ', '.join(available_dbs) if available_dbs else "None specified"
-        agent_system_prompt = system_prompt_template.format(available_databases=available_dbs_str)
+        # Get agent system prompt (no placeholders to format)
+        agent_system_prompt = router_data.get("system_prompt", "")
 
         # Join globals + agent prompt
         prompt_parts = []
