@@ -1,7 +1,9 @@
 name: planner
 version: "1.0.0"
 last_updated: "2025-08-25"
-uses_global: []  # Database content will be dynamically inserted
+uses_global:
+  - project
+  - database
 
 system_prompt: |
   You are the Planner Agent responsible for selecting which databases to query.

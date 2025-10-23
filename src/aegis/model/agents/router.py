@@ -10,7 +10,7 @@ from typing import Any, Dict, List
 
 from ...connections.llm_connector import complete_with_tools
 from ...utils.logging import get_logger
-from ...utils.prompt_loader import load_yaml, load_tools_from_yaml
+from ...utils.prompt_loader import load_yaml, load_tools_from_yaml, load_global_prompts_for_agent
 
 
 async def route_query(
@@ -49,27 +49,21 @@ async def route_query(
         prompt_version = router_data.get("version", "unknown")
         prompt_last_updated = router_data.get("last_updated", "unknown")
 
-        # Load global context
-        prompt_parts = []
-
-        # Add project context
-        project_data = load_yaml("global/project.yaml")
-        if "content" in project_data:
-            prompt_parts.append(project_data["content"].strip())
-
-        # Add database context from main
-        if context.get("database_prompt"):
-            prompt_parts.append(context["database_prompt"])
-
-        # Build system prompt with available databases
-        system_prompt_template = router_data.get("system_prompt", "")
+        # Load global context (uses_global from YAML)
         available_dbs = context.get("available_databases", [])
+        uses_global = router_data.get("uses_global", [])
+        globals_prompt = load_global_prompts_for_agent(uses_global, available_dbs)
+
+        # Build system prompt with variable substitution
+        system_prompt_template = router_data.get("system_prompt", "")
         available_dbs_str = ', '.join(available_dbs) if available_dbs else "None specified"
+        agent_system_prompt = system_prompt_template.format(available_databases=available_dbs_str)
 
-        system_prompt = system_prompt_template.format(available_databases=available_dbs_str)
-        prompt_parts.append(system_prompt)
-
-        # Join all parts
+        # Join globals + agent prompt
+        prompt_parts = []
+        if globals_prompt:
+            prompt_parts.append(globals_prompt)
+        prompt_parts.append(agent_system_prompt)
         final_system_prompt = "\n\n---\n\n".join(prompt_parts)
 
         # Build user message from template (limit to last 10 messages for context)

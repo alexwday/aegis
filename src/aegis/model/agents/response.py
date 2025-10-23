@@ -10,7 +10,7 @@ from typing import Any, AsyncGenerator, Dict, List, Union
 
 from ...connections.llm_connector import complete, stream
 from ...utils.logging import get_logger
-from ...utils.prompt_loader import load_yaml
+from ...utils.prompt_loader import load_yaml, load_global_prompts_for_agent
 
 
 async def generate_response(
@@ -73,27 +73,21 @@ async def generate_response(
         # Extract version info for tracking
         prompt_version = response_data.get("version", "unknown")
         prompt_last_updated = response_data.get("last_updated", "unknown")
+
+        # Load global context (uses_global from YAML)
+        available_dbs = context.get("available_databases", [])
+        uses_global = response_data.get("uses_global", [])
+        globals_prompt = load_global_prompts_for_agent(uses_global, available_dbs)
+
+        # Build system prompt
+        agent_system_prompt = response_data.get("system_prompt", "")
+
+        # Join globals + agent prompt
         prompt_parts = []
-
-        # Add project context
-        project_data = load_yaml("global/project.yaml")
-        if "content" in project_data:
-            prompt_parts.append(project_data["content"].strip())
-
-        # Add fiscal context for financial explanations (optional)
-        try:
-            fiscal_data = load_yaml("global/fiscal.yaml")
-            if "content" in fiscal_data:
-                prompt_parts.append(fiscal_data["content"].strip())
-        except Exception:
-            # Fiscal prompt is optional - skip if not found
-            pass
-
-        # Add response-specific system prompt
-        system_prompt_template = response_data.get("system_prompt", "")
-        if system_prompt_template:
-            prompt_parts.append(system_prompt_template.strip())
-
+        if globals_prompt:
+            prompt_parts.append(globals_prompt)
+        if agent_system_prompt:
+            prompt_parts.append(agent_system_prompt.strip())
         system_prompt = "\n\n---\n\n".join(prompt_parts)
 
         # Build conversation context

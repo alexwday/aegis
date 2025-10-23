@@ -3,6 +3,7 @@ version: "2.0.0"
 last_updated: "2025-01-23"
 uses_global:
   - project
+  - fiscal
   - database
 
 system_prompt: |

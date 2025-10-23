@@ -2,6 +2,7 @@ name: clarifier_periods
 version: "1.0.0"
 last_updated: "2025-01-24"
 uses_global:
+  - project
   - fiscal
 
 system_prompt: |

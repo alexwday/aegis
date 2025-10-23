@@ -53,12 +53,13 @@ def _load_fiscal_prompt() -> str:
     return fiscal_module.get_fiscal_statement()
 
 
-def _load_global_prompts(uses_global: list) -> list:
+def _load_global_prompts(uses_global: list, available_databases: Optional[List[str]] = None) -> list:
     """
     Load global prompts in canonical order.
 
     Args:
         uses_global: List of global prompt names to use
+        available_databases: Optional list of database IDs for filtering database prompt
 
     Returns:
         List of prompt content strings
@@ -74,18 +75,49 @@ def _load_global_prompts(uses_global: list) -> list:
 
         if global_name == "fiscal":
             prompt_parts.append(_load_fiscal_prompt())
+        elif global_name == "database":
+            # Use filtered database prompt from database_filter utility
+            from .database_filter import get_database_prompt
+            database_prompt = get_database_prompt(available_databases)
+            prompt_parts.append(database_prompt)
         else:
             try:
                 global_data = load_yaml(f"global/{global_name}.yaml")
                 if "content" in global_data:
                     prompt_parts.append(global_data["content"].strip())
             except FileNotFoundError:
-                print(f"Warning: Global prompt '{global_name}' not found, skipping...")
+                logger.warning(f"Global prompt '{global_name}' not found, skipping...")
 
     return prompt_parts
 
 
-def load_prompt(agent_type: str, name: str) -> str:
+def load_global_prompts_for_agent(
+    uses_global: List[str], available_databases: Optional[List[str]] = None
+) -> str:
+    """
+    Public helper to load global prompts for agents.
+
+    This is the recommended way for agents to load their global context prompts.
+    Handles special cases like fiscal (dynamic) and database (filtered).
+
+    Args:
+        uses_global: List of global prompt names to use
+        available_databases: Optional list of database IDs for filtering database prompt
+
+    Returns:
+        Joined global prompts string, separated by ---
+
+    Example:
+        >>> globals_str = load_global_prompts_for_agent(
+        ...     ["project", "fiscal", "database"],
+        ...     available_databases=["transcripts", "rts"]
+        ... )
+    """
+    prompt_parts = _load_global_prompts(uses_global, available_databases)
+    return "\n\n---\n\n".join(prompt_parts) if prompt_parts else ""
+
+
+def load_prompt(agent_type: str, name: str, available_databases: Optional[List[str]] = None) -> str:
     """
     Load and compose a complete prompt for an agent or subagent.
 
@@ -95,6 +127,7 @@ def load_prompt(agent_type: str, name: str) -> str:
     Args:
         agent_type: Either "agent" or "subagent"
         name: Name of the agent (e.g., "router", "benchmarking")
+        available_databases: Optional list of database IDs for filtering database prompt
 
     Returns:
         Fully composed prompt with globals and agent content
@@ -125,7 +158,7 @@ def load_prompt(agent_type: str, name: str) -> str:
 
     # Add global prompts in canonical order
     if "uses_global" in agent_data:
-        prompt_parts.extend(_load_global_prompts(agent_data["uses_global"]))
+        prompt_parts.extend(_load_global_prompts(agent_data["uses_global"], available_databases))
 
     # Add agent-specific content
     if "content" in agent_data:

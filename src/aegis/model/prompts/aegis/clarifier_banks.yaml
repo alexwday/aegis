@@ -2,7 +2,8 @@ name: clarifier_banks
 version: "1.0.0"
 last_updated: "2025-01-24"
 uses_global:
-  - banks
+  - project
+  - fiscal
 
 system_prompt: |
   <role>
