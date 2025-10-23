@@ -91,4 +91,4 @@ system_prompt: |
 user_prompt_template: |
   The user just asked: "{latest_message}"
 
-  Based on the conversation context above, how should I respond to this query without accessing any databases?
+  Based on the conversation context above, respond to this query without accessing any databases.
