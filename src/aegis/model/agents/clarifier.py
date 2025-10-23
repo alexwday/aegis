@@ -15,7 +15,7 @@ from typing import Any, Dict, List, Optional
 from ...connections.postgres_connector import fetch_all
 from ...connections.llm_connector import complete_with_tools
 from ...utils.logging import get_logger
-from ...utils.prompt_loader import load_yaml, load_tools_from_yaml, _load_fiscal_prompt
+from ...utils.prompt_loader import load_yaml, load_tools_from_yaml, load_global_prompts_for_agent
 from ...utils.settings import config
 
 
@@ -315,14 +315,22 @@ async def extract_banks(
 
         # Load clarifier prompt
         clarifier_data = load_yaml("aegis/clarifier_banks.yaml")
-        prompt_parts = []
 
-        # Add bank index context
+        # Load global context (uses_global from YAML)
+        uses_global = clarifier_data.get("uses_global", [])
+        globals_prompt = load_global_prompts_for_agent(uses_global, available_databases)
+
+        # Build prompt parts
+        prompt_parts = []
+        if globals_prompt:
+            prompt_parts.append(globals_prompt)
+
+        # Add bank index context (dynamic data)
         prompt_parts.append(bank_prompt)
 
         # Add clarifier system prompt
-        system_prompt_template = clarifier_data.get("system_prompt", "")
-        prompt_parts.append(system_prompt_template.strip())
+        agent_system_prompt = clarifier_data.get("system_prompt", "")
+        prompt_parts.append(agent_system_prompt.strip())
 
         system_prompt = "\n\n".join(prompt_parts)
 
@@ -524,12 +532,15 @@ async def extract_periods(
         # Load clarifier period prompt
         clarifier_data = load_yaml("aegis/clarifier_periods.yaml")
 
+        # Load global context (uses_global from YAML)
+        uses_global = clarifier_data.get("uses_global", [])
+        globals_prompt = load_global_prompts_for_agent(uses_global, available_databases)
+
         prompt_parts = []
+        if globals_prompt:
+            prompt_parts.append(globals_prompt)
 
-        # Add dynamic fiscal context from fiscal.py
-        prompt_parts.append(_load_fiscal_prompt())
-
-        # Add period availability context if we have banks
+        # Add period availability context if we have banks (dynamic data)
         if bank_ids:
             availability_text = "\n<period_availability>\n"
 
@@ -581,10 +592,10 @@ async def extract_periods(
             prompt_parts.append(availability_text)
 
         # Add clarifier system prompt
-        system_prompt_template = clarifier_data.get("system_prompt", "")
-        prompt_parts.append(system_prompt_template.strip())
+        agent_system_prompt = clarifier_data.get("system_prompt", "")
+        prompt_parts.append(agent_system_prompt.strip())
 
-        # Add context about whether we have banks
+        # Add context about whether we have banks (dynamic data)
         if bank_ids:
             prompt_parts.append(f"Banks to extract periods for (IDs): {bank_ids}")
         else:

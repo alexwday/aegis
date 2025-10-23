@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Optional
 from ...connections.postgres_connector import fetch_all
 from ...connections.llm_connector import complete_with_tools
 from ...utils.logging import get_logger
-from ...utils.prompt_loader import load_yaml, load_tools_from_yaml
+from ...utils.prompt_loader import load_yaml, load_tools_from_yaml, load_global_prompts_for_agent
 from ...utils.settings import config
 
 
@@ -184,43 +184,9 @@ async def get_filtered_availability_table(
         }
 
 
-def get_filtered_database_descriptions(available_databases: List[str]) -> str:
-    """
-    Load and filter database descriptions based on available databases.
-
-    Args:
-        available_databases: List of database IDs that are available
-
-    Returns:
-        Formatted string with database descriptions
-    """
-    logger = get_logger()
-
-    try:
-        # Load the database.yaml file
-        database_data = load_yaml("global/database.yaml")
-
-        if "databases" not in database_data:
-            return ""
-
-        # Filter to only include available databases
-        filtered_lines = ["\n<database_descriptions>"]
-        filtered_lines.append("Available databases for this query:\n")
-
-        for db_info in database_data["databases"]:
-            if db_info["id"] in available_databases:
-                filtered_lines.append(f"Database: {db_info['id']}")
-                filtered_lines.append(f"Name: {db_info['name']}")
-                filtered_lines.append(db_info["content"])
-                filtered_lines.append("")
-
-        filtered_lines.append("</database_descriptions>\n")
-
-        return "\n".join(filtered_lines)
-
-    except Exception as e:
-        logger.error("Failed to load database descriptions", error=str(e))
-        return ""
+# Removed: get_filtered_database_descriptions()
+# Now using load_global_prompts_for_agent() which internally uses
+# database_filter.get_database_prompt() for proper filtering
 
 
 async def plan_database_queries(
@@ -363,26 +329,27 @@ async def plan_database_queries(
                 "databases": [],
             }
 
-        # Get filtered database descriptions
-        database_descriptions = get_filtered_database_descriptions(
-            availability_data["available_databases"]
-        )
-
         # Load planner prompt
         planner_data = load_yaml("aegis/planner.yaml")
 
+        # Load global context (uses_global from YAML)
+        # This will load filtered database descriptions via database_filter.get_database_prompt()
+        uses_global = planner_data.get("uses_global", [])
+        globals_prompt = load_global_prompts_for_agent(
+            uses_global, availability_data["available_databases"]
+        )
+
         # Build system prompt
         prompt_parts = []
+        if globals_prompt:
+            prompt_parts.append(globals_prompt)
 
-        # Add availability table
+        # Add availability table (dynamic data)
         prompt_parts.append(availability_data["table"])
 
-        # Add database descriptions
-        prompt_parts.append(database_descriptions)
-
         # Add planner system prompt
-        system_prompt_template = planner_data.get("system_prompt", "")
-        prompt_parts.append(system_prompt_template.strip())
+        agent_system_prompt = planner_data.get("system_prompt", "")
+        prompt_parts.append(agent_system_prompt.strip())
 
         system_prompt = "\n\n".join(prompt_parts)
 
