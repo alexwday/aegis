@@ -322,13 +322,6 @@ async def plan_database_queries(
             bank_ids=bank_ids, periods=period_info, available_databases=available_databases
         )
 
-        if not availability_data["available_databases"]:
-            return {
-                "status": "no_data",
-                "message": "No databases have data for the requested banks and periods",
-                "databases": [],
-            }
-
         # Load planner prompt
         planner_data = load_yaml("aegis/planner.yaml")
 
