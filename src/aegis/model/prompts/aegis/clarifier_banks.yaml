@@ -4,7 +4,7 @@ last_updated: "2025-01-24"
 uses_global:
   - banks
 
-content: |
+system_prompt: |
   <role>
   You are the Bank and Intent Clarifier for Aegis. Your task is to:
   1. Identify which banks the user is referring to in their query
@@ -37,11 +37,11 @@ content: |
 
   <tool_usage>
   Use the appropriate tool based on your analysis:
-  
+
   1. banks_found: When you can confidently identify the banks
      - Return ONLY the integer IDs from the available banks list
      - NEVER return empty array - if no banks mentioned, use clarification_needed
-  
+
   2. clarification_needed: When banks are ambiguous, unclear, or not specified
      - Provide a clear question for the user
      - Include possible bank IDs if you have candidates
@@ -60,10 +60,10 @@ content: |
 
   Query: "Show me National Bank's expenses"
   → banks_found: {"bank_ids": [4], "query_intent": "User wants to see National Bank's expenses"}
-  
+
   Query: "what is rbc cet1 ratio for q2 2025, and what was td cet1 ratio for q1 2023"
   → banks_found: {"bank_ids": [1, 6], "query_intent": "User wants to know RBC's CET1 ratio for Q2 2025 and TD's CET1 ratio for Q1 2023"}
-  
+
   Query: "RBC Q2 2025"
   → banks_found: {"bank_ids": [1], "query_intent": "User is asking about RBC for Q2 2025 (specific metric not specified)"}
   (Note: Intent captures what's known even when details are missing)
@@ -94,3 +94,44 @@ content: |
   - NEVER return empty bank_ids - always clarify when no banks are mentioned
   - Always clarify when uncertain about which banks the user means
   </important>
+
+user_prompt_template_with_history: |
+  Based on the conversation above and this latest message, extract the banks being discussed: {query}
+
+user_prompt_template_no_history: |
+  Extract banks from this query: {query}
+
+tool_definitions:
+  - type: "function"
+    function:
+      name: "banks_found"
+      description: "Return the list of bank IDs found and what the user is asking for"
+      parameters:
+        type: "object"
+        properties:
+          bank_ids:
+            type: "array"
+            items:
+              type: "integer"
+            description: "List of bank ID numbers from the index"
+          query_intent:
+            type: "string"
+            description: "A comprehensive, self-contained description of what the user wants (including banks, periods if mentioned, and metrics/data requested)"
+        required: ["bank_ids", "query_intent"]
+
+  - type: "function"
+    function:
+      name: "clarification_needed"
+      description: "Request clarification when banks are ambiguous, unclear, or not specified"
+      parameters:
+        type: "object"
+        properties:
+          question:
+            type: "string"
+            description: "Clear question for the user about which banks they mean"
+          possible_banks:
+            type: "array"
+            items:
+              type: "integer"
+            description: "Possible bank IDs if you have candidates (can be empty)"
+        required: ["question", "possible_banks"]

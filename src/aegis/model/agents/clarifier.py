@@ -15,7 +15,7 @@ from typing import Any, Dict, List, Optional
 from ...connections.postgres_connector import fetch_all
 from ...connections.llm_connector import complete_with_tools
 from ...utils.logging import get_logger
-from ...utils.prompt_loader import load_yaml, _load_fiscal_prompt
+from ...utils.prompt_loader import load_yaml, load_tools_from_yaml, _load_fiscal_prompt
 from ...utils.settings import config
 
 
@@ -320,9 +320,9 @@ async def extract_banks(
         # Add bank index context
         prompt_parts.append(bank_prompt)
 
-        # Add clarifier instructions
-        if "content" in clarifier_data:
-            prompt_parts.append(clarifier_data["content"].strip())
+        # Add clarifier system prompt
+        system_prompt_template = clarifier_data.get("system_prompt", "")
+        prompt_parts.append(system_prompt_template.strip())
 
         system_prompt = "\n\n".join(prompt_parts)
 
@@ -335,79 +335,18 @@ async def extract_banks(
             for msg in messages[:-1]:
                 llm_messages.append(msg)
 
-        # Add the extraction request considering full conversation context
+        # Load and format user prompt template based on conversation history
         if messages and len(messages) > 1:
-            llm_messages.append(
-                {
-                    "role": "user",
-                    "content": (
-                        f"Based on the conversation above and this latest message, "
-                        f"extract the banks being discussed: {query}"
-                    ),
-                }
-            )
+            user_prompt_template = clarifier_data.get("user_prompt_template_with_history", "")
+            user_content = user_prompt_template.format(query=query)
         else:
-            llm_messages.append(
-                {"role": "user", "content": f"Extract banks from this query: {query}"}
-            )
+            user_prompt_template = clarifier_data.get("user_prompt_template_no_history", "")
+            user_content = user_prompt_template.format(query=query)
 
-        # Define tools for bank and intent extraction
-        tools = [
-            {
-                "type": "function",
-                "function": {
-                    "name": "banks_found",
-                    "description": (
-                        "Return the list of bank IDs found and what the user is asking for"
-                    ),
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "bank_ids": {
-                                "type": "array",
-                                "items": {"type": "integer"},
-                                "description": "List of bank ID numbers from the index",
-                            },
-                            "query_intent": {
-                                "type": "string",
-                                "description": (
-                                    "A comprehensive, self-contained description of what the user "
-                                    "is asking for. Include ALL context from the conversation and "
-                                    "the latest query. Use the user's own wording where possible. "
-                                    "This intent should be detailed enough that another agent can "
-                                    "understand the complete request without reading the conversation. "
-                                    "Example: 'User wants to compare the CET1 ratios for RBC in Q2 2025 "
-                                    "and TD in Q1 2023 to understand their relative capital strength.'"
-                                ),
-                            },
-                        },
-                        "required": ["bank_ids"],
-                    },
-                },
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "clarification_needed",
-                    "description": "Request clarification when banks are ambiguous or unclear",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "question": {
-                                "type": "string",
-                                "description": "Clarification question to ask the user",
-                            },
-                            "possible_banks": {
-                                "type": "array",
-                                "items": {"type": "integer"},
-                                "description": "List of possible bank IDs that need clarification",
-                            },
-                        },
-                        "required": ["question"],
-                    },
-                },
-            },
-        ]
+        llm_messages.append({"role": "user", "content": user_content})
+
+        # Load tools from YAML (no fallback)
+        tools = load_tools_from_yaml("clarifier_banks", execution_id=execution_id)
 
         # Call LLM with tools - using medium model for extraction
 
@@ -660,9 +599,9 @@ async def extract_periods(
             availability_text += "</period_availability>\n"
             prompt_parts.append(availability_text)
 
-        # Add clarifier period instructions
-        if "content" in clarifier_data:
-            prompt_parts.append(clarifier_data["content"].strip())
+        # Add clarifier system prompt
+        system_prompt_template = clarifier_data.get("system_prompt", "")
+        prompt_parts.append(system_prompt_template.strip())
 
         # Add context about whether we have banks
         if bank_ids:
@@ -684,130 +623,36 @@ async def extract_periods(
             for msg in messages[:-1]:
                 llm_messages.append(msg)
 
-        # Add the extraction request considering full conversation context
+        # Load and format user prompt template based on conversation history
         if messages and len(messages) > 1:
-            llm_messages.append(
-                {
-                    "role": "user",
-                    "content": (
-                        f"Based on the conversation above and this latest message, "
-                        f"extract the time periods being discussed: {query}"
-                    ),
-                }
-            )
+            user_prompt_template = clarifier_data.get("user_prompt_template_with_history", "")
+            user_content = user_prompt_template.format(query=query)
         else:
-            llm_messages.append(
-                {"role": "user", "content": f"Extract periods from this query: {query}"}
-            )
+            user_prompt_template = clarifier_data.get("user_prompt_template_no_history", "")
+            user_content = user_prompt_template.format(query=query)
 
-        # Define tools for period extraction
-        tools = []
+        llm_messages.append({"role": "user", "content": user_content})
 
+        # Load tools from YAML (no fallback)
+        all_tools = load_tools_from_yaml("clarifier_periods", execution_id=execution_id)
+
+        # Filter tools based on whether we have banks
         if bank_ids:
             # Full period extraction tools when we have banks
-            tools.extend(
-                [
-                    {
-                        "type": "function",
-                        "function": {
-                            "name": "periods_all",
-                            "description": "Apply the same period to all banks",
-                            "parameters": {
-                                "type": "object",
-                                "properties": {
-                                    "fiscal_year": {
-                                        "type": "integer",
-                                        "description": "Fiscal year (e.g., 2024)",
-                                    },
-                                    "quarters": {
-                                        "type": "array",
-                                        "items": {
-                                            "type": "string",
-                                            "enum": ["Q1", "Q2", "Q3", "Q4"],
-                                        },
-                                        "description": "List of quarters",
-                                    },
-                                },
-                                "required": ["fiscal_year", "quarters"],
-                            },
-                        },
-                    },
-                    {
-                        "type": "function",
-                        "function": {
-                            "name": "periods_specific",
-                            "description": "Different periods for different banks",
-                            "parameters": {
-                                "type": "object",
-                                "properties": {
-                                    "bank_periods": {
-                                        "type": "array",
-                                        "items": {
-                                            "type": "object",
-                                            "properties": {
-                                                "bank_id": {"type": "integer"},
-                                                "fiscal_year": {"type": "integer"},
-                                                "quarters": {
-                                                    "type": "array",
-                                                    "items": {
-                                                        "type": "string",
-                                                        "enum": ["Q1", "Q2", "Q3", "Q4"],
-                                                    },
-                                                },
-                                            },
-                                            "required": ["bank_id", "fiscal_year", "quarters"],
-                                        },
-                                        "description": "List of bank-specific periods",
-                                    }
-                                },
-                                "required": ["bank_periods"],
-                            },
-                        },
-                    },
-                ]
-            )
+            # Use: periods_all, periods_specific, period_clarification
+            tools = [
+                tool
+                for tool in all_tools
+                if tool["function"]["name"] in ["periods_all", "periods_specific", "period_clarification"]
+            ]
         else:
             # Limited tools when banks need clarification
-            tools.append(
-                {
-                    "type": "function",
-                    "function": {
-                        "name": "periods_valid",
-                        "description": "Periods mentioned in query are clear and valid",
-                        "parameters": {
-                            "type": "object",
-                            "properties": {
-                                "periods_clear": {
-                                    "type": "boolean",
-                                    "description": "Whether periods mentioned are clear",
-                                }
-                            },
-                            "required": ["periods_clear"],
-                        },
-                    },
-                }
-            )
-
-        # Add clarification tool
-        tools.append(
-            {
-                "type": "function",
-                "function": {
-                    "name": "period_clarification",
-                    "description": "Request clarification about time periods",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "question": {
-                                "type": "string",
-                                "description": "Clarification question about periods",
-                            }
-                        },
-                        "required": ["question"],
-                    },
-                },
-            }
-        )
+            # Use: periods_valid, period_clarification
+            tools = [
+                tool
+                for tool in all_tools
+                if tool["function"]["name"] in ["periods_valid", "period_clarification"]
+            ]
 
         # Call LLM with tools - using medium model
 

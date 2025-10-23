@@ -44,7 +44,7 @@ This document tracks ALL changes made during the YAML refactoring migration. Use
 
 ### 1. `/src/aegis/model/agents/clarifier.py`
 
-**Status**: ✅ CHANGE #1 Complete | ⏳ CHANGE #2 Pending
+**Status**: ✅ ALL CHANGES COMPLETE
 
 #### Changes Made:
 ```
@@ -86,18 +86,54 @@ CHANGE #1: Fix bank+year dictionary key bug ✅ COMPLETED
                 "quarters": bp["quarters"],
             }
 
-CHANGE #2: Load tools from YAML instead of hardcoded (PENDING)
-  LOCATION: TBD (tool definition section)
-  BEFORE: Hardcoded tool definitions in Python
-  AFTER: Load from clarifier_banks.yaml and clarifier_periods.yaml
+CHANGE #2: Load tools from YAML instead of hardcoded ✅ COMPLETED
+  LOCATIONS:
+    - Line 18: Add import load_tools_from_yaml
+    - Lines 316-346: extract_banks() - Update system prompt and user template loading
+    - Lines 348-349: extract_banks() - Replace hardcoded tools with load_tools_from_yaml
+    - Lines 543-634: extract_periods() - Update system prompt and user template loading
+    - Lines 636-655: extract_periods() - Replace hardcoded tools with filtered load_tools_from_yaml
+
+  BEFORE: Hardcoded tool definitions and prompt templates in Python
+  AFTER: Load from clarifier_banks.yaml and clarifier_periods.yaml with NO FALLBACKS
   REASON: Consolidate prompt management in YAML files
 
-  OLD CODE:
-    tools = [
-        {
-            "type": "function",
-            "function": {...}
-        }
+  KEY CHANGES:
+
+  1. Import change (line 18):
+     OLD: from ...utils.prompt_loader import load_yaml, _load_fiscal_prompt
+     NEW: from ...utils.prompt_loader import load_yaml, load_tools_from_yaml, _load_fiscal_prompt
+
+  2. extract_banks() system prompt (lines 323-325):
+     OLD: if "content" in clarifier_data: prompt_parts.append(clarifier_data["content"].strip())
+     NEW: system_prompt_template = clarifier_data.get("system_prompt", "")
+          prompt_parts.append(system_prompt_template.strip())
+
+  3. extract_banks() user template (lines 338-346):
+     OLD: Hardcoded f-strings for with/without conversation history
+     NEW: Load user_prompt_template_with_history or user_prompt_template_no_history
+          Use .format(query=query) for substitution
+
+  4. extract_banks() tools (lines 348-349):
+     OLD: Hardcoded 63-line tool definition array (lines 355-410)
+     NEW: tools = load_tools_from_yaml("clarifier_banks", execution_id=execution_id)
+
+  5. extract_periods() system prompt (lines 602-604):
+     OLD: if "content" in clarifier_data: prompt_parts.append(clarifier_data["content"].strip())
+     NEW: system_prompt_template = clarifier_data.get("system_prompt", "")
+          prompt_parts.append(system_prompt_template.strip())
+
+  6. extract_periods() user template (lines 626-634):
+     OLD: Hardcoded f-strings for with/without conversation history
+     NEW: Load user_prompt_template_with_history or user_prompt_template_no_history
+          Use .format(query=query) for substitution
+
+  7. extract_periods() tools (lines 636-655):
+     OLD: Hardcoded 106-line tool definition array with conditional logic (lines 704-810)
+     NEW: all_tools = load_tools_from_yaml("clarifier_periods", execution_id=execution_id)
+          Filter tools based on bank_ids parameter:
+            - If bank_ids exists: Use periods_all, periods_specific, period_clarification
+            - If bank_ids is None: Use periods_valid, period_clarification
     ]
 
   NEW CODE:
