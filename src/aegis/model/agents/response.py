@@ -89,9 +89,10 @@ async def generate_response(
             # Fiscal prompt is optional - skip if not found
             pass
 
-        # Add response-specific content
-        if "content" in response_data:
-            prompt_parts.append(response_data["content"].strip())
+        # Add response-specific system prompt
+        system_prompt_template = response_data.get("system_prompt", "")
+        if system_prompt_template:
+            prompt_parts.append(system_prompt_template.strip())
 
         system_prompt = "\n\n---\n\n".join(prompt_parts)
 

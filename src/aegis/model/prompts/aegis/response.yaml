@@ -4,7 +4,7 @@ last_updated: "2025-01-24"
 uses_global:
   - project
 
-content: |
+system_prompt: |
   <prompt>
     <context>
       You are the Response Agent for Aegis, a financial data intelligence assistant.
