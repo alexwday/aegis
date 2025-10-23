@@ -103,15 +103,15 @@ async def route_query(
         else:
             model = config.llm.medium.model  # Default to medium for speed and accuracy balance
 
-        # Call LLM with tools (optimized for speed)
+        # Call LLM with tools
         response = await complete_with_tools(
             messages=messages,
             tools=tools,
             context=context,
             llm_params={
                 "model": model,
-                "temperature": 0.0,  # Zero temperature for deterministic binary routing
-                "max_tokens": 10,  # Only need single integer response
+                "temperature": 0.1,  # Very low temperature for deterministic binary routing
+                "max_tokens": 50,  # Binary response needs minimal tokens
             },
         )
 
