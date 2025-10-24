@@ -375,7 +375,7 @@ async def plan_database_queries(
         ]
 
         # Load tools from YAML (no fallback)
-        tools = load_tools_from_yaml("planner", execution_id=execution_id)
+        tools = load_tools_from_yaml("aegis/planner", execution_id=execution_id)
 
         # Call LLM with tools
         model_tier_override = context.get("model_tier_override")

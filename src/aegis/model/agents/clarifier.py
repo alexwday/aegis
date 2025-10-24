@@ -350,7 +350,7 @@ async def extract_banks(
         llm_messages.append({"role": "user", "content": user_content})
 
         # Load tools from YAML (no fallback)
-        tools = load_tools_from_yaml("clarifier_banks", execution_id=execution_id)
+        tools = load_tools_from_yaml("aegis/clarifier_banks", execution_id=execution_id)
 
         # Call LLM with tools - using medium model for extraction
 
@@ -622,7 +622,7 @@ async def extract_periods(
         llm_messages.append({"role": "user", "content": user_content})
 
         # Load tools from YAML (no fallback)
-        all_tools = load_tools_from_yaml("clarifier_periods", execution_id=execution_id)
+        all_tools = load_tools_from_yaml("aegis/clarifier_periods", execution_id=execution_id)
 
         # Filter tools based on whether we have banks
         if bank_ids:
