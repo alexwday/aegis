@@ -244,7 +244,10 @@ def load_tools_from_yaml(
     """
     try:
         # Determine YAML path based on type
-        if agent_type == "subagent":
+        # If prompt_name contains a slash, use it as-is (direct path)
+        if "/" in prompt_name:
+            yaml_path = f"{prompt_name}.yaml"
+        elif agent_type == "subagent":
             yaml_path = f"{prompt_name}/{prompt_name}.yaml"
         else:
             yaml_path = f"{agent_type}s/{prompt_name}.yaml"
