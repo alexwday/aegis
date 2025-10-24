@@ -352,6 +352,17 @@ async def extract_banks(
         # Load tools from YAML (no fallback)
         tools = load_tools_from_yaml("aegis/clarifier_banks", execution_id=execution_id)
 
+        if not tools:
+            logger.error(
+                "clarifier.banks.tools_missing",
+                execution_id=execution_id,
+                error="Failed to load tools from clarifier_banks.yaml"
+            )
+            return {
+                "status": "error",
+                "error": "Clarifier tools not found in YAML"
+            }
+
         # Call LLM with tools - using medium model for extraction
 
         # Get model based on override or default to large
@@ -623,6 +634,17 @@ async def extract_periods(
 
         # Load tools from YAML (no fallback)
         all_tools = load_tools_from_yaml("aegis/clarifier_periods", execution_id=execution_id)
+
+        if not all_tools:
+            logger.error(
+                "clarifier.periods.tools_missing",
+                execution_id=execution_id,
+                error="Failed to load tools from clarifier_periods.yaml"
+            )
+            return {
+                "status": "error",
+                "error": "Clarifier period tools not found in YAML"
+            }
 
         # Filter tools based on whether we have banks
         if bank_ids:

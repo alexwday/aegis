@@ -377,6 +377,18 @@ async def plan_database_queries(
         # Load tools from YAML (no fallback)
         tools = load_tools_from_yaml("aegis/planner", execution_id=execution_id)
 
+        if not tools:
+            logger.error(
+                "planner.tools_missing",
+                execution_id=execution_id,
+                error="Failed to load tools from planner.yaml"
+            )
+            return {
+                "status": "error",
+                "databases": [],
+                "error": "Planner tools not found in YAML"
+            }
+
         # Call LLM with tools
         model_tier_override = context.get("model_tier_override")
         if model_tier_override == "small":

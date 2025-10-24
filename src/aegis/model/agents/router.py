@@ -83,6 +83,18 @@ async def route_query(
         # Load tools from YAML (no fallback - let it fail if missing)
         tools = load_tools_from_yaml("aegis/router", execution_id=execution_id)
 
+        if not tools:
+            logger.error(
+                "router.tools_missing",
+                execution_id=execution_id,
+                error="Failed to load tools from router.yaml"
+            )
+            return {
+                "status": "Error",
+                "route": "research_workflow",  # Default to research on error
+                "error": "Router tools not found in YAML"
+            }
+
         # Get model configuration (medium is optimal for fast binary decisions)
         from ...utils.settings import config
 
