@@ -112,16 +112,19 @@ async def generate_response(
         model_tier_override = context.get("model_tier_override")
         if model_tier_override == "small":
             model = config.llm.small.model
+            max_tokens = config.llm.small.max_tokens
         elif model_tier_override == "medium":
             model = config.llm.medium.model
+            max_tokens = config.llm.medium.max_tokens
         else:
             model = config.llm.large.model  # Default to large for high-quality responses
+            max_tokens = config.llm.large.max_tokens
 
         # LLM parameters for response generation
         llm_params = {
             "model": model,
             "temperature": 0.7,  # Balanced creativity for natural responses
-            "max_tokens": 500,  # Most direct responses are concise
+            "max_tokens": max_tokens,
         }
 
         if streaming:

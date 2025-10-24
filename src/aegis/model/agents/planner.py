@@ -393,10 +393,13 @@ async def plan_database_queries(
         model_tier_override = context.get("model_tier_override")
         if model_tier_override == "small":
             model = config.llm.small.model
+            max_tokens = config.llm.small.max_tokens
         elif model_tier_override == "large":
             model = config.llm.large.model
+            max_tokens = config.llm.large.max_tokens
         else:
             model = config.llm.medium.model  # Default to medium for planning
+            max_tokens = config.llm.medium.max_tokens
 
         response = await complete_with_tools(
             messages=messages,
@@ -405,7 +408,7 @@ async def plan_database_queries(
             llm_params={
                 "model": model,
                 "temperature": 0.1,  # Low temperature for consistent rule following
-                "max_tokens": 500,
+                "max_tokens": max_tokens,
             },
         )
 

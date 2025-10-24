@@ -101,10 +101,13 @@ async def route_query(
         model_tier_override = context.get("model_tier_override")
         if model_tier_override == "small":
             model = config.llm.small.model
+            max_tokens = config.llm.small.max_tokens
         elif model_tier_override == "large":
             model = config.llm.large.model
+            max_tokens = config.llm.large.max_tokens
         else:
             model = config.llm.medium.model  # Default to medium for speed and accuracy balance
+            max_tokens = config.llm.medium.max_tokens
 
         # Call LLM with tools
         response = await complete_with_tools(
@@ -114,7 +117,7 @@ async def route_query(
             llm_params={
                 "model": model,
                 "temperature": 0.1,  # Very low temperature for deterministic binary routing
-                "max_tokens": 50,  # Binary response needs minimal tokens
+                "max_tokens": max_tokens,
             },
         )
 

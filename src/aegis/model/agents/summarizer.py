@@ -115,12 +115,13 @@ Response:
         from ...utils.settings import config
 
         model = config.llm.large.model
+        max_tokens = config.llm.large.max_tokens
 
         # LLM parameters for synthesis
         llm_params = {
             "model": model,
             "temperature": 0.3,  # Lower temperature for consistency
-            "max_tokens": 300,  # Brief summary only - details in dropdowns
+            "max_tokens": max_tokens,
         }
 
         # Stream the synthesized response

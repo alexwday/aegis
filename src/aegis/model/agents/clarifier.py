@@ -369,10 +369,13 @@ async def extract_banks(
         model_tier_override = context.get("model_tier_override")
         if model_tier_override == "small":
             model = config.llm.small.model
+            max_tokens = config.llm.small.max_tokens
         elif model_tier_override == "medium":
             model = config.llm.medium.model
+            max_tokens = config.llm.medium.max_tokens
         else:
             model = config.llm.large.model  # Default to large for better reasoning
+            max_tokens = config.llm.large.max_tokens
 
         response = await complete_with_tools(
             messages=llm_messages,
@@ -381,7 +384,7 @@ async def extract_banks(
             llm_params={
                 "model": model,
                 "temperature": 0.1,  # Low temperature for consistent extraction
-                "max_tokens": 200,
+                "max_tokens": max_tokens,
             },
         )
 
@@ -671,10 +674,13 @@ async def extract_periods(
         model_tier_override = context.get("model_tier_override")
         if model_tier_override == "small":
             model = config.llm.small.model
+            max_tokens = config.llm.small.max_tokens
         elif model_tier_override == "medium":
             model = config.llm.medium.model
+            max_tokens = config.llm.medium.max_tokens
         else:
             model = config.llm.large.model  # Default to large for complex period validation
+            max_tokens = config.llm.large.max_tokens
 
         response = await complete_with_tools(
             messages=llm_messages,
@@ -683,7 +689,7 @@ async def extract_periods(
             llm_params={
                 "model": model,
                 "temperature": 0.1,
-                "max_tokens": 300,
+                "max_tokens": max_tokens,
             },
         )
 
