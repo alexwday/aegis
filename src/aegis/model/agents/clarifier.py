@@ -524,17 +524,20 @@ async def extract_periods(
     context: Dict[str, Any],
     available_databases: Optional[List[str]] = None,
     messages: Optional[List[Dict[str, str]]] = None,
+    query_intent: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Extract fiscal periods for the identified banks or check if period clarification is needed.
 
-    NEVER defaults - always clarifies when uncertain.
-
     Args:
-        query: User's query text
-        bank_ids: List of bank IDs to extract periods for (None if banks need clarification)
-        context: Runtime context with auth, SSL config, execution_id
-        available_databases: Optional list of available database IDs
+        query: Latest user message
+        bank_ids: Bank IDs identified from banks extraction
+        context: Runtime context
+        available_databases: Optional database filter
+        messages: Full conversation history
+        query_intent: Intent from banks extraction (includes period context from conversation)
+
+    NEVER defaults - always clarifies when uncertain.
 
     Returns:
         Dictionary with period extraction results
@@ -548,6 +551,8 @@ async def extract_periods(
             execution_id=execution_id,
             bank_ids=bank_ids,
             has_banks=bank_ids is not None,
+            has_query_intent=query_intent is not None and len(query_intent) > 0,
+            query_intent_preview=query_intent[:100] if query_intent else None,
         )
 
         # Load period availability from database
@@ -625,6 +630,13 @@ async def extract_periods(
             prompt_parts.append(
                 "NOTE: Banks are being clarified separately. "
                 "Only check if the period mentions in the query are clear and valid."
+            )
+
+        # Add query intent from banks extraction if available (critical for follow-up context)
+        if query_intent:
+            prompt_parts.append(
+                f"QUERY INTENT (from conversation context): {query_intent}\n"
+                "This intent was extracted from the full conversation and may contain period information."
             )
 
         system_prompt = "\n\n".join(prompt_parts)
@@ -1055,8 +1067,10 @@ async def clarify_query(
     if bank_result["status"] == "success":
         # We have banks, extract periods for them
         bank_ids = bank_result.get("bank_ids", [])
+        query_intent = bank_result.get("query_intent", "")  # Get intent from banks extraction
+
         period_result = await extract_periods(
-            query, bank_ids, context, available_databases, messages
+            query, bank_ids, context, available_databases, messages, query_intent
         )
 
         # Handle period extraction error
@@ -1106,7 +1120,8 @@ async def clarify_query(
 
     elif bank_result["status"] == "needs_clarification":
         # Banks need clarification, check if periods also need clarification
-        period_check = await extract_periods(query, None, context, available_databases, messages)
+        # No query_intent available yet since banks aren't identified
+        period_check = await extract_periods(query, None, context, available_databases, messages, None)
 
         # Collect clarification questions
         clarifications = []
