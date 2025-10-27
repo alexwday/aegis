@@ -10,7 +10,8 @@ from typing import Any, Dict, List
 
 from ...connections.llm_connector import complete_with_tools
 from ...utils.logging import get_logger
-from ...utils.prompt_loader import load_yaml, load_tools_from_yaml, load_global_prompts_for_agent
+from ...utils.prompt_loader import load_global_prompts_for_agent
+from ...utils.sql_prompt import prompt_manager
 
 
 async def route_query(
@@ -42,12 +43,17 @@ async def route_query(
     execution_id = context.get("execution_id")
 
     try:
-        # Load router YAML
-        router_data = load_yaml("aegis/router.yaml")
+        # Load router prompt from database
+        router_data = prompt_manager.get_latest_prompt(
+            model="aegis",
+            layer="aegis",
+            name="router",
+            system_prompt=False  # Get full record with all fields
+        )
 
         # Extract version info for tracking
         prompt_version = router_data.get("version", "unknown")
-        prompt_last_updated = router_data.get("last_updated", "unknown")
+        prompt_last_updated = router_data.get("updated_at", "unknown")
 
         # Load global context (uses_global from YAML)
         # Database descriptions come from the filtered database global
@@ -66,7 +72,7 @@ async def route_query(
         final_system_prompt = "\n\n---\n\n".join(prompt_parts)
 
         # Build user message from template (limit to last 10 messages for context)
-        user_prompt_template = router_data.get("user_prompt_template", "")
+        user_prompt_template = router_data.get("user_prompt", "")
         conversation_json = json.dumps(
             conversation_history[-10:] if conversation_history else [], indent=2
         )
@@ -80,19 +86,25 @@ async def route_query(
             {"role": "user", "content": user_content},
         ]
 
-        # Load tools from YAML (no fallback - let it fail if missing)
-        tools = load_tools_from_yaml("aegis/router", execution_id=execution_id)
+        # Load tools from database record
+        tool_definition = router_data.get("tool_definition")
+        if tool_definition:
+            # Single tool definition - wrap in array
+            tools = [tool_definition] if isinstance(tool_definition, dict) else tool_definition
+        else:
+            # Check for plural version
+            tools = router_data.get("tool_definitions", [])
 
         if not tools:
             logger.error(
                 "router.tools_missing",
                 execution_id=execution_id,
-                error="Failed to load tools from router.yaml"
+                error="Failed to load tools from database"
             )
             return {
                 "status": "Error",
                 "route": "research_workflow",  # Default to research on error
-                "error": "Router tools not found in YAML"
+                "error": "Router tools not found in database"
             }
 
         # Get model configuration (medium is optimal for fast binary decisions)
