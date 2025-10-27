@@ -52,6 +52,10 @@ async def route_query(
             execution_id=execution_id
         )
 
+        # Extract version info for return values
+        prompt_version = router_data.get("version") or "not_set"
+        prompt_last_updated = str(router_data.get("updated_at")) if router_data.get("updated_at") else "unknown"
+
         # Get composed prompt (already includes globals)
         final_system_prompt = router_data.get("composed_prompt", router_data.get("system_prompt", ""))
 
