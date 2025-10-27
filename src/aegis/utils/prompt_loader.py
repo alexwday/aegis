@@ -109,8 +109,10 @@ def load_prompt_from_db(
         has_user_prompt=bool(prompt_data.get("user_prompt")),
         has_tool_definition=bool(prompt_data.get("tool_definition")),
         has_tool_definitions=bool(prompt_data.get("tool_definitions")),
-        uses_global=prompt_data.get("uses_global", []),
-        version=prompt_data.get("version", "unknown")
+        uses_global=prompt_data.get("uses_global") or [],
+        version=prompt_data.get("version") or "not_set",
+        created_at=str(prompt_data.get("created_at")) if prompt_data.get("created_at") else "unknown",
+        updated_at=str(prompt_data.get("updated_at")) if prompt_data.get("updated_at") else "unknown"
     )
 
     # If composition requested, load global prompts and compose
