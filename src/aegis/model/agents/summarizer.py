@@ -9,7 +9,7 @@ original query while preserving source attribution.
 from typing import Any, AsyncGenerator, Dict, List
 from ...connections.llm_connector import stream
 from ...utils.logging import get_logger
-from ...utils.prompt_loader import load_yaml, load_global_prompts_for_agent
+from ...utils.sql_prompt import prompt_manager
 
 
 async def synthesize_responses(
@@ -52,13 +52,50 @@ async def synthesize_responses(
             databases=[r.get("database_id") for r in database_responses],
         )
 
-        # Load summarizer prompt
-        summarizer_data = load_yaml("aegis/summarizer.yaml")
+        # Load summarizer prompt from database
+        summarizer_data = prompt_manager.get_latest_prompt(
+            model="aegis",
+            layer="aegis",
+            name="summarizer",
+            system_prompt=False
+        )
 
-        # Load global context (uses_global from YAML)
+        # Load global context from database
         available_dbs = context.get("available_databases", [])
         uses_global = summarizer_data.get("uses_global", [])
-        globals_prompt = load_global_prompts_for_agent(uses_global, available_dbs)
+        global_order = ["fiscal", "project", "database", "restrictions"]
+        global_prompt_parts = []
+
+        for global_name in global_order:
+            if global_name not in uses_global:
+                continue
+
+            if global_name == "fiscal":
+                from ...utils.prompt_loader import _load_fiscal_prompt
+                global_prompt_parts.append(_load_fiscal_prompt())
+            elif global_name == "database":
+                from ...utils.database_filter import get_database_prompt
+                database_prompt = get_database_prompt(available_dbs)
+                global_prompt_parts.append(database_prompt)
+            else:
+                try:
+                    global_data = prompt_manager.get_latest_prompt(
+                        model="aegis",
+                        layer="global",
+                        name=global_name,
+                        system_prompt=False
+                    )
+                    if global_data.get("system_prompt"):
+                        global_prompt_parts.append(global_data["system_prompt"].strip())
+                except Exception as e:
+                    logger.warning(
+                        "summarizer.global_prompt_missing",
+                        execution_id=execution_id,
+                        global_name=global_name,
+                        error=str(e)
+                    )
+
+        globals_prompt = "\n\n---\n\n".join(global_prompt_parts) if global_prompt_parts else ""
 
         # Build system prompt
         prompt_parts = []

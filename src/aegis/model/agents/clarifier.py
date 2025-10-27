@@ -15,7 +15,7 @@ from typing import Any, Dict, List, Optional
 from ...connections.postgres_connector import fetch_all
 from ...connections.llm_connector import complete_with_tools
 from ...utils.logging import get_logger
-from ...utils.prompt_loader import load_yaml, load_tools_from_yaml, load_global_prompts_for_agent
+from ...utils.sql_prompt import prompt_manager
 from ...utils.settings import config
 
 
@@ -313,12 +313,49 @@ async def extract_banks(
             databases=available_databases,
         )
 
-        # Load clarifier prompt
-        clarifier_data = load_yaml("aegis/clarifier_banks.yaml")
+        # Load clarifier_banks prompt from database
+        clarifier_data = prompt_manager.get_latest_prompt(
+            model="aegis",
+            layer="aegis",
+            name="clarifier_banks",
+            system_prompt=False
+        )
 
-        # Load global context (uses_global from YAML)
+        # Load global context from database
         uses_global = clarifier_data.get("uses_global", [])
-        globals_prompt = load_global_prompts_for_agent(uses_global, available_databases)
+        global_order = ["fiscal", "project", "database", "restrictions"]
+        global_prompt_parts = []
+
+        for global_name in global_order:
+            if global_name not in uses_global:
+                continue
+
+            if global_name == "fiscal":
+                from ...utils.prompt_loader import _load_fiscal_prompt
+                global_prompt_parts.append(_load_fiscal_prompt())
+            elif global_name == "database":
+                from ...utils.database_filter import get_database_prompt
+                database_prompt = get_database_prompt(available_databases)
+                global_prompt_parts.append(database_prompt)
+            else:
+                try:
+                    global_data = prompt_manager.get_latest_prompt(
+                        model="aegis",
+                        layer="global",
+                        name=global_name,
+                        system_prompt=False
+                    )
+                    if global_data.get("system_prompt"):
+                        global_prompt_parts.append(global_data["system_prompt"].strip())
+                except Exception as e:
+                    logger.warning(
+                        "clarifier.banks.global_prompt_missing",
+                        execution_id=execution_id,
+                        global_name=global_name,
+                        error=str(e)
+                    )
+
+        globals_prompt = "\n\n---\n\n".join(global_prompt_parts) if global_prompt_parts else ""
 
         # Build prompt parts
         prompt_parts = []
@@ -344,23 +381,27 @@ async def extract_banks(
                 llm_messages.append(msg)
 
         # Load and format user prompt template
-        user_prompt_template = clarifier_data.get("user_prompt_template", "")
+        user_prompt_template = clarifier_data.get("user_prompt", "")
         user_content = user_prompt_template.format(query=query)
 
         llm_messages.append({"role": "user", "content": user_content})
 
-        # Load tools from YAML (no fallback)
-        tools = load_tools_from_yaml("aegis/clarifier_banks", execution_id=execution_id)
+        # Load tools from database record
+        tool_definition = clarifier_data.get("tool_definition")
+        if tool_definition:
+            tools = [tool_definition] if isinstance(tool_definition, dict) else tool_definition
+        else:
+            tools = clarifier_data.get("tool_definitions", [])
 
         if not tools:
             logger.error(
                 "clarifier.banks.tools_missing",
                 execution_id=execution_id,
-                error="Failed to load tools from clarifier_banks.yaml"
+                error="Failed to load tools from database"
             )
             return {
                 "status": "error",
-                "error": "Clarifier tools not found in YAML"
+                "error": "Clarifier tools not found in database"
             }
 
         # Call LLM with tools - using medium model for extraction
@@ -543,12 +584,49 @@ async def extract_periods(
         # Load period availability from database
         period_availability = await get_period_availability_from_db(bank_ids, available_databases)
 
-        # Load clarifier period prompt
-        clarifier_data = load_yaml("aegis/clarifier_periods.yaml")
+        # Load clarifier_periods prompt from database
+        clarifier_data = prompt_manager.get_latest_prompt(
+            model="aegis",
+            layer="aegis",
+            name="clarifier_periods",
+            system_prompt=False
+        )
 
-        # Load global context (uses_global from YAML)
+        # Load global context from database
         uses_global = clarifier_data.get("uses_global", [])
-        globals_prompt = load_global_prompts_for_agent(uses_global, available_databases)
+        global_order = ["fiscal", "project", "database", "restrictions"]
+        global_prompt_parts = []
+
+        for global_name in global_order:
+            if global_name not in uses_global:
+                continue
+
+            if global_name == "fiscal":
+                from ...utils.prompt_loader import _load_fiscal_prompt
+                global_prompt_parts.append(_load_fiscal_prompt())
+            elif global_name == "database":
+                from ...utils.database_filter import get_database_prompt
+                database_prompt = get_database_prompt(available_databases)
+                global_prompt_parts.append(database_prompt)
+            else:
+                try:
+                    global_data = prompt_manager.get_latest_prompt(
+                        model="aegis",
+                        layer="global",
+                        name=global_name,
+                        system_prompt=False
+                    )
+                    if global_data.get("system_prompt"):
+                        global_prompt_parts.append(global_data["system_prompt"].strip())
+                except Exception as e:
+                    logger.warning(
+                        "clarifier.periods.global_prompt_missing",
+                        execution_id=execution_id,
+                        global_name=global_name,
+                        error=str(e)
+                    )
+
+        globals_prompt = "\n\n---\n\n".join(global_prompt_parts) if global_prompt_parts else ""
 
         prompt_parts = []
         if globals_prompt:
@@ -630,23 +708,27 @@ async def extract_periods(
                 llm_messages.append(msg)
 
         # Load and format user prompt template
-        user_prompt_template = clarifier_data.get("user_prompt_template", "")
+        user_prompt_template = clarifier_data.get("user_prompt", "")
         user_content = user_prompt_template.format(query=query)
 
         llm_messages.append({"role": "user", "content": user_content})
 
-        # Load tools from YAML (no fallback)
-        all_tools = load_tools_from_yaml("aegis/clarifier_periods", execution_id=execution_id)
+        # Load tools from database record
+        tool_definition = clarifier_data.get("tool_definition")
+        if tool_definition:
+            all_tools = [tool_definition] if isinstance(tool_definition, dict) else tool_definition
+        else:
+            all_tools = clarifier_data.get("tool_definitions", [])
 
         if not all_tools:
             logger.error(
                 "clarifier.periods.tools_missing",
                 execution_id=execution_id,
-                error="Failed to load tools from clarifier_periods.yaml"
+                error="Failed to load tools from database"
             )
             return {
                 "status": "error",
-                "error": "Clarifier period tools not found in YAML"
+                "error": "Clarifier period tools not found in database"
             }
 
         # Filter tools based on whether we have banks

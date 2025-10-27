@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Optional
 from ...connections.postgres_connector import fetch_all
 from ...connections.llm_connector import complete_with_tools
 from ...utils.logging import get_logger
-from ...utils.prompt_loader import load_yaml, load_tools_from_yaml, load_global_prompts_for_agent
+from ...utils.sql_prompt import prompt_manager
 from ...utils.settings import config
 
 
@@ -331,15 +331,49 @@ async def plan_database_queries(
             bank_ids=bank_ids, periods=period_info, available_databases=available_databases
         )
 
-        # Load planner prompt
-        planner_data = load_yaml("aegis/planner.yaml")
-
-        # Load global context (uses_global from YAML)
-        # This will load filtered database descriptions via database_filter.get_database_prompt()
-        uses_global = planner_data.get("uses_global", [])
-        globals_prompt = load_global_prompts_for_agent(
-            uses_global, availability_data["available_databases"]
+        # Load planner prompt from database
+        planner_data = prompt_manager.get_latest_prompt(
+            model="aegis",
+            layer="aegis",
+            name="planner",
+            system_prompt=False
         )
+
+        # Load global context from database
+        uses_global = planner_data.get("uses_global", [])
+        global_order = ["fiscal", "project", "database", "restrictions"]
+        global_prompt_parts = []
+
+        for global_name in global_order:
+            if global_name not in uses_global:
+                continue
+
+            if global_name == "fiscal":
+                from ...utils.prompt_loader import _load_fiscal_prompt
+                global_prompt_parts.append(_load_fiscal_prompt())
+            elif global_name == "database":
+                from ...utils.database_filter import get_database_prompt
+                database_prompt = get_database_prompt(availability_data["available_databases"])
+                global_prompt_parts.append(database_prompt)
+            else:
+                try:
+                    global_data = prompt_manager.get_latest_prompt(
+                        model="aegis",
+                        layer="global",
+                        name=global_name,
+                        system_prompt=False
+                    )
+                    if global_data.get("system_prompt"):
+                        global_prompt_parts.append(global_data["system_prompt"].strip())
+                except Exception as e:
+                    logger.warning(
+                        "planner.global_prompt_missing",
+                        execution_id=execution_id,
+                        global_name=global_name,
+                        error=str(e)
+                    )
+
+        globals_prompt = "\n\n---\n\n".join(global_prompt_parts) if global_prompt_parts else ""
 
         # Build system prompt
         prompt_parts = []
@@ -361,7 +395,7 @@ async def plan_database_queries(
             conversation_context += f"{msg['role']}: {msg['content']}\n"
 
         # Load and format user prompt template
-        user_prompt_template = planner_data.get("user_prompt_template", "")
+        user_prompt_template = planner_data.get("user_prompt", "")
         user_message = user_prompt_template.format(
             conversation_context=conversation_context,
             query=query,
@@ -374,19 +408,23 @@ async def plan_database_queries(
             {"role": "user", "content": user_message},
         ]
 
-        # Load tools from YAML (no fallback)
-        tools = load_tools_from_yaml("aegis/planner", execution_id=execution_id)
+        # Load tools from database record
+        tool_definition = planner_data.get("tool_definition")
+        if tool_definition:
+            tools = [tool_definition] if isinstance(tool_definition, dict) else tool_definition
+        else:
+            tools = planner_data.get("tool_definitions", [])
 
         if not tools:
             logger.error(
                 "planner.tools_missing",
                 execution_id=execution_id,
-                error="Failed to load tools from planner.yaml"
+                error="Failed to load tools from database"
             )
             return {
                 "status": "error",
                 "databases": [],
-                "error": "Planner tools not found in YAML"
+                "error": "Planner tools not found in database"
             }
 
         # Call LLM with tools
