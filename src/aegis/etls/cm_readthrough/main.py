@@ -30,7 +30,6 @@ import uuid
 from datetime import datetime
 from typing import Dict, Any, List, Optional, Tuple
 from sqlalchemy import text
-import yaml
 from pathlib import Path
 
 # Import document converter functions
@@ -49,6 +48,7 @@ from aegis.connections.llm_connector import complete_with_tools
 from aegis.connections.postgres_connector import get_connection
 from aegis.utils.logging import setup_logging, get_logger
 from aegis.utils.settings import config
+from aegis.utils.prompt_loader import load_prompt_from_db
 from aegis.etls.cm_readthrough.config.config import (
     MODELS,
     TEMPERATURE,
@@ -221,15 +221,43 @@ async def find_latest_available_quarter(
         return None
 
 
-def load_prompt_template(prompt_file: str) -> Dict[str, Any]:
-    """Load prompt template from YAML file."""
-    prompt_path = Path(__file__).parent / "prompts" / prompt_file
+def load_prompt_template(prompt_file: str, execution_id: str = None) -> Dict[str, Any]:
+    """
+    Load prompt template from database.
 
-    if not prompt_path.exists():
-        raise FileNotFoundError(f"Prompt file not found: {prompt_path}")
+    Args:
+        prompt_file: Original YAML filename (e.g., "outlook_extraction.yaml")
+        execution_id: Execution ID for tracking
 
-    with open(prompt_path, 'r') as f:
-        return yaml.safe_load(f)
+    Returns:
+        Dict with system_template, user_template, tool_name, tool_description, tool_parameters
+    """
+    # Convert filename to prompt name (remove .yaml extension)
+    prompt_name = prompt_file.replace(".yaml", "")
+
+    # Load from database
+    prompt_data = load_prompt_from_db(
+        layer="cm_readthrough_etl",
+        name=prompt_name,
+        compose_with_globals=False,  # ETL doesn't use global contexts
+        available_databases=None,
+        execution_id=execution_id
+    )
+
+    # Convert database format to cm_readthrough's expected format
+    result = {
+        'system_template': prompt_data['system_prompt'],
+        'user_template': prompt_data.get('user_prompt', '')
+    }
+
+    # Extract tool definition components if present
+    if prompt_data.get('tool_definition'):
+        tool_def = prompt_data['tool_definition']
+        result['tool_name'] = tool_def['function']['name']
+        result['tool_description'] = tool_def['function']['description']
+        result['tool_parameters'] = tool_def['function']['parameters']['properties']
+
+    return result
 
 
 async def retrieve_full_transcript(
@@ -401,7 +429,8 @@ async def extract_outlook_from_transcript(
         }
     """
     # Load prompt template
-    prompt_template = load_prompt_template("outlook_extraction.yaml")
+    execution_id = context.get('execution_id')
+    prompt_template = load_prompt_template("outlook_extraction.yaml", execution_id)
 
     # Format categories using helper function
     categories_text = format_categories_for_prompt(categories)
@@ -516,7 +545,8 @@ async def extract_questions_from_qa(
         }
     """
     # Load prompt template
-    prompt_template = load_prompt_template("qa_extraction_dynamic.yaml")
+    execution_id = context.get('execution_id')
+    prompt_template = load_prompt_template("qa_extraction_dynamic.yaml", execution_id)
 
     # Format categories using helper function
     categories_text = format_categories_for_prompt(categories)
@@ -682,7 +712,8 @@ async def generate_subtitle(
         return default_subtitle
 
     # Load universal prompt template
-    prompt_template = load_prompt_template("subtitle_generation.yaml")
+    execution_id = context.get('execution_id')
+    prompt_template = load_prompt_template("subtitle_generation.yaml", execution_id)
 
     # Prepare content summary for subtitle generation
     content_summary = {}
@@ -791,7 +822,8 @@ async def format_outlook_batch(
         return {}
 
     # Load prompt template
-    prompt_template = load_prompt_template("batch_formatting.yaml")
+    execution_id = context.get('execution_id')
+    prompt_template = load_prompt_template("batch_formatting.yaml", execution_id)
 
     # Prepare outlook for formatting (remove bank_symbol for cleaner JSON)
     outlook_for_formatting = {
