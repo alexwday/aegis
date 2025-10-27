@@ -8,6 +8,7 @@ from typing import Dict, Any, List, Optional
 import yaml
 
 from .logging import get_logger
+from .sql_prompt import prompt_manager
 
 logger = get_logger()
 
@@ -51,6 +52,99 @@ def _load_fiscal_prompt() -> str:
     fiscal_module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(fiscal_module)
     return fiscal_module.get_fiscal_statement()
+
+
+def load_prompt_from_db(
+    layer: str,
+    name: str,
+    compose_with_globals: bool = True,
+    available_databases: Optional[List[str]] = None
+) -> Dict[str, Any]:
+    """
+    Load prompt from SQL database with optional global composition.
+
+    This is the standardized way for all agents and subagents to load prompts.
+    Handles global prompt composition automatically if requested.
+
+    Args:
+        layer: Prompt layer ("aegis", "transcripts", "reports", "global")
+        name: Prompt name (e.g., "router", "method_selection")
+        compose_with_globals: If True, auto-compose with global prompts
+        available_databases: Optional list for database filtering
+
+    Returns:
+        Dictionary with prompt data. If compose_with_globals=True, includes
+        'composed_prompt' field with globals prepended to system_prompt.
+
+    Example:
+        >>> # Agent usage
+        >>> prompt_data = load_prompt_from_db("aegis", "router", compose_with_globals=True)
+        >>> system_prompt = prompt_data["composed_prompt"]
+
+        >>> # Subagent usage
+        >>> prompt_data = load_prompt_from_db("transcripts", "method_selection", compose_with_globals=True)
+        >>> system_prompt = prompt_data["composed_prompt"]
+
+    Raises:
+        FileNotFoundError: If prompt doesn't exist in database
+    """
+    # Load prompt from database
+    prompt_data = prompt_manager.get_latest_prompt(
+        model="aegis",
+        layer=layer,
+        name=name,
+        system_prompt=False  # Get full record
+    )
+
+    # If composition requested, load global prompts and compose
+    if compose_with_globals and prompt_data.get("uses_global"):
+        global_prompt_parts = []
+
+        for global_name in GLOBAL_ORDER:
+            if global_name not in prompt_data["uses_global"]:
+                continue
+
+            if global_name == "fiscal":
+                # Fiscal is dynamically generated
+                global_prompt_parts.append(_load_fiscal_prompt())
+            elif global_name == "database":
+                # Database uses filtered prompt
+                from .database_filter import get_database_prompt
+                database_prompt = get_database_prompt(available_databases)
+                global_prompt_parts.append(database_prompt)
+            else:
+                # Load other global prompts from database
+                try:
+                    global_data = prompt_manager.get_latest_prompt(
+                        model="aegis",
+                        layer="global",
+                        name=global_name,
+                        system_prompt=False
+                    )
+                    if global_data.get("system_prompt"):
+                        global_prompt_parts.append(global_data["system_prompt"].strip())
+                except Exception as e:
+                    logger.warning(
+                        f"Global prompt '{global_name}' not found in database",
+                        error=str(e)
+                    )
+
+        # Find the main prompt content
+        main_content = None
+        content_key = None
+        for key in ['system_prompt', 'system_prompt_template', 'content']:
+            if key in prompt_data and prompt_data[key]:
+                main_content = prompt_data[key]
+                content_key = key
+                break
+
+        if main_content and global_prompt_parts:
+            # Compose: globals + main content
+            composed = "\n\n---\n\n".join(global_prompt_parts + [main_content])
+            prompt_data['composed_prompt'] = composed
+            prompt_data[f'original_{content_key}'] = main_content  # Save original
+
+    return prompt_data
 
 
 def _load_global_prompts(
