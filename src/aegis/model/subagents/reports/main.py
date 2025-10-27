@@ -12,7 +12,6 @@ import json
 
 # Import Aegis utilities
 from ....utils.logging import get_logger
-from ....utils.prompt_loader import load_subagent_prompt
 from ....utils.settings import config
 from ....connections.llm_connector import complete_with_tools
 from ....utils.monitor import add_monitor_entry, format_llm_call
