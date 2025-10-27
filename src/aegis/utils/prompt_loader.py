@@ -58,7 +58,8 @@ def load_prompt_from_db(
     layer: str,
     name: str,
     compose_with_globals: bool = True,
-    available_databases: Optional[List[str]] = None
+    available_databases: Optional[List[str]] = None,
+    execution_id: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Load prompt from SQL database with optional global composition.
@@ -71,6 +72,7 @@ def load_prompt_from_db(
         name: Prompt name (e.g., "router", "method_selection")
         compose_with_globals: If True, auto-compose with global prompts
         available_databases: Optional list for database filtering
+        execution_id: Optional execution ID for logging
 
     Returns:
         Dictionary with prompt data. If compose_with_globals=True, includes
@@ -96,9 +98,25 @@ def load_prompt_from_db(
         system_prompt=False  # Get full record
     )
 
+    # Log what was loaded from database
+    logger.info(
+        "prompt_loader.loaded_from_db",
+        execution_id=execution_id,
+        layer=layer,
+        name=name,
+        source="sql_database",
+        has_system_prompt=bool(prompt_data.get("system_prompt")),
+        has_user_prompt=bool(prompt_data.get("user_prompt")),
+        has_tool_definition=bool(prompt_data.get("tool_definition")),
+        has_tool_definitions=bool(prompt_data.get("tool_definitions")),
+        uses_global=prompt_data.get("uses_global", []),
+        version=prompt_data.get("version", "unknown")
+    )
+
     # If composition requested, load global prompts and compose
     if compose_with_globals and prompt_data.get("uses_global"):
         global_prompt_parts = []
+        globals_loaded = []
 
         for global_name in GLOBAL_ORDER:
             if global_name not in prompt_data["uses_global"]:
@@ -107,11 +125,13 @@ def load_prompt_from_db(
             if global_name == "fiscal":
                 # Fiscal is dynamically generated
                 global_prompt_parts.append(_load_fiscal_prompt())
+                globals_loaded.append(f"{global_name} (dynamic)")
             elif global_name == "database":
                 # Database uses filtered prompt
                 from .database_filter import get_database_prompt
                 database_prompt = get_database_prompt(available_databases)
                 global_prompt_parts.append(database_prompt)
+                globals_loaded.append(f"{global_name} (filtered)")
             else:
                 # Load other global prompts from database
                 try:
@@ -123,9 +143,12 @@ def load_prompt_from_db(
                     )
                     if global_data.get("system_prompt"):
                         global_prompt_parts.append(global_data["system_prompt"].strip())
+                        globals_loaded.append(f"{global_name} (db)")
                 except Exception as e:
                     logger.warning(
-                        f"Global prompt '{global_name}' not found in database",
+                        "prompt_loader.global_missing",
+                        execution_id=execution_id,
+                        global_name=global_name,
                         error=str(e)
                     )
 
@@ -143,6 +166,17 @@ def load_prompt_from_db(
             composed = "\n\n---\n\n".join(global_prompt_parts + [main_content])
             prompt_data['composed_prompt'] = composed
             prompt_data[f'original_{content_key}'] = main_content  # Save original
+
+            # Log successful composition
+            logger.info(
+                "prompt_loader.globals_composed",
+                execution_id=execution_id,
+                layer=layer,
+                name=name,
+                globals_loaded=globals_loaded,
+                total_globals=len(globals_loaded),
+                composed_length=len(composed)
+            )
 
     return prompt_data
 

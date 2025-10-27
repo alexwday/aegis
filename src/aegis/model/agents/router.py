@@ -48,21 +48,8 @@ async def route_query(
             layer="aegis",
             name="router",
             compose_with_globals=True,
-            available_databases=available_dbs
-        )
-
-        # Extract version info for tracking
-        prompt_version = router_data.get("version", "unknown")
-        prompt_last_updated = router_data.get("updated_at", "unknown")
-
-        logger.info(
-            "router.prompt_loaded",
-            execution_id=execution_id,
-            source="sql_database",
-            version=prompt_version,
-            last_updated=str(prompt_last_updated),
-            uses_global=router_data.get("uses_global", []),
-            has_composed_prompt=bool(router_data.get("composed_prompt"))
+            available_databases=available_dbs,
+            execution_id=execution_id
         )
 
         # Get composed prompt (already includes globals)
