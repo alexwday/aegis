@@ -91,7 +91,7 @@ async def generate_response(
             messages.append({"role": msg.get("role", "user"), "content": msg.get("content", "")})
 
         # Load and format user prompt template
-        user_prompt_template = response_data.get("user_prompt_template", "")
+        user_prompt_template = response_data.get("user_prompt", "")
         if user_prompt_template:
             user_content = user_prompt_template.format(latest_message=latest_message)
             messages.append({"role": "user", "content": user_content})
