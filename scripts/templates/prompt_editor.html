@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Aegis Prompt Editor</title>
+    <title>Prompt Editor</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
@@ -140,12 +140,63 @@
             color: #6c757d;
             font-size: 0.9rem;
         }
+        .chat-messages {
+            max-height: 400px;
+            overflow-y: auto;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            border: 1px solid #dee2e6;
+        }
+        .chat-message {
+            margin-bottom: 15px;
+            padding: 12px;
+            border-radius: 8px;
+            animation: fadeIn 0.3s;
+        }
+        .chat-message.user {
+            background-color: #667eea;
+            color: white;
+            margin-left: 20%;
+            text-align: right;
+        }
+        .chat-message.assistant {
+            background-color: white;
+            border: 1px solid #dee2e6;
+            margin-right: 20%;
+        }
+        .chat-message .role {
+            font-weight: 600;
+            font-size: 0.85rem;
+            margin-bottom: 5px;
+            opacity: 0.8;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .loading-dots {
+            display: inline-block;
+        }
+        .loading-dots span {
+            animation: blink 1.4s infinite both;
+        }
+        .loading-dots span:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+        .loading-dots span:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+        @keyframes blink {
+            0%, 80%, 100% { opacity: 0; }
+            40% { opacity: 1; }
+        }
     </style>
 </head>
 <body>
     <div class="header">
         <div class="container">
-            <h1><i class="fas fa-edit"></i> Aegis Prompt Editor</h1>
+            <h1><i class="fas fa-edit"></i> Prompt Editor</h1>
             <p class="mb-0">View and edit prompts from the database</p>
         </div>
     </div>
@@ -170,18 +221,23 @@
         <!-- Search and Filter -->
         <div class="table-container">
             <div class="row mb-3">
-                <div class="col-md-6">
+                <div class="col-md-5">
                     <input type="text" class="form-control" id="searchInput" placeholder="🔍 Search prompts...">
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <select class="form-select" id="filterLayer">
                         <option value="">All Layers</option>
                     </select>
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <select class="form-select" id="filterModel">
                         <option value="">All Models</option>
                     </select>
+                </div>
+                <div class="col-md-3">
+                    <button class="btn btn-success w-100" onclick="createNewPrompt()">
+                        <i class="fas fa-plus"></i> Create New Prompt
+                    </button>
                 </div>
             </div>
 
@@ -215,7 +271,7 @@
         <!-- Detail Panel -->
         <div class="detail-panel" id="detailPanel">
             <div class="d-flex justify-content-between align-items-center mb-4">
-                <h3><i class="fas fa-file-alt"></i> Prompt Details</h3>
+                <h3 id="detailPanelTitle"><i class="fas fa-file-alt"></i> Prompt Details</h3>
                 <button class="btn btn-secondary" onclick="closeDetail()">
                     <i class="fas fa-times"></i> Close
                 </button>
@@ -303,6 +359,33 @@
                     </button>
                 </div>
             </form>
+
+            <!-- AI Assistant Panel -->
+            <div class="mt-4">
+                <button class="btn btn-outline-primary w-100" type="button" data-bs-toggle="collapse" data-bs-target="#aiAssistant">
+                    <i class="fas fa-robot"></i> AI Prompt Assistant
+                    <i class="fas fa-chevron-down float-end mt-1"></i>
+                </button>
+                <div class="collapse mt-3" id="aiAssistant">
+                    <div class="card">
+                        <div class="card-body">
+                            <h6 class="card-title"><i class="fas fa-robot"></i> Ask the AI Assistant</h6>
+                            <p class="text-muted small mb-3">Get expert advice on improving this prompt. The AI can see your system prompt, user prompt, and tool definition.</p>
+
+                            <div id="chatMessages" class="chat-messages mb-3">
+                                <p class="text-muted text-center small">Start by asking a question below</p>
+                            </div>
+
+                            <div class="input-group">
+                                <input type="text" class="form-control" id="assistantInput" placeholder="e.g., How can I make this prompt clearer?" onkeypress="if(event.key === 'Enter') askAssistant()">
+                                <button class="btn btn-primary" type="button" onclick="askAssistant()" id="askBtn">
+                                    <i class="fas fa-paper-plane"></i> Ask
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -444,6 +527,9 @@
             usesGlobalArray = prompt.uses_global || [];
             renderTags();
 
+            // Update title to show edit mode
+            document.getElementById('detailPanelTitle').innerHTML = '<i class="fas fa-file-alt"></i> Prompt Details';
+
             // Show detail panel
             document.getElementById('detailPanel').classList.add('show');
             document.getElementById('detailPanel').scrollIntoView({ behavior: 'smooth' });
@@ -509,11 +595,6 @@
         }
 
         async function savePrompt(asNewVersion) {
-            if (!currentPromptId) {
-                alert('No prompt selected');
-                return;
-            }
-
             // Collect form data
             const promptData = {
                 model: document.getElementById('model').value,
@@ -526,6 +607,12 @@
                 user_prompt: document.getElementById('userPrompt').value,
                 uses_global: usesGlobalArray,
             };
+
+            // Validate required fields
+            if (!promptData.model || !promptData.layer || !promptData.name) {
+                alert('Model, Layer, and Name are required fields');
+                return;
+            }
 
             // Parse JSON tool definition
             const toolDefText = document.getElementById('toolDefinition').value.trim();
@@ -540,10 +627,17 @@
 
             try {
                 let url, method;
-                if (asNewVersion) {
+
+                if (!currentPromptId) {
+                    // Creating new prompt
+                    url = '/api/prompt';
+                    method = 'POST';
+                } else if (asNewVersion) {
+                    // Creating new version of existing prompt
                     url = `/api/prompt/${currentPromptId}/new-version`;
                     method = 'POST';
                 } else {
+                    // Updating existing prompt
                     url = `/api/prompt/${currentPromptId}`;
                     method = 'PUT';
                 }
@@ -577,12 +671,149 @@
                 row.classList.remove('selected');
             });
             currentPromptId = null;
+
+            // Clear AI assistant chat
+            const chatMessages = document.getElementById('chatMessages');
+            chatMessages.innerHTML = '<p class="text-muted text-center small">Start by asking a question below</p>';
+        }
+
+        function createNewPrompt() {
+            // Set to create mode
+            currentPromptId = null;
+
+            // Clear form fields
+            document.getElementById('promptId').value = '';
+            document.getElementById('model').value = '';
+            document.getElementById('layer').value = '';
+            document.getElementById('name').value = '';
+            document.getElementById('version').value = '1.0.0';
+            document.getElementById('updatedAt').value = '';
+            document.getElementById('description').value = '';
+            document.getElementById('comments').value = '';
+            document.getElementById('systemPrompt').value = '';
+            document.getElementById('userPrompt').value = '';
+            document.getElementById('toolDefinition').value = '';
+
+            // Clear tags array
+            usesGlobalArray = [];
+            renderTags();
+
+            // Update title
+            document.getElementById('detailPanelTitle').innerHTML = '<i class="fas fa-plus"></i> Create New Prompt';
+
+            // Clear selection highlighting
+            document.querySelectorAll('#promptsTable tbody tr').forEach(row => {
+                row.classList.remove('selected');
+            });
+
+            // Clear AI assistant chat
+            const chatMessages = document.getElementById('chatMessages');
+            chatMessages.innerHTML = '<p class="text-muted text-center small">Start by asking a question below</p>';
+
+            // Show detail panel
+            document.getElementById('detailPanel').classList.add('show');
+            document.getElementById('detailPanel').scrollIntoView({ behavior: 'smooth' });
         }
 
         function formatDate(dateString) {
             if (!dateString) return '-';
             const date = new Date(dateString);
             return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+        }
+
+        async function askAssistant() {
+            if (!currentPromptId) {
+                alert('Please select a prompt first');
+                return;
+            }
+
+            const input = document.getElementById('assistantInput');
+            const question = input.value.trim();
+
+            if (!question) {
+                alert('Please enter a question');
+                return;
+            }
+
+            // Get current prompt data
+            const promptData = {
+                layer: document.getElementById('layer').value,
+                name: document.getElementById('name').value,
+                description: document.getElementById('description').value,
+                system_prompt: document.getElementById('systemPrompt').value,
+                user_prompt: document.getElementById('userPrompt').value,
+                uses_global: usesGlobalArray
+            };
+
+            // Try to parse tool definition
+            const toolDefText = document.getElementById('toolDefinition').value.trim();
+            if (toolDefText) {
+                try {
+                    promptData.tool_definition = JSON.parse(toolDefText);
+                } catch (e) {
+                    // If invalid, include as text
+                    promptData.tool_definition = toolDefText;
+                }
+            }
+
+            // Add user message to chat
+            addChatMessage('user', question);
+            input.value = '';
+
+            // Show loading indicator
+            const askBtn = document.getElementById('askBtn');
+            const originalBtnText = askBtn.innerHTML;
+            askBtn.disabled = true;
+            askBtn.innerHTML = '<span class="loading-dots"><span>.</span><span>.</span><span>.</span></span>';
+
+            try {
+                const response = await fetch(`/api/prompt/${currentPromptId}/assist`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        question: question,
+                        prompt: promptData
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    addChatMessage('assistant', data.response);
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Failed to get assistant response');
+            } finally {
+                askBtn.disabled = false;
+                askBtn.innerHTML = originalBtnText;
+            }
+        }
+
+        function addChatMessage(role, content) {
+            const chatMessages = document.getElementById('chatMessages');
+
+            // Remove placeholder if present
+            const placeholder = chatMessages.querySelector('.text-center');
+            if (placeholder) {
+                placeholder.remove();
+            }
+
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `chat-message ${role}`;
+
+            const roleLabel = role === 'user' ? 'You' : 'AI Assistant';
+            messageDiv.innerHTML = `
+                <div class="role">${roleLabel}</div>
+                <div>${content.replace(/\n/g, '<br>')}</div>
+            `;
+
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
         }
 
         // Search functionality
