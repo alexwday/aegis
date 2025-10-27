@@ -13,6 +13,7 @@ import json
 # Import Aegis utilities
 from ....utils.logging import get_logger
 from ....utils.settings import config
+from ....utils.sql_prompt import prompt_manager
 from ....connections.llm_connector import complete_with_tools
 from ....utils.monitor import add_monitor_entry, format_llm_call
 
@@ -280,50 +281,46 @@ async def select_report_type(
     logger = get_logger()
     execution_id = context.get("execution_id")
 
-    # Define tool for report selection
-    tool = {
-        "type": "function",
-        "function": {
-            "name": "select_report",
-            "description": "Select the most appropriate report type",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "report_type": {
-                        "type": "string",
-                        "description": "The selected report type",
-                        "enum": [rt["report_type"] for rt in report_types]
-                    },
-                    "reasoning": {
-                        "type": "string",
-                        "description": "Brief explanation of why this report type was selected"
-                    }
-                },
-                "required": ["report_type", "reasoning"]
-            }
-        }
-    }
+    # Load prompt from database (no fallback)
+    prompt_data = prompt_manager.get_latest_prompt(
+        model="aegis",
+        layer="reports",
+        name="report_type_selection",
+        system_prompt=False
+    )
+    system_prompt = prompt_data.get("system_prompt", "")
+    user_prompt_template = prompt_data.get("user_prompt", "")
 
-    # Build prompt for selection
+    # Load tool from database
+    tool_definition = prompt_data.get("tool_definition")
+    if not tool_definition:
+        raise ValueError("No tool_definition found in report_type_selection prompt")
+
+    tool = tool_definition
+
+    # Build report options for prompt
     report_options = "\n".join([
         f"- {rt['report_type']}: {rt['report_name']} - {rt['report_description']}"
         for rt in report_types
     ])
 
+    # Update tool enum with actual report types
+    if "function" in tool and "parameters" in tool["function"]:
+        if "properties" in tool["function"]["parameters"]:
+            if "report_type" in tool["function"]["parameters"]["properties"]:
+                tool["function"]["parameters"]["properties"]["report_type"]["enum"] = [
+                    rt["report_type"] for rt in report_types
+                ]
+
+    # Format user prompt with variables
+    user_content = user_prompt_template.format(
+        user_intent=user_intent,
+        report_options=report_options
+    )
+
     messages = [
-        {
-            "role": "system",
-            "content": "You are a report selection assistant. Select the most appropriate report type based on the user's intent."
-        },
-        {
-            "role": "user",
-            "content": f"""User Intent: {user_intent}
-
-Available Report Types:
-{report_options}
-
-Select the report type that best matches what the user is looking for."""
-        }
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_content}
     ]
 
     try:
