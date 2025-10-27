@@ -55,6 +55,17 @@ async def route_query(
         prompt_version = router_data.get("version", "unknown")
         prompt_last_updated = router_data.get("updated_at", "unknown")
 
+        logger.info(
+            "router.prompt_loaded",
+            execution_id=execution_id,
+            source="sql_database",
+            version=prompt_version,
+            last_updated=str(prompt_last_updated),
+            has_system_prompt=bool(router_data.get("system_prompt")),
+            has_user_prompt=bool(router_data.get("user_prompt")),
+            has_tools=bool(router_data.get("tool_definition") or router_data.get("tool_definitions"))
+        )
+
         # Load global context (uses_global from YAML)
         # Database descriptions come from the filtered database global
         available_dbs = context.get("available_databases", [])
