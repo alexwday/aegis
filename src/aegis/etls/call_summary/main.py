@@ -133,7 +133,7 @@ def get_model_for_stage(stage: str, category_name: Optional[str] = None) -> str:
 def load_research_plan_config(execution_id):
     """Load the research plan prompt and tool definition from database."""
     prompt_data = load_prompt_from_db(
-        layer="call_summary",
+        layer="call_summary_etl",
         name="research_plan",
         compose_with_globals=False,  # ETL doesn't use global contexts
         available_databases=None,
@@ -148,7 +148,7 @@ def load_research_plan_config(execution_id):
 def load_category_extraction_config(execution_id):
     """Load the category extraction prompt and tool definition from database."""
     prompt_data = load_prompt_from_db(
-        layer="call_summary",
+        layer="call_summary_etl",
         name="category_extraction",
         compose_with_globals=False,  # ETL doesn't use global contexts
         available_databases=None,

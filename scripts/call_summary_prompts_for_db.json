@@ -1,7 +1,7 @@
 [
   {
-    "model": "call_summary_etl",
-    "layer": "call_summary",
+    "model": "aegis",
+    "layer": "call_summary_etl",
     "name": "research_plan",
     "description": "Generates comprehensive research plan for earnings call category analysis",
     "comments": "Version: 2.1 | Framework: CO-STAR+XML | Purpose: Generate comprehensive research plan for earnings call analysis | Token Target: ~300 tokens | Last Updated: 2024-09-26",
@@ -57,8 +57,8 @@
     "version": "2.1.0"
   },
   {
-    "model": "call_summary_etl",
-    "layer": "call_summary",
+    "model": "aegis",
+    "layer": "call_summary_etl",
     "name": "category_extraction",
     "description": "Extracts comprehensive category content with supporting evidence and quotes",
     "comments": "Version: 2.1 | Framework: CO-STAR+XML | Purpose: Extract comprehensive category content from earnings calls | Token Target: ~400 tokens | Last Updated: 2024-09-26",

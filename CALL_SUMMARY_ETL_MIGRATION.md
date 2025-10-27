@@ -11,8 +11,8 @@ Contains two prompts properly formatted for the database:
 
 **Database Schema Mapping**:
 ```
-model → "call_summary_etl"
-layer → "call_summary"
+model → "aegis"
+layer → "call_summary_etl"
 name → "research_plan" | "category_extraction"
 description → One-sentence purpose
 comments → Full metadata (version, framework, purpose)
@@ -59,8 +59,8 @@ Use the Prompt Editor at http://localhost:5001 to create both prompts:
 **For research_plan:**
 1. Click "Create New Prompt"
 2. Fill in fields from `scripts/call_summary_prompts_for_db.json`:
-   - **Model**: call_summary_etl
-   - **Layer**: call_summary
+   - **Model**: aegis
+   - **Layer**: call_summary_etl
    - **Name**: research_plan
    - **Version**: 2.1.0
    - **Description**: Generates comprehensive research plan for earnings call category analysis
@@ -73,8 +73,8 @@ Use the Prompt Editor at http://localhost:5001 to create both prompts:
 **For category_extraction:**
 1. Click "Create New Prompt" again
 2. Fill in fields from `scripts/call_summary_prompts_for_db.json`:
-   - **Model**: call_summary_etl
-   - **Layer**: call_summary
+   - **Model**: aegis
+   - **Layer**: call_summary_etl
    - **Name**: category_extraction
    - **Version**: 2.1.0
    - **Description**: Extracts comprehensive category content with supporting evidence and quotes
@@ -155,7 +155,7 @@ Once call_summary works:
 **Solution**: Verify prompts exist in database with correct layer/name:
 ```sql
 SELECT layer, name, version FROM prompts
-WHERE model = 'call_summary_etl'
+WHERE model = 'aegis' AND layer = 'call_summary_etl'
 ORDER BY name;
 ```
 
