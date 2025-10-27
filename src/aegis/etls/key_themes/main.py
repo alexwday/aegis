@@ -23,7 +23,6 @@ import time
 from datetime import datetime
 from typing import Dict, Any, List, Optional
 from sqlalchemy import text
-import yaml
 from docx import Document
 from docx.shared import Pt, Inches, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_COLOR_INDEX
@@ -48,6 +47,7 @@ from aegis.connections.oauth_connector import setup_authentication
 from aegis.connections.llm_connector import complete, complete_with_tools
 from aegis.connections.postgres_connector import get_connection
 from aegis.utils.logging import setup_logging, get_logger
+from aegis.utils.prompt_loader import load_prompt_from_db
 from aegis.etls.key_themes.config.config import get_model, TEMPERATURE, MAX_TOKENS
 
 # Initialize logging
@@ -404,16 +404,18 @@ async def extract_theme_and_summary(qa_block: QABlock, context: Dict[str, Any]):
     Step 2A: Extract theme title and summary for a single Q&A block.
     Validates content and skips invalid Q&A sessions.
     """
-    # Load theme extraction tool
-    tool_path = os.path.join(
-        os.path.dirname(os.path.abspath(__file__)),
-        'prompts', 'theme_extraction_prompt.yaml'
+    # Load theme extraction prompt from database
+    execution_id = context.get('execution_id')
+    prompt_data = load_prompt_from_db(
+        layer="key_themes_etl",
+        name="theme_extraction",
+        compose_with_globals=False,  # ETL doesn't use global contexts
+        available_databases=None,
+        execution_id=execution_id
     )
-    with open(tool_path, 'r') as f:
-        tool_config = yaml.safe_load(f)
 
-    # Format the system template with actual values
-    system_prompt = tool_config['system_template'].format(
+    # Format the system prompt with actual values
+    system_prompt = prompt_data['system_prompt'].format(
         bank_name=context.get('bank_name', 'Bank'),
         quarter=context.get('quarter', 'Q'),
         fiscal_year=context.get('fiscal_year', 'Year')
@@ -432,7 +434,7 @@ async def extract_theme_and_summary(qa_block: QABlock, context: Dict[str, Any]):
         try:
             response = await complete_with_tools(
                 messages=messages,
-                tools=[tool_config['tool']],
+                tools=[prompt_data['tool_definition']],
                 context=context,
                 llm_params={"model": get_model("theme_extraction"), "temperature": TEMPERATURE, "max_tokens": MAX_TOKENS}
             )
@@ -485,16 +487,18 @@ async def format_qa_html(qa_block: QABlock, context: Dict[str, Any]):
         qa_block.formatted_content = None
         return
 
-    # Load HTML formatting config
-    format_path = os.path.join(
-        os.path.dirname(os.path.abspath(__file__)),
-        'prompts', 'html_formatting_prompt.yaml'
+    # Load HTML formatting prompt from database
+    execution_id = context.get('execution_id')
+    prompt_data = load_prompt_from_db(
+        layer="key_themes_etl",
+        name="html_formatting",
+        compose_with_globals=False,  # ETL doesn't use global contexts
+        available_databases=None,
+        execution_id=execution_id
     )
-    with open(format_path, 'r') as f:
-        format_config = yaml.safe_load(f)
 
-    # Format the system template with actual values
-    system_prompt = format_config['system_template'].format(
+    # Format the system prompt with actual values
+    system_prompt = prompt_data['system_prompt'].format(
         bank_name=context.get('bank_name', 'Bank'),
         quarter=context.get('quarter', 'Q'),
         fiscal_year=context.get('fiscal_year', 'Year')
@@ -568,13 +572,15 @@ async def determine_comprehensive_grouping(
 
     logger.info(f"Determining comprehensive theme grouping for {len(valid_qa_blocks)} valid Q&A blocks")
 
-    # Load grouping tool
-    tool_path = os.path.join(
-        os.path.dirname(os.path.abspath(__file__)),
-        'prompts', 'theme_grouping_prompt.yaml'
+    # Load grouping prompt from database
+    execution_id = context.get('execution_id')
+    prompt_data = load_prompt_from_db(
+        layer="key_themes_etl",
+        name="theme_grouping",
+        compose_with_globals=False,  # ETL doesn't use global contexts
+        available_databases=None,
+        execution_id=execution_id
     )
-    with open(tool_path, 'r') as f:
-        tool_config = yaml.safe_load(f)
 
     # Prepare Q&A blocks info for the LLM - only valid blocks
     qa_blocks_info = []
@@ -588,7 +594,7 @@ async def determine_comprehensive_grouping(
     qa_blocks_str = "\n\n".join(qa_blocks_info)
 
     # Build prompt with all Q&A information and context
-    system_prompt = tool_config['system_template'].format(
+    system_prompt = prompt_data['system_prompt'].format(
         bank_name=context.get('bank_name', 'Bank'),
         bank_symbol=context.get('bank_symbol', 'BANK'),
         quarter=context.get('quarter', 'Q'),
@@ -610,7 +616,7 @@ async def determine_comprehensive_grouping(
         try:
             response = await complete_with_tools(
                 messages=messages,
-                tools=[tool_config['tool']],
+                tools=[prompt_data['tool_definition']],
                 context=context,
                 llm_params={"model": get_model("grouping"), "temperature": TEMPERATURE, "max_tokens": MAX_TOKENS}
             )
