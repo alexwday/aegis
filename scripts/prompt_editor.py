@@ -1,0 +1,258 @@
+#!/usr/bin/env python3
+"""
+Prompt Editor - Standalone web interface for viewing and editing prompts table.
+
+Usage:
+    python scripts/prompt_editor.py
+
+Then open browser to: http://localhost:5001
+"""
+
+import sys
+import os
+from pathlib import Path
+from datetime import datetime
+from typing import Optional, List, Dict, Any
+import json
+
+# Add parent directory to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+
+from flask import Flask, render_template, jsonify, request
+from sqlalchemy import text
+from aegis.connections.postgres_connector import get_connection
+from aegis.utils.settings import config
+
+app = Flask(__name__, template_folder="templates")
+
+
+def increment_version(version: str) -> str:
+    """
+    Increment version string (e.g., "1.0.0" -> "1.1.0").
+
+    Args:
+        version: Current version string
+
+    Returns:
+        Incremented version string
+    """
+    try:
+        parts = version.split(".")
+        if len(parts) == 3:
+            major, minor, patch = parts
+            # Increment minor version
+            return f"{major}.{int(minor) + 1}.0"
+        elif len(parts) == 2:
+            major, minor = parts
+            return f"{major}.{int(minor) + 1}"
+        else:
+            # If version doesn't follow standard format, just append ".1"
+            return f"{version}.1"
+    except (ValueError, AttributeError):
+        # If parsing fails, append ".1"
+        return f"{version}.1"
+
+
+@app.route("/")
+def index():
+    """Render main prompt editor page."""
+    return render_template("prompt_editor.html")
+
+
+@app.route("/api/prompts", methods=["GET"])
+async def get_prompts():
+    """Get all prompts from database."""
+    try:
+        async with get_connection() as conn:
+            result = await conn.execute(
+                text("""
+                    SELECT
+                        id, model, layer, name, description, comments,
+                        system_prompt, user_prompt, tool_definition, uses_global,
+                        version, created_at, updated_at
+                    FROM prompts
+                    ORDER BY model, layer, name, version DESC
+                """)
+            )
+
+            rows = result.fetchall()
+            prompts = []
+
+            for row in rows:
+                prompts.append({
+                    "id": row[0],
+                    "model": row[1],
+                    "layer": row[2],
+                    "name": row[3],
+                    "description": row[4],
+                    "comments": row[5],
+                    "system_prompt": row[6],
+                    "user_prompt": row[7],
+                    "tool_definition": row[8],
+                    "uses_global": row[9],
+                    "version": row[10],
+                    "created_at": row[11].isoformat() if row[11] else None,
+                    "updated_at": row[12].isoformat() if row[12] else None,
+                })
+
+            return jsonify({"success": True, "prompts": prompts})
+
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/prompt/<int:prompt_id>", methods=["GET"])
+async def get_prompt(prompt_id: int):
+    """Get single prompt by ID."""
+    try:
+        async with get_connection() as conn:
+            result = await conn.execute(
+                text("""
+                    SELECT
+                        id, model, layer, name, description, comments,
+                        system_prompt, user_prompt, tool_definition, uses_global,
+                        version, created_at, updated_at
+                    FROM prompts
+                    WHERE id = :id
+                """),
+                {"id": prompt_id}
+            )
+
+            row = result.fetchone()
+
+            if not row:
+                return jsonify({"success": False, "error": "Prompt not found"}), 404
+
+            prompt = {
+                "id": row[0],
+                "model": row[1],
+                "layer": row[2],
+                "name": row[3],
+                "description": row[4],
+                "comments": row[5],
+                "system_prompt": row[6],
+                "user_prompt": row[7],
+                "tool_definition": row[8],
+                "uses_global": row[9],
+                "version": row[10],
+                "created_at": row[11].isoformat() if row[11] else None,
+                "updated_at": row[12].isoformat() if row[12] else None,
+            }
+
+            return jsonify({"success": True, "prompt": prompt})
+
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/prompt/<int:prompt_id>", methods=["PUT"])
+async def update_prompt(prompt_id: int):
+    """Update existing prompt (overwrite)."""
+    try:
+        data = request.json
+
+        async with get_connection() as conn:
+            # Update the record
+            await conn.execute(
+                text("""
+                    UPDATE prompts
+                    SET
+                        model = :model,
+                        layer = :layer,
+                        name = :name,
+                        description = :description,
+                        comments = :comments,
+                        system_prompt = :system_prompt,
+                        user_prompt = :user_prompt,
+                        tool_definition = :tool_definition,
+                        uses_global = :uses_global,
+                        version = :version,
+                        updated_at = :updated_at
+                    WHERE id = :id
+                """),
+                {
+                    "id": prompt_id,
+                    "model": data.get("model"),
+                    "layer": data.get("layer"),
+                    "name": data.get("name"),
+                    "description": data.get("description"),
+                    "comments": data.get("comments"),
+                    "system_prompt": data.get("system_prompt"),
+                    "user_prompt": data.get("user_prompt"),
+                    "tool_definition": json.dumps(data.get("tool_definition")) if data.get("tool_definition") else None,
+                    "uses_global": data.get("uses_global"),
+                    "version": data.get("version"),
+                    "updated_at": datetime.utcnow(),
+                }
+            )
+
+            await conn.commit()
+
+            return jsonify({"success": True, "message": "Prompt updated successfully"})
+
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/prompt/<int:prompt_id>/new-version", methods=["POST"])
+async def create_new_version(prompt_id: int):
+    """Create new version of prompt (increment version, new record)."""
+    try:
+        data = request.json
+
+        # Increment version
+        current_version = data.get("version", "1.0.0")
+        new_version = increment_version(current_version)
+
+        async with get_connection() as conn:
+            # Insert new record with incremented version
+            await conn.execute(
+                text("""
+                    INSERT INTO prompts (
+                        model, layer, name, description, comments,
+                        system_prompt, user_prompt, tool_definition, uses_global,
+                        version, created_at, updated_at
+                    ) VALUES (
+                        :model, :layer, :name, :description, :comments,
+                        :system_prompt, :user_prompt, :tool_definition, :uses_global,
+                        :version, :created_at, :updated_at
+                    )
+                """),
+                {
+                    "model": data.get("model"),
+                    "layer": data.get("layer"),
+                    "name": data.get("name"),
+                    "description": data.get("description"),
+                    "comments": data.get("comments"),
+                    "system_prompt": data.get("system_prompt"),
+                    "user_prompt": data.get("user_prompt"),
+                    "tool_definition": json.dumps(data.get("tool_definition")) if data.get("tool_definition") else None,
+                    "uses_global": data.get("uses_global"),
+                    "version": new_version,
+                    "created_at": datetime.utcnow(),
+                    "updated_at": datetime.utcnow(),
+                }
+            )
+
+            await conn.commit()
+
+            return jsonify({
+                "success": True,
+                "message": f"New version created: {new_version}",
+                "version": new_version
+            })
+
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+if __name__ == "__main__":
+    print("\n" + "="*60)
+    print("🚀 Prompt Editor Starting...")
+    print("="*60)
+    print(f"\n📊 Database: {config.postgres_host}:{config.postgres_port}/{config.postgres_database}")
+    print(f"🌐 Web Interface: http://localhost:5001")
+    print("\n💡 Press Ctrl+C to stop\n")
+    print("="*60 + "\n")
+
+    app.run(host="0.0.0.0", port=5001, debug=True)
