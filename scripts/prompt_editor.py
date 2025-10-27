@@ -49,29 +49,28 @@ def get_db_connection():
 
 def increment_version(version: str) -> str:
     """
-    Increment version string (e.g., "1.0.0" -> "1.1.0").
+    Increment version string (e.g., "1.0.0" -> "2.0.0").
+
+    Always increments the major version and resets minor/patch to 0.
 
     Args:
         version: Current version string
 
     Returns:
-        Incremented version string
+        Incremented version string (X.0.0)
     """
     try:
         parts = version.split(".")
-        if len(parts) == 3:
-            major, minor, patch = parts
-            # Increment minor version
-            return f"{major}.{int(minor) + 1}.0"
-        elif len(parts) == 2:
-            major, minor = parts
-            return f"{major}.{int(minor) + 1}"
+        if len(parts) >= 1:
+            major = int(parts[0])
+            # Increment major version, reset rest to 0
+            return f"{major + 1}.0.0"
         else:
-            # If version doesn't follow standard format, just append ".1"
-            return f"{version}.1"
+            # Default if parsing fails
+            return "2.0.0"
     except (ValueError, AttributeError):
-        # If parsing fails, append ".1"
-        return f"{version}.1"
+        # If parsing fails, default to 2.0.0
+        return "2.0.0"
 
 
 @app.route("/")
