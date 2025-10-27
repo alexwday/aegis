@@ -184,7 +184,7 @@ async def rerank_similarity_chunks(
         else:
             system_prompt = rerank_prompts["system_prompt"]
 
-        user_template = rerank_prompts["user_prompt_template"]
+        user_template = rerank_prompts["user_prompt"]
         reranking_tool = rerank_prompts["tool_definition"]
     except Exception as e:
         logger.error(f"Failed to load reranking prompt from database: {e}")
@@ -671,7 +671,7 @@ async def generate_research_statement(
     else:
         # Standard conversational mode: use template from YAML
         query_intent = combo.get("query_intent", "General analysis")
-        user_prompt = synthesis_prompts["user_prompt_template"].format(
+        user_prompt = synthesis_prompts["user_prompt"].format(
             bank_name=combo["bank_name"],
             bank_symbol=combo["bank_symbol"],
             quarter=combo["quarter"],

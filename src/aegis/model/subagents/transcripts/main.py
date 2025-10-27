@@ -112,7 +112,7 @@ async def transcripts_agent(
                     execution_id=execution_id,
                 )
 
-            user_prompt_template = method_prompts["user_prompt_template"]
+            user_prompt_template = method_prompts["user_prompt"]
             retrieval_tool = method_prompts["tool_definition"]
 
             # Load financial categories and format for system prompt
