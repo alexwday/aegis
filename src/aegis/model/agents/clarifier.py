@@ -337,6 +337,18 @@ async def extract_banks(
             for msg in messages[:-1]:
                 llm_messages.append(msg)
 
+            # Debug: Log conversation context being sent
+            logger.debug(
+                "clarifier.banks.conversation_context",
+                execution_id=execution_id,
+                total_messages=len(messages),
+                history_messages_added=len(messages[:-1]),
+                history_preview=[
+                    {"role": msg["role"], "content": msg["content"][:50] + "..."}
+                    for msg in messages[:-1]
+                ]
+            )
+
         # Load and format user prompt template
         user_prompt_template = clarifier_data.get("user_prompt", "")
         user_content = user_prompt_template.format(query=query)
@@ -625,6 +637,18 @@ async def extract_periods(
             # Add all messages except the latest (which is the query)
             for msg in messages[:-1]:
                 llm_messages.append(msg)
+
+            # Debug: Log conversation context being sent
+            logger.debug(
+                "clarifier.periods.conversation_context",
+                execution_id=execution_id,
+                total_messages=len(messages),
+                history_messages_added=len(messages[:-1]),
+                history_preview=[
+                    {"role": msg["role"], "content": msg["content"][:50] + "..."}
+                    for msg in messages[:-1]
+                ]
+            )
 
         # Load and format user prompt template
         user_prompt_template = clarifier_data.get("user_prompt", "")
@@ -1002,7 +1026,20 @@ async def clarify_query(
         execution_id=execution_id,
         query_preview=query[:100] + "..." if len(query) > 100 else query,
         available_databases=available_databases if available_databases else "all",
+        messages_received=len(messages) if messages else 0,
     )
+
+    # Debug: Log conversation context received
+    if messages:
+        logger.debug(
+            "clarifier.messages_received",
+            execution_id=execution_id,
+            total_messages=len(messages),
+            messages_preview=[
+                {"role": msg["role"], "content": msg["content"][:50] + "..."}
+                for msg in messages
+            ]
+        )
 
     # Stage 1: Extract banks and query intent
     bank_result = await extract_banks(query, context, available_databases, messages)
