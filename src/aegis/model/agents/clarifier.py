@@ -337,15 +337,21 @@ async def extract_banks(
             for msg in messages[:-1]:
                 llm_messages.append(msg)
 
-            # Debug: Log conversation context being sent
-            logger.debug(
-                "clarifier.banks.conversation_context",
+            # CRITICAL: Log conversation context being sent TO LLM
+            logger.info(
+                "clarifier.banks.sending_to_llm",
                 execution_id=execution_id,
-                total_messages=len(messages),
-                history_messages_added=len(messages[:-1]),
-                history_preview=[
-                    {"role": msg["role"], "content": msg["content"][:50] + "..."}
-                    for msg in messages[:-1]
+                total_input_messages=len(messages),
+                history_messages_added_to_llm=len(messages[:-1]),
+                llm_messages_count=len(llm_messages),  # Will be system + history + user
+                conversation_sent_to_llm=[
+                    {
+                        "index": i,
+                        "role": msg["role"],
+                        "content_length": len(msg.get("content", "")),
+                        "content_preview": msg.get("content", "")[:80] + "..." if len(msg.get("content", "")) > 80 else msg.get("content", "")
+                    }
+                    for i, msg in enumerate(llm_messages[1:-1])  # Skip system and user (query), show history
                 ]
             )
 
@@ -650,15 +656,22 @@ async def extract_periods(
             for msg in messages[:-1]:
                 llm_messages.append(msg)
 
-            # Debug: Log conversation context being sent
-            logger.debug(
-                "clarifier.periods.conversation_context",
+            # CRITICAL: Log conversation context being sent TO LLM
+            logger.info(
+                "clarifier.periods.sending_to_llm",
                 execution_id=execution_id,
-                total_messages=len(messages),
-                history_messages_added=len(messages[:-1]),
-                history_preview=[
-                    {"role": msg["role"], "content": msg["content"][:50] + "..."}
-                    for msg in messages[:-1]
+                total_input_messages=len(messages),
+                history_messages_added_to_llm=len(messages[:-1]),
+                llm_messages_count=len(llm_messages),  # Will be system + history + user
+                has_query_intent_in_prompt=query_intent is not None and len(query_intent) > 0,
+                conversation_sent_to_llm=[
+                    {
+                        "index": i,
+                        "role": msg["role"],
+                        "content_length": len(msg.get("content", "")),
+                        "content_preview": msg.get("content", "")[:80] + "..." if len(msg.get("content", "")) > 80 else msg.get("content", "")
+                    }
+                    for i, msg in enumerate(llm_messages[1:-1])  # Skip system and user (query), show history
                 ]
             )
 
@@ -1041,16 +1054,29 @@ async def clarify_query(
         messages_received=len(messages) if messages else 0,
     )
 
-    # Debug: Log conversation context received
+    # CRITICAL: Log EXACT conversation being passed from main.py (after processing to 10 msgs)
     if messages:
-        logger.debug(
-            "clarifier.messages_received",
+        logger.info(
+            "clarifier.conversation_received_from_main",
             execution_id=execution_id,
-            total_messages=len(messages),
-            messages_preview=[
-                {"role": msg["role"], "content": msg["content"][:50] + "..."}
-                for msg in messages
+            total_conversation_messages=len(messages),
+            latest_message_role=messages[-1]["role"] if messages else None,
+            latest_message_preview=messages[-1]["content"][:80] + "..." if messages and len(messages[-1]["content"]) > 80 else messages[-1]["content"] if messages else None,
+            full_conversation=[
+                {
+                    "index": i,
+                    "role": msg["role"],
+                    "content_length": len(msg["content"]),
+                    "content_preview": msg["content"][:80] + "..." if len(msg["content"]) > 80 else msg["content"]
+                }
+                for i, msg in enumerate(messages)
             ]
+        )
+    else:
+        logger.warning(
+            "clarifier.no_conversation_received",
+            execution_id=execution_id,
+            message="Clarifier received NO conversation messages from main"
         )
 
     # Stage 1: Extract banks and query intent
