@@ -10,6 +10,7 @@ import asyncio
 
 from ....utils.logging import get_logger
 from ....utils.settings import config
+from ....utils.prompt_loader import load_prompt_from_db
 from ....connections.llm_connector import complete_with_tools
 from ....utils.monitor import add_monitor_entry
 
@@ -33,7 +34,7 @@ from .retrieval import (
 )
 
 # Import utility functions
-from .utils import load_financial_categories, load_transcripts_yaml
+from .utils import load_financial_categories
 
 
 async def transcripts_agent(
@@ -86,8 +87,14 @@ async def transcripts_agent(
         # ==================================================
 
         try:
-            # Load method selection prompts from YAML with global contexts
-            method_prompts = load_transcripts_yaml("method_selection", compose_with_globals=True)
+            # Load method selection prompts from database with global contexts
+            method_prompts = load_prompt_from_db(
+                layer="transcripts",
+                name="method_selection",
+                compose_with_globals=True,
+                available_databases=None,  # Transcripts doesn't filter databases
+                execution_id=execution_id
+            )
 
             # Use composed prompt if available (includes fiscal, project globals)
             # Otherwise fall back to raw template

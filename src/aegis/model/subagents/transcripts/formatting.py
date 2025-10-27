@@ -166,11 +166,17 @@ async def rerank_similarity_chunks(
     logger = get_logger()
     execution_id = context.get("execution_id")
 
-    # Load reranking prompts from YAML with global contexts
-    from .utils import load_transcripts_yaml
+    # Load reranking prompts from database with global contexts
+    from ....utils.prompt_loader import load_prompt_from_db
 
     try:
-        rerank_prompts = load_transcripts_yaml("reranking", compose_with_globals=True)
+        rerank_prompts = load_prompt_from_db(
+            layer="transcripts",
+            name="reranking",
+            compose_with_globals=True,
+            available_databases=None,  # Transcripts doesn't filter databases
+            execution_id=execution_id
+        )
 
         # Use composed prompt if available (includes fiscal, project globals)
         if "composed_prompt" in rerank_prompts:
@@ -629,11 +635,17 @@ async def generate_research_statement(
     logger = get_logger()
     execution_id = context.get("execution_id")
 
-    # Load research synthesis prompts from YAML with global contexts
-    from .utils import load_transcripts_yaml
+    # Load research synthesis prompts from database with global contexts
+    from ....utils.prompt_loader import load_prompt_from_db
 
     try:
-        synthesis_prompts = load_transcripts_yaml("research_synthesis", compose_with_globals=True)
+        synthesis_prompts = load_prompt_from_db(
+            layer="transcripts",
+            name="research_synthesis",
+            compose_with_globals=True,
+            available_databases=None,  # Transcripts doesn't filter databases
+            execution_id=execution_id
+        )
     except Exception as e:
         logger.error(f"Failed to load research_synthesis prompt from database: {e}")
         raise RuntimeError(

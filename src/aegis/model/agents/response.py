@@ -10,7 +10,7 @@ from typing import Any, AsyncGenerator, Dict, List, Union
 
 from ...connections.llm_connector import complete, stream
 from ...utils.logging import get_logger
-from ...utils.sql_prompt import prompt_manager
+from ...utils.prompt_loader import load_prompt_from_db
 
 
 async def generate_response(
@@ -67,65 +67,21 @@ async def generate_response(
     execution_id = context.get("execution_id")
 
     try:
-        # Load response agent prompt from database
-        response_data = prompt_manager.get_latest_prompt(
-            model="aegis",
+        # Load response agent prompt from database with global composition
+        response_data = load_prompt_from_db(
             layer="aegis",
             name="response",
-            system_prompt=False
+            compose_with_globals=True,
+            available_databases=context.get("available_databases", []),
+            execution_id=execution_id
         )
 
         # Extract version info for tracking
-        prompt_version = response_data.get("version", "unknown")
-        prompt_last_updated = response_data.get("updated_at", "unknown")
+        prompt_version = response_data.get("version") or "not_set"
+        prompt_last_updated = str(response_data.get("updated_at")) if response_data.get("updated_at") else "unknown"
 
-        # Load global context from database
-        available_dbs = context.get("available_databases", [])
-        uses_global = response_data.get("uses_global", [])
-        global_order = ["fiscal", "project", "database", "restrictions"]
-        global_prompt_parts = []
-
-        for global_name in global_order:
-            if global_name not in uses_global:
-                continue
-
-            if global_name == "fiscal":
-                from ...utils.prompt_loader import _load_fiscal_prompt
-                global_prompt_parts.append(_load_fiscal_prompt())
-            elif global_name == "database":
-                from ...utils.database_filter import get_database_prompt
-                database_prompt = get_database_prompt(available_dbs)
-                global_prompt_parts.append(database_prompt)
-            else:
-                try:
-                    global_data = prompt_manager.get_latest_prompt(
-                        model="aegis",
-                        layer="global",
-                        name=global_name,
-                        system_prompt=False
-                    )
-                    if global_data.get("system_prompt"):
-                        global_prompt_parts.append(global_data["system_prompt"].strip())
-                except Exception as e:
-                    logger.warning(
-                        "response.global_prompt_missing",
-                        execution_id=execution_id,
-                        global_name=global_name,
-                        error=str(e)
-                    )
-
-        globals_prompt = "\n\n---\n\n".join(global_prompt_parts) if global_prompt_parts else ""
-
-        # Build system prompt
-        agent_system_prompt = response_data.get("system_prompt", "")
-
-        # Join globals + agent prompt
-        prompt_parts = []
-        if globals_prompt:
-            prompt_parts.append(globals_prompt)
-        if agent_system_prompt:
-            prompt_parts.append(agent_system_prompt.strip())
-        system_prompt = "\n\n---\n\n".join(prompt_parts)
+        # Get the composed prompt (globals + response prompt)
+        system_prompt = response_data.get("composed_prompt", response_data.get("system_prompt", ""))
 
         # Build conversation context
         messages = [{"role": "system", "content": system_prompt}]

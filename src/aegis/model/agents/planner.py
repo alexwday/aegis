@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Optional
 from ...connections.postgres_connector import fetch_all
 from ...connections.llm_connector import complete_with_tools
 from ...utils.logging import get_logger
-from ...utils.sql_prompt import prompt_manager
+from ...utils.prompt_loader import load_prompt_from_db
 from ...utils.settings import config
 
 
@@ -331,63 +331,20 @@ async def plan_database_queries(
             bank_ids=bank_ids, periods=period_info, available_databases=available_databases
         )
 
-        # Load planner prompt from database
-        planner_data = prompt_manager.get_latest_prompt(
-            model="aegis",
+        # Load planner prompt from database with global composition
+        planner_data = load_prompt_from_db(
             layer="aegis",
             name="planner",
-            system_prompt=False
+            compose_with_globals=True,
+            available_databases=availability_data["available_databases"],
+            execution_id=execution_id
         )
 
-        # Load global context from database
-        uses_global = planner_data.get("uses_global", [])
-        global_order = ["fiscal", "project", "database", "restrictions"]
-        global_prompt_parts = []
-
-        for global_name in global_order:
-            if global_name not in uses_global:
-                continue
-
-            if global_name == "fiscal":
-                from ...utils.prompt_loader import _load_fiscal_prompt
-                global_prompt_parts.append(_load_fiscal_prompt())
-            elif global_name == "database":
-                from ...utils.database_filter import get_database_prompt
-                database_prompt = get_database_prompt(availability_data["available_databases"])
-                global_prompt_parts.append(database_prompt)
-            else:
-                try:
-                    global_data = prompt_manager.get_latest_prompt(
-                        model="aegis",
-                        layer="global",
-                        name=global_name,
-                        system_prompt=False
-                    )
-                    if global_data.get("system_prompt"):
-                        global_prompt_parts.append(global_data["system_prompt"].strip())
-                except Exception as e:
-                    logger.warning(
-                        "planner.global_prompt_missing",
-                        execution_id=execution_id,
-                        global_name=global_name,
-                        error=str(e)
-                    )
-
-        globals_prompt = "\n\n---\n\n".join(global_prompt_parts) if global_prompt_parts else ""
-
-        # Build system prompt
-        prompt_parts = []
-        if globals_prompt:
-            prompt_parts.append(globals_prompt)
-
-        # Add planner system prompt
-        agent_system_prompt = planner_data.get("system_prompt", "")
-        prompt_parts.append(agent_system_prompt.strip())
+        # Get the composed prompt (globals + planner prompt)
+        base_prompt = planner_data.get("composed_prompt", planner_data.get("system_prompt", ""))
 
         # Add availability table (dynamic data at END)
-        prompt_parts.append(availability_data["table"])
-
-        system_prompt = "\n\n".join(prompt_parts)
+        system_prompt = "\n\n".join([base_prompt, availability_data["table"]])
 
         # Build conversation context for the planner
         conversation_context = "Previous conversation:\n"

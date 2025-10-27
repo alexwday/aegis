@@ -9,7 +9,7 @@ original query while preserving source attribution.
 from typing import Any, AsyncGenerator, Dict, List
 from ...connections.llm_connector import stream
 from ...utils.logging import get_logger
-from ...utils.sql_prompt import prompt_manager
+from ...utils.prompt_loader import load_prompt_from_db
 
 
 async def synthesize_responses(
@@ -52,61 +52,17 @@ async def synthesize_responses(
             databases=[r.get("database_id") for r in database_responses],
         )
 
-        # Load summarizer prompt from database
-        summarizer_data = prompt_manager.get_latest_prompt(
-            model="aegis",
+        # Load summarizer prompt from database with global composition
+        summarizer_data = load_prompt_from_db(
             layer="aegis",
             name="summarizer",
-            system_prompt=False
+            compose_with_globals=True,
+            available_databases=context.get("available_databases", []),
+            execution_id=execution_id
         )
 
-        # Load global context from database
-        available_dbs = context.get("available_databases", [])
-        uses_global = summarizer_data.get("uses_global", [])
-        global_order = ["fiscal", "project", "database", "restrictions"]
-        global_prompt_parts = []
-
-        for global_name in global_order:
-            if global_name not in uses_global:
-                continue
-
-            if global_name == "fiscal":
-                from ...utils.prompt_loader import _load_fiscal_prompt
-                global_prompt_parts.append(_load_fiscal_prompt())
-            elif global_name == "database":
-                from ...utils.database_filter import get_database_prompt
-                database_prompt = get_database_prompt(available_dbs)
-                global_prompt_parts.append(database_prompt)
-            else:
-                try:
-                    global_data = prompt_manager.get_latest_prompt(
-                        model="aegis",
-                        layer="global",
-                        name=global_name,
-                        system_prompt=False
-                    )
-                    if global_data.get("system_prompt"):
-                        global_prompt_parts.append(global_data["system_prompt"].strip())
-                except Exception as e:
-                    logger.warning(
-                        "summarizer.global_prompt_missing",
-                        execution_id=execution_id,
-                        global_name=global_name,
-                        error=str(e)
-                    )
-
-        globals_prompt = "\n\n---\n\n".join(global_prompt_parts) if global_prompt_parts else ""
-
-        # Build system prompt
-        prompt_parts = []
-        if globals_prompt:
-            prompt_parts.append(globals_prompt)
-
-        agent_system_prompt = summarizer_data.get("system_prompt", "")
-        if agent_system_prompt:
-            prompt_parts.append(agent_system_prompt.strip())
-
-        system_prompt = "\n\n---\n\n".join(prompt_parts)
+        # Get the composed prompt (globals + summarizer prompt)
+        system_prompt = summarizer_data.get("composed_prompt", summarizer_data.get("system_prompt", ""))
 
         # Format database responses for the user prompt
         formatted_responses = []

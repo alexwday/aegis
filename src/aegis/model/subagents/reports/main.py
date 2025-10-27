@@ -13,7 +13,7 @@ import json
 # Import Aegis utilities
 from ....utils.logging import get_logger
 from ....utils.settings import config
-from ....utils.sql_prompt import prompt_manager
+from ....utils.prompt_loader import load_prompt_from_db
 from ....connections.llm_connector import complete_with_tools
 from ....utils.monitor import add_monitor_entry, format_llm_call
 
@@ -281,14 +281,16 @@ async def select_report_type(
     logger = get_logger()
     execution_id = context.get("execution_id")
 
-    # Load prompt from database (no fallback)
-    prompt_data = prompt_manager.get_latest_prompt(
-        model="aegis",
+    # Load prompt from database with global composition
+    prompt_data = load_prompt_from_db(
         layer="reports",
         name="report_type_selection",
-        system_prompt=False
+        compose_with_globals=True,
+        available_databases=None,  # Reports doesn't filter databases
+        execution_id=execution_id
     )
-    system_prompt = prompt_data.get("system_prompt", "")
+    # Get the composed prompt (globals + report_type_selection prompt)
+    system_prompt = prompt_data.get("composed_prompt", prompt_data.get("system_prompt", ""))
     user_prompt_template = prompt_data.get("user_prompt", "")
 
     # Load tool from database
