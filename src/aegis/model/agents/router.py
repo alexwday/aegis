@@ -10,7 +10,6 @@ from typing import Any, Dict, List
 
 from ...connections.llm_connector import complete_with_tools
 from ...utils.logging import get_logger
-from ...utils.prompt_loader import load_global_prompts_for_agent
 from ...utils.sql_prompt import prompt_manager
 
 
@@ -66,11 +65,54 @@ async def route_query(
             has_tools=bool(router_data.get("tool_definition") or router_data.get("tool_definitions"))
         )
 
-        # Load global context (uses_global from YAML)
-        # Database descriptions come from the filtered database global
+        # Load global context from database
+        # Global prompts loaded in canonical order: fiscal > project > database > restrictions
         available_dbs = context.get("available_databases", [])
         uses_global = router_data.get("uses_global", [])
-        globals_prompt = load_global_prompts_for_agent(uses_global, available_dbs)
+
+        global_order = ["fiscal", "project", "database", "restrictions"]
+        global_prompt_parts = []
+
+        for global_name in global_order:
+            if global_name not in uses_global:
+                continue
+
+            if global_name == "fiscal":
+                # Fiscal is still generated dynamically from fiscal.py
+                from ...utils.prompt_loader import _load_fiscal_prompt
+                global_prompt_parts.append(_load_fiscal_prompt())
+            elif global_name == "database":
+                # Database uses filtered prompt based on available databases
+                from ...utils.database_filter import get_database_prompt
+                database_prompt = get_database_prompt(available_dbs)
+                global_prompt_parts.append(database_prompt)
+            else:
+                # Load other global prompts from database
+                try:
+                    global_data = prompt_manager.get_latest_prompt(
+                        model="aegis",
+                        layer="global",
+                        name=global_name,
+                        system_prompt=False
+                    )
+                    if global_data.get("system_prompt"):
+                        global_prompt_parts.append(global_data["system_prompt"].strip())
+                except Exception as e:
+                    logger.warning(
+                        "router.global_prompt_missing",
+                        execution_id=execution_id,
+                        global_name=global_name,
+                        error=str(e)
+                    )
+
+        globals_prompt = "\n\n---\n\n".join(global_prompt_parts) if global_prompt_parts else ""
+
+        logger.info(
+            "router.globals_loaded",
+            execution_id=execution_id,
+            uses_global=uses_global,
+            loaded_count=len(global_prompt_parts)
+        )
 
         # Get agent system prompt (no placeholders to format)
         agent_system_prompt = router_data.get("system_prompt", "")
