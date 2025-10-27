@@ -128,9 +128,10 @@ def _load_global_prompts_for_transcripts(uses_global: List[str]) -> List[str]:
 
 async def load_financial_categories() -> Dict[int, Dict[str, str]]:
     """
-    Load financial categories from SQL database.
+    Load financial categories from YAML file.
 
-    Migrated from YAML to SQL database. Loads from prompts table with layer='transcripts', name='financial_categories'.
+    Financial categories are static configuration data, NOT prompts. They should
+    remain in the YAML file at prompts/subagents/transcripts/financial_categories.yaml.
 
     Returns:
         Dictionary mapping category IDs to their names and descriptions
@@ -141,47 +142,34 @@ async def load_financial_categories() -> Dict[int, Dict[str, str]]:
     logger = get_logger()
 
     try:
-        # Load from SQL database
-        categories_data = prompt_manager.get_latest_prompt(
-            model="aegis",
-            layer="transcripts",
-            name="financial_categories",
-            system_prompt=False
-        )
+        # Get the path to the financial categories YAML file
+        yaml_path = Path(__file__).parent.parent.parent / "prompts" / "subagents" / "transcripts" / "financial_categories.yaml"
 
-        # Extract the categories list from the database structure
-        # Could be in system_prompt (as JSON), user_prompt, or a custom field
-        categories_list = None
+        if not yaml_path.exists():
+            raise FileNotFoundError(f"Financial categories YAML not found at: {yaml_path}")
 
-        # Try to find categories in various fields
-        for field in ['system_prompt', 'user_prompt', 'description']:
-            if field in categories_data and categories_data[field]:
-                try:
-                    import json
-                    # Try to parse as JSON
-                    parsed = json.loads(categories_data[field])
-                    if isinstance(parsed, dict) and "categories" in parsed:
-                        categories_list = parsed["categories"]
-                        break
-                    elif isinstance(parsed, list):
-                        categories_list = parsed
-                        break
-                except (json.JSONDecodeError, TypeError):
-                    # Not JSON, skip
-                    pass
+        # Load YAML file
+        with open(yaml_path, 'r', encoding='utf-8') as f:
+            data = yaml.safe_load(f)
+
+        # Extract categories list from legacy format
+        categories_list = data.get("categories")
 
         if not categories_list:
-            raise KeyError("'categories' data not found in database record")
+            raise KeyError("'categories' field not found in YAML file")
 
         # Convert to dict keyed by ID
         categories = {}
         for cat in categories_list:
             categories[cat["id"]] = {"name": cat["name"], "description": cat["description"]}
+
+        logger.debug(f"Loaded {len(categories)} financial categories from YAML")
         return categories
+
     except Exception as e:
-        logger.error(f"Failed to load financial categories from database: {e}")
+        logger.error(f"Failed to load financial categories from YAML: {e}")
         raise RuntimeError(
-            "Critical error: Cannot load financial categories from database. "
+            "Critical error: Cannot load financial categories from YAML. "
             "Method selection will not work without this data."
         ) from e
 
