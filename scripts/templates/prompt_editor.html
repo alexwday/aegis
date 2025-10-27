@@ -79,31 +79,45 @@
         .array-tags {
             display: flex;
             flex-wrap: wrap;
-            gap: 5px;
-            padding: 5px;
-            border: 1px solid #ced4da;
-            border-radius: 4px;
-            min-height: 38px;
+            gap: 8px;
+            padding: 10px;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            min-height: 50px;
+            background-color: #f8f9fa;
         }
-        .tag-item {
-            background-color: #667eea;
-            color: white;
-            padding: 3px 10px;
-            border-radius: 15px;
-            font-size: 0.85rem;
+        .array-tags:empty {
             display: flex;
             align-items: center;
-            gap: 5px;
+            justify-content: center;
+        }
+        .tag-item {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            transition: transform 0.2s;
+        }
+        .tag-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
         }
         .tag-remove {
             cursor: pointer;
             font-weight: bold;
+            font-size: 1.2rem;
+            line-height: 1;
+            padding: 0 4px;
+            border-radius: 50%;
+            transition: background-color 0.2s;
         }
-        .tag-input {
-            border: none;
-            outline: none;
-            flex: 1;
-            min-width: 100px;
+        .tag-remove:hover {
+            background-color: rgba(255,255,255,0.2);
         }
         .stats {
             display: flex;
@@ -263,8 +277,17 @@
 
                 <div class="mb-3">
                     <label class="field-label">Uses Global (Array)</label>
+                    <div class="mb-2">
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="tagInput" placeholder="Enter value (e.g., fiscal, project, database)">
+                            <button class="btn btn-outline-primary" type="button" onclick="addTag()">
+                                <i class="fas fa-plus"></i> Add
+                            </button>
+                        </div>
+                        <small class="text-muted">Add items one at a time, or press Enter in the input field</small>
+                    </div>
                     <div class="array-tags" id="usesGlobalContainer">
-                        <input type="text" class="tag-input" id="tagInput" placeholder="Type and press Enter...">
+                        <!-- Tags will be rendered here -->
                     </div>
                 </div>
 
@@ -432,24 +455,38 @@
             input.addEventListener('keydown', function(e) {
                 if (e.key === 'Enter') {
                     e.preventDefault();
-                    const value = input.value.trim();
-                    if (value && !usesGlobalArray.includes(value)) {
-                        usesGlobalArray.push(value);
-                        renderTags();
-                        input.value = '';
-                    }
+                    addTag();
                 }
             });
         }
 
+        function addTag() {
+            const input = document.getElementById('tagInput');
+            const value = input.value.trim();
+
+            if (!value) {
+                alert('Please enter a value');
+                return;
+            }
+
+            if (usesGlobalArray.includes(value)) {
+                alert('This value already exists');
+                return;
+            }
+
+            usesGlobalArray.push(value);
+            renderTags();
+            input.value = '';
+            input.focus();
+        }
+
         function renderTags() {
             const container = document.getElementById('usesGlobalContainer');
-            const input = document.getElementById('tagInput');
 
-            // Clear existing tags
-            container.querySelectorAll('.tag-item').forEach(tag => tag.remove());
+            // Clear all existing content
+            container.innerHTML = '';
 
-            // Add tags before input
+            // Add tags
             usesGlobalArray.forEach((tag, index) => {
                 const tagElement = document.createElement('div');
                 tagElement.className = 'tag-item';
@@ -457,8 +494,13 @@
                     ${tag}
                     <span class="tag-remove" onclick="removeTag(${index})">×</span>
                 `;
-                container.insertBefore(tagElement, input);
+                container.appendChild(tagElement);
             });
+
+            // Show message if no tags
+            if (usesGlobalArray.length === 0) {
+                container.innerHTML = '<small class="text-muted">No items added yet</small>';
+            }
         }
 
         function removeTag(index) {

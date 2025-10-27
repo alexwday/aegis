@@ -14,16 +14,37 @@ from pathlib import Path
 from datetime import datetime
 from typing import Optional, List, Dict, Any
 import json
+from contextlib import contextmanager
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from flask import Flask, render_template, jsonify, request
-from sqlalchemy import text
-from aegis.connections.postgres_connector import get_connection
+from sqlalchemy import create_engine, text, MetaData
+from sqlalchemy.pool import QueuePool
 from aegis.utils.settings import config
 
 app = Flask(__name__, template_folder="templates")
+
+# Create synchronous database engine for Flask
+sync_engine = create_engine(
+    f"postgresql://{config.postgres_user}:{config.postgres_password}"
+    f"@{config.postgres_host}:{config.postgres_port}/{config.postgres_database}",
+    poolclass=QueuePool,
+    pool_size=5,
+    max_overflow=10,
+    pool_pre_ping=True,
+)
+
+
+@contextmanager
+def get_db_connection():
+    """Context manager for database connections."""
+    conn = sync_engine.connect()
+    try:
+        yield conn
+    finally:
+        conn.close()
 
 
 def increment_version(version: str) -> str:
@@ -60,11 +81,11 @@ def index():
 
 
 @app.route("/api/prompts", methods=["GET"])
-async def get_prompts():
+def get_prompts():
     """Get all prompts from database."""
     try:
-        async with get_connection() as conn:
-            result = await conn.execute(
+        with get_db_connection() as conn:
+            result = conn.execute(
                 text("""
                     SELECT
                         id, model, layer, name, description, comments,
@@ -102,11 +123,11 @@ async def get_prompts():
 
 
 @app.route("/api/prompt/<int:prompt_id>", methods=["GET"])
-async def get_prompt(prompt_id: int):
+def get_prompt(prompt_id: int):
     """Get single prompt by ID."""
     try:
-        async with get_connection() as conn:
-            result = await conn.execute(
+        with get_db_connection() as conn:
+            result = conn.execute(
                 text("""
                     SELECT
                         id, model, layer, name, description, comments,
@@ -146,14 +167,19 @@ async def get_prompt(prompt_id: int):
 
 
 @app.route("/api/prompt/<int:prompt_id>", methods=["PUT"])
-async def update_prompt(prompt_id: int):
+def update_prompt(prompt_id: int):
     """Update existing prompt (overwrite)."""
     try:
         data = request.json
 
-        async with get_connection() as conn:
+        with get_db_connection() as conn:
+            # Convert tool_definition to JSON string for JSONB
+            tool_def_json = None
+            if data.get("tool_definition"):
+                tool_def_json = json.dumps(data.get("tool_definition"))
+
             # Update the record
-            await conn.execute(
+            conn.execute(
                 text("""
                     UPDATE prompts
                     SET
@@ -164,7 +190,7 @@ async def update_prompt(prompt_id: int):
                         comments = :comments,
                         system_prompt = :system_prompt,
                         user_prompt = :user_prompt,
-                        tool_definition = :tool_definition,
+                        tool_definition = CAST(:tool_definition AS JSONB),
                         uses_global = :uses_global,
                         version = :version,
                         updated_at = :updated_at
@@ -179,14 +205,14 @@ async def update_prompt(prompt_id: int):
                     "comments": data.get("comments"),
                     "system_prompt": data.get("system_prompt"),
                     "user_prompt": data.get("user_prompt"),
-                    "tool_definition": json.dumps(data.get("tool_definition")) if data.get("tool_definition") else None,
+                    "tool_definition": tool_def_json,
                     "uses_global": data.get("uses_global"),
                     "version": data.get("version"),
                     "updated_at": datetime.utcnow(),
                 }
             )
 
-            await conn.commit()
+            conn.commit()
 
             return jsonify({"success": True, "message": "Prompt updated successfully"})
 
@@ -195,7 +221,7 @@ async def update_prompt(prompt_id: int):
 
 
 @app.route("/api/prompt/<int:prompt_id>/new-version", methods=["POST"])
-async def create_new_version(prompt_id: int):
+def create_new_version(prompt_id: int):
     """Create new version of prompt (increment version, new record)."""
     try:
         data = request.json
@@ -204,9 +230,14 @@ async def create_new_version(prompt_id: int):
         current_version = data.get("version", "1.0.0")
         new_version = increment_version(current_version)
 
-        async with get_connection() as conn:
+        with get_db_connection() as conn:
+            # Convert tool_definition to JSON string for JSONB
+            tool_def_json = None
+            if data.get("tool_definition"):
+                tool_def_json = json.dumps(data.get("tool_definition"))
+
             # Insert new record with incremented version
-            await conn.execute(
+            conn.execute(
                 text("""
                     INSERT INTO prompts (
                         model, layer, name, description, comments,
@@ -214,7 +245,7 @@ async def create_new_version(prompt_id: int):
                         version, created_at, updated_at
                     ) VALUES (
                         :model, :layer, :name, :description, :comments,
-                        :system_prompt, :user_prompt, :tool_definition, :uses_global,
+                        :system_prompt, :user_prompt, CAST(:tool_definition AS JSONB), :uses_global,
                         :version, :created_at, :updated_at
                     )
                 """),
@@ -226,7 +257,7 @@ async def create_new_version(prompt_id: int):
                     "comments": data.get("comments"),
                     "system_prompt": data.get("system_prompt"),
                     "user_prompt": data.get("user_prompt"),
-                    "tool_definition": json.dumps(data.get("tool_definition")) if data.get("tool_definition") else None,
+                    "tool_definition": tool_def_json,
                     "uses_global": data.get("uses_global"),
                     "version": new_version,
                     "created_at": datetime.utcnow(),
@@ -234,7 +265,7 @@ async def create_new_version(prompt_id: int):
                 }
             )
 
-            await conn.commit()
+            conn.commit()
 
             return jsonify({
                 "success": True,
