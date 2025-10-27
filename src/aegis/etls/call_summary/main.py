@@ -20,7 +20,6 @@ from datetime import datetime
 from typing import Dict, Any, List, Optional
 from sqlalchemy import text
 import pandas as pd
-import yaml
 from docx import Document
 from docx.shared import Inches, Pt, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -46,6 +45,7 @@ from aegis.connections.llm_connector import complete_with_tools
 from aegis.connections.postgres_connector import get_connection
 from aegis.utils.logging import setup_logging, get_logger
 from aegis.utils.settings import config
+from aegis.utils.prompt_loader import load_prompt_from_db
 from aegis.etls.call_summary.config.config import MODELS, TEMPERATURE, MAX_TOKENS
 
 # Initialize logging
@@ -130,22 +130,39 @@ def get_model_for_stage(stage: str, category_name: Optional[str] = None) -> str:
     return model
 
 
-def load_research_plan_config():
-    """Load the research plan prompt and tool definition from YAML file."""
-    prompt_path = os.path.join(
-        os.path.dirname(os.path.abspath(__file__)),
-        'prompts', 'research_plan_prompt.yaml'
+def load_research_plan_config(execution_id):
+    """Load the research plan prompt and tool definition from database."""
+    prompt_data = load_prompt_from_db(
+        layer="call_summary",
+        name="research_plan",
+        compose_with_globals=False,  # ETL doesn't use global contexts
+        available_databases=None,
+        execution_id=execution_id
     )
-    with open(prompt_path, 'r') as f:
-        config = yaml.safe_load(f)
     return {
-        'system_template': config['system_template'],
-        'tool': config['tool']
+        'system_template': prompt_data['system_prompt'],
+        'tool': prompt_data['tool_definition']
     }
 
 
-def load_category_extraction_config():
-    """Load the category extraction prompt and tool definition from YAML file."""
+def load_category_extraction_config(execution_id):
+    """Load the category extraction prompt and tool definition from database."""
+    prompt_data = load_prompt_from_db(
+        layer="call_summary",
+        name="category_extraction",
+        compose_with_globals=False,  # ETL doesn't use global contexts
+        available_databases=None,
+        execution_id=execution_id
+    )
+    return {
+        'system_template': prompt_data['system_prompt'],
+        'tool': prompt_data['tool_definition']
+    }
+
+
+# Legacy YAML loader functions - kept for reference but no longer used
+def load_research_plan_config_yaml():
+    """DEPRECATED: Load the research plan prompt and tool definition from YAML file."""
     prompt_path = os.path.join(
         os.path.dirname(os.path.abspath(__file__)),
         'prompts', 'category_extraction_prompt.yaml'
@@ -819,7 +836,7 @@ async def generate_call_summary(
         )
         
         # Load research plan configuration (prompt + tool)
-        research_config = load_research_plan_config()
+        research_config = load_research_plan_config(execution_id)
         
         # Format categories for system prompt
         categories_text = ""
@@ -934,7 +951,7 @@ Category {i}:
         category_results = []
         
         # Load category extraction configuration
-        extraction_config = load_category_extraction_config()
+        extraction_config = load_category_extraction_config(execution_id)
         
         for i, category in enumerate(categories, 1):
             logger.info(
