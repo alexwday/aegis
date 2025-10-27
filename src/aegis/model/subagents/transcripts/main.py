@@ -87,7 +87,7 @@ async def transcripts_agent(
 
         try:
             # Load method selection prompts from YAML with global contexts
-            method_prompts = load_transcripts_yaml("method_selection.yaml", compose_with_globals=True)
+            method_prompts = load_transcripts_yaml("method_selection", compose_with_globals=True)
 
             # Use composed prompt if available (includes fiscal, project globals)
             # Otherwise fall back to raw template
@@ -123,9 +123,9 @@ async def transcripts_agent(
                 num_categories=len(categories),
             )
         except Exception as e:
-            logger.error(f"Failed to load method_selection.yaml: {e}")
+            logger.error(f"Failed to load method_selection prompt from database: {e}")
             raise RuntimeError(
-                f"Critical error: Could not load method selection prompts from YAML: {e}"
+                f"Critical error: Could not load method selection prompts from database: {e}"
             )
 
         # ==================================================

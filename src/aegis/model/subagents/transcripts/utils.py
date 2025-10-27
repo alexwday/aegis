@@ -19,7 +19,7 @@ def load_transcripts_yaml(filename: str, compose_with_globals: bool = False) -> 
     Migrated from YAML to SQL database. Loads from prompts table with layer='transcripts'.
 
     Args:
-        filename: Name of prompt (e.g., "method_selection.yaml" -> "method_selection")
+        filename: Name of prompt (e.g., "method_selection", "reranking")
         compose_with_globals: If True, compose prompts with global contexts (fiscal, project, etc.)
 
     Returns:
@@ -31,8 +31,8 @@ def load_transcripts_yaml(filename: str, compose_with_globals: bool = False) -> 
     """
     logger = get_logger()
 
-    # Extract name without .yaml extension
-    prompt_name = filename.replace(".yaml", "")
+    # Use prompt name directly (no .yaml extension expected)
+    prompt_name = filename
 
     try:
         # Load from SQL database

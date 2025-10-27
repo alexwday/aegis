@@ -170,7 +170,7 @@ async def rerank_similarity_chunks(
     from .utils import load_transcripts_yaml
 
     try:
-        rerank_prompts = load_transcripts_yaml("reranking.yaml", compose_with_globals=True)
+        rerank_prompts = load_transcripts_yaml("reranking", compose_with_globals=True)
 
         # Use composed prompt if available (includes fiscal, project globals)
         if "composed_prompt" in rerank_prompts:
@@ -181,8 +181,8 @@ async def rerank_similarity_chunks(
         user_template = rerank_prompts["user_prompt_template"]
         reranking_tool = rerank_prompts["tool_definition"]
     except Exception as e:
-        logger.error(f"Failed to load reranking.yaml: {e}")
-        raise RuntimeError(f"Critical error: Could not load reranking prompts from YAML: {e}")
+        logger.error(f"Failed to load reranking prompt from database: {e}")
+        raise RuntimeError(f"Critical error: Could not load reranking prompts from database: {e}")
 
     # Build chunk summaries for reranking
     chunk_summaries = []
@@ -633,11 +633,11 @@ async def generate_research_statement(
     from .utils import load_transcripts_yaml
 
     try:
-        synthesis_prompts = load_transcripts_yaml("research_synthesis.yaml", compose_with_globals=True)
+        synthesis_prompts = load_transcripts_yaml("research_synthesis", compose_with_globals=True)
     except Exception as e:
-        logger.error(f"Failed to load research_synthesis.yaml: {e}")
+        logger.error(f"Failed to load research_synthesis prompt from database: {e}")
         raise RuntimeError(
-            f"Critical error: Could not load research synthesis prompts from YAML: {e}"
+            f"Critical error: Could not load research synthesis prompts from database: {e}"
         )
 
     # Use composed prompt if available (includes fiscal, project, restrictions globals)
