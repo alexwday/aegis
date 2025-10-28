@@ -28,7 +28,7 @@ from aegis.connections.oauth_connector import setup_authentication
 from aegis.utils.ssl import setup_ssl
 import asyncio
 
-app = Flask(__name__, template_folder="templates")
+app = Flask(__name__, template_folder="../templates")
 
 # Create synchronous database engine for Flask
 sync_engine = create_engine(
