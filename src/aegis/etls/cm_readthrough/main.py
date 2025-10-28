@@ -1323,6 +1323,10 @@ async def main():
         # Generate markdown for database
         markdown_content = structured_data_to_markdown(results)
 
+        # Extract filenames for S3 placeholders (matching call_summary and key_themes pattern)
+        docx_filename = docx_path.name
+        pdf_filename = Path(pdf_path).name if pdf_path else None
+
         # Save to database with file paths
         await save_to_database(
             results=results,
@@ -1331,8 +1335,8 @@ async def main():
             markdown_content=markdown_content,
             execution_id=execution_id,
             local_filepath=str(docx_path),
-            s3_document_name=None,  # TODO: Implement S3 upload if needed
-            s3_pdf_name=None  # TODO: Implement S3 upload if needed
+            s3_document_name=docx_filename,  # Placeholder - will be updated when uploaded to S3
+            s3_pdf_name=pdf_filename  # Placeholder - will be updated when uploaded to S3
         )
 
         logger.info(f"CM Readthrough ETL completed successfully")
