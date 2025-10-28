@@ -1140,7 +1140,10 @@ async def save_to_database(
     fiscal_year: int,
     quarter: str,
     markdown_content: str,
-    execution_id: str
+    execution_id: str,
+    local_filepath: str = None,
+    s3_document_name: str = None,
+    s3_pdf_name: str = None
 ) -> None:
     """
     Save the report to the database.
@@ -1151,32 +1154,47 @@ async def save_to_database(
         quarter: Quarter
         markdown_content: Markdown version of report
         execution_id: Execution UUID
+        local_filepath: Path to local DOCX file (optional)
+        s3_document_name: S3 document key (optional)
+        s3_pdf_name: S3 PDF key (optional)
     """
     async with get_connection() as conn:
-        # Save to aegis_reports table
+        # Save to aegis_reports table (matching structure of call_summary and key_themes)
         query = text("""
             INSERT INTO aegis_reports (
                 report_name,
                 report_description,
                 report_type,
-                execution_id,
+                bank_id,
+                bank_name,
+                bank_symbol,
                 fiscal_year,
                 quarter,
+                local_filepath,
+                s3_document_name,
+                s3_pdf_name,
                 markdown_content,
-                metadata,
                 generation_date,
-                generated_by
+                generated_by,
+                execution_id,
+                metadata
             ) VALUES (
                 :report_name,
                 :report_description,
                 :report_type,
-                :execution_id,
+                :bank_id,
+                :bank_name,
+                :bank_symbol,
                 :fiscal_year,
                 :quarter,
+                :local_filepath,
+                :s3_document_name,
+                :s3_pdf_name,
                 :markdown_content,
-                :metadata,
                 NOW(),
-                :generated_by
+                :generated_by,
+                :execution_id,
+                :metadata
             )
         """)
 
@@ -1190,12 +1208,18 @@ async def save_to_database(
                     "analyst questions on market dynamics, risk management, M&A pipelines, and transaction banking."
                 ),
                 "report_type": "cm_readthrough",
-                "execution_id": str(execution_id),
+                "bank_id": None,  # Cross-bank report, no specific bank
+                "bank_name": None,  # Cross-bank report, no specific bank
+                "bank_symbol": None,  # Cross-bank report, no specific bank
                 "fiscal_year": fiscal_year,
                 "quarter": quarter,
+                "local_filepath": local_filepath,
+                "s3_document_name": s3_document_name,
+                "s3_pdf_name": s3_pdf_name,
                 "markdown_content": markdown_content,
-                "metadata": json.dumps(results),
-                "generated_by": "cm_readthrough_etl"
+                "generated_by": "cm_readthrough_etl",
+                "execution_id": str(execution_id),
+                "metadata": json.dumps(results)
             }
         )
 
@@ -1290,6 +1314,7 @@ async def main():
         logger.info(f"Word document created: {docx_path}")
 
         # Convert to PDF if requested
+        pdf_path = None
         if not args.no_pdf:
             pdf_path = str(docx_path).replace(".docx", ".pdf")
             if convert_docx_to_pdf(str(docx_path), pdf_path):
@@ -1298,13 +1323,16 @@ async def main():
         # Generate markdown for database
         markdown_content = structured_data_to_markdown(results)
 
-        # Save to database
+        # Save to database with file paths
         await save_to_database(
             results=results,
             fiscal_year=args.year,
             quarter=args.quarter,
             markdown_content=markdown_content,
-            execution_id=execution_id
+            execution_id=execution_id,
+            local_filepath=str(docx_path),
+            s3_document_name=None,  # TODO: Implement S3 upload if needed
+            s3_pdf_name=None  # TODO: Implement S3 upload if needed
         )
 
         logger.info(f"CM Readthrough ETL completed successfully")
