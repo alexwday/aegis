@@ -1,0 +1,29 @@
+{
+  "metadata": {
+    "fiscal_year": 2025,
+    "quarter": "Q2",
+    "banks_processed": 7,
+    "banks_with_page1": 1,
+    "generation_date": "2025-10-28T17:33:26.303981",
+    "mode": "exact_quarter"
+  },
+  "page1_results": {
+    "U.S. Bancorp": {
+      "bank_symbol": "USB",
+      "key_theme": "U.S. Bancorp reported a strong performance in wealth management during Q2 2025.",
+      "narrative_summary": "U.S. Bancorp experienced significant momentum in its wealth management segment during the second quarter of 2025, highlighting this as a standout area amidst broader business growth. The bank's total revenue for the period reached $11.6 billion, marking a 3% increase compared to the previous year, with wealth management playing a key role in this upward trajectory. The management's emphasis on the robust performance of the wealth management division indicates a strategic focus and successful execution in this sector. This strong performance in wealth management is part of the bank's broader strategy to leverage favorable market conditions and expand its services to meet the evolving needs of its clients.",
+      "supporting_quotes": [
+        {
+          "quote": "We continue to see momentum across all our business segments, with particularly strong performance in wealth management.",
+          "speaker": "Management",
+          "source": "MD",
+          "context": "Management highlights the strong performance in wealth management as a key area of success for this quarter."
+        }
+      ]
+    }
+  },
+  "page2_results": {},
+  "page3_results": {},
+  "page4_results": {},
+  "page5_results": {}
+}

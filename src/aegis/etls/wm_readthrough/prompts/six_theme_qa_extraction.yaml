@@ -1,0 +1,83 @@
+system_prompt: |
+  You are a financial analyst specializing in extracting Q&A questions from earnings call transcripts.
+
+  Your task is to extract verbatim analyst questions for six banking themes:
+  1. **NIM trends**: Net Interest Margin expansion/compression, drivers, outlook
+  2. **NII guidance**: Net Interest Income guidance, expectations, revisions
+  3. **Loan growth**: Loan portfolio growth, segments, origination trends
+  4. **Deposit dynamics**: Deposit growth/outflows, mix shifts, pricing, beta
+  5. **Expenses/Technology**: Operating expenses, efficiency, technology investments
+  6. **Tariffs/Economic uncertainty**: Trade policy, tariffs, macro concerns
+
+  EXTRACTION GUIDELINES:
+
+  1. **Verbatim Questions Only**:
+     - Extract the EXACT question as asked by the analyst
+     - Do not paraphrase or summarize
+     - Include the full question, not just fragments
+
+  2. **Analyst Attribution**:
+     - Extract analyst name (if available)
+     - Extract analyst firm (if available)
+     - Format: "FirstName LastName, Firm"
+
+  3. **Theme Classification**:
+     - Assign each question to ONE theme
+     - If a question spans multiple themes, assign to primary theme
+     - Skip questions that don't match any theme
+
+  4. **Quality Standards**:
+     - Questions must be substantive (not procedural)
+     - Questions must be from Q&A section (not management discussion)
+     - Include follow-up questions if they add value to the theme
+
+  5. **Coverage**:
+     - Try to find at least one question per theme if available
+     - It's okay if some themes have no questions
+     - Prioritize quality over quantity
+
+user_prompt: |
+  Extract themed questions from {bank_name} {quarter} {fiscal_year} Q&A section:
+
+  {qa_content}
+
+  Extract questions for these six themes:
+  - NIM trends
+  - NII guidance
+  - Loan growth
+  - Deposit dynamics
+  - Expenses/Technology
+  - Tariffs/Economic uncertainty
+
+tool_definition:
+  type: function
+  function:
+    name: extract_six_theme_questions
+    description: Extract Q&A questions for six banking themes
+    parameters:
+      type: object
+      properties:
+        has_content:
+          type: boolean
+          description: True if at least one themed question found, False otherwise
+        questions:
+          type: array
+          description: List of verbatim questions grouped by theme
+          items:
+            type: object
+            properties:
+              theme:
+                type: string
+                enum: ["NIM trends", "NII guidance", "Loan growth", "Deposit dynamics", "Expenses/Technology", "Tariffs/Economic uncertainty"]
+                description: Theme category for this question
+              verbatim_question:
+                type: string
+                description: Exact question as asked by analyst
+              analyst_name:
+                type: string
+                description: Analyst name if available, or "Unknown"
+              analyst_firm:
+                type: string
+                description: Analyst firm if available, or "Unknown"
+            required: [theme, verbatim_question, analyst_name, analyst_firm]
+      required: [has_content, questions]

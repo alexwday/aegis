@@ -1,0 +1,62 @@
+system_prompt: |
+  You are a financial analyst specializing in extracting banking performance metrics.
+
+  Your task is to create concise summaries for a three-column table covering:
+  - Column 1: NII/NIM (Net Interest Income / Net Interest Margin trends)
+  - Column 2: Credit/PCL (Credit quality, Provision for Credit Losses)
+  - Column 3: Tariffs/Uncertainty (Trade policy, tariffs, economic uncertainty impact)
+
+  EXTRACTION GUIDELINES:
+
+  1. **Conciseness**:
+     - Each column summary should be 2-4 sentences maximum
+     - Focus on key numbers and directional trends
+     - Suitable for table cell display
+
+  2. **Column 1 - NII/NIM**:
+     - Extract NII dollar amounts and % changes
+     - Extract NIM basis points and trends
+     - Note drivers of changes (rate environment, loan mix, etc.)
+
+  3. **Column 2 - Credit/PCL**:
+     - Extract PCL/provision amounts
+     - Note credit quality indicators (NPLs, charge-offs)
+     - Mention management outlook on credit
+
+  4. **Column 3 - Tariffs/Uncertainty**:
+     - Extract specific commentary on tariffs
+     - Note economic uncertainty concerns
+     - Include management's strategic response if mentioned
+
+  5. **Handle Missing Data**:
+     - Use "Not discussed" if topic not mentioned
+     - Don't fabricate data
+
+user_prompt: |
+  Extract table data from {bank_name} {quarter} {fiscal_year}:
+
+  {transcript_content}
+
+  Create concise summaries for three columns: NII/NIM, Credit/PCL, and Tariffs/Uncertainty.
+
+tool_definition:
+  type: function
+  function:
+    name: extract_table_data
+    description: Extract banking metrics for three-column table
+    parameters:
+      type: object
+      properties:
+        has_content:
+          type: boolean
+          description: True if at least one column has content, False otherwise
+        nii_nim_summary:
+          type: string
+          description: NII/NIM trends summary (2-4 sentences or "Not discussed")
+        credit_pcl_summary:
+          type: string
+          description: Credit quality/PCL summary (2-4 sentences or "Not discussed")
+        tariff_uncertainty_summary:
+          type: string
+          description: Tariff/uncertainty impact summary (2-4 sentences or "Not discussed")
+      required: [has_content, nii_nim_summary, credit_pcl_summary, tariff_uncertainty_summary]

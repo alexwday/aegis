@@ -92,7 +92,6 @@ def load_prompt_from_db(
     """
     # Load prompt from database
     prompt_data = prompt_manager.get_latest_prompt(
-        model="aegis",
         layer=layer,
         name=name,
         system_prompt=False  # Get full record
@@ -138,7 +137,6 @@ def load_prompt_from_db(
                 # Load other global prompts from database
                 try:
                     global_data = prompt_manager.get_latest_prompt(
-                        model="aegis",
                         layer="global",
                         name=global_name,
                         system_prompt=False

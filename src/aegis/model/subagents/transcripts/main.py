@@ -106,7 +106,7 @@ async def transcripts_agent(
                     includes_globals=method_prompts.get("uses_global", []),
                 )
             else:
-                system_prompt_template = method_prompts["system_prompt_template"]
+                system_prompt_template = method_prompts["system_prompt"]
                 logger.warning(
                     f"subagent.{database_id}.no_composed_prompt",
                     execution_id=execution_id,
