@@ -131,56 +131,6 @@ def get_model_for_stage(stage: str, category_name: Optional[str] = None) -> str:
     return model
 
 
-def load_research_plan_config(execution_id):
-    """Load the research plan prompt and tool definition from database."""
-    try:
-        prompt_data = load_prompt_from_db(
-            layer="call_summary_etl",
-            name="research_plan",
-            compose_with_globals=False,  # ETL doesn't use global contexts
-            available_databases=None,
-            execution_id=execution_id
-        )
-
-        if not prompt_data:
-            raise RuntimeError("load_prompt_from_db returned None for research_plan")
-
-        return {
-            'system_template': prompt_data['system_prompt'],
-            'tool': prompt_data['tool_definition']
-        }
-    except Exception as e:
-        logger.error(f"Failed to load research_plan prompt from database: {e}", exc_info=True)
-        raise RuntimeError(
-            f"Critical error: Could not load research_plan prompt from database: {e}"
-        )
-
-
-def load_category_extraction_config(execution_id):
-    """Load the category extraction prompt and tool definition from database."""
-    try:
-        prompt_data = load_prompt_from_db(
-            layer="call_summary_etl",
-            name="category_extraction",
-            compose_with_globals=False,  # ETL doesn't use global contexts
-            available_databases=None,
-            execution_id=execution_id
-        )
-
-        if not prompt_data:
-            raise RuntimeError("load_prompt_from_db returned None for category_extraction")
-
-        return {
-            'system_template': prompt_data['system_prompt'],
-            'tool': prompt_data['tool_definition']
-        }
-    except Exception as e:
-        logger.error(f"Failed to load category_extraction prompt from database: {e}", exc_info=True)
-        raise RuntimeError(
-            f"Critical error: Could not load category_extraction prompt from database: {e}"
-        )
-
-
 # Legacy YAML loader functions - kept for reference but no longer used
 def load_research_plan_config_yaml():
     """DEPRECATED: Load the research plan prompt and tool definition from YAML file."""
@@ -856,9 +806,15 @@ async def generate_call_summary(
             content_length=len(formatted_transcript)
         )
         
-        # Load research plan configuration (prompt + tool)
-        research_config = load_research_plan_config(execution_id)
-        
+        # Load research plan prompts from database (matches transcripts pattern)
+        research_prompts = load_prompt_from_db(
+            layer="call_summary_etl",
+            name="research_plan",
+            compose_with_globals=False,  # ETL doesn't use global contexts
+            available_databases=None,
+            execution_id=execution_id
+        )
+
         # Format categories for system prompt
         categories_text = ""
         for i, category in enumerate(categories, 1):
@@ -876,7 +832,7 @@ Category {i}:
 """
         
         # Format system prompt with all context
-        system_prompt = research_config['system_template'].format(
+        system_prompt = research_prompts['system_prompt'].format(
             bank_name=bank_info['bank_name'],
             bank_symbol=bank_info['bank_symbol'],
             quarter=quarter,
@@ -906,7 +862,7 @@ Category {i}:
             try:
                 response = await complete_with_tools(
                     messages=messages,
-                    tools=[research_config['tool']],
+                    tools=[research_prompts['tool_definition']],
                     context=context,
                     llm_params={
                         "model": get_model_for_stage("RESEARCH_PLAN_MODEL"),
@@ -971,8 +927,14 @@ Category {i}:
         # Step 7: SECOND STAGE - Extract content for each category using tool calling
         category_results = []
         
-        # Load category extraction configuration
-        extraction_config = load_category_extraction_config(execution_id)
+        # Load category extraction prompts from database (matches transcripts pattern)
+        extraction_prompts = load_prompt_from_db(
+            layer="call_summary_etl",
+            name="category_extraction",
+            compose_with_globals=False,  # ETL doesn't use global contexts
+            available_databases=None,
+            execution_id=execution_id
+        )
         
         for i, category in enumerate(categories, 1):
             logger.info(
@@ -1109,7 +1071,7 @@ Category {i}:
                     message="Cross-category notes missing or too brief. Deduplication guidance may be insufficient."
                 )
 
-            system_prompt = extraction_config['system_template'].format(
+            system_prompt = extraction_prompts['system_prompt'].format(
                 category_index=i,
                 total_categories=len(categories),
                 bank_name=bank_info['bank_name'],
@@ -1142,7 +1104,7 @@ Category {i}:
                 try:
                     response = await complete_with_tools(
                         messages=messages,
-                        tools=[extraction_config['tool']],
+                        tools=[extraction_prompts['tool_definition']],
                         context=context,
                         llm_params={
                             "model": get_model_for_stage("CATEGORY_EXTRACTION_MODEL", category["category_name"]),
