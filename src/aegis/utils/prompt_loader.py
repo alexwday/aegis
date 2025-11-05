@@ -137,7 +137,8 @@ def load_prompt_from_db(
             else:
                 # Load other global prompts from database
                 try:
-                    global_data = prompt_manager.get_latest_prompt(
+                    global_data = sql_prompt.prompt_manager.get_latest_prompt(
+                        model="aegis",
                         layer="global",
                         name=global_name,
                         system_prompt=False
