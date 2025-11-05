@@ -91,11 +91,26 @@ def load_prompt_from_db(
         FileNotFoundError: If prompt doesn't exist in database
     """
     # Load prompt from database
-    prompt_data = prompt_manager.get_latest_prompt(
-        layer=layer,
-        name=name,
-        system_prompt=False  # Get full record
-    )
+    logger.debug(f"prompt_manager type: {type(prompt_manager)}, value: {prompt_manager}")
+
+    if prompt_manager is None:
+        logger.error("prompt_manager is None! Reinitializing...")
+        from .sql_prompt import postgresql_prompts
+        postgresql_prompts()
+        from .sql_prompt import prompt_manager as pm
+        prompt_data = pm.get_latest_prompt(
+            model='aegis',  # Use aegis model filter
+            layer=layer,
+            name=name,
+            system_prompt=False  # Get full record
+        )
+    else:
+        prompt_data = prompt_manager.get_latest_prompt(
+            model='aegis',  # Use aegis model filter
+            layer=layer,
+            name=name,
+            system_prompt=False  # Get full record
+        )
 
     # Log what was loaded from database
     logger.info(

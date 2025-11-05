@@ -21,6 +21,7 @@ from ..utils.monitor import (
 )
 from ..utils.settings import config
 from ..utils.ssl import setup_ssl
+from ..utils.sql_prompt import postgresql_prompts
 from .agents import route_query, generate_response, clarify_query, synthesize_responses
 import re
 
@@ -149,6 +150,9 @@ async def model(
     # Stage 0: Initialize logging, execution ID, and process monitoring
     setup_logging()
     logger = get_logger()
+
+    # Initialize PostgreSQL prompts cache
+    postgresql_prompts()
 
     # Generate execution ID for this request
     execution_id = str(uuid.uuid4())

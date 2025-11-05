@@ -2,90 +2,169 @@
 SQL-based prompt management - retrieves prompts from PostgreSQL database.
 """
 
-from typing import Dict, Any, Optional
-from sqlalchemy import text
-from aegis.connections.postgres_connector import get_sync_engine
-from aegis.utils.logging import get_logger
+from sqlalchemy import create_engine, Table, Column, Integer, MetaData, Text, TIMESTAMP, func, JSON, ARRAY, select
+from sqlalchemy.exc import SQLAlchemyError
+import pandas as pd
+import yaml
+import dotenv
+import logging
+from pathlib import Path
+from typing import Dict, Optional
+from datetime import datetime, timezone
+from .settings import config
+import uuid
 
-logger = get_logger()
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
+# Load PostgreSQL connection variable from variables from .env file
+dotenv.load_dotenv()
 
-class PromptManager:
-    """Manages prompt retrieval from PostgreSQL database."""
+POSTGRES_HOST = config.postgres_host
+POSTGRES_PORT = config.postgres_port
+POSTGRES_DATABASE = config.postgres_database
+POSTGRES_USER = config.postgres_user
+POSTGRES_PASSWORD = config.postgres_password
 
-    def __init__(self):
-        """Initialize prompt manager."""
-        self.engine = get_sync_engine()
+DB_URL = f"postgresql://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGRES_HOST}:{POSTGRES_PORT}/{POSTGRES_DATABASE}"
 
-    def get_latest_prompt(
-        self,
-        layer: str,
-        name: str,
-        system_prompt: bool = False
-    ) -> Dict[str, Any]:
-        """
-        Retrieve the latest version of a prompt from database.
+class SQLPromptManager:
+    def __init__(self, model_filter: str = None):
+        self.engine = create_engine(DB_URL)
+        self.metadata = MetaData()
+        self.prompts_table = None
+        self.model_filter = model_filter
+        self._define_prompts_table()
+        self.df_prompts = self._df_prompts(model=self.model_filter)  # Latest prompts DataFrame for unique model/layer/name based
 
-        Args:
-            layer: Prompt layer (aegis, transcripts, reports, global, etc.)
-            name: Prompt name
-            system_prompt: If True, return only system_prompt string. If False, return full dict.
+    def _define_prompts_table(self):
+        self.prompts_table = Table(
+            'prompts', self.metadata,
+            Column('id', Integer, primary_key=True, autoincrement=True),
+            Column('model', Text, nullable=False),
+            Column('layer', Text),
+            Column('name', Text, nullable=False),
+            Column('description', Text),
+            Column('comments', Text),
+            Column('system_prompt', Text),
+            Column('user_prompt', Text),
+            Column('tool_definition', JSON),
+            Column('uses_global', ARRAY(Text)),
+            Column('version', Text, default='1.0.0'),
+            Column('created_at', TIMESTAMP(timezone=True), server_default=func.now()),
+            Column('updated_at', TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now())
+        )
 
-        Returns:
-            If system_prompt=True: Just the system_prompt string
-            If system_prompt=False: Full prompt dictionary with all fields
-
-        Raises:
-            FileNotFoundError: If prompt doesn't exist
-        """
+    def create_prompts_table(self):
         try:
-            with self.engine.connect() as conn:
-                result = conn.execute(
-                    text("""
-                        SELECT
-                            id, model, layer, name, description, comments,
-                            system_prompt, user_prompt, tool_definition, tool_definitions,
-                            uses_global, version, created_at, updated_at
-                        FROM prompts
-                        WHERE layer = :layer AND name = :name
-                        ORDER BY version DESC
-                        LIMIT 1
-                    """),
-                    {"layer": layer, "name": name}
-                ).fetchone()
+            # Check if table already exists
+            with self.engine.connect() as connection:
+                table_exists = connection.dialect.has_table(connection, 'prompts')
 
-                if not result:
-                    raise FileNotFoundError(
-                        f"No prompt found for layer='{layer}', name='{name}'"
-                    )
+            if table_exists:
+                logger.info("Prompts table already exists")
+            else:
+                # Create the table if it doesn't exist
+                self.metadata.create_all(self.engine, checkfirst=True)
+                logger.info("Prompts table created successfully")
+            return True
 
-                # Convert Row to dict
-                prompt_data = {
-                    "id": result[0],
-                    "model": result[1],
-                    "layer": result[2],
-                    "name": result[3],
-                    "description": result[4],
-                    "comments": result[5],
-                    "system_prompt": result[6],
-                    "user_prompt": result[7],
-                    "tool_definition": result[8],
-                    "tool_definitions": result[9],
-                    "uses_global": result[10] or [],
-                    "version": result[11],
-                    "created_at": result[12],
-                    "updated_at": result[13],
-                }
+        except SQLAlchemyError as e:
+            logger.error(f"Error creating prompts table: {str(e)}")
+            return False
+        except Exception as e:
+            logger.error(f"Unexpected error creating prompts table: {str(e)}")
+            return False
 
-                if system_prompt:
-                    return prompt_data.get("system_prompt", "")
-                else:
-                    return prompt_data
+    def _df_prompts(self, model: str = None):
+        if model:
+            query = """
+            SELECT p.*
+            FROM prompts p
+            INNER JOIN (
+                SELECT model, layer, name, MAX(updated_at) as max_updated_at
+                FROM prompts
+                WHERE model = %(model)s
+                GROUP BY model, layer, name
+            ) latest
+            ON p.model = latest.model
+            AND p.layer = latest.layer
+            AND p.name = latest.name
+            AND p.updated_at = latest.max_updated_at
+            ORDER BY p.id
+            """
+            df = pd.read_sql(query, self.engine, params={'model': model})
+        else:
+            query = """
+            SELECT p.*
+            FROM prompts p
+            INNER JOIN (
+                SELECT model, layer, name, MAX(updated_at) as max_updated_at
+                FROM prompts
+                GROUP BY model, layer, name
+            ) latest
+            ON p.model = latest.model
+            AND p.layer = latest.layer
+            AND p.name = latest.name
+            AND p.updated_at = latest.max_updated_at
+            ORDER BY p.id
+            """
+            df = pd.read_sql(query, self.engine)
+        return df
+
+    def get_latest_prompt(self, model: str = None, layer: str = None, name: str = None, system_prompt: bool = True):
+        try:
+            # Check if all mandatory parameters are provided
+            if not model or not layer or not name:
+                missing_params = []
+                if not model:
+                    missing_params.append('model')
+                if not layer:
+                    missing_params.append('layer')
+                if not name:
+                    missing_params.append('name')
+                logger.warning(f"Missing mandatory parameters: {', '.join(missing_params)}. All of model, layer, and name are required.")
+                return 'Blank'
+
+            # Start with all prompts
+            filtered_df = self.df_prompts.copy()
+
+            # Filter by model, layer, and name (all are mandatory)
+            filtered_df = filtered_df[
+                (filtered_df['model'] == model) &
+                (filtered_df['layer'] == layer) &
+                (filtered_df['name'] == name)
+            ]
+
+            # Check if any results found
+            if filtered_df.empty:
+                logger.warning(f"No prompt found for model={model}, layer={layer}, name={name}")
+                return 'Blank'
+
+            # Get the first row (should be the latest due to _df_prompts query)
+            row = filtered_df.iloc[0]
+
+            if system_prompt:
+                try:
+                    # Try to parse as YAML
+                    parsed = yaml.safe_load(row['system_prompt'])
+                    return parsed
+                except (yaml.YAMLError, Exception) as yaml_err:
+                    # If YAML parsing fails, return the raw string
+                    logger.info("Returning system_prompt as raw text instead")
+                    return row['system_prompt']
+
+            # Return full row as dict
+            return row.to_dict()
 
         except Exception as e:
-            logger.error(f"Error retrieving prompt: {e}")
-            raise
+            logger.error(f"Error retrieving latest prompt from DataFrame: {str(e)}")
+            return 'Blank'
 
+prompt_manager = None
 
-# Singleton instance
-prompt_manager = PromptManager()
+def postgresql_prompts():
+    global prompt_manager
+    prompt_manager = SQLPromptManager(model_filter='aegis')
+    return prompt_manager
