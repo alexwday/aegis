@@ -806,7 +806,51 @@ async def generate_call_summary(
             execution_id=execution_id,
             content_length=len(formatted_transcript)
         )
-        
+
+        # DIAGNOSTIC: Count words in MD vs QA sections
+        md_word_count = 0
+        qa_word_count = 0
+
+        # Split by section headers to count words per section
+        if "## Section 1: MANAGEMENT DISCUSSION SECTION" in formatted_transcript:
+            # Extract MD section (from Section 1 to Section 2 or end)
+            md_start = formatted_transcript.index("## Section 1: MANAGEMENT DISCUSSION SECTION")
+            if "## Section 2:" in formatted_transcript:
+                md_end = formatted_transcript.index("## Section 2:")
+                md_content = formatted_transcript[md_start:md_end]
+            else:
+                md_content = formatted_transcript[md_start:]
+            md_word_count = len(md_content.split())
+
+        if "## Section 2:" in formatted_transcript:
+            # Extract QA section (from Section 2 to end)
+            qa_start = formatted_transcript.index("## Section 2:")
+            qa_content = formatted_transcript[qa_start:]
+            qa_word_count = len(qa_content.split())
+
+            # Check section name
+            qa_header_line = qa_content.split('\n')[0]
+            logger.info(
+                "etl.call_summary.qa_section_found",
+                execution_id=execution_id,
+                qa_section_header=qa_header_line
+            )
+
+        total_words = len(formatted_transcript.split())
+        md_percentage = (md_word_count / total_words * 100) if total_words > 0 else 0
+        qa_percentage = (qa_word_count / total_words * 100) if total_words > 0 else 0
+
+        logger.info(
+            "etl.call_summary.section_word_counts",
+            execution_id=execution_id,
+            total_words=total_words,
+            md_words=md_word_count,
+            md_percentage=f"{md_percentage:.1f}%",
+            qa_words=qa_word_count,
+            qa_percentage=f"{qa_percentage:.1f}%",
+            has_qa_content=qa_word_count > 0
+        )
+
         # Load research plan prompts from database (matches transcripts pattern)
         research_prompts = load_prompt_from_db(
             layer="call_summary_etl",
