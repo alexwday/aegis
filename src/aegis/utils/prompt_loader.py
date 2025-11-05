@@ -92,10 +92,10 @@ def load_prompt_from_db(
     """
     # Load prompt from database
     prompt_data = sql_prompt.prompt_manager.get_latest_prompt(
-        model='aegis',  # Use aegis model filter
+        model="aegis",
         layer=layer,
         name=name,
-        system_prompt=False  # Get full record
+        system_prompt=False
     )
 
     # Log what was loaded from database
