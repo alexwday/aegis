@@ -28,6 +28,7 @@ from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 import re
 import hashlib
+from difflib import SequenceMatcher
 
 # Import document converter functions
 from aegis.etls.call_summary.document_converter import (
@@ -1045,8 +1046,25 @@ Category {i}:
                     for result in completed_results:
                         if 'summary_statements' in result:
                             for stmt in result['summary_statements']:
-                                # Include full statement for context
-                                all_statements.append(f"[{result['name']}] {stmt['statement']}")
+                                # Include statement and evidence summary for context
+                                statement_text = f"[{result['name']}] {stmt['statement']}"
+
+                                # Add evidence snippets to help identify overlapping content
+                                if 'evidence' in stmt and stmt['evidence']:
+                                    # Show up to 3 quotes from evidence to help detect duplicates
+                                    quote_snippets = []
+                                    for idx, ev in enumerate(stmt['evidence'][:3]):  # First 3 quotes
+                                        if ev.get('type') == 'quote' and ev.get('content'):
+                                            # Take first 80 chars of each quote
+                                            snippet = ev['content'][:80]
+                                            if len(ev['content']) > 80:
+                                                snippet += "..."
+                                            quote_snippets.append(f"Q{idx+1}: \"{snippet}\"")
+
+                                    if quote_snippets:
+                                        statement_text += f"\n  → Quotes: {' | '.join(quote_snippets)}"
+
+                                all_statements.append(statement_text)
 
                     if all_statements:
                         # Provide all extracted content to prevent duplication
@@ -1060,6 +1078,17 @@ Category {i}:
                 extracted_themes = "Starting extraction - no prior themes"
             
             # Format system prompt with ALL context
+            # Validate cross_category_notes (should be mandatory and substantive)
+            cross_cat_notes = category_plan.get('cross_category_notes', '')
+            if not cross_cat_notes or len(cross_cat_notes.strip()) < 20:
+                logger.warning(
+                    "etl.call_summary.weak_cross_category_notes",
+                    execution_id=execution_id,
+                    category_name=category['category_name'],
+                    notes_length=len(cross_cat_notes.strip()) if cross_cat_notes else 0,
+                    message="Cross-category notes missing or too brief. Deduplication guidance may be insufficient."
+                )
+
             system_prompt = extraction_config['system_template'].format(
                 category_index=i,
                 total_categories=len(categories),
@@ -1071,7 +1100,7 @@ Category {i}:
                 category_description=category['category_description'],
                 transcripts_section=category['transcripts_section'],
                 research_plan=category_plan['extraction_strategy'],
-                cross_category_notes=category_plan.get('cross_category_notes', ''),
+                cross_category_notes=cross_cat_notes,
                 previous_sections=previous_summary,
                 extracted_themes=extracted_themes
             )
@@ -1121,6 +1150,40 @@ Category {i}:
                         rejected=extracted_data.get('rejected', False),
                         attempt=attempt + 1
                     )
+
+                    # Passive duplicate detection (logging only, no rejection)
+                    if not extracted_data.get('rejected', False) and 'summary_statements' in extracted_data:
+                        # Get all prior statements for comparison
+                        all_prior_statements = []
+                        for prior_result in [r for r in category_results[:-1] if not r.get('rejected', False)]:
+                            if 'summary_statements' in prior_result:
+                                for prior_stmt in prior_result['summary_statements']:
+                                    all_prior_statements.append({
+                                        'category': prior_result['name'],
+                                        'statement': prior_stmt['statement']
+                                    })
+
+                        # Check each new statement against prior statements
+                        for new_stmt in extracted_data['summary_statements']:
+                            for prior in all_prior_statements:
+                                similarity = SequenceMatcher(
+                                    None,
+                                    new_stmt['statement'].lower(),
+                                    prior['statement'].lower()
+                                ).ratio()
+
+                                if similarity > 0.7:  # 70% similarity threshold
+                                    logger.warning(
+                                        "etl.call_summary.potential_duplicate_detected",
+                                        execution_id=execution_id,
+                                        current_category=category["category_name"],
+                                        prior_category=prior['category'],
+                                        similarity_pct=f"{similarity*100:.0f}%",
+                                        current_statement=new_stmt['statement'][:100],
+                                        prior_statement=prior['statement'][:100],
+                                        message="Potential semantic overlap detected - review for duplication"
+                                    )
+
                     break  # Success
 
                 except Exception as e:
