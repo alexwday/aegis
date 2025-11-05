@@ -47,6 +47,7 @@ from aegis.connections.postgres_connector import get_connection
 from aegis.utils.logging import setup_logging, get_logger
 from aegis.utils.settings import config
 from aegis.utils.prompt_loader import load_prompt_from_db
+from aegis.utils.sql_prompt import postgresql_prompts
 from aegis.etls.call_summary.config.config import MODELS, TEMPERATURE, MAX_TOKENS
 
 # Initialize logging
@@ -1683,7 +1684,10 @@ Examples:
     )
     
     args = parser.parse_args()
-    
+
+    # Initialize PostgreSQL prompts cache
+    postgresql_prompts()
+
     # Generate the call summary
     print(f"\n🔄 Generating report for {args.bank} {args.quarter} {args.year}...\n")
 
