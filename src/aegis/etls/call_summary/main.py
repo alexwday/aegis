@@ -133,32 +133,52 @@ def get_model_for_stage(stage: str, category_name: Optional[str] = None) -> str:
 
 def load_research_plan_config(execution_id):
     """Load the research plan prompt and tool definition from database."""
-    prompt_data = load_prompt_from_db(
-        layer="call_summary_etl",
-        name="research_plan",
-        compose_with_globals=False,  # ETL doesn't use global contexts
-        available_databases=None,
-        execution_id=execution_id
-    )
-    return {
-        'system_template': prompt_data['system_prompt'],
-        'tool': prompt_data['tool_definition']
-    }
+    try:
+        prompt_data = load_prompt_from_db(
+            layer="call_summary_etl",
+            name="research_plan",
+            compose_with_globals=False,  # ETL doesn't use global contexts
+            available_databases=None,
+            execution_id=execution_id
+        )
+
+        if not prompt_data:
+            raise RuntimeError("load_prompt_from_db returned None for research_plan")
+
+        return {
+            'system_template': prompt_data['system_prompt'],
+            'tool': prompt_data['tool_definition']
+        }
+    except Exception as e:
+        logger.error(f"Failed to load research_plan prompt from database: {e}", exc_info=True)
+        raise RuntimeError(
+            f"Critical error: Could not load research_plan prompt from database: {e}"
+        )
 
 
 def load_category_extraction_config(execution_id):
     """Load the category extraction prompt and tool definition from database."""
-    prompt_data = load_prompt_from_db(
-        layer="call_summary_etl",
-        name="category_extraction",
-        compose_with_globals=False,  # ETL doesn't use global contexts
-        available_databases=None,
-        execution_id=execution_id
-    )
-    return {
-        'system_template': prompt_data['system_prompt'],
-        'tool': prompt_data['tool_definition']
-    }
+    try:
+        prompt_data = load_prompt_from_db(
+            layer="call_summary_etl",
+            name="category_extraction",
+            compose_with_globals=False,  # ETL doesn't use global contexts
+            available_databases=None,
+            execution_id=execution_id
+        )
+
+        if not prompt_data:
+            raise RuntimeError("load_prompt_from_db returned None for category_extraction")
+
+        return {
+            'system_template': prompt_data['system_prompt'],
+            'tool': prompt_data['tool_definition']
+        }
+    except Exception as e:
+        logger.error(f"Failed to load category_extraction prompt from database: {e}", exc_info=True)
+        raise RuntimeError(
+            f"Critical error: Could not load category_extraction prompt from database: {e}"
+        )
 
 
 # Legacy YAML loader functions - kept for reference but no longer used
