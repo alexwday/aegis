@@ -453,7 +453,8 @@ def add_structured_content_to_doc(doc, category_data: dict, heading_level: int =
                         )
                     
                     # Add speaker attribution with em dash
-                    speaker_run = evidence_para.add_run(f' — {evidence["speaker"]}')
+                    speaker = evidence.get("speaker", "Unknown")
+                    speaker_run = evidence_para.add_run(f' — {speaker}')
                     speaker_run.italic = False  # Attribution not italic, just smaller
                     speaker_run.font.size = Pt(7)
                     speaker_run.font.color.rgb = RGBColor(96, 96, 96)  # Lighter gray
@@ -997,13 +998,13 @@ Category {i}:
                 None
             )
 
-            # Validate name matches as secondary check
-            if category_plan and category_plan.get('name') != category['category_name']:
+            # Validate name matches as secondary check (strip whitespace to avoid false mismatches)
+            if category_plan and category_plan.get('name', '').strip() != category['category_name'].strip():
                 logger.warning(
                     "etl.call_summary.name_mismatch",
                     execution_id=execution_id,
-                    expected_name=category['category_name'],
-                    received_name=category_plan.get('name'),
+                    expected_name=category['category_name'].strip(),
+                    received_name=category_plan.get('name', '').strip(),
                     index=i
                 )
 

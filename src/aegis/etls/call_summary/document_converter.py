@@ -328,12 +328,12 @@ def structured_data_to_markdown(category_results: List[Dict[str, Any]],
 
                 # Add evidence as nested quotes
                 for evidence in statement_data.get('evidence', []):
-                    content = evidence['content']
+                    content = evidence.get('content', '')
                     # Use full evidence content - no truncation
 
-                    speaker = evidence['speaker']
+                    speaker = evidence.get('speaker', 'Unknown')
 
-                    if evidence['type'] == 'quote':
+                    if evidence.get('type') == 'quote':
                         markdown += f"  > \"{content}\" — {speaker}\n"
                     else:
                         markdown += f"  > {content} — {speaker}\n"
