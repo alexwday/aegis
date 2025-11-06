@@ -1,40 +1,18 @@
-# Call Summary ETL Prompts - PostgreSQL Insert Statements
+# Research Plan Prompt - v2.3.0
 
-This file contains the SQL statements to insert/update the call summary ETL prompts in your PostgreSQL database.
-
-## Instructions
-
-1. Connect to your PostgreSQL database
-2. Copy and paste each SQL block below
-3. Run them in order
+## Metadata
+- **Model**: aegis
+- **Layer**: call_summary_etl
+- **Name**: research_plan
+- **Version**: 2.3.0
+- **Updates**: Prioritizes Q&A content capture while allowing empty category skip
 
 ---
 
-## 1. Research Plan Prompt
+## System Prompt
 
-**Key Updates:**
-- Prioritizes Q&A content capture
-- Ensures all Q&A discussions are categorized
-- Still allows skipping truly empty categories
-
-```sql
--- Delete existing research plan prompt
-DELETE FROM prompts
-WHERE layer = 'call_summary_etl' AND name = 'research_plan';
-
--- Insert updated research plan prompt
-INSERT INTO prompts (
-    model, layer, name, description, comments,
-    system_prompt, user_prompt, tool_definition,
-    uses_global, version, created_at, updated_at
-)
-VALUES (
-    'aegis',
-    'call_summary_etl',
-    'research_plan',
-    'Generate comprehensive research plan for earnings call analysis',
-    'Updated 2024-11-05 - Prioritizes Q&A content capture while allowing empty category skip',
-    $SYSTEM$<context>
+```
+<context>
 You are a senior financial analyst preparing a comprehensive earnings call analysis for {bank_name} ({bank_symbol}) {quarter} {fiscal_year}.
 Your task is to create a detailed research plan that will guide high-quality content extraction.
 
@@ -177,72 +155,82 @@ CRITICAL REQUIREMENTS:
 - The extraction_strategy MUST contain the themes and speakers - they are NOT separate fields
 - Use cross_category_notes to specify where overlapping content should be placed
 - It's better to stretch a category definition to capture Q&A content than to lose valuable discussions
-</response_format>$SYSTEM$,
-    NULL,
-    '{"type": "function", "function": {"name": "generate_research_plan", "description": "Creates comprehensive research plan with content mapping and extraction strategy", "parameters": {"type": "object", "properties": {"category_plans": {"type": "array", "description": "Detailed research plan for each category", "items": {"type": "object", "properties": {"index": {"type": "integer", "description": "Category index number (1-based) - MUST match the category number provided"}, "name": {"type": "string", "description": "Category name - MUST match exactly as provided"}, "extraction_strategy": {"type": "string", "description": "Comprehensive extraction guidance that MUST include:\\n1. ALL themes and topics found relevant to this category\\n2. ALL relevant speakers who discussed this topic and their roles\\n3. ALL specific metrics or data points discovered\\n4. Recommended approach for synthesis\\n5. Any unique insights or notable discussions\\n\\nBe EXHAUSTIVE - include everything relevant, not just highlights.\\nIf no relevant content exists, explain what was searched for and why nothing was found.\\n"}, "cross_category_notes": {"type": "string", "description": "Deduplication strategy to prevent overlap between categories.\\nSpecify which content belongs in THIS category vs others.\\nExample: \\"Revenue metrics go here; profitability ratios go to Financial Performance\\"\\nLeave empty if no overlap concerns.\\n"}}, "required": ["index", "name", "extraction_strategy", "cross_category_notes"]}}}, "required": ["category_plans"]}}}'::jsonb,
-    ARRAY[]::text[],
-    '2.1',
-    NOW(),
-    NOW()
-);
+</response_format>
 ```
 
 ---
 
-## 2. Category Extraction Prompt
+## Tool Definition
 
-No changes to this prompt - included for completeness.
-
-```sql
--- Delete existing category extraction prompt
-DELETE FROM prompts
-WHERE layer = 'call_summary_etl' AND name = 'category_extraction';
-
--- (Category extraction prompt SQL - no changes needed, keeping existing version)
+```json
+{
+  "type": "function",
+  "function": {
+    "name": "generate_research_plan",
+    "description": "Creates comprehensive research plan with content mapping and extraction strategy",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "category_plans": {
+          "type": "array",
+          "description": "Detailed research plan for each category",
+          "items": {
+            "type": "object",
+            "properties": {
+              "index": {
+                "type": "integer",
+                "description": "Category index number (1-based) - MUST match the category number provided"
+              },
+              "name": {
+                "type": "string",
+                "description": "Category name - MUST match exactly as provided"
+              },
+              "extraction_strategy": {
+                "type": "string",
+                "description": "Comprehensive extraction guidance that MUST include:\n1. ALL themes and topics found relevant to this category\n2. ALL relevant speakers who discussed this topic and their roles\n3. ALL specific metrics or data points discovered\n4. Recommended approach for synthesis\n5. Any unique insights or notable discussions\n\nBe EXHAUSTIVE - include everything relevant, not just highlights.\nIf no relevant content exists, explain what was searched for and why nothing was found."
+              },
+              "cross_category_notes": {
+                "type": "string",
+                "description": "Deduplication strategy to prevent overlap between categories.\nSpecify which content belongs in THIS category vs others.\nExample: \"Revenue metrics go here; profitability ratios go to Financial Performance\"\nLeave empty if no overlap concerns."
+              }
+            },
+            "required": [
+              "index",
+              "name",
+              "extraction_strategy",
+              "cross_category_notes"
+            ]
+          }
+        }
+      },
+      "required": [
+        "category_plans"
+      ]
+    }
+  }
+}
 ```
 
 ---
 
-## Verification
+## What Changed from v2.2.1
 
-After running the above SQL, verify the prompts were inserted:
+### Objective Updates:
+- **#1 NEW**: "Ensures ALL Q&A discussions are captured and categorized - Q&A content is particularly valuable"
+- **#7 NEW**: "Assigns Q&A discussions to appropriate categories even if the fit isn't perfect"
+- **#8 UPDATED**: "Only skips categories that genuinely have no relevant content after thorough analysis"
 
-```sql
--- Check both prompts exist
-SELECT layer, name, version, created_at, updated_at
-FROM prompts
-WHERE layer = 'call_summary_etl'
-ORDER BY name;
+### Quality Standards Updates:
+- **ADDED**: "PRIORITIZE Q&A CONTENT: Q&A discussions contain critical insights - ensure all Q&A content is mapped to categories"
+- **ADDED**: "DON'T LEAVE Q&A UNCATEGORIZED: If Q&A content doesn't perfectly match a category, assign it to the closest one"
+- **ADDED**: "OK TO SKIP EMPTY CATEGORIES: Categories with genuinely no content can be omitted"
 
--- View research plan prompt metadata
-SELECT layer, name, version, description, comments, created_at
-FROM prompts
-WHERE layer = 'call_summary_etl' AND name = 'research_plan';
+### Critical Requirements Updates:
+- **ADDED**: "CAPTURE ALL Q&A DISCUSSIONS: Ensure every Q&A exchange is mapped to an appropriate category"
+- **ADDED**: "Q&A content is particularly valuable - don't leave any Q&A discussions uncategorized"
+- **ADDED**: "For Q&A content that doesn't perfectly match a category, assign it to the closest relevant one"
+- **UPDATED**: Now explicitly allows skipping empty categories but requires thorough checking of both MD and Q&A first
+- **ADDED**: "It's better to stretch a category definition to capture Q&A content than to lose valuable discussions"
 
--- View full system prompt for research plan
-SELECT system_prompt
-FROM prompts
-WHERE layer = 'call_summary_etl' AND name = 'research_plan';
-```
-
----
-
-## Notes
-
-- **$SYSTEM$...$SYSTEM$** syntax is PostgreSQL dollar-quoting to handle special characters
-- Tool definitions are stored as **JSONB** for structured querying
-- Research plan uses version **"2.1"** with Q&A prioritization updates
-- Uses **model='aegis'** to match the prompt_loader pattern
-- Only the research plan prompt changed - category extraction remains the same
-
-## Changes Summary
-
-### Research Plan Prompt Updates (2024-11-05):
-
-1. **Objective #1**: Now leads with "Ensures ALL Q&A discussions are captured and categorized"
-2. **Objective #7**: "Assigns Q&A discussions to appropriate categories even if the fit isn't perfect"
-3. **Quality Standards**: Added "PRIORITIZE Q&A CONTENT" and "DON'T LEAVE Q&A UNCATEGORIZED" at top
-4. **Critical Requirements**: Emphasizes "CAPTURE ALL Q&A DISCUSSIONS" as first requirement
-5. **Philosophy**: Stretch category definitions to capture Q&A content rather than lose discussions
-
-These changes ensure Q&A content (which contains critical investor concerns and management responses) is thoroughly categorized while still allowing genuinely empty categories to be skipped.
+### Philosophy:
+The prompt now **prioritizes capturing all Q&A content** (which contains critical investor concerns and management responses) while still allowing genuinely empty categories to be skipped. The emphasis is on not losing valuable Q&A discussions even if they don't perfectly match a category definition.
