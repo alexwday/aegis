@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Call Summary ETL - Category Extraction Prompt</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            line-height: 1.6;
+            color: #1f2937;
+            background: #f9fafb;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 2rem;
+            text-align: center;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 0.25rem;
+        }
+
+        .header p {
+            font-size: 1.25rem;
+            opacity: 0.85;
+            font-weight: 300;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+            margin-bottom: 3rem;
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        }
+
+        .prompt-column {
+            padding: 2rem;
+            border-left: 4px solid var(--section-color);
+        }
+
+        .explanation-column {
+            padding: 2rem;
+            background: linear-gradient(to right, rgba(var(--section-color-rgb), 0.03), white 30%);
+            border-left: 4px solid var(--section-color);
+        }
+
+        .section-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 2px solid #e5e7eb;
+        }
+
+        .section-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 6px;
+            background: var(--section-color);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 0.75rem;
+            font-size: 1.25rem;
+        }
+
+        .section-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--section-color);
+        }
+
+        .prompt-content {
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.875rem;
+            line-height: 1.8;
+            color: #1f2937;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        .variable {
+            color: #dc2626;
+            background: #fef2f2;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-weight: 600;
+        }
+
+        .explanation-text {
+            font-size: 1rem;
+            line-height: 1.7;
+            color: #374151;
+            margin-bottom: 1.5rem;
+        }
+
+        .key-points {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+        }
+
+        .key-points li {
+            position: relative;
+            padding-left: 1.5rem;
+            margin-bottom: 0.75rem;
+            color: #4b5563;
+            line-height: 1.6;
+        }
+
+        .key-points li::before {
+            content: "▸";
+            position: absolute;
+            left: 0;
+            color: var(--section-color);
+            font-weight: bold;
+            font-size: 1.1rem;
+        }
+
+        .key-points strong {
+            color: var(--section-color);
+            font-weight: 600;
+        }
+
+        .key-points code {
+            font-family: 'Consolas', monospace;
+            font-size: 0.875rem;
+            background: #f3f4f6;
+            padding: 2px 6px;
+            border-radius: 3px;
+        }
+
+        @media (max-width: 1200px) {
+            .section {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
+            }
+
+            .prompt-column,
+            .explanation-column {
+                padding: 1.5rem;
+            }
+
+            .header h1 {
+                font-size: 1.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Call Summary ETL</h1>
+        <p>Category Extraction Prompt</p>
+    </div>
+
+    <div class="container">
+
+        <div class="section" style="--section-color: #1e40af; --section-color-rgb: 30, 64, 175;">
+            <div class="prompt-column">
+                <div class="section-header">
+                    <div class="section-icon">🎭</div>
+                    <h2 class="section-title">Context</h2>
+                </div>
+                <div class="prompt-content">You are extracting content for category <span class="variable">{category_index}</span> of <span class="variable">{total_categories}</span> in a comprehensive earnings call analysis.<br>Bank: <span class="variable">{bank_name}</span> (<span class="variable">{bank_symbol}</span>) | Period: <span class="variable">{quarter}</span> <span class="variable">{fiscal_year}</span><br>This is a continuation of the report - do not reintroduce context.<br><br>&lt;current_category&gt;<br>Name: <span class="variable">{category_name}</span><br>Requirements: <span class="variable">{category_description}</span><br>Source Section: <span class="variable">{transcripts_section}</span> section only<br>&lt;/current_category&gt;<br><br>&lt;research_guidance&gt;<br>Based on the research plan for this category:<br><span class="variable">{research_plan}</span><br><br>Deduplication notes from research phase:<br><span class="variable">{cross_category_notes}</span><br>&lt;/research_guidance&gt;<br><br>&lt;previous_categories_context&gt;<br>Categories already processed (avoid duplication):<br><span class="variable">{previous_sections}</span><br><br>Key themes already covered:<br><span class="variable">{extracted_themes}</span><br>&lt;/previous_categories_context&gt;</div>
+            </div>
+
+            <div class="explanation-column">
+                <div class="section-header">
+                    <div class="section-icon">💡</div>
+                    <h2 class="section-title">Business Context</h2>
+                </div>
+                <p class="explanation-text">Establishes the AI's role, identity, and working environment. This section creates the persona and provides the situational context needed to complete the task, including dynamic variables that get injected at runtime.</p>
+                <ul class="key-points">
+                    <li><strong>Role Assignment</strong>: Defines the AI's professional identity and expertise level</li>
+<li><strong>Dynamic Variables</strong>: Placeholders like <code>{bank_name}</code>, <code>{quarter}</code> are filled at runtime</li>
+<li><strong>Nested Context</strong>: XML tags organize related information hierarchically</li>
+<li><strong>Scenario Setup</strong>: Provides all necessary background to understand the task</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="section" style="--section-color: #059669; --section-color-rgb: 5, 150, 105;">
+            <div class="prompt-column">
+                <div class="section-header">
+                    <div class="section-icon">🎯</div>
+                    <h2 class="section-title">Objective</h2>
+                </div>
+                <div class="prompt-content">Extract comprehensive, high-quality insights for this specific category from the earnings call transcript.<br>Focus on:<br>1. Capturing ALL material content relevant to this category<br>2. Providing rich context and evidence for each finding<br>3. Maintaining analytical depth while avoiding duplication<br>4. Including emerging topics that fit the category's analytical purpose<br>5. Ensuring exhaustive coverage without artificial limits<br>6. Using markup for emphasis: **bold** for numbers/metrics, __underline__ for key phrases in quotes</div>
+            </div>
+
+            <div class="explanation-column">
+                <div class="section-header">
+                    <div class="section-icon">💡</div>
+                    <h2 class="section-title">Business Context</h2>
+                </div>
+                <p class="explanation-text">Defines the specific, measurable goals the AI must achieve. Each numbered item is a success criterion. The objectives are ordered by importance and collectively define what 'complete' and 'correct' output looks like.</p>
+                <ul class="key-points">
+                    <li><strong>Clear Success Criteria</strong>: Enumerated goals provide completion checklist</li>
+<li><strong>Priority Signaling</strong>: Order suggests relative importance of objectives</li>
+<li><strong>Comprehensive Scope</strong>: Multiple objectives ensure nothing is missed</li>
+<li><strong>Actionable Language</strong>: Verbs like 'Ensures', 'Maps', 'Identifies' create clear directives</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="section" style="--section-color: #7c3aed; --section-color-rgb: 124, 58, 237;">
+            <div class="prompt-column">
+                <div class="section-header">
+                    <div class="section-icon">✍️</div>
+                    <h2 class="section-title">Style</h2>
+                </div>
+                <div class="prompt-content">- Analytical and comprehensive<br>- Specific with exact numbers and details<br>- Evidence-rich with strategic quote selection<br>- Professional financial analysis tone<br>- Strategic use of emphasis: **numbers/metrics**, __key phrases in quotes__</div>
+            </div>
+
+            <div class="explanation-column">
+                <div class="section-header">
+                    <div class="section-icon">💡</div>
+                    <h2 class="section-title">Business Context</h2>
+                </div>
+                <p class="explanation-text">Specifies the writing approach, formatting characteristics, and structural preferences. This calibrates the AI's output to match organizational standards and ensures consistency across multiple generations.</p>
+                <ul class="key-points">
+                    <li><strong>Writing Approach</strong>: Defines formality level and presentation style</li>
+<li><strong>Comprehensiveness</strong>: Sets expectations for depth and thoroughness</li>
+<li><strong>Precision Standards</strong>: Establishes required level of specificity</li>
+<li><strong>Organizational Patterns</strong>: Guides how to structure information</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="section" style="--section-color: #8b5cf6; --section-color-rgb: 139, 92, 246;">
+            <div class="prompt-column">
+                <div class="section-header">
+                    <div class="section-icon">🎵</div>
+                    <h2 class="section-title">Tone</h2>
+                </div>
+                <div class="prompt-content">- Authoritative yet accessible<br>- Detail-oriented without verbosity<br>- Objective and analytical<br>- Insightful synthesis</div>
+            </div>
+
+            <div class="explanation-column">
+                <div class="section-header">
+                    <div class="section-icon">💡</div>
+                    <h2 class="section-title">Business Context</h2>
+                </div>
+                <p class="explanation-text">Defines the voice characteristics and emotional register of outputs. While style covers structure, tone governs how information is conveyed and the relationship with the reader.</p>
+                <ul class="key-points">
+                    <li><strong>Voice Characteristics</strong>: Authoritative, objective, analytical, detail-oriented</li>
+<li><strong>Confidence Level</strong>: Signals how definitive vs. tentative outputs should be</li>
+<li><strong>Relationship</strong>: Establishes the AI-to-reader dynamic</li>
+<li><strong>Emotional Register</strong>: Professional and measured vs. casual or urgent</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="section" style="--section-color: #0d9488; --section-color-rgb: 13, 148, 136;">
+            <div class="prompt-column">
+                <div class="section-header">
+                    <div class="section-icon">👥</div>
+                    <h2 class="section-title">Audience</h2>
+                </div>
+                <div class="prompt-content">Senior finance professionals expecting:<br>- Comprehensive coverage of all material points<br>- Rich supporting evidence<br>- Clear, well-structured insights<br>- Strategic emphasis on critical information</div>
+            </div>
+
+            <div class="explanation-column">
+                <div class="section-header">
+                    <div class="section-icon">💡</div>
+                    <h2 class="section-title">Business Context</h2>
+                </div>
+                <p class="explanation-text">Identifies who will consume the output and what they need. This calibrates complexity, jargon usage, and level of detail based on stakeholder expertise and use case.</p>
+                <ul class="key-points">
+                    <li><strong>Stakeholder Type</strong>: Internal team vs. executives vs. external clients</li>
+<li><strong>Expertise Level</strong>: Determines whether domain terms need explanation</li>
+<li><strong>Information Needs</strong>: Lists specific requirements the audience expects</li>
+<li><strong>Use Case Context</strong>: How the output will be consumed shapes structure</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="section" style="--section-color: #4f46e5; --section-color-rgb: 79, 70, 229;">
+            <div class="prompt-column">
+                <div class="section-header">
+                    <div class="section-icon">🔬</div>
+                    <h2 class="section-title">Response Framework</h2>
+                </div>
+                <div class="prompt-content">EXTRACTION REQUIREMENTS:<br><br>1. REJECTION DECISIONS:<br>   Set rejected=true ONLY if the category genuinely lacks ANY material content.<br>   Examples of valid rejection:<br>   - "No geographic expansion discussions" for International Growth<br>   - "Sustainability not mentioned in this call" for ESG<br>   If even minor relevant content exists, extract it - don't reject.<br><br>2. TITLE CREATION:<br>   Format: "Category Name: Brief Context"<br>   Examples:<br>   - "Credit Quality: Resilient provisioning amid uncertainty"<br>   - "Digital Strategy: Accelerating cloud migration"<br>   - "Expenses: Managing inflationary pressures"<br>   Keep total under 60 characters for table of contents readability<br>   Capture the ESSENCE of what was discussed in this category<br><br>3. STATEMENT CONSTRUCTION:<br>   Each statement should:<br>   - Synthesize a specific insight or finding<br>   - Be clear and concise (1-2 sentences)<br>   - Use **bold** for ALL numbers, metrics, percentages (e.g., "Revenue grew **12%**")<br>   - Stand alone as a complete insight<br>   - Have ALL relevant supporting evidence attached<br><br>4. EVIDENCE SELECTION:<br>   When providing evidence (per selective quote strategy in Section 5), include FULL CONTEXT:<br>   - Direct quotes should include BOTH the punchline AND relevant background commentary<br>   - Start quotes earlier to capture the setup and context of the discussion<br>   - Include explanatory phrases that precede the key insight<br>   - Paraphrases of complex explanations when quotes would be too long<br>   - Multiple perspectives if available<br>   - Speaker attribution for credibility<br>   - Use __underline__ for critical phrases within quotes<br><br>   CRITICAL: When you DO use direct quotes (per Section 5 priorities), prefer longer quotes<br>   with context over short punchlines. This doesn't mean quote everything - it means make the<br>   quotes you do use comprehensive and contextual (3-4 sentences with background).<br>   Evidence should be rich enough to stand alone without the full transcript<br><br>5. QUOTE SELECTION STRATEGY:<br>   Use direct quotes STRATEGICALLY, not uniformly:<br><br>   PRIORITIZE QUOTES FOR:<br>   - Key drivers and root causes of performance ("driven by X, Y, Z")<br>   - Strategic initiatives and forward-looking plans<br>   - Management outlook, guidance, and expectations<br>   - Risk factors and challenges discussed<br>   - Novel insights or unique perspectives<br>   - Qualitative context that explains "why" behind results<br><br>   PARAPHRASE INSTEAD FOR:<br>   - Basic performance numbers ("Revenue was $X billion")<br>   - Simple quarter-over-quarter comparisons without explanation<br>   - Routine definitions or straightforward metrics<br>   - Standard regulatory or accounting explanations<br><br>   RULE OF THUMB: Quote the "why" and "what's next", paraphrase the "what happened"<br><br>6. MARKUP USAGE:<br>   - **Bold**: Numbers, metrics, percentages, financial figures<br>     Example: "NIM expanded **15 basis points** to **1.72%**"<br>   - __Underline__: Key phrases or critical statements within quotes<br>     Example: "CFO noted __'unprecedented growth'__ in wealth management"<br><br>7. COMPLETENESS:<br>   - Include ALL material points discussed for this category<br>   - Don't artificially limit the number of statements<br>   - If a topic was discussed extensively, reflect that in your extraction<br>   - Better to be thorough than to arbitrarily truncate<br><br>8. QUALITY OVER QUANTITY:<br>   Each statement should add value:<br>   - Don't repeat the same point multiple times<br>   - Combine related insights into single statements with rich evidence<br>   - Ensure each statement advances understanding</div>
+            </div>
+
+            <div class="explanation-column">
+                <div class="section-header">
+                    <div class="section-icon">💡</div>
+                    <h2 class="section-title">Business Context</h2>
+                </div>
+                <p class="explanation-text">Defines the detailed requirements for extraction and output construction. This section translates high-level objectives into concrete, operational rules with specific criteria for what to include and how to format it.</p>
+                <ul class="key-points">
+                    <li><strong>Operational Rules</strong>: Converts objectives into actionable requirements</li>
+<li><strong>Quality Criteria</strong>: Specifies what makes a good vs. bad extraction</li>
+<li><strong>Format Specifications</strong>: Title length, statement structure, markup usage</li>
+<li><strong>Decision Logic</strong>: When to reject, when to quote vs. paraphrase</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="section" style="--section-color: #d97706; --section-color-rgb: 217, 119, 6;">
+            <div class="prompt-column">
+                <div class="section-header">
+                    <div class="section-icon">⚠️</div>
+                    <h2 class="section-title">Deduplication Strategy</h2>
+                </div>
+                <div class="prompt-content">MANDATORY deduplication - violations will be rejected:<br><br>1. BEFORE EXTRACTING - CHECK ALL PREVIOUS THEMES:<br>   The extracted_themes field contains EVERYTHING already extracted<br>   Read through ALL statements from prior categories<br>   If you find similar/related content, you MUST either:<br>   a) Skip it entirely if already covered, OR<br>   b) Extract ONLY the novel aspect not yet mentioned<br><br>2. FOLLOW CROSS-CATEGORY BOUNDARIES:<br>   The cross_category_notes specify PRIMARY ownership of cross-cutting themes<br>   If a theme belongs primarily in another category, skip it here<br>   Only extract if this category is designated as primary owner<br><br>3. VERIFY NO SEMANTIC OVERLAP:<br>   Even if wording differs, check if the MEANING was already captured.<br><br>   Common semantic duplicates to avoid:<br>   - "NIM expanded 15bps" ≈ "Net interest margin grew 15 basis points" → DUPLICATE<br>   - "CET1 ratio of 13.2%" ≈ "Strong capital position above 13%" → DUPLICATE<br>   - "Revenue growth drivers" ≈ "Factors contributing to revenue increase" → DUPLICATE<br>   - "PCL normalized" ≈ "Provisions returned to historical levels" → DUPLICATE<br>   - "Expense discipline" ≈ "Cost management initiatives" → DUPLICATE<br><br>   Check MEANING not just WORDING. Different phrasing of same concept = duplicate<br><br>4. WHEN IN DOUBT - SKIP IT:<br>   If uncertain whether content overlaps, err on side of skipping<br>   Better to have one strong instance than duplicate weak ones<br>   Duplication is worse than minor gaps<br><br>5. SECTION SPECIFICITY:<br>   Only extract from the specified transcripts_section (MD or QA)<br>   Don't pull content from other sections<br><br>ZERO TOLERANCE: If you extract content already in extracted_themes, the category will be rejected</div>
+            </div>
+
+            <div class="explanation-column">
+                <div class="section-header">
+                    <div class="section-icon">💡</div>
+                    <h2 class="section-title">Business Context</h2>
+                </div>
+                <p class="explanation-text">Establishes zero-tolerance rules for content overlap. This section provides mandatory checks and concrete examples of semantic duplication (different wording, same meaning) to ensure report quality.</p>
+                <ul class="key-points">
+                    <li><strong>Zero Tolerance</strong>: Violations will be rejected - strict enforcement</li>
+<li><strong>Semantic Checking</strong>: Different wording of same concept counts as duplicate</li>
+<li><strong>Concrete Examples</strong>: Provides pairs showing what duplication looks like</li>
+<li><strong>Default Action</strong>: 'When in doubt, skip it' prioritizes quality over coverage</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="section" style="--section-color: #e11d48; --section-color-rgb: 225, 29, 72;">
+            <div class="prompt-column">
+                <div class="section-header">
+                    <div class="section-icon">⭐</div>
+                    <h2 class="section-title">Quality Standards</h2>
+                </div>
+                <div class="prompt-content">- COMPREHENSIVENESS: Capture all material content - no artificial limits<br>- SPECIFICITY: Use exact figures, precise quotes, actual names<br>- EVIDENCE-RICH: Provide comprehensive supporting quotes and paraphrases<br>- NON-DUPLICATIVE: Respect category boundaries and previous extractions<br>- STRATEGIC EMPHASIS: Use markup to highlight key information<br>- ANALYTICAL: Synthesize insights, don't just report facts<br>- PROFESSIONAL: Maintain analytical rigor and objectivity<br>- COMPLETENESS: Better to have 8-10 rich statements than 3-4 thin ones</div>
+            </div>
+
+            <div class="explanation-column">
+                <div class="section-header">
+                    <div class="section-icon">💡</div>
+                    <h2 class="section-title">Business Context</h2>
+                </div>
+                <p class="explanation-text">Lists non-negotiable quality requirements that outputs must meet. These standards act as a final checklist, addressing specific failure modes like generic statements, artificial limits, and duplication.</p>
+                <ul class="key-points">
+                    <li><strong>Comprehensiveness</strong>: Capture all material content, no artificial limits</li>
+<li><strong>Specificity</strong>: Exact figures, precise quotes, actual names required</li>
+<li><strong>Evidence-Rich</strong>: Comprehensive supporting evidence for all statements</li>
+<li><strong>Analytical</strong>: Synthesize insights, don't just report facts</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="section" style="--section-color: #0891b2; --section-color-rgb: 8, 145, 178;">
+            <div class="prompt-column">
+                <div class="section-header">
+                    <div class="section-icon">📤</div>
+                    <h2 class="section-title">Response Format</h2>
+                </div>
+                <div class="prompt-content">Use the provided tool to return structured category content.<br><br>IMPORTANT:<br>- Only set rejected=true if there's genuinely no relevant content<br>- Provide a detailed rejection_reason if rejected<br>- For non-rejected categories, ensure title and summary_statements are comprehensive<br>- Include ALL relevant evidence for each statement - be exhaustive<br>- Use **bold** for metrics and __underline__ for emphasis strategically<br>- Let the content dictate the number of statements - don't limit artificially</div>
+            </div>
+
+            <div class="explanation-column">
+                <div class="section-header">
+                    <div class="section-icon">💡</div>
+                    <h2 class="section-title">Business Context</h2>
+                </div>
+                <p class="explanation-text">Provides final instructions before output generation. This bridges the prompt instructions and technical tool definition, reinforcing critical requirements and reminding the AI to verify completeness.</p>
+                <ul class="key-points">
+                    <li><strong>Output Mechanism</strong>: Use provided function/tool to return structured data</li>
+<li><strong>Critical Reminders</strong>: Reinforces most important rules before submission</li>
+<li><strong>Verification Step</strong>: Final check against all requirements</li>
+<li><strong>Formatting</strong>: Markup usage, field requirements, completeness check</li>
+                </ul>
+            </div>
+        </div>
+
+    </div>
+</body>
+</html>
