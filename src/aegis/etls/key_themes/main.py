@@ -32,10 +32,7 @@ from aegis.etls.key_themes.document_converter import (
     add_theme_header_with_background,
     get_standard_report_metadata,
 )
-from aegis.etls.key_themes.transcript_utils import (
-    retrieve_full_section,
-    format_full_section_chunks,
-)
+from aegis.etls.key_themes.transcript_utils import retrieve_full_section
 from aegis.utils.ssl import setup_ssl
 from aegis.connections.oauth_connector import setup_authentication
 from aegis.connections.llm_connector import complete, complete_with_tools
@@ -44,6 +41,7 @@ from aegis.utils.logging import setup_logging, get_logger
 from aegis.utils.prompt_loader import load_prompt_from_db
 from aegis.utils.sql_prompt import postgresql_prompts
 from aegis.utils.settings import config
+
 import yaml
 
 setup_logging()
@@ -154,14 +152,13 @@ def load_categories_from_xlsx(execution_id: str) -> List[Dict[str, str]]:
         return categories
 
     except Exception as e:
-        error_msg = f"Failed to load categories from {xlsx_path}: {str(e)}"
         logger.error(
             "etl.key_themes.categories_load_error",
             execution_id=execution_id,
             xlsx_path=xlsx_path,
             error=str(e),
         )
-        raise
+        raise ValueError(f"Failed to load categories from {xlsx_path}: {str(e)}") from e
 
 
 class QABlock:
@@ -302,7 +299,6 @@ async def load_qa_blocks(
         Dictionary indexed by qa_id containing QABlock objects
     """
     logger = get_logger()
-    execution_id = context.get("execution_id")
 
     bank_info = await get_bank_info(bank_name)
 
@@ -648,9 +644,7 @@ async def determine_comprehensive_grouping(
     # Format categories list for prompt
     categories_list = []
     for i, cat in enumerate(categories, 1):
-        categories_list.append(
-            f"{i}. {cat['category_name']}\n   {cat['category_description']}"
-        )
+        categories_list.append(f"{i}. {cat['category_name']}\n   {cat['category_description']}")
     categories_str = "\n\n".join(categories_list)
 
     system_prompt = prompt_data["system_prompt"].format(
@@ -935,9 +929,7 @@ async def generate_key_themes(bank_name: str, fiscal_year: int, quarter: str) ->
                 available_periods = db_result.fetchall()
 
                 if available_periods:
-                    period_list = ", ".join(
-                        [f"{p[1]} {p[0]}" for p in available_periods]
-                    )
+                    period_list = ", ".join([f"{p[1]} {p[0]}" for p in available_periods])
                     error_msg += (
                         f"\n\nAvailable periods for {bank_info['bank_name']}: {period_list}"
                     )
