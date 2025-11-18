@@ -1,0 +1,17 @@
+# Key Themes ETL Configuration
+
+# LLM Model Configuration
+# Models are referenced from aegis.utils.settings.config
+# Tiers: small, medium, large
+models:
+  theme_extraction:
+    tier: medium  # Uses config.llm.medium.model
+  formatting:
+    tier: medium  # Uses config.llm.medium.model
+  grouping:
+    tier: medium  # Uses config.llm.medium.model
+
+# LLM Parameters
+llm:
+  temperature: 0.1
+  max_tokens: 32768

@@ -14,172 +14,91 @@ Usage:
 
 import argparse
 import asyncio
+import hashlib
 import json
-import sys
 import uuid
 import os
-import time
-# import re  # No longer needed - using HTML parser instead
 from datetime import datetime
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List
+import pandas as pd
 from sqlalchemy import text
 from docx import Document
 from docx.shared import Pt, Inches, RGBColor
-from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_COLOR_INDEX
-from docx.oxml import OxmlElement, parse_xml
-from docx.oxml.ns import qn, nsdecls
-import hashlib
-from collections import defaultdict
-from html.parser import HTMLParser
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 
-# Import document converter functions
 from aegis.etls.key_themes.document_converter import (
-    convert_docx_to_pdf,
+    HTMLToDocx,
+    add_page_numbers_with_footer,
+    add_theme_header_with_background,
     get_standard_report_metadata,
-    theme_groups_to_markdown
 )
-
-# Import direct transcript functions
-from aegis.model.subagents.transcripts.retrieval import retrieve_full_section
-from aegis.model.subagents.transcripts.formatting import format_full_section_chunks
+from aegis.etls.key_themes.transcript_utils import (
+    retrieve_full_section,
+    format_full_section_chunks,
+)
 from aegis.utils.ssl import setup_ssl
 from aegis.connections.oauth_connector import setup_authentication
 from aegis.connections.llm_connector import complete, complete_with_tools
 from aegis.connections.postgres_connector import get_connection
 from aegis.utils.logging import setup_logging, get_logger
 from aegis.utils.prompt_loader import load_prompt_from_db
-from aegis.etls.key_themes.config.config import get_model, TEMPERATURE, MAX_TOKENS
+from aegis.utils.sql_prompt import postgresql_prompts
+from aegis.etls.config_loader import ETLConfig
 
-# Initialize logging
 setup_logging()
 logger = get_logger()
 
+etl_config = ETLConfig(os.path.join(os.path.dirname(__file__), "config", "config.yaml"))
 
-class HTMLToDocx(HTMLParser):
+
+def load_categories_from_xlsx(execution_id: str) -> List[Dict[str, str]]:
     """
-    Parser to convert HTML-formatted text to Word document formatting.
-    Supports: <b>, <strong>, <i>, <em>, <u>, <mark>, <span style="..."> tags and their nesting.
+    Load categories from the key themes categories XLSX file.
+
+    Args:
+        execution_id: Execution ID for logging
+
+    Returns:
+        List of dictionaries with category_name and category_description
     """
+    file_name = "key_themes_categories.xlsx"
 
-    def __init__(self, paragraph, font_size=Pt(9)):
-        super().__init__()
-        self.paragraph = paragraph
-        self.font_size = font_size
-        self.text_buffer = ""
-        self.format_stack = []  # Stack to track nested formatting
-        self.style_stack = []  # Stack for span styles
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    xlsx_path = os.path.join(current_dir, "config", "categories", file_name)
 
-    def handle_starttag(self, tag, attrs):
-        # Flush any pending text before changing format
-        self._flush_text()
+    if not os.path.exists(xlsx_path):
+        raise FileNotFoundError(f"Categories file not found: {xlsx_path}")
 
-        # Add format to stack
-        if tag in ['b', 'strong']:
-            self.format_stack.append('bold')
-        elif tag in ['i', 'em']:
-            self.format_stack.append('italic')
-        elif tag == 'u':
-            self.format_stack.append('underline')
-        elif tag == 'mark':
-            # Check for background-color style in mark tag
-            style_dict = self._parse_style(attrs)
-            if style_dict and 'background-color' in style_dict:
-                self.format_stack.append('highlight_yellow')
-            else:
-                self.format_stack.append('highlight')
-        elif tag == 'span':
-            # Parse style attribute for span tags
-            style_dict = self._parse_style(attrs)
-            self.style_stack.append(style_dict if style_dict else {})
+    try:
+        df = pd.read_excel(xlsx_path, sheet_name=0)
 
-    def handle_endtag(self, tag):
-        # Flush any pending text before changing format
-        self._flush_text()
+        required_columns = ["category_name", "category_description"]
+        missing_columns = [col for col in required_columns if col not in df.columns]
+        if missing_columns:
+            raise ValueError(f"Missing required columns in {file_name}: {missing_columns}")
 
-        # Remove format from stack
-        if tag in ['b', 'strong'] and 'bold' in self.format_stack:
-            self.format_stack.remove('bold')
-        elif tag in ['i', 'em'] and 'italic' in self.format_stack:
-            self.format_stack.remove('italic')
-        elif tag == 'u' and 'underline' in self.format_stack:
-            self.format_stack.remove('underline')
-        elif tag == 'mark':
-            if 'highlight_yellow' in self.format_stack:
-                self.format_stack.remove('highlight_yellow')
-            elif 'highlight' in self.format_stack:
-                self.format_stack.remove('highlight')
-        elif tag == 'span' and self.style_stack:
-            self.style_stack.pop()
+        categories = df.to_dict("records")
 
-    def handle_data(self, data):
-        # Buffer text to handle whitespace properly
-        self.text_buffer += data
+        if not categories:
+            raise ValueError(f"No categories in {file_name}")
 
-    def _parse_style(self, attrs):
-        """Parse style attribute from HTML tags."""
-        style_dict = {}
-        for attr_name, attr_value in attrs:
-            if attr_name == 'style':
-                # Parse CSS style string
-                styles = attr_value.split(';')
-                for style in styles:
-                    if ':' in style:
-                        prop, value = style.split(':', 1)
-                        style_dict[prop.strip().lower()] = value.strip()
-        return style_dict
+        logger.info(
+            "etl.key_themes.categories_loaded",
+            execution_id=execution_id,
+            file_name=file_name,
+            num_categories=len(categories),
+        )
+        return categories
 
-    def _flush_text(self):
-        """Apply formatting and add text to document."""
-        if not self.text_buffer:
-            return
-
-        run = self.paragraph.add_run(self.text_buffer)
-
-        # Apply span styles if present (from top of stack)
-        if self.style_stack:
-            current_style = self.style_stack[-1]
-
-            # Apply color
-            if 'color' in current_style:
-                color_hex = current_style['color'].lstrip('#')
-                if color_hex.startswith('1e4d8b'):  # Dark blue for key questions
-                    run.font.color.rgb = RGBColor(0x1e, 0x4d, 0x8b)
-                elif color_hex.startswith('4d94ff'):  # Medium blue for key answers
-                    run.font.color.rgb = RGBColor(0x4d, 0x94, 0xff)
-
-            # Apply font size
-            if 'font-size' in current_style:
-                size_str = current_style['font-size']
-                if 'pt' in size_str:
-                    size = float(size_str.replace('pt', '').strip())
-                    run.font.size = Pt(size)
-                else:
-                    run.font.size = self.font_size
-            else:
-                run.font.size = self.font_size
-
-            # Apply font weight from span
-            if 'font-weight' in current_style and current_style['font-weight'] == 'bold':
-                run.font.bold = True
-        else:
-            run.font.size = self.font_size
-
-        # Apply all active formats from format stack
-        if 'bold' in self.format_stack:
-            run.font.bold = True
-        if 'italic' in self.format_stack:
-            run.font.italic = True
-        if 'underline' in self.format_stack:
-            run.font.underline = True
-        if 'highlight' in self.format_stack or 'highlight_yellow' in self.format_stack:
-            run.font.highlight_color = WD_COLOR_INDEX.YELLOW
-
-        self.text_buffer = ""
-
-    def close(self):
-        """Ensure any remaining text is flushed."""
-        self._flush_text()
-        super().close()
+    except Exception as e:
+        error_msg = f"Failed to load categories from {xlsx_path}: {str(e)}"
+        logger.error(
+            "etl.key_themes.categories_load_error",
+            execution_id=execution_id,
+            xlsx_path=xlsx_path,
+            error=str(e),
+        )
+        raise
 
 
 class QABlock:
@@ -189,11 +108,11 @@ class QABlock:
         self.qa_id = qa_id
         self.position = position
         self.original_content = original_content
-        self.theme_title = None
+        self.category_name = None  # Changed from theme_title to category_name
         self.summary = None
         self.formatted_content = None
         self.assigned_group = None
-        self.is_valid = True  # Default to valid until proven otherwise
+        self.is_valid = True
 
 
 class ThemeGroup:
@@ -206,227 +125,238 @@ class ThemeGroup:
         self.qa_blocks = []
 
 
-async def resolve_bank_info(bank_input: str, context: Dict[str, Any]) -> Dict[str, Any]:
-    """Resolve bank input to full bank information from database."""
+async def get_bank_info(bank_name: str) -> Dict[str, Any]:
+    """
+    Look up bank information from the aegis_data_availability table.
+
+    Args:
+        bank_name: Name, symbol, or ID of the bank
+
+    Returns:
+        Dictionary with bank_id, bank_name, and bank_symbol
+
+    Raises:
+        ValueError: If bank not found
+    """
     async with get_connection() as conn:
-        # Try as bank_id (integer)
-        try:
-            bank_id = int(bank_input)
+        if bank_name.isdigit():
             result = await conn.execute(
-                text("""
-                    SELECT DISTINCT bank_id, bank_name, bank_symbol
-                    FROM aegis_data_availability
-                    WHERE bank_id = :bank_id
-                    LIMIT 1
-                """),
-                {"bank_id": bank_id}
+                text(
+                    """
+                SELECT DISTINCT bank_id, bank_name, bank_symbol
+                FROM aegis_data_availability
+                WHERE bank_id = :bank_id
+                LIMIT 1
+                """
+                ),
+                {"bank_id": int(bank_name)},
             )
             row = result.fetchone()
-            if row:
-                return {
-                    'id': row.bank_id,
-                    'name': row.bank_name,
-                    'ticker': row.bank_symbol,
-                    'symbol': row.bank_symbol
-                }
-        except ValueError:
-            pass
-
-        # Try as exact ticker/symbol or name match first
-        result = await conn.execute(
-            text("""
+            result = row._asdict() if row else None
+        else:
+            result = await conn.execute(
+                text(
+                    """
                 SELECT DISTINCT bank_id, bank_name, bank_symbol
                 FROM aegis_data_availability
-                WHERE UPPER(bank_symbol) = UPPER(:symbol)
-                   OR LOWER(bank_name) = LOWER(:name)
+                WHERE LOWER(bank_name) = LOWER(:bank_name)
+                   OR LOWER(bank_symbol) = LOWER(:bank_name)
                 LIMIT 1
-            """),
-            {"symbol": bank_input, "name": bank_input}
-        )
-        row = result.fetchone()
-        if row:
-            return {
-                'id': row.bank_id,
-                'name': row.bank_name,
-                'ticker': row.bank_symbol,
-                'symbol': row.bank_symbol
-            }
+                """
+                ),
+                {"bank_name": bank_name},
+            )
+            row = result.fetchone()
+            result = row._asdict() if row else None
 
-        # Try partial match on ticker/symbol (e.g. "RY" matches "RY-CA")
+            if not result:
+                partial_result = await conn.execute(
+                    text(
+                        """
+                    SELECT DISTINCT bank_id, bank_name, bank_symbol
+                    FROM aegis_data_availability
+                    WHERE LOWER(bank_name) LIKE LOWER(:pattern)
+                       OR LOWER(bank_symbol) LIKE LOWER(:pattern)
+                    LIMIT 1
+                    """
+                    ),
+                    {"pattern": f"%{bank_name}%"},
+                )
+                row = partial_result.fetchone()
+                result = row._asdict() if row else None
+
+        if not result:
+            raise ValueError(f"Bank '{bank_name}' not found")
+
+        return {
+            "bank_id": result["bank_id"],
+            "bank_name": result["bank_name"],
+            "bank_symbol": result["bank_symbol"],
+        }
+
+
+async def verify_data_availability(bank_id: int, fiscal_year: int, quarter: str) -> bool:
+    """
+    Check if transcript data is available for the specified bank and period.
+
+    Args:
+        bank_id: Bank ID
+        fiscal_year: Year (e.g., 2024)
+        quarter: Quarter (e.g., "Q3")
+
+    Returns:
+        True if transcript data is available, False otherwise
+    """
+    async with get_connection() as conn:
         result = await conn.execute(
-            text("""
-                SELECT DISTINCT bank_id, bank_name, bank_symbol
-                FROM aegis_data_availability
-                WHERE UPPER(bank_symbol) LIKE UPPER(:pattern) || '%'
-                   OR UPPER(bank_symbol) LIKE '%' || UPPER(:pattern) || '%'
-                LIMIT 1
-            """),
-            {"pattern": bank_input}
-        )
-        row = result.fetchone()
-        if row:
-            return {
-                'id': row.bank_id,
-                'name': row.bank_name,
-                'ticker': row.bank_symbol,
-                'symbol': row.bank_symbol
-            }
-
-        # Try as bank name (partial match)
-        result = await conn.execute(
-            text("""
-                SELECT DISTINCT bank_id, bank_name, bank_symbol
-                FROM aegis_data_availability
-                WHERE LOWER(bank_name) LIKE LOWER(:name_pattern)
-                LIMIT 1
-            """),
-            {"name_pattern": f"%{bank_input}%"}
-        )
-        row = result.fetchone()
-        if row:
-            return {
-                'id': row.bank_id,
-                'name': row.bank_name,
-                'ticker': row.bank_symbol,
-                'symbol': row.bank_symbol
-            }
-
-        # List available banks for user
-        available = await conn.execute(text("""
-            SELECT DISTINCT bank_symbol, bank_name
+            text(
+                """
+            SELECT database_names
             FROM aegis_data_availability
-            ORDER BY bank_symbol
-        """))
-        available_banks = available.fetchall()
+            WHERE bank_id = :bank_id
+              AND fiscal_year = :fiscal_year
+              AND quarter = :quarter
+            """
+            ),
+            {"bank_id": bank_id, "fiscal_year": fiscal_year, "quarter": quarter},
+        )
+        row = result.fetchone()
 
-        bank_list = "\n".join([f"  - {r['bank_symbol']}: {r['bank_name']}" for r in available_banks])
-        raise ValueError(f"Could not resolve bank '{bank_input}'. Available banks:\n{bank_list}")
+        if row and row[0]:
+            return "transcripts" in row[0]
+
+        return False
 
 
 async def load_qa_blocks(
-    bank_name: str,
-    fiscal_year: int,
-    quarter: str,
-    context: Dict[str, Any]
+    bank_name: str, fiscal_year: int, quarter: str, context: Dict[str, Any]
 ) -> Dict[str, QABlock]:
     """
     Step 1: Load all Q&A blocks and create an index.
+    Uses retrieve_full_section from transcript_utils for consistency.
 
     Returns:
         Dictionary indexed by qa_id containing QABlock objects
     """
-    logger.info(f"Loading Q&A blocks for {bank_name} {fiscal_year} {quarter}")
+    logger = get_logger()
+    execution_id = context.get("execution_id")
 
-    # Retrieve Q&A chunks from database
+    bank_info = await get_bank_info(bank_name)
+
     combo = {
-        "bank_name": bank_name,
-        "bank_id": 1,  # Will be resolved from database
-        "bank_symbol": "",  # Will be resolved
+        "bank_name": bank_info["bank_name"],
+        "bank_id": bank_info["bank_id"],
+        "bank_symbol": bank_info["bank_symbol"],
         "fiscal_year": fiscal_year,
         "quarter": quarter,
-        "query_intent": "Retrieve Q&A section for key themes extraction"
     }
 
-    # Get full bank info from database
-    try:
-        bank_info = await resolve_bank_info(bank_name, context)
-        combo['bank_id'] = bank_info['id']
-        combo['bank_symbol'] = bank_info['symbol']
-        logger.info(f"Resolved bank: {bank_name} -> bank_id={combo['bank_id']}, symbol={combo['bank_symbol']}")
-    except Exception as e:
-        logger.warning(f"Could not resolve bank info: {e}")
+    # Use retrieve_full_section to get Q&A chunks
+    chunks = await retrieve_full_section(combo=combo, sections="QA", context=context)
 
-    # Query transcripts - the table uses institution_id (string) not bank_id
-    from sqlalchemy import text
-
-    async with get_connection() as conn:
-        # Query using institution_id (the aegis_transcripts table doesn't have bank_id column)
-        logger.info(f"Querying Q&A data with institution_id={str(combo['bank_id'])}, year={combo['fiscal_year']}, quarter={combo['quarter']}")
-        try:
-            result = await conn.execute(
-                text("""
-                    SELECT
-                        qa_group_id,
-                        chunk_content as content
-                    FROM aegis_transcripts
-                    WHERE institution_id = :institution_id
-                    AND fiscal_year = :fiscal_year
-                    AND fiscal_quarter = :fiscal_quarter
-                    AND section_name = 'Q&A'
-                    ORDER BY qa_group_id
-                """),
-                {
-                    "institution_id": str(combo['bank_id']),  # Convert to string for institution_id
-                    "fiscal_year": combo['fiscal_year'],
-                    "fiscal_quarter": combo['quarter']
-                }
-            )
-            rows = result.fetchall()
-            chunks = [{"qa_group_id": row[0], "content": row[1]} for row in rows]
-            logger.info(f"Found {len(chunks)} Q&A chunks")
-        except Exception as e:
-            logger.warning(f"Failed to retrieve Q&A data: {e}")
-            chunks = []
+    logger.debug(
+        "load_qa_index.retrieved",
+        bank_name=bank_name,
+        quarter=quarter,
+        fiscal_year=fiscal_year,
+        num_chunks=len(chunks),
+    )
 
     if not chunks:
-        logger.warning(f"No Q&A data found for {bank_name} {fiscal_year} {quarter}")
         return {}
 
-    # Group chunks by Q&A group ID
+    # Group chunks by qa_group_id
     qa_groups = {}
     for chunk in chunks:
-        qa_group_id = chunk.get('qa_group_id')
+        qa_group_id = chunk.get("qa_group_id")
         if qa_group_id is not None:
             if qa_group_id not in qa_groups:
                 qa_groups[qa_group_id] = []
             qa_groups[qa_group_id].append(chunk)
 
-    # Create QABlock index
+    # Build QABlock index
     qa_index = {}
     for qa_group_id, group_chunks in qa_groups.items():
-        # Combine chunk content for this Q&A group
-        qa_content = "\n".join([
-            chunk.get('content', '')
-            for chunk in group_chunks
-            if chunk.get('content')
-        ])
+        # Concatenate content from all chunks in this Q&A group
+        qa_content = "\n".join(
+            [chunk.get("content", "") for chunk in group_chunks if chunk.get("content")]
+        )
 
         if qa_content:
-            qa_id = f'qa_{qa_group_id}'
+            qa_id = f"qa_{qa_group_id}"
             qa_index[qa_id] = QABlock(qa_id, qa_group_id, qa_content)
 
-    logger.info(f"Loaded {len(qa_index)} Q&A blocks into index")
     return qa_index
 
 
-async def extract_theme_and_summary(qa_block: QABlock, context: Dict[str, Any]):
+async def classify_qa_block(
+    qa_block: QABlock,
+    categories: List[Dict[str, str]],
+    previous_classifications: List[Dict[str, str]],
+    context: Dict[str, Any],
+):
     """
-    Step 2A: Extract theme title and summary for a single Q&A block.
-    Validates content and skips invalid Q&A sessions.
+    Step 1A: Validate and classify a single Q&A block into predefined category.
+    Uses cumulative context from previous classifications for consistency.
+
+    Args:
+        qa_block: Q&A block to classify
+        categories: List of predefined categories from xlsx
+        previous_classifications: List of prior classifications for context
+        context: Execution context
     """
-    # Load theme extraction prompt from database
-    execution_id = context.get('execution_id')
+    execution_id = context.get("execution_id")
+
+    logger.info(
+        "category_classification.processing_qa",
+        execution_id=execution_id,
+        qa_id=qa_block.qa_id,
+        content_length=len(qa_block.original_content),
+        num_previous_classifications=len(previous_classifications),
+    )
+
     prompt_data = load_prompt_from_db(
         layer="key_themes_etl",
         name="theme_extraction",
-        compose_with_globals=False,  # ETL doesn't use global contexts
+        compose_with_globals=False,
         available_databases=None,
-        execution_id=execution_id
+        execution_id=execution_id,
     )
 
-    # Format the system prompt with actual values
-    system_prompt = prompt_data['system_prompt'].format(
-        bank_name=context.get('bank_name', 'Bank'),
-        quarter=context.get('quarter', 'Q'),
-        fiscal_year=context.get('fiscal_year', 'Year')
+    # Format categories list
+    categories_list = []
+    for i, cat in enumerate(categories, 1):
+        categories_list.append(f"{i}. {cat['category_name']}\n   {cat['category_description']}")
+    categories_str = "\n\n".join(categories_list)
+
+    # Format previous classifications
+    if previous_classifications:
+        prev_class_str = "\n".join(
+            [
+                f"{pc['qa_id']}: {pc['category_name']} - {pc['summary'][:100]}..."
+                for pc in previous_classifications
+            ]
+        )
+    else:
+        prev_class_str = "No previous classifications yet (this is the first Q&A)."
+
+    system_prompt = prompt_data["system_prompt"].format(
+        bank_name=context.get("bank_name", "Bank"),
+        quarter=context.get("quarter", "Q"),
+        fiscal_year=context.get("fiscal_year", "Year"),
+        categories_list=categories_str,
+        num_categories=len(categories),
+        previous_classifications=prev_class_str,
     )
 
     messages = [
         {"role": "system", "content": system_prompt},
-        {"role": "user", "content": f"Extract theme from this Q&A session:\n\n{qa_block.original_content}"}
+        {
+            "role": "user",
+            "content": f"Validate and classify this Q&A session:\n\n{qa_block.original_content}",
+        },
     ]
 
-    # Retry logic for better reliability
     max_retries = 3
     result = None
 
@@ -434,46 +364,57 @@ async def extract_theme_and_summary(qa_block: QABlock, context: Dict[str, Any]):
         try:
             response = await complete_with_tools(
                 messages=messages,
-                tools=[prompt_data['tool_definition']],
+                tools=[prompt_data["tool_definition"]],
                 context=context,
-                llm_params={"model": get_model("theme_extraction"), "temperature": TEMPERATURE, "max_tokens": MAX_TOKENS}
+                llm_params={
+                    "model": etl_config.get_model("theme_extraction"),
+                    "temperature": etl_config.temperature,
+                    "max_tokens": etl_config.max_tokens,
+                },
             )
 
             if response:
-                tool_calls = response.get('choices', [{}])[0].get('message', {}).get('tool_calls', [])
+                tool_calls = (
+                    response.get("choices", [{}])[0].get("message", {}).get("tool_calls", [])
+                )
                 if tool_calls:
-                    result = json.loads(tool_calls[0]['function']['arguments'])
-                    break  # Success, exit retry loop
+                    result = json.loads(tool_calls[0]["function"]["arguments"])
+                    break
 
-        except Exception as e:
+        except Exception:
             if attempt < max_retries - 1:
-                logger.warning(f"Retry {attempt + 1}/{max_retries} for theme extraction {qa_block.qa_id}: {str(e)}")
-                await asyncio.sleep(2 ** attempt)  # Exponential backoff: 1s, 2s, 4s
+                await asyncio.sleep(2**attempt)
                 continue
-            else:
-                logger.error(f"Error extracting theme for {qa_block.qa_id} after {max_retries} attempts: {str(e)}")
-                # Set defaults on error
-                qa_block.theme_title = f"Q&A Discussion {qa_block.position}"
-                qa_block.summary = "Theme extraction failed"
-                qa_block.is_valid = True  # Assume valid on error to avoid losing data
-                return
+            raise
 
     if result:
-        # Check if the Q&A is valid
-        is_valid = result.get('is_valid', True)
+        is_valid = result.get("is_valid", True)
 
-        if is_valid:
-            qa_block.theme_title = result['theme_title']
-            qa_block.summary = result.get('summary', '')
-            qa_block.is_valid = True
-            logger.debug(f"Extracted theme for {qa_block.qa_id}: {qa_block.theme_title}")
-        else:
-            # Mark as invalid and log the reason
+        if not is_valid:
+            logger.warning(
+                "category_classification.rejected",
+                execution_id=execution_id,
+                qa_id=qa_block.qa_id,
+                rejection_reason=result.get("rejection_reason", "No reason provided"),
+            )
             qa_block.is_valid = False
-            rejection_reason = result.get('rejection_reason', 'Invalid Q&A content')
-            logger.info(f"Skipping invalid Q&A {qa_block.qa_id}: {rejection_reason}")
-            qa_block.theme_title = None
+            qa_block.category_name = None
             qa_block.summary = None
+        else:
+            category_name = result.get("category_name", "")
+            summary = result.get("summary", "")
+
+            logger.info(
+                "category_classification.accepted",
+                execution_id=execution_id,
+                qa_id=qa_block.qa_id,
+                category_name=category_name,
+                summary_preview=summary[:100],
+            )
+
+            qa_block.is_valid = True
+            qa_block.category_name = category_name
+            qa_block.summary = summary
 
 
 async def format_qa_html(qa_block: QABlock, context: Dict[str, Any]):
@@ -481,134 +422,200 @@ async def format_qa_html(qa_block: QABlock, context: Dict[str, Any]):
     Step 2B: Format Q&A block with HTML tags for emphasis.
     Only formats valid Q&A blocks that passed validation.
     """
-    # Skip formatting if the block is invalid
+
     if not qa_block.is_valid:
-        logger.debug(f"Skipping formatting for invalid Q&A block {qa_block.qa_id}")
         qa_block.formatted_content = None
         return
 
-    # Load HTML formatting prompt from database
-    execution_id = context.get('execution_id')
+    execution_id = context.get("execution_id")
     prompt_data = load_prompt_from_db(
         layer="key_themes_etl",
         name="html_formatting",
-        compose_with_globals=False,  # ETL doesn't use global contexts
+        compose_with_globals=False,
         available_databases=None,
-        execution_id=execution_id
+        execution_id=execution_id,
     )
 
-    # Format the system prompt with actual values
-    system_prompt = prompt_data['system_prompt'].format(
-        bank_name=context.get('bank_name', 'Bank'),
-        quarter=context.get('quarter', 'Q'),
-        fiscal_year=context.get('fiscal_year', 'Year')
+    system_prompt = prompt_data["system_prompt"].format(
+        bank_name=context.get("bank_name", "Bank"),
+        quarter=context.get("quarter", "Q"),
+        fiscal_year=context.get("fiscal_year", "Year"),
     )
 
     messages = [
         {"role": "system", "content": system_prompt},
-        {"role": "user", "content": f"Format this Q&A exchange with HTML tags for emphasis:\n\n{qa_block.original_content}"}
+        {
+            "role": "user",
+            "content": (
+                "Format this Q&A exchange with HTML tags for emphasis:\n\n"
+                f"{qa_block.original_content}"
+            ),
+        },
     ]
 
-    # Retry logic for formatting
-    max_retries = 2
+    max_retries = 3
     for attempt in range(max_retries):
         try:
-            response = await complete(messages, context, {"model": get_model("formatting"), "temperature": TEMPERATURE, "max_tokens": MAX_TOKENS})
+            response = await complete(
+                messages,
+                context,
+                {
+                    "model": etl_config.get_model("formatting"),
+                    "temperature": etl_config.temperature,
+                    "max_tokens": etl_config.max_tokens,
+                },
+            )
 
             if isinstance(response, dict):
-                qa_block.formatted_content = response.get('choices', [{}])[0].get('message', {}).get('content', '')
+                qa_block.formatted_content = (
+                    response.get("choices", [{}])[0].get("message", {}).get("content", "")
+                )
             else:
                 qa_block.formatted_content = str(response)
-            break  # Success
+            break
 
-        except Exception as e:
+        except Exception:
             if attempt < max_retries - 1:
-                logger.warning(f"Retry {attempt + 1}/{max_retries} for formatting {qa_block.qa_id}: {str(e)}")
-                await asyncio.sleep(2 ** attempt)  # Exponential backoff
+                await asyncio.sleep(2**attempt)
             else:
-                logger.error(f"Error formatting {qa_block.qa_id} after {max_retries} attempts: {str(e)}")
-                qa_block.formatted_content = qa_block.original_content  # Fallback to original
+                qa_block.formatted_content = qa_block.original_content
 
 
-async def process_all_qa_blocks(qa_index: Dict[str, QABlock], context: Dict[str, Any]):
+async def classify_all_qa_blocks_sequential(
+    qa_index: Dict[str, QABlock],
+    categories: List[Dict[str, str]],
+    context: Dict[str, Any],
+):
     """
-    Step 2: Process all Q&A blocks independently (in parallel).
-    Extracts themes and formats markdown for each block.
+    Step 1: Classify all Q&A blocks sequentially with cumulative context.
+
+    Args:
+        qa_index: Dictionary of QA blocks indexed by qa_id
+        categories: List of predefined categories from xlsx
+        context: Execution context
     """
-    logger.info(f"Processing {len(qa_index)} Q&A blocks in parallel")
+    previous_classifications = []
 
-    # Create tasks for parallel processing
-    tasks = []
-    for qa_block in qa_index.values():
-        # Create coroutines for theme extraction and HTML formatting
-        theme_task = extract_theme_and_summary(qa_block, context)
-        format_task = format_qa_html(qa_block, context)
-        tasks.extend([theme_task, format_task])
+    # Process in order by position
+    sorted_qa_blocks = sorted(qa_index.values(), key=lambda x: x.position)
 
-    # Execute all tasks in parallel
+    for qa_block in sorted_qa_blocks:
+        await classify_qa_block(qa_block, categories, previous_classifications, context)
+
+        # Add to cumulative context if valid
+        if qa_block.is_valid:
+            previous_classifications.append(
+                {
+                    "qa_id": qa_block.qa_id,
+                    "category_name": qa_block.category_name,
+                    "summary": qa_block.summary,
+                }
+            )
+
+    logger.info(
+        "classification.completed",
+        execution_id=context.get("execution_id"),
+        total_classified=len(previous_classifications),
+        total_invalid=len([qa for qa in qa_index.values() if not qa.is_valid]),
+    )
+
+
+async def format_all_qa_blocks_parallel(qa_index: Dict[str, QABlock], context: Dict[str, Any]):
+    """
+    Step 2: Format all valid Q&A blocks in parallel with HTML tags.
+
+    Args:
+        qa_index: Dictionary of QA blocks indexed by qa_id
+        context: Execution context
+    """
+    # Only format valid Q&As
+    valid_qa_blocks = [qa for qa in qa_index.values() if qa.is_valid]
+
+    if not valid_qa_blocks:
+        return
+
+    # Parallel formatting
+    tasks = [format_qa_html(qa_block, context) for qa_block in valid_qa_blocks]
     await asyncio.gather(*tasks)
 
-    logger.info("Completed processing all Q&A blocks")
+    logger.info(
+        "formatting.completed",
+        execution_id=context.get("execution_id"),
+        total_formatted=len(valid_qa_blocks),
+    )
 
 
 async def determine_comprehensive_grouping(
-    qa_index: Dict[str, QABlock],
-    context: Dict[str, Any]
+    qa_index: Dict[str, QABlock], categories: List[Dict[str, str]], context: Dict[str, Any]
 ) -> List[ThemeGroup]:
     """
     Step 3: Make ONE comprehensive grouping decision for all themes.
     Only processes valid Q&A blocks.
-    """
-    # Filter out invalid Q&A blocks
-    valid_qa_blocks = {qa_id: qa_block for qa_id, qa_block in qa_index.items() if qa_block.is_valid}
-    invalid_count = len(qa_index) - len(valid_qa_blocks)
 
-    if invalid_count > 0:
-        logger.info(f"Filtered out {invalid_count} invalid Q&A blocks from grouping")
+    Args:
+        qa_index: Dictionary of QA blocks indexed by qa_id
+        categories: List of category definitions from xlsx
+        context: Execution context with auth, ssl, bank info
+    """
+
+    valid_qa_blocks = {qa_id: qa_block for qa_id, qa_block in qa_index.items() if qa_block.is_valid}
 
     if not valid_qa_blocks:
-        logger.warning("No valid Q&A blocks to group")
         return []
 
-    logger.info(f"Determining comprehensive theme grouping for {len(valid_qa_blocks)} valid Q&A blocks")
-
-    # Load grouping prompt from database
-    execution_id = context.get('execution_id')
+    execution_id = context.get("execution_id")
     prompt_data = load_prompt_from_db(
         layer="key_themes_etl",
-        name="theme_grouping",
-        compose_with_globals=False,  # ETL doesn't use global contexts
+        name="grouping",
+        compose_with_globals=False,
         available_databases=None,
-        execution_id=execution_id
+        execution_id=execution_id,
     )
 
-    # Prepare Q&A blocks info for the LLM - only valid blocks
     qa_blocks_info = []
     for qa_id, qa_block in sorted(valid_qa_blocks.items(), key=lambda x: x[1].position):
         qa_blocks_info.append(
             f"ID: {qa_id}\n"
-            f"Title: {qa_block.theme_title}\n"
+            f"Category: {qa_block.category_name}\n"
             f"Summary: {qa_block.summary}\n"
         )
 
     qa_blocks_str = "\n\n".join(qa_blocks_info)
 
-    # Build prompt with all Q&A information and context
-    system_prompt = prompt_data['system_prompt'].format(
-        bank_name=context.get('bank_name', 'Bank'),
-        bank_symbol=context.get('bank_symbol', 'BANK'),
-        quarter=context.get('quarter', 'Q'),
-        fiscal_year=context.get('fiscal_year', 'Year'),
-        total_qa_blocks=len(valid_qa_blocks),  # Use valid count
-        qa_blocks_info=qa_blocks_str
+    # Format categories list for prompt
+    categories_list = []
+    for i, cat in enumerate(categories, 1):
+        categories_list.append(
+            f"{i}. {cat['category_name']}\n   {cat['category_description']}"
+        )
+    categories_str = "\n\n".join(categories_list)
+
+    system_prompt = prompt_data["system_prompt"].format(
+        bank_name=context.get("bank_name", "Bank"),
+        bank_symbol=context.get("bank_symbol", "BANK"),
+        quarter=context.get("quarter", "Q"),
+        fiscal_year=context.get("fiscal_year", "Year"),
+        total_qa_blocks=len(valid_qa_blocks),
+        qa_blocks_info=qa_blocks_str,
+        categories_list=categories_str,
+        num_categories=len(categories),
     )
 
     messages = [
         {"role": "system", "content": system_prompt},
-        {"role": "user", "content": "Analyze all Q&A blocks and return optimal grouping instructions."}
+        {
+            "role": "user",
+            "content": "Review category assignments, regroup if needed, and create final titles.",
+        },
     ]
 
-    # Retry logic for grouping (critical step)
+    logger.info(
+        "regrouping.llm_request",
+        execution_id=execution_id,
+        num_qa_blocks=len(valid_qa_blocks),
+        system_prompt_length=len(system_prompt),
+    )
+
     max_retries = 3
     result = None
 
@@ -616,426 +623,339 @@ async def determine_comprehensive_grouping(
         try:
             response = await complete_with_tools(
                 messages=messages,
-                tools=[prompt_data['tool_definition']],
+                tools=[prompt_data["tool_definition"]],
                 context=context,
-                llm_params={"model": get_model("grouping"), "temperature": TEMPERATURE, "max_tokens": MAX_TOKENS}
+                llm_params={
+                    "model": etl_config.get_model("grouping"),
+                    "temperature": etl_config.temperature,
+                    "max_tokens": etl_config.max_tokens,
+                },
             )
 
             if response:
-                tool_calls = response.get('choices', [{}])[0].get('message', {}).get('tool_calls', [])
+                tool_calls = (
+                    response.get("choices", [{}])[0].get("message", {}).get("tool_calls", [])
+                )
+
                 if tool_calls:
                     try:
-                        result = json.loads(tool_calls[0]['function']['arguments'])
-                        logger.debug(f"Grouping result keys: {result.keys()}")
-                        break  # Success
-                    except json.JSONDecodeError as je:
+                        result = json.loads(tool_calls[0]["function"]["arguments"])
+
+                        logger.info(
+                            "regrouping.parsed_result",
+                            execution_id=execution_id,
+                            num_groups=len(result.get("theme_groups", [])),
+                        )
+
+                        break
+                    except json.JSONDecodeError as e:
+                        logger.error(
+                            "regrouping.json_decode_error",
+                            execution_id=execution_id,
+                            error=str(e),
+                        )
                         if attempt < max_retries - 1:
-                            logger.warning(f"JSON decode error on attempt {attempt + 1}: {je}")
-                            await asyncio.sleep(2 ** attempt)
+                            await asyncio.sleep(2**attempt)
                             continue
-                        else:
-                            raise
+                        raise
 
-        except Exception as e:
+        except Exception:
             if attempt < max_retries - 1:
-                logger.warning(f"Retry {attempt + 1}/{max_retries} for grouping: {str(e)}")
-                await asyncio.sleep(2 ** attempt)
+                await asyncio.sleep(2**attempt)
                 continue
-            else:
-                logger.error(f"Failed to group themes after {max_retries} attempts: {e}")
-                return None
+            return None
 
-    if result:
-        # Check if the expected key exists
-        if 'theme_groups' not in result:
-            logger.error(f"Missing 'theme_groups' key in result. Available keys: {list(result.keys())}")
-            logger.error(f"Full result: {json.dumps(result, indent=2)}")
-            raise KeyError("'theme_groups' key not found in LLM response")
-
-        # Create ThemeGroup objects from LLM response
+    if result and "theme_groups" in result:
         theme_groups = []
-        for group_data in result['theme_groups']:
+        for group_data in result["theme_groups"]:
             group = ThemeGroup(
-                group_title=group_data['group_title'],
-                qa_ids=group_data['qa_ids'],
-                rationale=group_data.get('rationale', 'Grouped by topic similarity')
+                group_title=group_data["group_title"],
+                qa_ids=group_data["qa_ids"],
+                rationale=group_data.get("rationale", "Regrouped by category"),
             )
             theme_groups.append(group)
 
-        logger.info(f"Created {len(theme_groups)} theme groups")
         return theme_groups
 
-    # Fallback: each valid Q&A gets its own theme
-    logger.warning("Falling back to individual themes")
+    # Fallback: Use initial category assignments
+    logger.warning(
+        "regrouping.fallback",
+        execution_id=execution_id,
+        message="Using initial category assignments as fallback",
+    )
+
+    category_groups = {}
+    for qa_id, qa_block in valid_qa_blocks.items():
+        category = qa_block.category_name
+        if category not in category_groups:
+            category_groups[category] = []
+        category_groups[category].append(qa_id)
+
     theme_groups = []
-    for qa_id, qa_block in valid_qa_blocks.items():  # Use valid_qa_blocks
+    for category, qa_ids in category_groups.items():
         group = ThemeGroup(
-            group_title=qa_block.theme_title,
-            qa_ids=[qa_id],
-            rationale="Fallback - individual theme"
+            group_title=f"{category}",
+            qa_ids=qa_ids,
+            rationale="Fallback - grouped by initial classification",
         )
         theme_groups.append(group)
 
     return theme_groups
 
 
-def apply_grouping_to_index(
-    qa_index: Dict[str, QABlock],
-    theme_groups: List[ThemeGroup]
-):
+def apply_grouping_to_index(qa_index: Dict[str, QABlock], theme_groups: List[ThemeGroup]):
     """
     Step 4: Apply grouping decisions to the Q&A index.
     """
-    logger.info("Applying grouping decisions to Q&A index")
 
-    # Clear any previous assignments
     for qa_block in qa_index.values():
         qa_block.assigned_group = None
 
-    # Apply group assignments
     for group in theme_groups:
         for qa_id in group.qa_ids:
             if qa_id in qa_index:
                 qa_block = qa_index[qa_id]
                 qa_block.assigned_group = group
                 group.qa_blocks.append(qa_block)
-            else:
-                logger.warning(f"Q&A ID {qa_id} not found in index")
-
-    # Log statistics
-    assigned_count = sum(1 for qa in qa_index.values() if qa.assigned_group)
-    logger.info(f"Assigned {assigned_count}/{len(qa_index)} Q&A blocks to groups")
-
-
-def add_page_numbers_with_footer(doc, bank_symbol, quarter, fiscal_year):
-    """Add custom footer with bank info, document title, and page numbers."""
-    for section in doc.sections:
-        footer = section.footer
-
-        # Clear existing footer content
-        footer.paragraphs[0].clear()
-
-        # Create a table in the footer for proper left/right alignment
-
-        # Add a table with 1 row and 2 columns
-        tbl = footer.add_table(1, 2, width=doc.sections[0].page_width - doc.sections[0].left_margin - doc.sections[0].right_margin)
-        tbl.autofit = False
-        tbl.allow_autofit = False
-
-        # Hide table borders
-        tbl.style = 'Table Grid'
-        for row in tbl.rows:
-            for cell in row.cells:
-                # Remove all borders
-                tc = cell._element
-                tcPr = tc.get_or_add_tcPr()
-                tcBorders = parse_xml(f'<w:tcBorders {nsdecls("w")}><w:top w:val="nil"/><w:left w:val="nil"/><w:bottom w:val="nil"/><w:right w:val="nil"/></w:tcBorders>')
-                tcPr.append(tcBorders)
-
-        # Left cell - bank info and doc title
-        left_cell = tbl.rows[0].cells[0]
-        left_para = left_cell.paragraphs[0]
-        left_para.alignment = WD_ALIGN_PARAGRAPH.LEFT
-        left_text = f"{bank_symbol} | {quarter}/{str(fiscal_year)[-2:]} | Investor Call - Key Themes"
-        run_left = left_para.add_run(left_text)
-        run_left.font.size = Pt(9)
-        run_left.font.color.rgb = RGBColor(68, 68, 68)
-
-        # Right cell - page number
-        right_cell = tbl.rows[0].cells[1]
-        right_para = right_cell.paragraphs[0]
-        right_para.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-
-        # Add page number field
-        run = right_para.add_run()
-        fldChar1 = OxmlElement('w:fldChar')
-        fldChar1.set(qn('w:fldCharType'), 'begin')
-        run._element.append(fldChar1)
-
-        instrText = OxmlElement('w:instrText')
-        instrText.text = 'PAGE'
-        run._element.append(instrText)
-
-        fldChar2 = OxmlElement('w:fldChar')
-        fldChar2.set(qn('w:fldCharType'), 'end')
-        run._element.append(fldChar2)
-
-        # Add "| Page" text after page number
-        run_page = right_para.add_run(' | Page')
-        run_page.font.size = Pt(9)
-        run_page.font.color.rgb = RGBColor(68, 68, 68)
-
-
-def add_theme_header_with_background(doc, theme_number, theme_title):
-    """Add a theme header with dark blue text on light blue background."""
-    heading = doc.add_paragraph()
-    heading.paragraph_format.space_before = Pt(12)
-    heading.paragraph_format.space_after = Pt(8)
-    heading.paragraph_format.keep_with_next = True
-
-    # Create the full header text
-    full_text = f"Theme {theme_number}: {theme_title}"
-    run = heading.add_run(full_text)
-    run.font.size = Pt(14)
-    run.font.bold = True
-    run.font.color.rgb = RGBColor(31, 73, 125)  # Dark blue
-
-    # Add shading to the paragraph (light blue background)
-    shading_elm = OxmlElement('w:shd')
-    shading_elm.set(qn('w:val'), 'clear')
-    shading_elm.set(qn('w:color'), 'auto')
-    shading_elm.set(qn('w:fill'), 'D4E1F5')  # Light blue background
-    heading._element.get_or_add_pPr().append(shading_elm)
-
-    return heading
 
 
 def create_document(
-    theme_groups: List[ThemeGroup],
-    bank_name: str,
-    fiscal_year: int,
-    quarter: str,
-    output_path: str
+    theme_groups: List[ThemeGroup], bank_name: str, fiscal_year: int, quarter: str, output_path: str
 ):
     """
     Step 5: Create Word document with grouped themes matching call summary style.
     """
     doc = Document()
 
-    # Get bank symbol (assuming it's the ticker from the first part of bank_name)
     bank_symbol = bank_name.split()[0] if bank_name else "RBC"
     if bank_name == "Royal Bank of Canada":
         bank_symbol = "RY"
 
-    # Set narrow margins for content-heavy document
     sections = doc.sections
     for section in sections:
         section.top_margin = Inches(0.5)
-        section.bottom_margin = Inches(0.6)  # More space for footer
+        section.bottom_margin = Inches(0.6)
         section.left_margin = Inches(0.6)
         section.right_margin = Inches(0.5)
         section.gutter = Inches(0)
 
-    # Add page numbers and footer
     add_page_numbers_with_footer(doc, bank_symbol, quarter, fiscal_year)
 
-    # Check for banner image in config directories
     etl_dir = os.path.dirname(os.path.abspath(__file__))
     banner_path = None
 
-    # First check in key_themes config directory
-    config_dir = os.path.join(etl_dir, 'config')
-    for ext in ['jpg', 'jpeg', 'png']:
-        potential_banner = os.path.join(config_dir, f'banner.{ext}')
+    config_dir = os.path.join(etl_dir, "config")
+    for ext in ["jpg", "jpeg", "png"]:
+        potential_banner = os.path.join(config_dir, f"banner.{ext}")
         if os.path.exists(potential_banner):
             banner_path = potential_banner
             break
 
-    # If not found, check in call_summary config directory (fallback)
     if not banner_path:
-        call_summary_config_dir = os.path.join(os.path.dirname(etl_dir), 'call_summary', 'config')
-        for ext in ['jpg', 'jpeg', 'png']:
-            potential_banner = os.path.join(call_summary_config_dir, f'banner.{ext}')
+        call_summary_config_dir = os.path.join(os.path.dirname(etl_dir), "call_summary", "config")
+        for ext in ["jpg", "jpeg", "png"]:
+            potential_banner = os.path.join(call_summary_config_dir, f"banner.{ext}")
             if os.path.exists(potential_banner):
                 banner_path = potential_banner
                 break
 
-    # Add banner image if found
     if banner_path:
         try:
-            # Add the banner image at the top, adjusted for narrow margins
-            doc.add_picture(banner_path, width=Inches(7.4))  # Full width with narrow margins
+
+            doc.add_picture(banner_path, width=Inches(7.4))
             last_paragraph = doc.paragraphs[-1]
             last_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
             last_paragraph.paragraph_format.space_after = Pt(6)
 
-            logger.info(f"Banner added from: {banner_path}")
-        except Exception as e:
-            logger.warning(f"Could not add banner: {str(e)}")
+        except Exception:
+            pass
 
-    # No title page - go straight to content after banner
-
-    # Add detailed content for each theme group
     for i, group in enumerate(theme_groups, 1):
-        # Use the new styled theme header with background
+
         add_theme_header_with_background(doc, i, group.group_title)
 
-        # No metadata about conversation count - removed per request
-
-        # Sort Q&A blocks by position for logical flow
         sorted_blocks = sorted(group.qa_blocks, key=lambda x: x.position)
 
-        # Add formatted content for each Q&A in this group
         for j, qa_block in enumerate(sorted_blocks, 1):
-            # Add conversation sub-header with underlining
+
             conv_para = doc.add_paragraph()
             conv_para.paragraph_format.space_before = Pt(6)
             conv_para.paragraph_format.space_after = Pt(4)
 
-            # Add the entire "Conversation X:" with underline and black font
             conv_text = f"Conversation {j}:"
             conv_run = conv_para.add_run(conv_text)
             conv_run.font.underline = True
             conv_run.font.size = Pt(11)
-            conv_run.font.color.rgb = RGBColor(0, 0, 0)  # Black color
+            conv_run.font.color.rgb = RGBColor(0, 0, 0)
 
-            # Add the formatted content with HTML processing and indentation
             content = qa_block.formatted_content or qa_block.original_content
-            for line in content.split('\n'):
+            for line in content.split("\n"):
                 if line.strip():
-                    # Skip horizontal rules
-                    if line.strip() in ['---', '***', '___', '<hr>', '<hr/>', '<hr />']:
+                    if line.strip() in ["---", "***", "___", "<hr>", "<hr/>", "<hr />"]:
                         continue
 
-                    # Create paragraph with indentation and parse HTML
                     p = doc.add_paragraph()
-                    p.paragraph_format.left_indent = Inches(0.3)  # Indent conversation content
+                    p.paragraph_format.left_indent = Inches(0.3)
                     p.paragraph_format.space_after = Pt(3)
                     p.paragraph_format.line_spacing = 1.15
 
-                    # Use HTML parser to add formatted text
                     parser = HTMLToDocx(p, font_size=Pt(9))
                     parser.feed(line.strip())
                     parser.close()
 
-                    # If no content was added (empty line), add it as plain text
                     if not p.runs:
                         run = p.add_run(line.strip())
                         run.font.size = Pt(9)
 
-            # Add subtle separator between conversations within the same theme
             if j < len(sorted_blocks):
                 separator = doc.add_paragraph()
-                separator.paragraph_format.left_indent = Inches(0.3)  # Match conversation indentation
+                separator.paragraph_format.left_indent = Inches(0.3)
                 separator.paragraph_format.space_before = Pt(6)
                 separator.paragraph_format.space_after = Pt(6)
-                # Add a subtle horizontal line
+
                 separator_run = separator.add_run("_" * 50)
                 separator_run.font.size = Pt(8)
                 separator_run.font.color.rgb = RGBColor(200, 200, 200)
 
-        # No page breaks between themes - let them flow continuously
-        # Add a bit more spacing between themes instead
         if i < len(theme_groups):
             spacing = doc.add_paragraph()
             spacing.paragraph_format.space_before = Pt(12)
             spacing.paragraph_format.space_after = Pt(12)
 
-    # Save document
     doc.save(output_path)
-    logger.info(f"Document saved to {output_path}")
 
 
-async def main():
-    """Main ETL function for key themes extraction."""
-    parser = argparse.ArgumentParser(
-        description='Generate key themes report from earnings call Q&A'
-    )
-    parser.add_argument('--bank', required=True,
-                       help='Bank name, ticker, or ID')
-    parser.add_argument('--year', type=int, required=True,
-                       help='Fiscal year')
-    parser.add_argument('--quarter', required=True,
-                       help='Quarter (Q1, Q2, Q3, Q4)')
-    parser.add_argument('--output-dir',
-                       default='src/aegis/etls/key_themes/output',
-                       help='Output directory for reports')
-    parser.add_argument('--no-pdf', action='store_true',
-                       help='Skip PDF generation')
+async def generate_key_themes(bank_name: str, fiscal_year: int, quarter: str) -> str:
+    """
+    Generate key themes report from earnings call Q&A.
 
-    args = parser.parse_args()
+    Args:
+        bank_name: ID, name, or symbol of the bank
+        fiscal_year: Year (e.g., 2024)
+        quarter: Quarter (e.g., "Q3")
 
-    # Create execution context
+    Returns:
+        Success or error message string
+    """
     execution_id = str(uuid.uuid4())
-    ssl_config = setup_ssl()
-    auth_config = await setup_authentication(execution_id, ssl_config)
-
-    context = {
-        'execution_id': execution_id,
-        'ssl_config': ssl_config,
-        'auth_config': auth_config
-    }
+    logger.info(
+        "etl.key_themes.started",
+        execution_id=execution_id,
+        bank_name=bank_name,
+        fiscal_year=fiscal_year,
+        quarter=quarter,
+    )
 
     try:
-        # Resolve bank information
-        bank_info = await resolve_bank_info(args.bank, context)
-        logger.info(f"Processing key themes for {bank_info['name']} ({bank_info['ticker']})")
+        bank_info = await get_bank_info(bank_name)
 
-        # Add bank info to context for all prompts
-        context['bank_name'] = bank_info['name']
-        context['bank_symbol'] = bank_info['ticker']
-        context['quarter'] = args.quarter
-        context['fiscal_year'] = args.year
+        if not await verify_data_availability(bank_info["bank_id"], fiscal_year, quarter):
+            error_msg = (
+                f"No transcript data available for {bank_info['bank_name']} "
+                f"{quarter} {fiscal_year}"
+            )
 
-        # Step 1: Load all Q&A blocks into index
-        qa_index = await load_qa_blocks(
-            bank_info['name'],
-            args.year,
-            args.quarter,
-            context
-        )
+            async with get_connection() as conn:
+                db_result = await conn.execute(
+                    text(
+                        """
+                    SELECT DISTINCT fiscal_year, quarter
+                    FROM aegis_data_availability
+                    WHERE bank_id = :bank_id
+                      AND 'transcripts' = ANY(database_names)
+                    ORDER BY fiscal_year DESC, quarter DESC
+                    LIMIT 10
+                    """
+                    ),
+                    {"bank_id": bank_info["bank_id"]},
+                )
+                available_periods = db_result.fetchall()
+
+                if available_periods:
+                    period_list = ", ".join(
+                        [f"{p[1]} {p[0]}" for p in available_periods]
+                    )
+                    error_msg += (
+                        f"\n\nAvailable periods for {bank_info['bank_name']}: {period_list}"
+                    )
+
+            raise ValueError(error_msg)
+
+        ssl_config = setup_ssl()
+        auth_config = await setup_authentication(execution_id, ssl_config)
+
+        if not auth_config["success"]:
+            error_msg = f"Authentication failed: {auth_config.get('error', 'Unknown error')}"
+            logger.error("etl.key_themes.auth_failed", execution_id=execution_id, error=error_msg)
+            raise RuntimeError(error_msg)
+
+        context = {
+            "execution_id": execution_id,
+            "ssl_config": ssl_config,
+            "auth_config": auth_config,
+        }
+
+        context["bank_name"] = bank_info["bank_name"]
+        context["bank_symbol"] = bank_info["bank_symbol"]
+        context["quarter"] = quarter
+        context["fiscal_year"] = fiscal_year
+
+        # Load categories from xlsx
+        categories = load_categories_from_xlsx(execution_id)
+
+        qa_index = await load_qa_blocks(bank_info["bank_name"], fiscal_year, quarter, context)
 
         if not qa_index:
-            logger.error("No Q&A blocks found")
-            return 1
+            error_msg = f"No Q&A data found for {bank_info['bank_name']} {quarter} {fiscal_year}"
+            logger.error(
+                "etl.key_themes.no_data",
+                execution_id=execution_id,
+                bank_name=bank_info["bank_name"],
+                fiscal_year=fiscal_year,
+                quarter=quarter,
+            )
+            raise ValueError(error_msg)
 
-        # Step 2: Process all Q&A blocks independently (parallel)
-        await process_all_qa_blocks(qa_index, context)
+        # Stage 1: Sequential classification with cumulative context
+        await classify_all_qa_blocks_sequential(qa_index, categories, context)
 
-        # Step 3: Determine comprehensive grouping
-        theme_groups = await determine_comprehensive_grouping(qa_index, context)
+        # Stage 2: Parallel HTML formatting
+        await format_all_qa_blocks_parallel(qa_index, context)
 
-        # Step 4: Apply grouping to index
+        # Stage 3: Review classifications, regroup if needed, generate final titles
+        theme_groups = await determine_comprehensive_grouping(qa_index, categories, context)
+
+        logger.info(
+            "etl.key_themes.grouping_completed",
+            execution_id=execution_id,
+            num_groups=len(theme_groups),
+        )
+
         apply_grouping_to_index(qa_index, theme_groups)
 
-        # Step 5: Create output document
-        os.makedirs(args.output_dir, exist_ok=True)
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        base_filename = f"{bank_info['ticker']}_{args.year}_{args.quarter}_key_themes_{timestamp}"
-        docx_path = os.path.join(args.output_dir, f"{base_filename}.docx")
+        output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "output")
+        os.makedirs(output_dir, exist_ok=True)
 
-        logger.info(f"Generating Word document: {docx_path}")
-        create_document(
-            theme_groups,
-            bank_info['name'],
-            args.year,
-            args.quarter,
-            docx_path
-        )
+        content_hash = hashlib.md5(
+            f"{bank_info['bank_id']}_{fiscal_year}_{quarter}_{datetime.now().isoformat()}".encode()
+        ).hexdigest()[:8]
 
-        # Generate PDF if requested
-        pdf_path = None
-        pdf_filename = None
-        if not args.no_pdf:
-            pdf_path = os.path.join(args.output_dir, f"{base_filename}.pdf")
-            pdf_filename = f"{base_filename}.pdf"
-            logger.info(f"Generating PDF: {pdf_path}")
-            pdf_result = convert_docx_to_pdf(docx_path, pdf_path)
-            if not pdf_result:
-                logger.warning("PDF generation failed")
-                pdf_path = None
-                pdf_filename = None
+        filename_base = f"{bank_info['bank_symbol']}_{fiscal_year}_{quarter}_{content_hash}"
+        docx_filename = f"{filename_base}.docx"
+        filepath = os.path.join(output_dir, docx_filename)
 
-        # Step 6: Generate Markdown content for database storage
-        logger.info("Generating markdown for database storage")
-        markdown_content = theme_groups_to_markdown(
-            theme_groups,
-            bank_info,
-            args.quarter,
-            args.year
-        )
+        create_document(theme_groups, bank_info["bank_name"], fiscal_year, quarter, filepath)
 
-        # Step 7: Save to database
-        logger.info("Saving report to aegis_reports table")
+        logger.info("etl.key_themes.document_saved", execution_id=execution_id, filepath=filepath)
+
         report_metadata = get_standard_report_metadata()
         generation_timestamp = datetime.now()
-        execution_id = str(uuid.uuid4())
 
         try:
             async with get_connection() as conn:
-                # Delete any existing report for this bank/period/type combination
-                deleted = await conn.execute(text(
-                    """
+                deleted = await conn.execute(
+                    text(
+                        """
                     DELETE FROM aegis_reports
                     WHERE bank_id = :bank_id
                       AND fiscal_year = :fiscal_year
@@ -1043,37 +963,39 @@ async def main():
                       AND report_type = :report_type
                     RETURNING id
                     """
-                ), {
-                    "bank_id": bank_info["id"],
-                    "fiscal_year": args.year,
-                    "quarter": args.quarter,
-                    "report_type": report_metadata["report_type"]
-                })
+                    ),
+                    {
+                        "bank_id": bank_info["bank_id"],
+                        "fiscal_year": fiscal_year,
+                        "quarter": quarter,
+                        "report_type": report_metadata["report_type"],
+                    },
+                )
                 deleted_rows = deleted.fetchall()
 
                 if deleted_rows:
-                    logger.info(f"Deleted {len(deleted_rows)} existing key_themes report(s)")
-
-                    # Check if there are any other reports for this bank/period
-                    remaining_reports = await conn.execute(text(
-                        """
+                    remaining_reports = await conn.execute(
+                        text(
+                            """
                         SELECT COUNT(*) as count
                         FROM aegis_reports
                         WHERE bank_id = :bank_id
                           AND fiscal_year = :fiscal_year
                           AND quarter = :quarter
                         """
-                    ), {
-                        "bank_id": bank_info["id"],
-                        "fiscal_year": args.year,
-                        "quarter": args.quarter
-                    })
+                        ),
+                        {
+                            "bank_id": bank_info["bank_id"],
+                            "fiscal_year": fiscal_year,
+                            "quarter": quarter,
+                        },
+                    )
                     count_result = remaining_reports.scalar()
 
-                    # If no other reports exist, remove 'reports' from availability
                     if count_result == 0:
-                        await conn.execute(text(
-                            """
+                        await conn.execute(
+                            text(
+                                """
                             UPDATE aegis_data_availability
                             SET database_names = array_remove(database_names, 'reports')
                             WHERE bank_id = :bank_id
@@ -1081,16 +1003,17 @@ async def main():
                               AND quarter = :quarter
                               AND 'reports' = ANY(database_names)
                             """
-                        ), {
-                            "bank_id": bank_info["id"],
-                            "fiscal_year": args.year,
-                            "quarter": args.quarter
-                        })
-                        logger.info("Removed 'reports' from aegis_data_availability")
+                            ),
+                            {
+                                "bank_id": bank_info["bank_id"],
+                                "fiscal_year": fiscal_year,
+                                "quarter": quarter,
+                            },
+                        )
 
-                # Insert new report
-                result = await conn.execute(text(
-                    """
+                result = await conn.execute(
+                    text(
+                        """
                     INSERT INTO aegis_reports (
                         report_name,
                         report_description,
@@ -1103,7 +1026,6 @@ async def main():
                         local_filepath,
                         s3_document_name,
                         s3_pdf_name,
-                        markdown_content,
                         generation_date,
                         generated_by,
                         execution_id,
@@ -1120,7 +1042,6 @@ async def main():
                         :local_filepath,
                         :s3_document_name,
                         :s3_pdf_name,
-                        :markdown_content,
                         :generation_date,
                         :generated_by,
                         :execution_id,
@@ -1128,34 +1049,40 @@ async def main():
                     )
                     RETURNING id
                     """
-                ), {
-                    "report_name": report_metadata["report_name"],
-                    "report_description": report_metadata["report_description"],
-                    "report_type": report_metadata["report_type"],
-                    "bank_id": bank_info["id"],
-                    "bank_name": bank_info["name"],
-                    "bank_symbol": bank_info.get("ticker", bank_info.get("symbol", "")),
-                    "fiscal_year": args.year,
-                    "quarter": args.quarter,
-                    "local_filepath": docx_path,
-                    "s3_document_name": f"{base_filename}.docx",
-                    "s3_pdf_name": pdf_filename,
-                    "markdown_content": markdown_content,
-                    "generation_date": generation_timestamp,
-                    "generated_by": "key_themes_etl",
-                    "execution_id": execution_id,
-                    "metadata": json.dumps({
-                        "theme_groups": len(theme_groups),
-                        "total_qa_blocks": sum(len(group.qa_blocks) for group in theme_groups),
-                        "invalid_qa_filtered": sum(1 for qa in qa_index.values() if not qa.is_valid)
-                    })
-                })
-                report_row = result.fetchone()
-                report_id = report_row.id
-                logger.info(f"Report saved to database with ID: {report_id}")
+                    ),
+                    {
+                        "report_name": report_metadata["report_name"],
+                        "report_description": report_metadata["report_description"],
+                        "report_type": report_metadata["report_type"],
+                        "bank_id": bank_info["bank_id"],
+                        "bank_name": bank_info["bank_name"],
+                        "bank_symbol": bank_info["bank_symbol"],
+                        "fiscal_year": fiscal_year,
+                        "quarter": quarter,
+                        "local_filepath": filepath,
+                        "s3_document_name": docx_filename,
+                        "s3_pdf_name": None,
+                        "generation_date": generation_timestamp,
+                        "generated_by": "key_themes_etl",
+                        "execution_id": execution_id,
+                        "metadata": json.dumps(
+                            {
+                                "theme_groups": len(theme_groups),
+                                "total_qa_blocks": sum(
+                                    len(group.qa_blocks) for group in theme_groups
+                                ),
+                                "invalid_qa_filtered": sum(
+                                    1 for qa in qa_index.values() if not qa.is_valid
+                                ),
+                            }
+                        ),
+                    },
+                )
+                result.fetchone()
 
-                # Update aegis_data_availability to include 'reports' database
-                update_result = await conn.execute(text("""
+                await conn.execute(
+                    text(
+                        """
                     UPDATE aegis_data_availability
                     SET database_names =
                         CASE
@@ -1167,42 +1094,79 @@ async def main():
                       AND quarter = :quarter
                       AND NOT ('reports' = ANY(database_names))
                     RETURNING bank_id
-                """), {
-                    "bank_id": bank_info["id"],
-                    "fiscal_year": args.year,
-                    "quarter": args.quarter
-                })
-                update_count = update_result.rowcount
+                """
+                    ),
+                    {
+                        "bank_id": bank_info["bank_id"],
+                        "fiscal_year": fiscal_year,
+                        "quarter": quarter,
+                    },
+                )
 
-                if update_count > 0:
-                    logger.info("Updated aegis_data_availability to include 'reports'")
-
-                # Commit all changes at once
                 await conn.commit()
 
         except Exception as e:
-            logger.error(f"Database error: {str(e)}")
-            # Continue even if database save fails
+            logger.error("etl.key_themes.database_error", execution_id=execution_id, error=str(e))
+            raise
 
-        # Report statistics
         total_qa = sum(len(group.qa_blocks) for group in theme_groups)
         invalid_qa = sum(1 for qa in qa_index.values() if not qa.is_valid)
-        logger.info(f"✓ Key themes report generated successfully")
-        logger.info(f"  Theme Groups: {len(theme_groups)}")
-        logger.info(f"  Valid Q&As: {total_qa}")
-        if invalid_qa > 0:
-            logger.info(f"  Invalid Q&As filtered: {invalid_qa}")
-        logger.info(f"  DOCX: {docx_path}")
+        logger.info(
+            "etl.key_themes.completed",
+            execution_id=execution_id,
+            theme_groups=len(theme_groups),
+            valid_qa=total_qa,
+            invalid_qa_filtered=invalid_qa,
+            filepath=filepath,
+        )
 
-        return 0
+        return (
+            f"✅ Complete: {filepath}\n   Theme groups: {len(theme_groups)}, "
+            f"Valid Q&A: {total_qa}, Filtered: {invalid_qa}"
+        )
 
-    except Exception as e:
-        import traceback
-        logger.error(f"Error generating key themes report: {str(e)}")
-        logger.error(f"Error type: {type(e).__name__}")
-        logger.debug(f"Full traceback:\n{traceback.format_exc()}")
-        return 1
+    except (
+        KeyError,
+        TypeError,
+        AttributeError,
+        json.JSONDecodeError,
+        FileNotFoundError,
+    ) as e:
+        error_msg = f"Error generating key themes report: {str(e)}"
+        logger.error(
+            "etl.key_themes.error", execution_id=execution_id, error=error_msg, exc_info=True
+        )
+        return f"❌ {error_msg}"
+    except (ValueError, RuntimeError) as e:
+        logger.error("etl.key_themes.error", execution_id=execution_id, error=str(e))
+        return f"⚠️ {str(e)}"
+
+
+def main():
+    """Main entry point for command-line execution."""
+    parser = argparse.ArgumentParser(
+        description="Generate key themes report from earnings call Q&A",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+
+    parser.add_argument("--bank", required=True, help="Bank ID, name, or symbol")
+    parser.add_argument("--year", type=int, required=True, help="Fiscal year")
+    parser.add_argument(
+        "--quarter", required=True, choices=["Q1", "Q2", "Q3", "Q4"], help="Quarter"
+    )
+
+    args = parser.parse_args()
+
+    postgresql_prompts()
+
+    print(f"\n🔄 Generating key themes report for {args.bank} {args.quarter} {args.year}...\n")
+
+    result = asyncio.run(
+        generate_key_themes(bank_name=args.bank, fiscal_year=args.year, quarter=args.quarter)
+    )
+
+    print(result)
 
 
 if __name__ == "__main__":
-    sys.exit(asyncio.run(main()))
+    main()

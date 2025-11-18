@@ -33,8 +33,10 @@ from aegis.etls.call_summary.document_converter import (
     mark_document_for_update,
     add_structured_content_to_doc,
 )
-from aegis.model.subagents.transcripts.retrieval import retrieve_full_section
-from aegis.model.subagents.transcripts.formatting import format_full_section_chunks
+from aegis.etls.call_summary.transcript_utils import (
+    retrieve_full_section,
+    format_full_section_chunks,
+)
 from aegis.utils.ssl import setup_ssl
 from aegis.connections.oauth_connector import setup_authentication
 from aegis.connections.llm_connector import complete_with_tools
