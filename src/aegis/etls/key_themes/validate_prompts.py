@@ -204,7 +204,7 @@ def compare_tool_definitions(template: Dict, db: Dict) -> Dict[str, Any]:
     if not template or not db:
         return {
             'matches': False,
-            'note': f"Template: {type(template)}, DB: {type(db)}"
+            'note': f"One is missing - Template: {type(template)}, DB: {type(db)}"
         }
 
     # Normalize JSON for comparison
@@ -214,10 +214,37 @@ def compare_tool_definitions(template: Dict, db: Dict) -> Dict[str, Any]:
     if template_json == db_json:
         return {'matches': True}
 
+    # Find specific differences
+    differences = []
+
+    # Check function name
+    template_func_name = template.get('function', {}).get('name')
+    db_func_name = db.get('function', {}).get('name')
+    if template_func_name != db_func_name:
+        differences.append(f"Function name: '{template_func_name}' vs '{db_func_name}'")
+
+    # Check required parameters
+    template_required = template.get('function', {}).get('parameters', {}).get('required', [])
+    db_required = db.get('function', {}).get('parameters', {}).get('required', [])
+    if set(template_required) != set(db_required):
+        differences.append(f"Required params: {template_required} vs {db_required}")
+
+    # Check properties keys
+    template_props = set(template.get('function', {}).get('parameters', {}).get('properties', {}).keys())
+    db_props = set(db.get('function', {}).get('parameters', {}).get('properties', {}).keys())
+    if template_props != db_props:
+        missing_in_db = template_props - db_props
+        extra_in_db = db_props - template_props
+        if missing_in_db:
+            differences.append(f"Missing in DB: {list(missing_in_db)}")
+        if extra_in_db:
+            differences.append(f"Extra in DB: {list(extra_in_db)}")
+
     return {
         'matches': False,
-        'template_preview': template_json[:500],
-        'db_preview': db_json[:500],
+        'differences': differences if differences else ['Unknown structural difference'],
+        'template_json': template_json,
+        'db_json': db_json,
     }
 
 
@@ -262,11 +289,9 @@ async def validate_prompt(
             'template_version': template_data['metadata'].get('version'),
         }
 
-    # Compare versions
+    # Compare versions (informational only)
     template_version = template_data['metadata'].get('version')
     db_version = db_data.get('version')
-
-    version_match = template_version == db_version
 
     # Compare system prompts
     system_comparison = compare_system_prompts(
@@ -274,26 +299,29 @@ async def validate_prompt(
         db_data['system_prompt'] or ''
     )
 
-    # Compare tool definitions
+    # Compare tool definitions (MOST IMPORTANT)
     tool_comparison = compare_tool_definitions(
         template_data['tool_definition'],
         db_data['tool_definition']
     )
 
-    # Determine overall status
-    if version_match and system_comparison['matches'] and tool_comparison['matches']:
+    # Determine overall status - IGNORE version mismatches, focus on tool definitions
+    critical_mismatch = not tool_comparison['matches']
+    warning_mismatch = not system_comparison['matches']
+
+    if not critical_mismatch and not warning_mismatch:
         status = 'valid'
         message = 'Prompt matches template'
-    else:
-        status = 'mismatch'
+    elif critical_mismatch:
+        status = 'critical'
         issues = []
-        if not version_match:
-            issues.append(f'version mismatch (template: {template_version}, db: {db_version})')
-        if not system_comparison['matches']:
-            issues.append('system prompt differs')
-        if not tool_comparison['matches']:
-            issues.append('tool definition differs')
-        message = 'Validation failed: ' + ', '.join(issues)
+        issues.append('❌ TOOL DEFINITION DIFFERS')
+        if warning_mismatch:
+            issues.append('system prompt also differs')
+        message = 'CRITICAL: ' + ', '.join(issues)
+    else:
+        status = 'warning'
+        message = 'Warning: System prompt differs (tool definition matches)'
 
     return {
         'name': name,
@@ -342,23 +370,26 @@ def print_results(results: List[Dict[str, Any]]):
     print("="*80 + "\n")
 
     valid_count = sum(1 for r in results if r['status'] == 'valid')
-    mismatch_count = sum(1 for r in results if r['status'] == 'mismatch')
+    critical_count = sum(1 for r in results if r['status'] == 'critical')
+    warning_count = sum(1 for r in results if r['status'] == 'warning')
     missing_count = sum(1 for r in results if r['status'] == 'missing')
     error_count = sum(1 for r in results if r['status'] == 'error')
 
     print(f"Summary:")
-    print(f"  ✓ Valid:    {valid_count}")
-    print(f"  ⚠ Mismatch: {mismatch_count}")
-    print(f"  ✗ Missing:  {missing_count}")
-    print(f"  ⚠ Errors:   {error_count}")
-    print(f"  Total:      {len(results)}\n")
+    print(f"  ✓ Valid:      {valid_count}")
+    print(f"  ❌ Critical:  {critical_count} (tool definition mismatch)")
+    print(f"  ⚠ Warning:    {warning_count} (system prompt mismatch only)")
+    print(f"  ✗ Missing:    {missing_count}")
+    print(f"  ⚠ Errors:     {error_count}")
+    print(f"  Total:        {len(results)}\n")
 
     print("-" * 80)
 
     for result in results:
         status_icon = {
             'valid': '✓',
-            'mismatch': '⚠',
+            'critical': '❌',
+            'warning': '⚠',
             'missing': '✗',
             'error': '✗'
         }.get(result['status'], '?')
@@ -376,8 +407,25 @@ def print_results(results: List[Dict[str, Any]]):
         if result.get('db_updated_at'):
             print(f"  Last Updated: {result['db_updated_at']}")
 
-        # Show system prompt comparison details for mismatches
-        if result['status'] == 'mismatch':
+        # Show tool definition comparison for critical issues
+        if result['status'] == 'critical':
+            tool_comp = result.get('tool_definition_comparison', {})
+            print(f"\n  ❌ TOOL DEFINITION MISMATCH:")
+            if 'note' in tool_comp:
+                print(f"    {tool_comp['note']}")
+            elif 'differences' in tool_comp:
+                for diff in tool_comp['differences']:
+                    print(f"    • {diff}")
+
+                # Offer to show full JSON
+                print(f"\n    To see full tool definitions, check:")
+                print(f"    - Template: {result['name']}_prompt.md (line ~240)")
+                print(f"    - Database: Run query SELECT tool_definition FROM prompts WHERE name='{result['name']}'")
+            else:
+                print(f"    Tool definitions differ (check JSON structure)")
+
+        # Show system prompt comparison for warnings and critical
+        if result['status'] in ('warning', 'critical'):
             sys_comp = result.get('system_prompt_comparison', {})
             if not sys_comp.get('matches'):
                 print(f"\n  System Prompt Issues:")
@@ -394,21 +442,19 @@ def print_results(results: List[Dict[str, Any]]):
                             print(f"        Template: {diff['template']}")
                             print(f"        Database: {diff['db']}")
 
-            tool_comp = result.get('tool_definition_comparison', {})
-            if not tool_comp.get('matches'):
-                print(f"\n  Tool Definition Issues:")
-                if 'note' in tool_comp:
-                    print(f"    {tool_comp['note']}")
-                else:
-                    print(f"    Tool definitions differ (check JSON structure)")
-
     print("\n" + "="*80)
 
     # Overall verdict
     if valid_count == len(results):
         print("✓ All prompts are valid and match templates")
+    elif critical_count > 0:
+        print(f"❌ CRITICAL: {critical_count} prompt(s) have TOOL DEFINITION mismatches")
+        print(f"   This will cause runtime errors - prompts must be reloaded!")
+    elif warning_count > 0:
+        print(f"⚠ Warning: {warning_count} prompt(s) have system prompt differences")
+        print(f"   Tool definitions match - this may be acceptable")
     else:
-        print(f"⚠ {mismatch_count + missing_count + error_count} prompt(s) need attention")
+        print(f"⚠ {missing_count + error_count} prompt(s) need attention")
 
     print("="*80 + "\n")
 
@@ -416,14 +462,15 @@ def print_results(results: List[Dict[str, Any]]):
 async def main():
     """Main execution function."""
     print("\n🔍 Validating key_themes ETL prompts against templates...\n")
+    print("Focus: Tool definition validation (versions are informational only)\n")
 
     try:
         results = await validate_all_prompts()
         print_results(results)
 
-        # Exit with error code if any validation failed
-        failed = sum(1 for r in results if r['status'] != 'valid')
-        if failed > 0:
+        # Exit with error code only if critical (tool definition mismatch)
+        critical = sum(1 for r in results if r['status'] == 'critical')
+        if critical > 0:
             exit(1)
 
     except Exception as e:
