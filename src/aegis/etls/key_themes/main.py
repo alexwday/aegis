@@ -18,6 +18,7 @@ import hashlib
 import json
 import uuid
 import os
+from collections import Counter
 from datetime import datetime
 from typing import Dict, Any, List
 import pandas as pd
@@ -904,7 +905,9 @@ async def determine_comprehensive_grouping(
             if attempt < max_retries - 1:
                 await asyncio.sleep(2**attempt)
                 continue
-            return None
+            raise RuntimeError(
+                "Failed to complete theme regrouping after multiple retries."
+            ) from e
 
     if result and "theme_groups" in result:
         theme_groups = []
@@ -944,6 +947,38 @@ async def determine_comprehensive_grouping(
     return theme_groups
 
 
+def validate_grouping_assignments(
+    qa_index: Dict[str, QABlock], theme_groups: List[ThemeGroup], execution_id: str
+):
+    """
+    Ensure regrouping output covers every valid QA exactly once.
+    """
+    valid_ids = {qa_id for qa_id, qa_block in qa_index.items() if qa_block.is_valid}
+    provided_ids = []
+
+    for group in theme_groups:
+        provided_ids.extend(group.qa_ids)
+
+    provided_set = set(provided_ids)
+    duplicates = [qa_id for qa_id, count in Counter(provided_ids).items() if count > 1]
+    missing_ids = sorted(valid_ids - provided_set)
+    unknown_ids = sorted(provided_set - valid_ids)
+
+    if duplicates or missing_ids or unknown_ids:
+        logger.error(
+            "regrouping.validation_failed",
+            execution_id=execution_id,
+            duplicates=duplicates or None,
+            missing_ids=missing_ids or None,
+            unknown_ids=unknown_ids or None,
+            expected_total=len(valid_ids),
+            provided_total=len(provided_ids),
+        )
+        raise ValueError(
+            "theme_grouping output failed validation; check logs for duplicates or missing IDs."
+        )
+
+
 def apply_grouping_to_index(qa_index: Dict[str, QABlock], theme_groups: List[ThemeGroup]):
     """
     Step 4: Apply grouping decisions to the Q&A index.
@@ -961,16 +996,19 @@ def apply_grouping_to_index(qa_index: Dict[str, QABlock], theme_groups: List[The
 
 
 def create_document(
-    theme_groups: List[ThemeGroup], bank_name: str, fiscal_year: int, quarter: str, output_path: str
+    theme_groups: List[ThemeGroup],
+    bank_name: str,
+    bank_symbol: str,
+    fiscal_year: int,
+    quarter: str,
+    output_path: str,
 ):
     """
     Step 5: Create Word document with grouped themes matching call summary style.
     """
     doc = Document()
 
-    bank_symbol = bank_name.split()[0] if bank_name else "RBC"
-    if bank_name == "Royal Bank of Canada":
-        bank_symbol = "RY"
+    resolved_symbol = bank_symbol or (bank_name.split()[0] if bank_name else "BANK")
 
     sections = doc.sections
     for section in sections:
@@ -980,7 +1018,7 @@ def create_document(
         section.right_margin = Inches(0.5)
         section.gutter = Inches(0)
 
-    add_page_numbers_with_footer(doc, bank_symbol, quarter, fiscal_year)
+    add_page_numbers_with_footer(doc, resolved_symbol, quarter, fiscal_year)
 
     etl_dir = os.path.dirname(os.path.abspath(__file__))
     banner_path = None
@@ -1138,6 +1176,8 @@ async def generate_key_themes(bank_name: str, fiscal_year: int, quarter: str) ->
         # Stage 3: Review classifications, regroup if needed, generate final titles
         theme_groups = await determine_comprehensive_grouping(qa_index, categories, context)
 
+        validate_grouping_assignments(qa_index, theme_groups, execution_id)
+
         logger.info(
             "etl.key_themes.grouping_completed",
             execution_id=execution_id,
@@ -1157,7 +1197,14 @@ async def generate_key_themes(bank_name: str, fiscal_year: int, quarter: str) ->
         docx_filename = f"{filename_base}.docx"
         filepath = os.path.join(output_dir, docx_filename)
 
-        create_document(theme_groups, bank_info["bank_name"], fiscal_year, quarter, filepath)
+        create_document(
+            theme_groups,
+            bank_info["bank_name"],
+            bank_info["bank_symbol"],
+            fiscal_year,
+            quarter,
+            filepath,
+        )
 
         logger.info("etl.key_themes.document_saved", execution_id=execution_id, filepath=filepath)
 
