@@ -797,6 +797,15 @@ async def determine_comprehensive_grouping(
 
     for attempt in range(max_retries):
         try:
+            # CRITICAL: Log right before making LLM call
+            logger.info(
+                "regrouping.about_to_call_llm",
+                execution_id=execution_id,
+                attempt=attempt + 1,
+                messages_count=len(messages),
+                tools_count=1,
+            )
+
             response = await complete_with_tools(
                 messages=messages,
                 tools=[prompt_data["tool_definition"]],
@@ -806,6 +815,13 @@ async def determine_comprehensive_grouping(
                     "temperature": etl_config.temperature,
                     "max_tokens": etl_config.max_tokens,
                 },
+            )
+
+            # CRITICAL: Log that LLM call returned
+            logger.info(
+                "regrouping.llm_returned",
+                execution_id=execution_id,
+                response_received=True,
             )
 
             # Debug: Log raw response structure
