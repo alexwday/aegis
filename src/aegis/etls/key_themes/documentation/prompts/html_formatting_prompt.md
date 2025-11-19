@@ -77,9 +77,9 @@ SIMPLE, CLEAR HTML FORMATTING RULES:
 
 IMPORTANT: Formatting is for EMPHASIS ONLY. After removing pleasantries/fluff, include ALL remaining business content whether formatted or not.
 
-1. BLUE LARGER TEXT - Highlight the ONE most important sentence per speaker:
-   • QUESTION: <span style="color: #1e4d8b; font-size: 11pt; font-weight: bold;">The analyst's core question sentence</span>
-   • ANSWER: <span style="color: #4d94ff; font-size: 11pt; font-weight: bold;">The executive's most direct answer sentence</span>
+1. BLUE LARGER TEXT - Highlight the key sentences that capture the substance:
+   • QUESTION: <span style="color: #1e4d8b; font-size: 11pt; font-weight: bold;">The analyst's key question sentences</span> - May be multiple sentences if the question is multi-part or has context
+   • ANSWER: <span style="color: #4d94ff; font-size: 11pt; font-weight: bold;">The executive's key response sentences</span> - May be multiple sentences if response has multiple important points
    Note: Blue formatting is for visual emphasis - include all other business content too
 
 2. YELLOW HIGHLIGHT - Key strategic statements:
