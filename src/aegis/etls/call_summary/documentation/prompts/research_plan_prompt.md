@@ -160,6 +160,16 @@ CRITICAL REQUIREMENTS:
 
 ---
 
+## User Prompt
+
+```
+Analyze this transcript and create the research plan:
+
+{transcript_text}
+```
+
+---
+
 ## Tool Definition
 
 ```json

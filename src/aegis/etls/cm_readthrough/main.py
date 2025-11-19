@@ -13,7 +13,8 @@ This redesigned script uses an 8-phase pipeline:
 
 Document Structure:
 - Section 1: Outlook statements (2-column table)
-- Section 2: Q&A for Global Markets, Risk Management, Corporate Banking, Regulatory Changes (3-column table)
+- Section 2: Q&A for Global Markets, Risk Management, Corporate Banking,
+  Regulatory Changes (3-column table)
 - Section 3: Q&A for Investment Banking/M&A, Transaction Banking (3-column table)
 
 Usage:
@@ -25,23 +26,21 @@ import argparse
 import asyncio
 import hashlib
 import json
-import sys
+import os
 import uuid
 from datetime import datetime
-from typing import Dict, Any, List, Optional, Tuple
-from sqlalchemy import text
 from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
 
-# Import document converter functions
-from aegis.etls.cm_readthrough.document_converter import (
-    convert_docx_to_pdf,
-    structured_data_to_markdown,
-    create_combined_document
+import pandas as pd
+import yaml
+from sqlalchemy import text
+
+from aegis.etls.cm_readthrough.document_converter import create_combined_document
+from aegis.etls.cm_readthrough.transcript_utils import (
+    retrieve_full_section,
+    format_full_section_chunks,
 )
-
-# Import direct transcript functions
-from aegis.model.subagents.transcripts.retrieval import retrieve_full_section
-from aegis.model.subagents.transcripts.formatting import format_full_section_chunks
 from aegis.utils.ssl import setup_ssl
 from aegis.connections.oauth_connector import setup_authentication
 from aegis.connections.llm_connector import complete_with_tools
@@ -49,104 +48,385 @@ from aegis.connections.postgres_connector import get_connection
 from aegis.utils.logging import setup_logging, get_logger
 from aegis.utils.settings import config
 from aegis.utils.prompt_loader import load_prompt_from_db
-from aegis.etls.cm_readthrough.config.config import (
-    MODELS,
-    TEMPERATURE,
-    MAX_TOKENS,
-    MAX_CONCURRENT_BANKS,
-    get_monitored_institutions,
-    get_outlook_categories,
-    get_qa_market_volatility_regulatory_categories,
-    get_qa_pipelines_activity_categories
-)
+from aegis.utils.sql_prompt import postgresql_prompts
 
-# Initialize logging
 setup_logging()
 logger = get_logger()
 
-# =============================================================================
-# CATEGORY FORMATTING
-# =============================================================================
+
+class ETLConfig:
+    """
+    ETL configuration loader that reads YAML configs and resolves model references.
+
+    This class loads ETL-specific configuration from YAML files and provides
+    easy access to configuration values with automatic model tier resolution.
+    """
+
+    def __init__(self, config_path: str):
+        """Initialize the ETL configuration loader."""
+        self.config_path = config_path
+        self._config = self._load_config()
+
+    def _load_config(self) -> Dict[str, Any]:
+        """Load configuration from YAML file."""
+        if not os.path.exists(self.config_path):
+            raise FileNotFoundError(f"Configuration file not found: {self.config_path}")
+
+        with open(self.config_path, "r", encoding="utf-8") as f:
+            return yaml.safe_load(f)
+
+    def get_model(self, model_key: str) -> str:
+        """
+        Get the actual model name for a given model key.
+
+        Resolves model tier references (small/medium/large) to actual model names
+        from the global settings configuration.
+        """
+        if "models" not in self._config or model_key not in self._config["models"]:
+            raise KeyError(f"Model key '{model_key}' not found in configuration")
+
+        tier = self._config["models"][model_key].get("tier")
+        if not tier:
+            raise ValueError(f"No tier specified for model '{model_key}'")
+
+        # Resolve tier to actual model from global config
+        tier_map = {
+            "small": config.llm.small.model,
+            "medium": config.llm.medium.model,
+            "large": config.llm.large.model,
+        }
+
+        if tier not in tier_map:
+            raise ValueError(
+                f"Invalid tier '{tier}' for model '{model_key}'. "
+                f"Valid tiers: {list(tier_map.keys())}"
+            )
+
+        return tier_map[tier]
+
+    @property
+    def temperature(self) -> float:
+        """Get the LLM temperature parameter."""
+        return self._config.get("llm", {}).get("temperature", 0.1)
+
+    @property
+    def max_tokens(self) -> int:
+        """Get the LLM max_tokens parameter."""
+        return self._config.get("llm", {}).get("max_tokens", 32768)
+
+    @property
+    def max_concurrent_banks(self) -> int:
+        """Get the maximum concurrent banks parameter."""
+        return self._config.get("concurrency", {}).get("max_concurrent_banks", 5)
+
+
+etl_config = ETLConfig(os.path.join(os.path.dirname(__file__), "config", "config.yaml"))
+
+_MONITORED_INSTITUTIONS = None
+
+
+def _load_monitored_institutions() -> Dict[str, Dict[str, Any]]:
+    """
+    Load and cache monitored institutions configuration.
+
+    Returns:
+        Dictionary mapping ticker to institution details (id, name, type, path_safe_name)
+    """
+    global _MONITORED_INSTITUTIONS
+    if _MONITORED_INSTITUTIONS is None:
+        config_path = os.path.join(
+            os.path.dirname(__file__), "config", "monitored_institutions.yaml"
+        )
+        with open(config_path, "r", encoding="utf-8") as f:
+            _MONITORED_INSTITUTIONS = yaml.safe_load(f)
+    return _MONITORED_INSTITUTIONS
+
+
+def get_monitored_institutions() -> List[Dict[str, Any]]:
+    """
+    Get list of monitored institutions.
+
+    Returns:
+        List of institution dictionaries with bank_id, bank_symbol, bank_name
+    """
+    institutions_dict = _load_monitored_institutions()
+    institutions = []
+    for ticker, info in institutions_dict.items():
+        institutions.append(
+            {
+                "bank_id": info["id"],
+                "bank_symbol": ticker,
+                "bank_name": info["name"],
+                "type": info.get("type", ""),
+                "path_safe_name": info.get("path_safe_name", ""),
+            }
+        )
+    return institutions
+
+
+def load_outlook_categories(execution_id: str) -> List[Dict[str, Any]]:
+    """
+    Load outlook categories from Excel file.
+
+    Args:
+        execution_id: Execution ID for logging
+
+    Returns:
+        List of category dictionaries with transcript_sections, category_name, category_description,
+        example_1, example_2, example_3
+    """
+    file_name = "outlook_categories.xlsx"
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    xlsx_path = os.path.join(current_dir, "config", "categories", file_name)
+
+    if not os.path.exists(xlsx_path):
+        raise FileNotFoundError(f"Categories file not found: {xlsx_path}")
+
+    try:
+        df = pd.read_excel(xlsx_path, sheet_name=0)
+
+        # Required columns for standard format
+        required_columns = ["transcript_sections", "category_name", "category_description"]
+        missing_columns = [col for col in required_columns if col not in df.columns]
+        if missing_columns:
+            raise ValueError(f"Missing required columns in {file_name}: {missing_columns}")
+
+        # Optional example columns
+        optional_columns = ["example_1", "example_2", "example_3"]
+        for col in optional_columns:
+            if col not in df.columns:
+                df[col] = ""  # Add empty column if not present
+
+        # Convert to list of dicts, ensuring all 6 columns are present
+        categories = []
+        for _, row in df.iterrows():
+            category = {
+                "transcript_sections": str(row["transcript_sections"]).strip(),
+                "category_name": str(row["category_name"]).strip(),
+                "category_description": str(row["category_description"]).strip(),
+                "example_1": str(row["example_1"]).strip() if pd.notna(row["example_1"]) else "",
+                "example_2": str(row["example_2"]).strip() if pd.notna(row["example_2"]) else "",
+                "example_3": str(row["example_3"]).strip() if pd.notna(row["example_3"]) else "",
+            }
+            categories.append(category)
+
+        if not categories:
+            raise ValueError(f"No categories in {file_name}")
+
+        logger.info(
+            "etl.cm_readthrough.categories_loaded",
+            execution_id=execution_id,
+            file_name=file_name,
+            num_categories=len(categories),
+        )
+        return categories
+
+    except Exception as e:
+        error_msg = f"Failed to load outlook categories from {xlsx_path}: {str(e)}"
+        logger.error(
+            "etl.cm_readthrough.categories_load_error",
+            execution_id=execution_id,
+            xlsx_path=xlsx_path,
+            error=str(e),
+        )
+        raise RuntimeError(error_msg) from e
+
+
+def load_qa_market_volatility_regulatory_categories(execution_id: str) -> List[Dict[str, Any]]:
+    """
+    Load Q&A market volatility/regulatory categories from Excel file.
+
+    Args:
+        execution_id: Execution ID for logging
+
+    Returns:
+        List of category dictionaries with standardized 6-column format
+    """
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    xlsx_path = os.path.join(
+        current_dir, "config", "categories", "qa_market_volatility_regulatory_categories.xlsx"
+    )
+
+    if not os.path.exists(xlsx_path):
+        raise FileNotFoundError(f"Categories file not found: {xlsx_path}")
+
+    try:
+        df = pd.read_excel(xlsx_path, sheet_name=0)
+
+        # Required columns for standard format
+        required_columns = ["transcript_sections", "category_name", "category_description"]
+        missing_columns = [col for col in required_columns if col not in df.columns]
+        if missing_columns:
+            raise ValueError(
+                f"Missing required columns in Excel file: {missing_columns}. "
+                f"Required columns: {required_columns}"
+            )
+
+        # Optional example columns
+        optional_columns = ["example_1", "example_2", "example_3"]
+        for col in optional_columns:
+            if col not in df.columns:
+                df[col] = ""  # Add empty column if not present
+
+        categories = []
+        for _, row in df.iterrows():
+            # Skip rows with missing required fields
+            if pd.isna(row["category_name"]) or pd.isna(row["category_description"]):
+                continue
+
+            category = {
+                "transcript_sections": str(row["transcript_sections"]).strip(),
+                "category_name": str(row["category_name"]).strip(),
+                "category_description": str(row["category_description"]).strip(),
+                "example_1": str(row["example_1"]).strip() if pd.notna(row["example_1"]) else "",
+                "example_2": str(row["example_2"]).strip() if pd.notna(row["example_2"]) else "",
+                "example_3": str(row["example_3"]).strip() if pd.notna(row["example_3"]) else "",
+            }
+
+            categories.append(category)
+
+        logger.info(
+            "etl.cm_readthrough.categories_loaded",
+            execution_id=execution_id,
+            file_name="qa_market_volatility_regulatory_categories.xlsx",
+            num_categories=len(categories),
+        )
+        return categories
+
+    except Exception as e:
+        error_msg = (
+            f"Failed to load Q&A market volatility/regulatory categories from {xlsx_path}: {str(e)}"
+        )
+        logger.error(
+            "etl.cm_readthrough.categories_load_error",
+            execution_id=execution_id,
+            xlsx_path=xlsx_path,
+            error=str(e),
+        )
+        raise RuntimeError(error_msg) from e
+
+
+def load_qa_pipelines_activity_categories(execution_id: str) -> List[Dict[str, Any]]:
+    """
+    Load Q&A pipelines/activity categories from Excel file.
+
+    Args:
+        execution_id: Execution ID for logging
+
+    Returns:
+        List of category dictionaries with standardized 6-column format
+    """
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    xlsx_path = os.path.join(
+        current_dir, "config", "categories", "qa_pipelines_activity_categories.xlsx"
+    )
+
+    if not os.path.exists(xlsx_path):
+        raise FileNotFoundError(f"Categories file not found: {xlsx_path}")
+
+    try:
+        df = pd.read_excel(xlsx_path, sheet_name=0)
+
+        # Required columns for standard format
+        required_columns = ["transcript_sections", "category_name", "category_description"]
+        missing_columns = [col for col in required_columns if col not in df.columns]
+        if missing_columns:
+            raise ValueError(
+                f"Missing required columns in Excel file: {missing_columns}. "
+                f"Required columns: {required_columns}"
+            )
+
+        # Optional example columns
+        optional_columns = ["example_1", "example_2", "example_3"]
+        for col in optional_columns:
+            if col not in df.columns:
+                df[col] = ""  # Add empty column if not present
+
+        categories = []
+        for _, row in df.iterrows():
+            # Skip rows with missing required fields
+            if pd.isna(row["category_name"]) or pd.isna(row["category_description"]):
+                continue
+
+            category = {
+                "transcript_sections": str(row["transcript_sections"]).strip(),
+                "category_name": str(row["category_name"]).strip(),
+                "category_description": str(row["category_description"]).strip(),
+                "example_1": str(row["example_1"]).strip() if pd.notna(row["example_1"]) else "",
+                "example_2": str(row["example_2"]).strip() if pd.notna(row["example_2"]) else "",
+                "example_3": str(row["example_3"]).strip() if pd.notna(row["example_3"]) else "",
+            }
+
+            categories.append(category)
+
+        logger.info(
+            "etl.cm_readthrough.categories_loaded",
+            execution_id=execution_id,
+            file_name="qa_pipelines_activity_categories.xlsx",
+            num_categories=len(categories),
+        )
+        return categories
+
+    except Exception as e:
+        error_msg = f"Failed to load Q&A pipelines/activity categories from {xlsx_path}: {str(e)}"
+        logger.error(
+            "etl.cm_readthrough.categories_load_error",
+            execution_id=execution_id,
+            xlsx_path=xlsx_path,
+            error=str(e),
+        )
+        raise RuntimeError(error_msg) from e
+
 
 def format_categories_for_prompt(categories: List[Dict[str, Any]]) -> str:
     """
-    Format category dictionaries into a structured prompt format.
+    Format category dictionaries into standardized XML format for prompt injection.
+
+    This is the standardized formatting function used across all ETLs (Call Summary,
+    Key Themes, CM Readthrough) to ensure consistent category presentation to LLMs.
 
     Args:
-        categories: List of category dicts with category, description, examples
+        categories: List of category dicts with standardized 6-column format
 
     Returns:
-        Formatted string for prompt injection
+        Formatted XML string with category information
     """
     formatted_sections = []
 
     for cat in categories:
-        section = f"<example_category>\n"
-        section += f"Category: {cat['category']}\n"
-        section += f"Description: {cat['description']}\n"
+        # Map transcript_sections to human-readable description
+        section_desc = {
+            "MD": "Management Discussion section only",
+            "QA": "Q&A section only",
+            "ALL": "Both Management Discussion and Q&A sections",
+        }.get(cat.get("transcript_sections", "ALL"), "ALL sections")
 
-        if cat.get('examples') and len(cat['examples']) > 0:
-            section += "Examples:\n"
-            for example in cat['examples']:
-                section += f"  - {example}\n"
+        section = "<category>\n"
+        section += f"<name>{cat['category_name']}</name>\n"
+        section += f"<section>{section_desc}</section>\n"
+        section += f"<description>{cat['category_description']}</description>\n"
 
-        section += "</example_category>"
+        # Collect non-empty examples
+        examples = []
+        for i in range(1, 4):
+            example_key = f"example_{i}"
+            if cat.get(example_key) and cat[example_key].strip():
+                examples.append(cat[example_key])
+
+        if examples:
+            section += "<examples>\n"
+            for example in examples:
+                section += f"  <example>{example}</example>\n"
+            section += "</examples>\n"
+
+        section += "</category>"
         formatted_sections.append(section)
 
     return "\n\n".join(formatted_sections)
 
-# =============================================================================
-# HELPER FUNCTIONS
-# =============================================================================
-
-async def get_bank_info(bank_identifier: Any) -> Dict[str, Any]:
-    """
-    Resolve bank identifier (ID, symbol, or name) to full bank information.
-
-    Args:
-        bank_identifier: Bank ID (int), symbol (str), or name (str)
-
-    Returns:
-        Dict with bank_id, bank_name, and bank_symbol
-    """
-    async with get_connection() as conn:
-        # Try different identifier types
-        if isinstance(bank_identifier, int) or (isinstance(bank_identifier, str) and bank_identifier.isdigit()):
-            # Bank ID provided
-            query = text("""
-                SELECT DISTINCT bank_id, bank_name, bank_symbol
-                FROM aegis_data_availability
-                WHERE bank_id = :bank_id
-                LIMIT 1
-            """)
-            result = await conn.execute(query, {"bank_id": int(bank_identifier)})
-        else:
-            # Try symbol or name
-            query = text("""
-                SELECT DISTINCT bank_id, bank_name, bank_symbol
-                FROM aegis_data_availability
-                WHERE UPPER(bank_symbol) = UPPER(:identifier)
-                   OR UPPER(bank_name) = UPPER(:identifier)
-                LIMIT 1
-            """)
-            result = await conn.execute(query, {"identifier": str(bank_identifier)})
-
-        row = result.first()
-        if not row:
-            raise ValueError(f"Bank not found: {bank_identifier}")
-
-        return {
-            "bank_id": row.bank_id,
-            "bank_name": row.bank_name,
-            "bank_symbol": row.bank_symbol
-        }
-
 
 async def find_latest_available_quarter(
-    bank_id: int,
-    min_fiscal_year: int,
-    min_quarter: str,
-    bank_name: str = ""
+    bank_id: int, min_fiscal_year: int, min_quarter: str, bank_name: str = ""
 ) -> Optional[Tuple[int, str]]:
     """
     Find the latest available quarter for a bank, at or after the minimum specified.
@@ -161,11 +441,11 @@ async def find_latest_available_quarter(
         Tuple of (fiscal_year, quarter) if found, None otherwise
     """
     async with get_connection() as conn:
-        # Convert quarter to sortable format
         quarter_map = {"Q1": 1, "Q2": 2, "Q3": 3, "Q4": 4}
         min_quarter_num = quarter_map.get(min_quarter, 1)
 
-        query = text("""
+        query = text(
+            """
             SELECT fiscal_year, quarter
             FROM aegis_data_availability
             WHERE bank_id = :bank_id
@@ -186,15 +466,11 @@ async def find_latest_available_quarter(
                          WHEN 'Q1' THEN 1
                      END DESC
             LIMIT 1
-        """)
+        """
+        )
 
         result = await conn.execute(
-            query,
-            {
-                "bank_id": bank_id,
-                "min_year": min_fiscal_year,
-                "min_quarter": min_quarter_num
-            }
+            query, {"bank_id": bank_id, "min_year": min_fiscal_year, "min_quarter": min_quarter_num}
         )
 
         row = result.first()
@@ -202,9 +478,10 @@ async def find_latest_available_quarter(
             latest_year = row.fiscal_year
             latest_quarter = row.quarter
 
-            # Log if we're using a more recent quarter
-            if (latest_year > min_fiscal_year or
-                (latest_year == min_fiscal_year and quarter_map.get(latest_quarter, 0) > min_quarter_num)):
+            if latest_year > min_fiscal_year or (
+                latest_year == min_fiscal_year
+                and quarter_map.get(latest_quarter, 0) > min_quarter_num
+            ):
                 logger.info(
                     f"[LATEST QUARTER MODE] {bank_name or f'Bank {bank_id}'}: "
                     f"Using more recent data {latest_year} {latest_quarter} "
@@ -221,192 +498,13 @@ async def find_latest_available_quarter(
         return None
 
 
-def load_prompt_template(prompt_file: str, execution_id: str = None) -> Dict[str, Any]:
-    """
-    Load prompt template from database.
-
-    Args:
-        prompt_file: Original YAML filename (e.g., "outlook_extraction.yaml")
-        execution_id: Execution ID for tracking
-
-    Returns:
-        Dict with system_template, user_template, tool_name, tool_description, tool_parameters
-    """
-    # Convert filename to prompt name (remove .yaml extension)
-    prompt_name = prompt_file.replace(".yaml", "")
-
-    # Load from database
-    prompt_data = load_prompt_from_db(
-        layer="cm_readthrough_etl",
-        name=prompt_name,
-        compose_with_globals=False,  # ETL doesn't use global contexts
-        available_databases=None,
-        execution_id=execution_id
-    )
-
-    # Convert database format to cm_readthrough's expected format
-    result = {
-        'system_template': prompt_data['system_prompt'],
-        'user_template': prompt_data.get('user_prompt', '')
-    }
-
-    # Extract tool definition components if present
-    if prompt_data.get('tool_definition'):
-        tool_def = prompt_data['tool_definition']
-        result['tool_name'] = tool_def['function']['name']
-        result['tool_description'] = tool_def['function']['description']
-        result['tool_parameters'] = tool_def['function']['parameters']['properties']
-
-    return result
-
-
-async def retrieve_full_transcript(
-    bank_info: Dict[str, Any],
-    fiscal_year: int,
-    quarter: str,
-    context: Dict[str, Any],
-    use_latest: bool
-) -> Optional[str]:
-    """
-    Retrieve full transcript (MD + Q&A sections) as single string.
-
-    Args:
-        bank_info: Bank information dictionary
-        fiscal_year: Fiscal year
-        quarter: Quarter
-        context: Execution context
-        use_latest: Whether to use latest available quarter
-
-    Returns:
-        Combined transcript string or None if not available
-    """
-    # Determine which quarter to use
-    actual_year, actual_quarter = fiscal_year, quarter
-
-    if use_latest:
-        latest = await find_latest_available_quarter(
-            bank_id=bank_info["bank_id"],
-            min_fiscal_year=fiscal_year,
-            min_quarter=quarter,
-            bank_name=bank_info["bank_name"]
-        )
-        if latest:
-            actual_year, actual_quarter = latest
-        else:
-            logger.warning(
-                f"[NO DATA] {bank_info['bank_name']}: No transcript data available "
-                f"for {fiscal_year} {quarter} or later"
-            )
-            return None
-
-    # Build combo dict for transcript retrieval
-    combo = {
-        "bank_id": bank_info["bank_id"],
-        "bank_name": bank_info["bank_name"],
-        "bank_symbol": bank_info["bank_symbol"],
-        "fiscal_year": actual_year,
-        "quarter": actual_quarter
-    }
-
-    try:
-        # Get Management Discussion section
-        md_chunks = await retrieve_full_section(combo=combo, sections="MD", context=context)
-        md_content = await format_full_section_chunks(chunks=md_chunks, combo=combo, context=context)
-
-        # Get Q&A section
-        qa_chunks = await retrieve_full_section(combo=combo, sections="QA", context=context)
-        qa_content = await format_full_section_chunks(chunks=qa_chunks, combo=combo, context=context)
-
-        # Log retrieval
-        logger.info(
-            f"[TRANSCRIPT] {bank_info['bank_name']} {actual_year} {actual_quarter}: "
-            f"Retrieved {len(md_content)} MD chars + {len(qa_content)} QA chars"
-        )
-
-        return f"{md_content}\n\n{qa_content}"
-
-    except Exception as e:
-        logger.error(f"Error retrieving transcript for {bank_info['bank_name']}: {e}")
-        return None
-
-
-async def retrieve_qa_section(
-    bank_info: Dict[str, Any],
-    fiscal_year: int,
-    quarter: str,
-    context: Dict[str, Any],
-    use_latest: bool
-) -> Optional[str]:
-    """
-    Retrieve only Q&A section as single string.
-
-    Args:
-        bank_info: Bank information dictionary
-        fiscal_year: Fiscal year
-        quarter: Quarter
-        context: Execution context
-        use_latest: Whether to use latest available quarter
-
-    Returns:
-        Q&A section string or None if not available
-    """
-    # Determine which quarter to use
-    actual_year, actual_quarter = fiscal_year, quarter
-
-    if use_latest:
-        latest = await find_latest_available_quarter(
-            bank_id=bank_info["bank_id"],
-            min_fiscal_year=fiscal_year,
-            min_quarter=quarter,
-            bank_name=bank_info["bank_name"]
-        )
-        if latest:
-            actual_year, actual_quarter = latest
-        else:
-            logger.warning(
-                f"[NO DATA] {bank_info['bank_name']}: No Q&A data available "
-                f"for {fiscal_year} {quarter} or later"
-            )
-            return None
-
-    # Build combo dict
-    combo = {
-        "bank_id": bank_info["bank_id"],
-        "bank_name": bank_info["bank_name"],
-        "bank_symbol": bank_info["bank_symbol"],
-        "fiscal_year": actual_year,
-        "quarter": actual_quarter
-    }
-
-    try:
-        # Get Q&A section only
-        qa_chunks = await retrieve_full_section(combo=combo, sections="QA", context=context)
-        qa_content = await format_full_section_chunks(chunks=qa_chunks, combo=combo, context=context)
-
-        # Log retrieval
-        logger.info(
-            f"[Q&A SECTION] {bank_info['bank_name']} {actual_year} {actual_quarter}: "
-            f"Retrieved {len(qa_content)} chars"
-        )
-
-        return qa_content
-
-    except Exception as e:
-        logger.error(f"Error retrieving Q&A for {bank_info['bank_name']}: {e}")
-        return None
-
-
-# =============================================================================
-# PHASE 1: OUTLOOK EXTRACTION
-# =============================================================================
-
 async def extract_outlook_from_transcript(
     bank_info: Dict[str, Any],
     transcript_content: str,
     categories: List[Dict[str, Any]],
     fiscal_year: int,
     quarter: str,
-    context: Dict[str, Any]
+    context: Dict[str, Any],
 ) -> Dict[str, Any]:
     """
     Extract categorized outlook statements from full transcript.
@@ -428,60 +526,51 @@ async def extract_outlook_from_transcript(
             ]
         }
     """
-    # Load prompt template
-    execution_id = context.get('execution_id')
-    prompt_template = load_prompt_template("outlook_extraction.yaml", execution_id)
+    execution_id = context.get("execution_id")
 
-    # Format categories using helper function
+    # Direct prompt loading (matches Call Summary pattern)
+    outlook_prompts = load_prompt_from_db(
+        layer="cm_readthrough_etl",
+        name="outlook_extraction",
+        compose_with_globals=False,
+        available_databases=None,
+        execution_id=execution_id,
+    )
+
     categories_text = format_categories_for_prompt(categories)
 
-    # Format messages
+    # In-place prompt variable replacement (matches Call Summary pattern)
+    outlook_prompts["system_prompt"] = outlook_prompts["system_prompt"].format(
+        categories_list=categories_text
+    )
+
+    outlook_prompts["user_prompt"] = outlook_prompts["user_prompt"].format(
+        bank_name=bank_info["bank_name"],
+        fiscal_year=fiscal_year,
+        quarter=quarter,
+        transcript_content=transcript_content,
+    )
+
+    # Direct message construction (matches Call Summary pattern)
     messages = [
-        {
-            "role": "system",
-            "content": prompt_template["system_template"].format(categories_list=categories_text)
-        },
-        {
-            "role": "user",
-            "content": prompt_template["user_template"].format(
-                bank_name=bank_info["bank_name"],
-                fiscal_year=fiscal_year,
-                quarter=quarter,
-                transcript_content=transcript_content
-            )
-        }
+        {"role": "system", "content": outlook_prompts["system_prompt"]},
+        {"role": "user", "content": outlook_prompts["user_prompt"]},
     ]
 
-    # Create tool definition
-    tools = [{
-        "type": "function",
-        "function": {
-            "name": prompt_template["tool_name"],
-            "description": prompt_template["tool_description"],
-            "parameters": {
-                "type": "object",
-                "properties": prompt_template["tool_parameters"],
-                "required": ["has_content", "statements"]
-            }
-        }
-    }]
+    # Direct tool use (matches Call Summary pattern)
+    tools = [outlook_prompts["tool_definition"]]
 
-    # Call LLM
     llm_params = {
-        "model": MODELS["outlook_extraction"],
-        "temperature": TEMPERATURE,
-        "max_tokens": MAX_TOKENS
+        "model": etl_config.get_model("outlook_extraction"),
+        "temperature": etl_config.temperature,
+        "max_tokens": etl_config.max_tokens,
     }
 
     try:
         response = await complete_with_tools(
-            messages=messages,
-            tools=tools,
-            context=context,
-            llm_params=llm_params
+            messages=messages, tools=tools, context=context, llm_params=llm_params
         )
 
-        # Extract tool call results
         tool_calls = response.get("choices", [{}])[0].get("message", {}).get("tool_calls")
         if tool_calls:
             tool_call = tool_calls[0]
@@ -494,9 +583,15 @@ async def extract_outlook_from_transcript(
             statements = result.get("statements", [])
             new_categories = [s["category"] for s in statements if s.get("is_new_category", False)]
             if new_categories:
-                logger.info(f"[NEW CATEGORIES] {bank_info['bank_name']}: Identified new categories: {', '.join(new_categories)}")
+                logger.info(
+                    f"[NEW CATEGORIES] {bank_info['bank_name']}: "
+                    f"Identified new categories: {', '.join(new_categories)}"
+                )
 
-            logger.info(f"[OUTLOOK EXTRACTED] {bank_info['bank_name']}: {len(statements)} statements ({len(new_categories)} new categories)")
+            logger.info(
+                f"[OUTLOOK EXTRACTED] {bank_info['bank_name']}: "
+                f"{len(statements)} statements ({len(new_categories)} new categories)"
+            )
             return result
         else:
             logger.warning(f"No tool call in response for {bank_info['bank_name']}")
@@ -507,17 +602,13 @@ async def extract_outlook_from_transcript(
         return {"has_content": False, "statements": []}
 
 
-# =============================================================================
-# PHASE 2: Q&A EXTRACTION
-# =============================================================================
-
 async def extract_questions_from_qa(
     bank_info: Dict[str, Any],
     qa_content: str,
     categories: List[Dict[str, Any]],
     fiscal_year: int,
     quarter: str,
-    context: Dict[str, Any]
+    context: Dict[str, Any],
 ) -> Dict[str, Any]:
     """
     Extract categorized analyst questions from Q&A section.
@@ -544,60 +635,51 @@ async def extract_questions_from_qa(
             ]
         }
     """
-    # Load prompt template
-    execution_id = context.get('execution_id')
-    prompt_template = load_prompt_template("qa_extraction_dynamic.yaml", execution_id)
+    execution_id = context.get("execution_id")
 
-    # Format categories using helper function
+    # Direct prompt loading (matches Call Summary pattern)
+    qa_prompts = load_prompt_from_db(
+        layer="cm_readthrough_etl",
+        name="qa_extraction_dynamic",
+        compose_with_globals=False,
+        available_databases=None,
+        execution_id=execution_id,
+    )
+
     categories_text = format_categories_for_prompt(categories)
 
-    # Format messages
+    # In-place prompt variable replacement (matches Call Summary pattern)
+    qa_prompts["system_prompt"] = qa_prompts["system_prompt"].format(
+        categories_list=categories_text
+    )
+
+    qa_prompts["user_prompt"] = qa_prompts["user_prompt"].format(
+        bank_name=bank_info["bank_name"],
+        fiscal_year=fiscal_year,
+        quarter=quarter,
+        qa_content=qa_content,
+    )
+
+    # Direct message construction (matches Call Summary pattern)
     messages = [
-        {
-            "role": "system",
-            "content": prompt_template["system_template"].format(categories_list=categories_text)
-        },
-        {
-            "role": "user",
-            "content": prompt_template["user_template"].format(
-                bank_name=bank_info["bank_name"],
-                fiscal_year=fiscal_year,
-                quarter=quarter,
-                qa_content=qa_content
-            )
-        }
+        {"role": "system", "content": qa_prompts["system_prompt"]},
+        {"role": "user", "content": qa_prompts["user_prompt"]},
     ]
 
-    # Create tool definition
-    tools = [{
-        "type": "function",
-        "function": {
-            "name": prompt_template["tool_name"],
-            "description": prompt_template["tool_description"],
-            "parameters": {
-                "type": "object",
-                "properties": prompt_template["tool_parameters"],
-                "required": ["has_content", "questions"]
-            }
-        }
-    }]
+    # Direct tool use (matches Call Summary pattern)
+    tools = [qa_prompts["tool_definition"]]
 
-    # Call LLM
     llm_params = {
-        "model": MODELS["qa_extraction"],
-        "temperature": TEMPERATURE,
-        "max_tokens": MAX_TOKENS
+        "model": etl_config.get_model("qa_extraction"),
+        "temperature": etl_config.temperature,
+        "max_tokens": etl_config.max_tokens,
     }
 
     try:
         response = await complete_with_tools(
-            messages=messages,
-            tools=tools,
-            context=context,
-            llm_params=llm_params
+            messages=messages, tools=tools, context=context, llm_params=llm_params
         )
 
-        # Extract tool call results
         tool_calls = response.get("choices", [{}])[0].get("message", {}).get("tool_calls")
         if tool_calls:
             tool_call = tool_calls[0]
@@ -610,9 +692,15 @@ async def extract_questions_from_qa(
             questions = result.get("questions", [])
             new_categories = [q["category"] for q in questions if q.get("is_new_category", False)]
             if new_categories:
-                logger.info(f"[NEW CATEGORIES] {bank_info['bank_name']}: Identified new Q&A categories: {', '.join(set(new_categories))}")
+                logger.info(
+                    f"[NEW CATEGORIES] {bank_info['bank_name']}: "
+                    f"Identified new Q&A categories: {', '.join(set(new_categories))}"
+                )
 
-            logger.info(f"[QUESTIONS EXTRACTED] {bank_info['bank_name']}: {len(questions)} questions ({len(new_categories)} new categories)")
+            logger.info(
+                f"[QUESTIONS EXTRACTED] {bank_info['bank_name']}: "
+                f"{len(questions)} questions ({len(new_categories)} new categories)"
+            )
             return result
         else:
             logger.warning(f"No tool call in response for {bank_info['bank_name']}")
@@ -623,14 +711,10 @@ async def extract_questions_from_qa(
         return {"has_content": False, "questions": []}
 
 
-# =============================================================================
-# PHASE 3: AGGREGATION
-# =============================================================================
-
 def aggregate_results(
     bank_outlook: List[Tuple[str, str, Dict]],  # [(bank_name, bank_symbol, outlook_result)]
     bank_section2: List[Tuple[str, str, Dict]],  # [(bank_name, bank_symbol, section2_result)]
-    bank_section3: List[Tuple[str, str, Dict]]   # [(bank_name, bank_symbol, section3_result)]
+    bank_section3: List[Tuple[str, str, Dict]],  # [(bank_name, bank_symbol, section3_result)]
 ) -> Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]]:
     """
     Aggregate and sort results by bank for all 3 sections.
@@ -653,27 +737,20 @@ def aggregate_results(
     all_section2 = {}
     all_section3 = {}
 
-    # Filter banks with content and organize
     for bank_name, bank_symbol, result in bank_outlook:
         if result.get("has_content") and result.get("statements"):
             all_outlook[bank_name] = {
                 "bank_symbol": bank_symbol,
-                "statements": result["statements"]
+                "statements": result["statements"],
             }
 
     for bank_name, bank_symbol, result in bank_section2:
         if result.get("has_content") and result.get("questions"):
-            all_section2[bank_name] = {
-                "bank_symbol": bank_symbol,
-                "questions": result["questions"]
-            }
+            all_section2[bank_name] = {"bank_symbol": bank_symbol, "questions": result["questions"]}
 
     for bank_name, bank_symbol, result in bank_section3:
         if result.get("has_content") and result.get("questions"):
-            all_section3[bank_name] = {
-                "bank_symbol": bank_symbol,
-                "questions": result["questions"]
-            }
+            all_section3[bank_name] = {"bank_symbol": bank_symbol, "questions": result["questions"]}
 
     logger.info(
         f"[AGGREGATION] {len(all_outlook)} banks with outlook, "
@@ -684,16 +761,12 @@ def aggregate_results(
     return all_outlook, all_section2, all_section3
 
 
-# =============================================================================
-# PHASES 5-7: SUBTITLE GENERATION (3 sections)
-# =============================================================================
-
 async def generate_subtitle(
     content_data: Dict[str, Any],
     content_type: str,
     section_context: str,
     default_subtitle: str,
-    context: Dict[str, Any]
+    context: Dict[str, Any],
 ) -> str:
     """
     Universal subtitle generation function for any section.
@@ -711,14 +784,19 @@ async def generate_subtitle(
     if not content_data:
         return default_subtitle
 
-    # Load universal prompt template
-    execution_id = context.get('execution_id')
-    prompt_template = load_prompt_template("subtitle_generation.yaml", execution_id)
+    execution_id = context.get("execution_id")
 
-    # Prepare content summary for subtitle generation
+    # Direct prompt loading (matches Call Summary pattern)
+    subtitle_prompts = load_prompt_from_db(
+        layer="cm_readthrough_etl",
+        name="subtitle_generation",
+        compose_with_globals=False,
+        available_databases=None,
+        execution_id=execution_id,
+    )
+
     content_summary = {}
     for bank_name, data in content_data.items():
-        # Handle both outlook (statements) and questions
         if content_type == "outlook":
             items = data.get("statements", [])
             content_summary[bank_name] = [
@@ -732,55 +810,38 @@ async def generate_subtitle(
                 for item in items[:3]
             ]
 
-    # Format messages
+    # In-place prompt variable replacement (matches Call Summary pattern)
+    subtitle_prompts["user_prompt"] = subtitle_prompts["user_prompt"].format(
+        content_type=content_type,
+        section_context=section_context,
+        content_json=json.dumps(content_summary, indent=2),
+    )
+
+    # Direct message construction (matches Call Summary pattern)
     messages = [
-        {
-            "role": "system",
-            "content": prompt_template["system_template"]
-        },
-        {
-            "role": "user",
-            "content": prompt_template["user_template"].format(
-                content_type=content_type,
-                section_context=section_context,
-                content_json=json.dumps(content_summary, indent=2)
-            )
-        }
+        {"role": "system", "content": subtitle_prompts["system_prompt"]},
+        {"role": "user", "content": subtitle_prompts["user_prompt"]},
     ]
 
-    # Create tool definition
-    tools = [{
-        "type": "function",
-        "function": {
-            "name": prompt_template["tool_name"],
-            "description": prompt_template["tool_description"],
-            "parameters": {
-                "type": "object",
-                "properties": prompt_template["tool_parameters"],
-                "required": ["subtitle"]
-            }
-        }
-    }]
+    # Direct tool use (matches Call Summary pattern)
+    tools = [subtitle_prompts["tool_definition"]]
 
-    # Call LLM
     llm_params = {
-        "model": MODELS["subtitle_generation"],  # Use dedicated subtitle model (GPT-4.1 for tool calling)
-        "temperature": TEMPERATURE,
+        "model": etl_config.get_model("subtitle_generation"),
+        "temperature": etl_config.temperature,
         "max_tokens": 100,  # Subtitle is short
-        "tool_choice": "required"  # Force tool use
+        "tool_choice": "required",  # Force tool use
     }
 
     try:
-        logger.info(f"[SUBTITLE] Generating {content_type} subtitle from {len(content_data)} banks...")
-
-        response = await complete_with_tools(
-            messages=messages,
-            tools=tools,
-            context=context,
-            llm_params=llm_params
+        logger.info(
+            f"[SUBTITLE] Generating {content_type} subtitle from {len(content_data)} banks..."
         )
 
-        # Extract tool call results
+        response = await complete_with_tools(
+            messages=messages, tools=tools, context=context, llm_params=llm_params
+        )
+
         tool_calls = response.get("choices", [{}])[0].get("message", {}).get("tool_calls")
         if tool_calls:
             tool_call = tool_calls[0]
@@ -790,7 +851,9 @@ async def generate_subtitle(
             logger.info(f"[SUBTITLE GENERATED] {subtitle}")
             return subtitle
         else:
-            logger.warning(f"No tool call in subtitle generation, using default: {default_subtitle}")
+            logger.warning(
+                f"No tool call in subtitle generation, using default: {default_subtitle}"
+            )
             return default_subtitle
 
     except Exception as e:
@@ -798,15 +861,8 @@ async def generate_subtitle(
         return default_subtitle
 
 
-
-
-# =============================================================================
-# PHASE 8: BATCH FORMATTING
-# =============================================================================
-
 async def format_outlook_batch(
-    all_outlook: Dict[str, Any],
-    context: Dict[str, Any]
+    all_outlook: Dict[str, Any], context: Dict[str, Any]
 ) -> Dict[str, Any]:
     """
     Single LLM call to format all outlook statements with HTML emphasis.
@@ -821,81 +877,71 @@ async def format_outlook_batch(
     if not all_outlook:
         return {}
 
-    # Load prompt template
-    execution_id = context.get('execution_id')
-    prompt_template = load_prompt_template("batch_formatting.yaml", execution_id)
+    execution_id = context.get("execution_id")
 
-    # Prepare outlook for formatting (remove bank_symbol for cleaner JSON)
+    # Direct prompt loading (matches Call Summary pattern)
+    formatting_prompts = load_prompt_from_db(
+        layer="cm_readthrough_etl",
+        name="batch_formatting",
+        compose_with_globals=False,
+        available_databases=None,
+        execution_id=execution_id,
+    )
+
     outlook_for_formatting = {
-        bank_name: data["statements"]
-        for bank_name, data in all_outlook.items()
+        bank_name: data["statements"] for bank_name, data in all_outlook.items()
     }
 
-    # Format messages
+    # In-place prompt variable replacement (matches Call Summary pattern)
+    formatting_prompts["user_prompt"] = formatting_prompts["user_prompt"].format(
+        quotes_json=json.dumps(
+            outlook_for_formatting, indent=2
+        )  # Note: template still says "quotes"
+    )
+
+    # Direct message construction (matches Call Summary pattern)
     messages = [
-        {
-            "role": "system",
-            "content": prompt_template["system_template"]
-        },
-        {
-            "role": "user",
-            "content": prompt_template["user_template"].format(
-                quotes_json=json.dumps(outlook_for_formatting, indent=2)  # Note: template still says "quotes"
-            )
-        }
+        {"role": "system", "content": formatting_prompts["system_prompt"]},
+        {"role": "user", "content": formatting_prompts["user_prompt"]},
     ]
 
-    # Create tool definition
-    tools = [{
-        "type": "function",
-        "function": {
-            "name": prompt_template["tool_name"],
-            "description": prompt_template["tool_description"],
-            "parameters": {
-                "type": "object",
-                "properties": prompt_template["tool_parameters"],
-                "required": ["formatted_quotes"]  # Note: template still says "quotes"
-            }
-        }
-    }]
+    # Direct tool use (matches Call Summary pattern)
+    tools = [formatting_prompts["tool_definition"]]
 
-    # Call LLM
     llm_params = {
-        "model": MODELS["batch_formatting"],
-        "temperature": TEMPERATURE,
-        "max_tokens": MAX_TOKENS
+        "model": etl_config.get_model("batch_formatting"),
+        "temperature": etl_config.temperature,
+        "max_tokens": etl_config.max_tokens,
     }
 
     try:
         logger.info(f"[BATCH FORMATTING] Formatting {len(all_outlook)} banks with outlook...")
 
         response = await complete_with_tools(
-            messages=messages,
-            tools=tools,
-            context=context,
-            llm_params=llm_params
+            messages=messages, tools=tools, context=context, llm_params=llm_params
         )
 
-        # Extract tool call results
         tool_calls = response.get("choices", [{}])[0].get("message", {}).get("tool_calls")
         if tool_calls:
             tool_call = tool_calls[0]
             formatted_result = json.loads(tool_call["function"]["arguments"])
-            formatted_outlook = formatted_result.get("formatted_quotes", {})  # Tool returns "quotes" key
+            formatted_outlook = formatted_result.get(
+                "formatted_quotes", {}
+            )  # Tool returns "quotes" key
 
-            # Merge formatted outlook back with bank_symbol
             result = {}
             for bank_name, data in all_outlook.items():
                 if bank_name in formatted_outlook:
                     result[bank_name] = {
                         "bank_symbol": data["bank_symbol"],
-                        "statements": formatted_outlook[bank_name]
+                        "statements": formatted_outlook[bank_name],
                     }
                 else:
-                    # Fallback: keep original if formatting failed for this bank
                     result[bank_name] = data
 
-            logger.info(f"[BATCH FORMATTING] Successfully formatted outlook for {len(result)} banks")
+            logger.info(
+                f"[BATCH FORMATTING] Successfully formatted outlook for {len(result)} banks"
+            )
             return result
         else:
             logger.warning("No tool call in formatting response, returning original")
@@ -906,15 +952,14 @@ async def format_outlook_batch(
         return all_outlook  # Fallback to original
 
 
-# =============================================================================
-# MAIN ORCHESTRATION
-# =============================================================================
-
 async def process_all_banks_parallel(
     fiscal_year: int,
     quarter: str,
     context: Dict[str, Any],
-    use_latest: bool = False
+    use_latest: bool,
+    outlook_categories: List[Dict[str, Any]],
+    qa_market_vol_reg_categories: List[Dict[str, Any]],
+    qa_pipelines_activity_categories: List[Dict[str, Any]],
 ) -> Dict[str, Any]:
     """
     Process all banks with concurrent execution.
@@ -924,122 +969,270 @@ async def process_all_banks_parallel(
         quarter: Quarter
         context: Execution context
         use_latest: If True, use latest available quarter >= specified quarter
+        outlook_categories: Loaded outlook categories
+        qa_market_vol_reg_categories: Loaded Section 2 Q&A categories
+        qa_pipelines_activity_categories: Loaded Section 3 Q&A categories
 
     Returns:
         Combined results dictionary
     """
-    # Load configuration
+    execution_id = context.get("execution_id")
     monitored_banks = get_monitored_institutions()
-    outlook_categories = get_outlook_categories()
-    qa_market_vol_reg_categories = get_qa_market_volatility_regulatory_categories()
-    qa_pipelines_activity_categories = get_qa_pipelines_activity_categories()
 
     logger.info(
         f"Processing {len(monitored_banks)} banks for {fiscal_year} {quarter} "
         f"(mode: {'latest available' if use_latest else 'exact quarter'})"
     )
-    logger.info(
-        f"Categories - Outlook: {len(outlook_categories)}, "
-        f"Market Vol/Reg: {len(qa_market_vol_reg_categories)}, "
-        f"Pipelines/Activity: {len(qa_pipelines_activity_categories)}"
-    )
 
-    # Concurrency control
-    semaphore = asyncio.Semaphore(MAX_CONCURRENT_BANKS)
+    semaphore = asyncio.Semaphore(etl_config.max_concurrent_banks)
 
-    # Phase 1: Extract outlook from all banks (concurrent)
     async def process_bank_outlook(bank_data):
         async with semaphore:
             try:
-                bank_info = await get_bank_info(bank_data["bank_id"])
+                # Handle use_latest logic
+                actual_year, actual_quarter = fiscal_year, quarter
+                if use_latest:
+                    latest = await find_latest_available_quarter(
+                        bank_id=bank_data["bank_id"],
+                        min_fiscal_year=fiscal_year,
+                        min_quarter=quarter,
+                        bank_name=bank_data["bank_name"],
+                    )
+                    if latest:
+                        actual_year, actual_quarter = latest
+                    else:
+                        logger.warning(
+                            f"[NO DATA] {bank_data['bank_name']}: No transcript data available "
+                            f"for {fiscal_year} {quarter} or later"
+                        )
+                        return (
+                            bank_data["bank_name"],
+                            bank_data["bank_symbol"],
+                            {"has_content": False, "statements": []},
+                        )
 
-                # Get full transcript
-                transcript = await retrieve_full_transcript(
-                    bank_info, fiscal_year, quarter, context, use_latest
-                )
+                # Direct transcript retrieval (matches Call Summary pattern)
+                combo = {
+                    "bank_id": bank_data["bank_id"],
+                    "bank_name": bank_data["bank_name"],
+                    "bank_symbol": bank_data["bank_symbol"],
+                    "fiscal_year": actual_year,
+                    "quarter": actual_quarter,
+                }
+
+                try:
+                    md_chunks = await retrieve_full_section(
+                        combo=combo, sections="MD", context=context
+                    )
+                    md_content = await format_full_section_chunks(
+                        chunks=md_chunks, combo=combo, context=context
+                    )
+
+                    qa_chunks = await retrieve_full_section(
+                        combo=combo, sections="QA", context=context
+                    )
+                    qa_content = await format_full_section_chunks(
+                        chunks=qa_chunks, combo=combo, context=context
+                    )
+
+                    transcript = f"{md_content}\n\n{qa_content}"
+
+                    logger.info(
+                        f"[TRANSCRIPT] {bank_data['bank_name']} {actual_year} {actual_quarter}: "
+                        f"Retrieved {len(md_content)} MD chars + {len(qa_content)} QA chars"
+                    )
+
+                except Exception as e:
+                    logger.error(f"Error retrieving transcript for {bank_data['bank_name']}: {e}")
+                    transcript = None
 
                 if not transcript:
-                    return (bank_info["bank_name"], bank_info["bank_symbol"], {"has_content": False, "statements": []})
+                    return (
+                        bank_data["bank_name"],
+                        bank_data["bank_symbol"],
+                        {"has_content": False, "statements": []},
+                    )
 
-                # Extract outlook
                 result = await extract_outlook_from_transcript(
-                    bank_info, transcript, outlook_categories,
-                    fiscal_year, quarter, context
+                    bank_data, transcript, outlook_categories, fiscal_year, quarter, context
                 )
 
-                return (bank_info["bank_name"], bank_info["bank_symbol"], result)
+                return (bank_data["bank_name"], bank_data["bank_symbol"], result)
 
             except Exception as e:
                 logger.error(f"Error processing outlook for bank {bank_data}: {e}")
-                return (bank_data.get("bank_name", "Unknown"), bank_data.get("bank_symbol", ""), {"has_content": False, "statements": []})
+                return (
+                    bank_data.get("bank_name", "Unknown"),
+                    bank_data.get("bank_symbol", ""),
+                    {"has_content": False, "statements": []},
+                )
 
-    # Phase 2: Extract Section 2 questions from all banks (concurrent)
     async def process_bank_section2(bank_data):
         async with semaphore:
             try:
-                bank_info = await get_bank_info(bank_data["bank_id"])
+                # Handle use_latest logic
+                actual_year, actual_quarter = fiscal_year, quarter
+                if use_latest:
+                    latest = await find_latest_available_quarter(
+                        bank_id=bank_data["bank_id"],
+                        min_fiscal_year=fiscal_year,
+                        min_quarter=quarter,
+                        bank_name=bank_data["bank_name"],
+                    )
+                    if latest:
+                        actual_year, actual_quarter = latest
+                    else:
+                        logger.warning(
+                            f"[NO DATA] {bank_data['bank_name']}: No Q&A data available "
+                            f"for {fiscal_year} {quarter} or later"
+                        )
+                        return (
+                            bank_data["bank_name"],
+                            bank_data["bank_symbol"],
+                            {"has_content": False, "questions": []},
+                        )
 
-                # Get Q&A section only
-                qa_content = await retrieve_qa_section(
-                    bank_info, fiscal_year, quarter, context, use_latest
-                )
+                # Direct Q&A retrieval (matches Call Summary pattern)
+                combo = {
+                    "bank_id": bank_data["bank_id"],
+                    "bank_name": bank_data["bank_name"],
+                    "bank_symbol": bank_data["bank_symbol"],
+                    "fiscal_year": actual_year,
+                    "quarter": actual_quarter,
+                }
+
+                try:
+                    qa_chunks = await retrieve_full_section(
+                        combo=combo, sections="QA", context=context
+                    )
+                    qa_content = await format_full_section_chunks(
+                        chunks=qa_chunks, combo=combo, context=context
+                    )
+
+                    logger.info(
+                        f"[Q&A SECTION] {bank_data['bank_name']} {actual_year} {actual_quarter}: "
+                        f"Retrieved {len(qa_content)} chars"
+                    )
+
+                except Exception as e:
+                    logger.error(f"Error retrieving Q&A for {bank_data['bank_name']}: {e}")
+                    qa_content = None
 
                 if not qa_content:
-                    return (bank_info["bank_name"], bank_info["bank_symbol"], {"has_content": False, "questions": []})
+                    return (
+                        bank_data["bank_name"],
+                        bank_data["bank_symbol"],
+                        {"has_content": False, "questions": []},
+                    )
 
-                # Extract Section 2 questions
                 result = await extract_questions_from_qa(
-                    bank_info, qa_content, qa_market_vol_reg_categories,
-                    fiscal_year, quarter, context
+                    bank_data,
+                    qa_content,
+                    qa_market_vol_reg_categories,
+                    fiscal_year,
+                    quarter,
+                    context,
                 )
 
-                return (bank_info["bank_name"], bank_info["bank_symbol"], result)
+                return (bank_data["bank_name"], bank_data["bank_symbol"], result)
 
             except Exception as e:
                 logger.error(f"Error processing Section 2 for bank {bank_data}: {e}")
-                return (bank_data.get("bank_name", "Unknown"), bank_data.get("bank_symbol", ""), {"has_content": False, "questions": []})
+                return (
+                    bank_data.get("bank_name", "Unknown"),
+                    bank_data.get("bank_symbol", ""),
+                    {"has_content": False, "questions": []},
+                )
 
-    # Phase 3: Extract Section 3 questions from all banks (concurrent)
     async def process_bank_section3(bank_data):
         async with semaphore:
             try:
-                bank_info = await get_bank_info(bank_data["bank_id"])
+                # Handle use_latest logic
+                actual_year, actual_quarter = fiscal_year, quarter
+                if use_latest:
+                    latest = await find_latest_available_quarter(
+                        bank_id=bank_data["bank_id"],
+                        min_fiscal_year=fiscal_year,
+                        min_quarter=quarter,
+                        bank_name=bank_data["bank_name"],
+                    )
+                    if latest:
+                        actual_year, actual_quarter = latest
+                    else:
+                        logger.warning(
+                            f"[NO DATA] {bank_data['bank_name']}: No Q&A data available "
+                            f"for {fiscal_year} {quarter} or later"
+                        )
+                        return (
+                            bank_data["bank_name"],
+                            bank_data["bank_symbol"],
+                            {"has_content": False, "questions": []},
+                        )
 
-                # Get Q&A section only
-                qa_content = await retrieve_qa_section(
-                    bank_info, fiscal_year, quarter, context, use_latest
-                )
+                # Direct Q&A retrieval (matches Call Summary pattern)
+                combo = {
+                    "bank_id": bank_data["bank_id"],
+                    "bank_name": bank_data["bank_name"],
+                    "bank_symbol": bank_data["bank_symbol"],
+                    "fiscal_year": actual_year,
+                    "quarter": actual_quarter,
+                }
+
+                try:
+                    qa_chunks = await retrieve_full_section(
+                        combo=combo, sections="QA", context=context
+                    )
+                    qa_content = await format_full_section_chunks(
+                        chunks=qa_chunks, combo=combo, context=context
+                    )
+
+                    logger.info(
+                        f"[Q&A SECTION] {bank_data['bank_name']} {actual_year} {actual_quarter}: "
+                        f"Retrieved {len(qa_content)} chars"
+                    )
+
+                except Exception as e:
+                    logger.error(f"Error retrieving Q&A for {bank_data['bank_name']}: {e}")
+                    qa_content = None
 
                 if not qa_content:
-                    return (bank_info["bank_name"], bank_info["bank_symbol"], {"has_content": False, "questions": []})
+                    return (
+                        bank_data["bank_name"],
+                        bank_data["bank_symbol"],
+                        {"has_content": False, "questions": []},
+                    )
 
-                # Extract Section 3 questions
                 result = await extract_questions_from_qa(
-                    bank_info, qa_content, qa_pipelines_activity_categories,
-                    fiscal_year, quarter, context
+                    bank_data,
+                    qa_content,
+                    qa_pipelines_activity_categories,
+                    fiscal_year,
+                    quarter,
+                    context,
                 )
 
-                return (bank_info["bank_name"], bank_info["bank_symbol"], result)
+                return (bank_data["bank_name"], bank_data["bank_symbol"], result)
 
             except Exception as e:
                 logger.error(f"Error processing Section 3 for bank {bank_data}: {e}")
-                return (bank_data.get("bank_name", "Unknown"), bank_data.get("bank_symbol", ""), {"has_content": False, "questions": []})
+                return (
+                    bank_data.get("bank_name", "Unknown"),
+                    bank_data.get("bank_symbol", ""),
+                    {"has_content": False, "questions": []},
+                )
 
-    # Execute Phases 1, 2, 3 concurrently (all 3 extraction phases in parallel)
     logger.info(f"[PHASES 1-3] Starting concurrent extraction for {len(monitored_banks)} banks...")
 
     outlook_tasks = [process_bank_outlook(bank) for bank in monitored_banks]
     section2_tasks = [process_bank_section2(bank) for bank in monitored_banks]
     section3_tasks = [process_bank_section3(bank) for bank in monitored_banks]
 
-    # Run all 3 phases in parallel
     bank_outlook, bank_section2, bank_section3 = await asyncio.gather(
         asyncio.gather(*outlook_tasks, return_exceptions=True),
         asyncio.gather(*section2_tasks, return_exceptions=True),
-        asyncio.gather(*section3_tasks, return_exceptions=True)
+        asyncio.gather(*section3_tasks, return_exceptions=True),
     )
 
-    # Filter out exceptions and log
     bank_outlook_clean = []
     for r in bank_outlook:
         if isinstance(r, Exception):
@@ -1061,13 +1254,11 @@ async def process_all_banks_parallel(
         else:
             bank_section3_clean.append(r)
 
-    # Phase 4: Aggregation
     logger.info("[PHASE 4] Aggregating results...")
     all_outlook, all_section2, all_section3 = aggregate_results(
         bank_outlook_clean, bank_section2_clean, bank_section3_clean
     )
 
-    # Phases 5-7: Subtitle generation (all 3 in parallel using universal prompt)
     logger.info("[PHASES 5-7] Generating subtitles for all 3 sections...")
     subtitle1, subtitle2, subtitle3 = await asyncio.gather(
         generate_subtitle(
@@ -1075,34 +1266,33 @@ async def process_all_banks_parallel(
             "outlook",
             "Forward-looking outlook statements on IB activity, markets, pipelines",
             "Outlook: Capital markets activity across major institutions",
-            context
+            context,
         ),
         generate_subtitle(
             all_section2,
             "questions",
             "Analyst questions on market volatility, risk management, regulatory changes",
-            "Conference calls: Benefits and threats of market volatility, line-draws and regulatory changes",
-            context
+            (
+                "Conference calls: Benefits and threats of market volatility, "
+                "line-draws and regulatory changes"
+            ),
+            context,
         ),
         generate_subtitle(
             all_section3,
             "questions",
             "Analyst questions on pipeline strength, M&A activity, transaction banking",
             "Conference calls: How well pipelines are holding up and areas of activity",
-            context
-        )
+            context,
+        ),
     )
 
-    # Phase 8: Batch formatting (DISABLED - takes too long)
     logger.info("[PHASE 8] Skipping batch formatting (disabled for performance)")
-    # formatted_outlook = await format_outlook_batch(all_outlook, context)
     formatted_outlook = all_outlook  # Use unformatted statements
 
-    # Questions typically don't need formatting (verbatim extraction)
     formatted_section2 = all_section2
     formatted_section3 = all_section3
 
-    # Prepare results for document generation
     results = {
         "metadata": {
             "fiscal_year": fiscal_year,
@@ -1115,11 +1305,11 @@ async def process_all_banks_parallel(
             "mode": "latest_available" if use_latest else "exact_quarter",
             "subtitle_section1": f"Outlook: {subtitle1}",
             "subtitle_section2": f"Conference calls: {subtitle2}",
-            "subtitle_section3": f"Conference calls: {subtitle3}"
+            "subtitle_section3": f"Conference calls: {subtitle3}",
         },
         "outlook": formatted_outlook,
         "section2_questions": formatted_section2,
-        "section3_questions": formatted_section3
+        "section3_questions": formatted_section3,
     }
 
     logger.info(
@@ -1131,19 +1321,13 @@ async def process_all_banks_parallel(
     return results
 
 
-# =============================================================================
-# DATABASE STORAGE
-# =============================================================================
-
 async def save_to_database(
     results: Dict[str, Any],
     fiscal_year: int,
     quarter: str,
-    markdown_content: str,
     execution_id: str,
     local_filepath: str = None,
     s3_document_name: str = None,
-    s3_pdf_name: str = None
 ) -> None:
     """
     Save the report to the database.
@@ -1152,15 +1336,34 @@ async def save_to_database(
         results: Structured results
         fiscal_year: Year
         quarter: Quarter
-        markdown_content: Markdown version of report
         execution_id: Execution UUID
         local_filepath: Path to local DOCX file (optional)
         s3_document_name: S3 document key (optional)
-        s3_pdf_name: S3 PDF key (optional)
     """
     async with get_connection() as conn:
-        # Save to aegis_reports table (matching structure of call_summary and key_themes)
-        query = text("""
+        # Delete any existing report for the same period/type
+        delete_result = await conn.execute(
+            text(
+                """
+            DELETE FROM aegis_reports
+            WHERE fiscal_year = :fiscal_year
+              AND quarter = :quarter
+              AND report_type = :report_type
+            RETURNING id
+            """
+            ),
+            {
+                "fiscal_year": fiscal_year,
+                "quarter": quarter,
+                "report_type": "cm_readthrough",
+            },
+        )
+        delete_result.fetchall()
+
+        # Insert new report
+        result = await conn.execute(
+            text(
+                """
             INSERT INTO aegis_reports (
                 report_name,
                 report_description,
@@ -1173,7 +1376,6 @@ async def save_to_database(
                 local_filepath,
                 s3_document_name,
                 s3_pdf_name,
-                markdown_content,
                 generation_date,
                 generated_by,
                 execution_id,
@@ -1190,22 +1392,22 @@ async def save_to_database(
                 :local_filepath,
                 :s3_document_name,
                 :s3_pdf_name,
-                :markdown_content,
-                NOW(),
+                :generation_date,
                 :generated_by,
                 :execution_id,
                 :metadata
             )
-        """)
-
-        await conn.execute(
-            query,
+            RETURNING id
+            """
+            ),
             {
                 "report_name": "Capital Markets Readthrough",
                 "report_description": (
-                    "AI-generated analysis of capital markets commentary from quarterly earnings calls "
-                    "across major U.S. and European banks. Extracts investment banking and trading outlook, "
-                    "analyst questions on market dynamics, risk management, M&A pipelines, and transaction banking."
+                    "AI-generated analysis of capital markets commentary from "
+                    "quarterly earnings calls across major U.S. and European banks. "
+                    "Extracts investment banking and trading outlook, analyst questions "
+                    "on market dynamics, risk management, M&A pipelines, and "
+                    "transaction banking."
                 ),
                 "report_type": "cm_readthrough",
                 "bank_id": None,  # Cross-bank report, no specific bank
@@ -1215,135 +1417,197 @@ async def save_to_database(
                 "quarter": quarter,
                 "local_filepath": local_filepath,
                 "s3_document_name": s3_document_name,
-                "s3_pdf_name": s3_pdf_name,
-                "markdown_content": markdown_content,
+                "s3_pdf_name": None,
+                "generation_date": datetime.now(),
                 "generated_by": "cm_readthrough_etl",
                 "execution_id": str(execution_id),
-                "metadata": json.dumps(results)
-            }
+                "metadata": json.dumps(results),
+            },
         )
+        result.fetchone()
 
         await conn.commit()
 
     logger.info(f"Report saved to database with execution_id: {execution_id}")
 
 
-# =============================================================================
-# MAIN ENTRY POINT
-# =============================================================================
+async def generate_cm_readthrough(
+    fiscal_year: int, quarter: str, use_latest: bool = False, output_path: Optional[str] = None
+) -> str:
+    """
+    Generate CM readthrough report for all monitored institutions.
 
-async def main():
-    """Main entry point for the CM Readthrough ETL."""
+    Args:
+        fiscal_year: Year (e.g., 2024)
+        quarter: Quarter (e.g., "Q3")
+        use_latest: If True, use latest available quarter >= specified quarter
+        output_path: Optional custom output path
+
+    Returns:
+        Success or error message string
+    """
+    execution_id = str(uuid.uuid4())
+    logger.info(
+        "etl.cm_readthrough.started",
+        execution_id=execution_id,
+        fiscal_year=fiscal_year,
+        quarter=quarter,
+        use_latest=use_latest,
+    )
+
+    try:
+        # Stage 1: Setup & Validation - Load categories and establish authentication
+        outlook_categories = load_outlook_categories(execution_id)
+        qa_market_vol_reg_categories = load_qa_market_volatility_regulatory_categories(execution_id)
+        qa_pipelines_activity_categories = load_qa_pipelines_activity_categories(execution_id)
+
+        logger.info(
+            "etl.cm_readthrough.categories_loaded",
+            execution_id=execution_id,
+            outlook_categories=len(outlook_categories),
+            section2_categories=len(qa_market_vol_reg_categories),
+            section3_categories=len(qa_pipelines_activity_categories),
+        )
+
+        ssl_config = setup_ssl()
+        auth_config = await setup_authentication(execution_id=execution_id, ssl_config=ssl_config)
+
+        if not auth_config["success"]:
+            error_msg = f"Authentication failed: {auth_config.get('error', 'Unknown error')}"
+            logger.error(
+                "etl.cm_readthrough.auth_failed", execution_id=execution_id, error=error_msg
+            )
+            raise RuntimeError(error_msg)
+
+        context = {
+            "execution_id": execution_id,
+            "ssl_config": ssl_config,
+            "auth_config": auth_config,
+        }
+
+        # Stage 2: Transcript Retrieval & Extraction (Parallel)
+        results = await process_all_banks_parallel(
+            fiscal_year=fiscal_year,
+            quarter=quarter,
+            context=context,
+            use_latest=use_latest,
+            outlook_categories=outlook_categories,
+            qa_market_vol_reg_categories=qa_market_vol_reg_categories,
+            qa_pipelines_activity_categories=qa_pipelines_activity_categories,
+        )
+
+        if not results or (
+            not results.get("outlook")
+            and not results.get("section2_questions")
+            and not results.get("section3_questions")
+        ):
+            raise ValueError(
+                f"No results generated for {quarter} {fiscal_year}. "
+                "No banks had available data for the specified period."
+            )
+
+        output_dir = Path(__file__).parent / "output"
+        output_dir.mkdir(exist_ok=True)
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        content_hash = hashlib.md5(f"{fiscal_year}_{quarter}_{timestamp}".encode()).hexdigest()[:8]
+
+        if output_path:
+            docx_path = Path(output_path)
+        else:
+            docx_path = output_dir / f"CM_Readthrough_{fiscal_year}_{quarter}_{content_hash}.docx"
+
+        create_combined_document(results, str(docx_path))
+        logger.info(
+            "etl.cm_readthrough.document_saved", execution_id=execution_id, filepath=str(docx_path)
+        )
+
+        docx_filename = docx_path.name
+
+        await save_to_database(
+            results=results,
+            fiscal_year=fiscal_year,
+            quarter=quarter,
+            execution_id=execution_id,
+            local_filepath=str(docx_path),
+            s3_document_name=docx_filename,
+        )
+
+        metadata = results.get("metadata", {})
+        banks_with_outlook = metadata.get("banks_with_outlook", 0)
+        banks_with_section2 = metadata.get("banks_with_section2", 0)
+        banks_with_section3 = metadata.get("banks_with_section3", 0)
+        total_banks = metadata.get("banks_processed", 0)
+
+        logger.info(
+            "etl.cm_readthrough.completed",
+            execution_id=execution_id,
+            banks_with_data=f"{banks_with_outlook}/{total_banks} outlook, "
+            f"{banks_with_section2}/{total_banks} section2, "
+            f"{banks_with_section3}/{total_banks} section3",
+        )
+
+        return (
+            f"✅ Complete: {docx_path}\n"
+            f"   Banks: {banks_with_outlook}/{total_banks} outlook, "
+            f"{banks_with_section2}/{total_banks} section2, "
+            f"{banks_with_section3}/{total_banks} section3"
+        )
+
+    except (
+        KeyError,
+        TypeError,
+        AttributeError,
+        json.JSONDecodeError,
+        FileNotFoundError,
+    ) as e:
+        # System errors - unexpected, likely code bugs
+        error_msg = f"Error generating CM readthrough: {str(e)}"
+        logger.error(
+            "etl.cm_readthrough.error", execution_id=execution_id, error=error_msg, exc_info=True
+        )
+        return f"❌ {error_msg}"
+    except (ValueError, RuntimeError) as e:
+        # User-friendly errors - expected conditions (no data, auth failure, etc.)
+        logger.error("etl.cm_readthrough.error", execution_id=execution_id, error=str(e))
+        return f"⚠️ {str(e)}"
+
+
+def main():
+    """Main entry point for command-line execution."""
     parser = argparse.ArgumentParser(
-        description="Generate CM Readthrough report for all monitored institutions"
+        description="Generate CM readthrough report for all monitored institutions",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
+
+    parser.add_argument("--year", type=int, required=True, help="Fiscal year")
     parser.add_argument(
-        "--year",
-        type=int,
-        required=True,
-        help="Fiscal year (e.g., 2024)"
-    )
-    parser.add_argument(
-        "--quarter",
-        type=str,
-        required=True,
-        help="Quarter (e.g., Q3)"
+        "--quarter", required=True, choices=["Q1", "Q2", "Q3", "Q4"], help="Quarter"
     )
     parser.add_argument(
         "--use-latest",
         action="store_true",
-        help="Use latest available quarter if newer than specified (minimum quarter mode)"
+        help="Use latest available quarter if newer than specified",
     )
-    parser.add_argument(
-        "--output",
-        type=str,
-        help="Output file path (optional)"
-    )
-    parser.add_argument(
-        "--no-pdf",
-        action="store_true",
-        help="Skip PDF generation"
-    )
+    parser.add_argument("--output", type=str, help="Output file path (optional)")
 
     args = parser.parse_args()
 
-    # Generate execution ID
-    execution_id = uuid.uuid4()
-    logger.info(f"Starting CM Readthrough ETL with execution_id: {execution_id}")
+    postgresql_prompts()
 
-    # Setup context
-    ssl_config = setup_ssl()
-    auth_config = await setup_authentication(execution_id=str(execution_id), ssl_config=ssl_config)
+    print(f"\n🔄 Generating CM readthrough for {args.quarter} {args.year}...\n")
 
-    context = {
-        "execution_id": str(execution_id),
-        "ssl_config": ssl_config,
-        "auth_config": auth_config
-    }
-
-    # Process all banks
-    try:
-        results = await process_all_banks_parallel(
+    result = asyncio.run(
+        generate_cm_readthrough(
             fiscal_year=args.year,
             quarter=args.quarter,
-            context=context,
-            use_latest=args.use_latest
+            use_latest=args.use_latest,
+            output_path=args.output,
         )
+    )
 
-        if not results or (not results.get("outlook") and not results.get("questions")):
-            logger.warning("No results generated")
-            return
+    print(result)
 
-        # Generate document
-        output_dir = Path(__file__).parent / "output"
-        output_dir.mkdir(exist_ok=True)
-
-        # Create filename with timestamp for uniqueness
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        content_hash = hashlib.md5(
-            f"{args.year}_{args.quarter}_{timestamp}".encode()
-        ).hexdigest()[:8]
-
-        if args.output:
-            docx_path = Path(args.output)
-        else:
-            docx_path = output_dir / f"CM_Readthrough_{args.year}_{args.quarter}_{content_hash}.docx"
-
-        # Create Word document
-        create_combined_document(results, str(docx_path))
-        logger.info(f"Word document created: {docx_path}")
-
-        # Convert to PDF if requested
-        pdf_path = None
-        if not args.no_pdf:
-            pdf_path = str(docx_path).replace(".docx", ".pdf")
-            if convert_docx_to_pdf(str(docx_path), pdf_path):
-                logger.info(f"PDF created: {pdf_path}")
-
-        # Generate markdown for database
-        markdown_content = structured_data_to_markdown(results)
-
-        # Extract filenames for S3 placeholders (matching call_summary and key_themes pattern)
-        docx_filename = docx_path.name
-        pdf_filename = Path(pdf_path).name if pdf_path else None
-
-        # Save to database with file paths
-        await save_to_database(
-            results=results,
-            fiscal_year=args.year,
-            quarter=args.quarter,
-            markdown_content=markdown_content,
-            execution_id=execution_id,
-            local_filepath=str(docx_path),
-            s3_document_name=docx_filename,  # Placeholder - will be updated when uploaded to S3
-            s3_pdf_name=pdf_filename  # Placeholder - will be updated when uploaded to S3
-        )
-
-        logger.info(f"CM Readthrough ETL completed successfully")
-
-    except Exception as e:
-        logger.error(f"Error in CM Readthrough ETL: {e}", exc_info=True)
-        raise
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()

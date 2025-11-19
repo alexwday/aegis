@@ -121,7 +121,7 @@ def _load_monitored_institutions() -> Dict[int, Dict[str, Any]]:
     Load and cache monitored institutions configuration.
 
     Returns:
-        Dictionary mapping bank_id to institution details (id, name, type, path_safe_name)
+        Dictionary mapping bank_id to institution details (id, name, symbol, type, path_safe_name)
     """
     global _MONITORED_INSTITUTIONS
     if _MONITORED_INSTITUTIONS is None:
@@ -129,12 +129,64 @@ def _load_monitored_institutions() -> Dict[int, Dict[str, Any]]:
             os.path.dirname(__file__), "config", "monitored_institutions.yaml"
         )
         with open(config_path, "r", encoding="utf-8") as f:
-            data = yaml.safe_load(f)
-        _MONITORED_INSTITUTIONS = {inst["id"]: inst for inst in data.values()}
+            yaml_data = yaml.safe_load(f)
+
+        # Build dict with bank_id as key, adding symbol from YAML key
+        _MONITORED_INSTITUTIONS = {}
+        for key, value in yaml_data.items():
+            symbol = key.split("-")[0]  # Extract symbol from "RY-CA" -> "RY"
+            _MONITORED_INSTITUTIONS[value["id"]] = {**value, "symbol": symbol}
     return _MONITORED_INSTITUTIONS
 
 
-def load_categories_from_xlsx(bank_type: str, execution_id: str) -> List[Dict[str, str]]:
+def format_categories_for_prompt(categories: List[Dict[str, Any]]) -> str:
+    """
+    Format category dictionaries into standardized XML format for prompt injection.
+
+    This is the standardized formatting function used across all ETLs (Call Summary,
+    Key Themes, CM Readthrough) to ensure consistent category presentation to LLMs.
+
+    Args:
+        categories: List of category dicts with standardized 6-column format
+
+    Returns:
+        Formatted XML string with category information
+    """
+    formatted_sections = []
+
+    for cat in categories:
+        # Map transcript_sections to human-readable description
+        section_desc = {
+            "MD": "Management Discussion section only",
+            "QA": "Q&A section only",
+            "ALL": "Both Management Discussion and Q&A sections",
+        }.get(cat.get("transcript_sections", "ALL"), "ALL sections")
+
+        section = "<category>\n"
+        section += f"<name>{cat['category_name']}</name>\n"
+        section += f"<section>{section_desc}</section>\n"
+        section += f"<description>{cat['category_description']}</description>\n"
+
+        # Collect non-empty examples
+        examples = []
+        for i in range(1, 4):
+            example_key = f"example_{i}"
+            if cat.get(example_key) and cat[example_key].strip():
+                examples.append(cat[example_key])
+
+        if examples:
+            section += "<examples>\n"
+            for example in examples:
+                section += f"  <example>{example}</example>\n"
+            section += "</examples>\n"
+
+        section += "</category>"
+        formatted_sections.append(section)
+
+    return "\n\n".join(formatted_sections)
+
+
+def load_categories_from_xlsx(bank_type: str, execution_id: str) -> List[Dict[str, Any]]:
     """
     Load categories from the appropriate XLSX file based on bank type.
 
@@ -143,7 +195,8 @@ def load_categories_from_xlsx(bank_type: str, execution_id: str) -> List[Dict[st
         execution_id: Execution ID for logging
 
     Returns:
-        List of dictionaries with transcripts_section, category_name, and category_description
+        List of dictionaries with transcript_sections, category_name, category_description,
+        example_1, example_2, example_3
     """
     file_name = (
         "canadian_banks_categories.xlsx"
@@ -160,12 +213,30 @@ def load_categories_from_xlsx(bank_type: str, execution_id: str) -> List[Dict[st
     try:
         df = pd.read_excel(xlsx_path, sheet_name=0)
 
-        required_columns = ["transcripts_section", "category_name", "category_description"]
+        # Required columns for standard format
+        required_columns = ["transcript_sections", "category_name", "category_description"]
         missing_columns = [col for col in required_columns if col not in df.columns]
         if missing_columns:
             raise ValueError(f"Missing required columns in {file_name}: {missing_columns}")
 
-        categories = df.to_dict("records")
+        # Optional example columns
+        optional_columns = ["example_1", "example_2", "example_3"]
+        for col in optional_columns:
+            if col not in df.columns:
+                df[col] = ""  # Add empty column if not present
+
+        # Convert to list of dicts, ensuring all 6 columns are present
+        categories = []
+        for _, row in df.iterrows():
+            category = {
+                "transcript_sections": str(row["transcript_sections"]).strip(),
+                "category_name": str(row["category_name"]).strip(),
+                "category_description": str(row["category_description"]).strip(),
+                "example_1": str(row["example_1"]).strip() if pd.notna(row["example_1"]) else "",
+                "example_2": str(row["example_2"]).strip() if pd.notna(row["example_2"]) else "",
+                "example_3": str(row["example_3"]).strip() if pd.notna(row["example_3"]) else "",
+            }
+            categories.append(category)
 
         if not categories:
             raise ValueError(f"No categories in {file_name}")
@@ -189,93 +260,98 @@ def load_categories_from_xlsx(bank_type: str, execution_id: str) -> List[Dict[st
         raise RuntimeError(error_msg) from e
 
 
-def get_bank_type(bank_id: int) -> str:
+def get_bank_info_from_config(bank_identifier: str) -> Dict[str, Any]:
     """
-    Look up bank type from monitored institutions configuration.
+    Look up bank from monitored institutions configuration file.
 
     Args:
-        bank_id: Bank ID from database
+        bank_identifier: Bank ID (as string/int), symbol (e.g., "RY"), or name
 
     Returns:
-        "Canadian_Banks" or "US_Banks"
+        Dictionary with bank_id, bank_name, bank_symbol, bank_type
 
     Raises:
-        ValueError: If bank_id not found in monitored institutions
+        ValueError: If bank not found in monitored institutions
     """
     institutions = _load_monitored_institutions()
-    if bank_id not in institutions:
-        raise ValueError(f"Bank ID {bank_id} not found in monitored institutions")
-    return institutions[bank_id]["type"]
+
+    # Try lookup by ID
+    if bank_identifier.isdigit():
+        bank_id = int(bank_identifier)
+        if bank_id in institutions:
+            inst = institutions[bank_id]
+            return {
+                "bank_id": inst["id"],
+                "bank_name": inst["name"],
+                "bank_symbol": inst["symbol"],
+                "bank_type": inst["type"],
+            }
+
+    # Try lookup by symbol or name
+    bank_identifier_upper = bank_identifier.upper()
+    bank_identifier_lower = bank_identifier.lower()
+
+    for inst in institutions.values():
+        # Match by symbol (case-insensitive)
+        if inst["symbol"].upper() == bank_identifier_upper:
+            return {
+                "bank_id": inst["id"],
+                "bank_name": inst["name"],
+                "bank_symbol": inst["symbol"],
+                "bank_type": inst["type"],
+            }
+
+        # Match by name (case-insensitive, partial match)
+        if bank_identifier_lower in inst["name"].lower():
+            return {
+                "bank_id": inst["id"],
+                "bank_name": inst["name"],
+                "bank_symbol": inst["symbol"],
+                "bank_type": inst["type"],
+            }
+
+    # Build helpful error message with available banks
+    available = [f"{inst['symbol']} ({inst['name']})" for inst in institutions.values()]
+    raise ValueError(
+        f"Bank '{bank_identifier}' not found in monitored institutions.\n"
+        f"Available banks: {', '.join(sorted(available))}"
+    )
 
 
-async def get_bank_info(bank_name: str) -> Dict[str, Any]:
+async def verify_and_get_availability(
+    bank_id: int, bank_name: str, fiscal_year: int, quarter: str
+) -> None:
     """
-    Look up bank information from the aegis_data_availability table.
+    Verify transcript data is available for the specified bank and period.
 
     Args:
-        bank_name: Name, symbol, or ID of the bank
-
-    Returns:
-        Dictionary with bank_id, bank_name, and bank_symbol
+        bank_id: Bank ID
+        bank_name: Bank name (for error messages)
+        fiscal_year: Year (e.g., 2024)
+        quarter: Quarter (e.g., "Q3")
 
     Raises:
-        ValueError: If bank not found
+        ValueError: If transcript data not available
     """
     async with get_connection() as conn:
-        if bank_name.isdigit():
-            result = await conn.execute(
-                text(
-                    """
-                SELECT DISTINCT bank_id, bank_name, bank_symbol
+        result = await conn.execute(
+            text(
+                """
+                SELECT database_names
                 FROM aegis_data_availability
                 WHERE bank_id = :bank_id
-                LIMIT 1
+                  AND fiscal_year = :fiscal_year
+                  AND quarter = :quarter
                 """
-                ),
-                {"bank_id": int(bank_name)},
-            )
-            row = result.fetchone()
-            result = row._asdict() if row else None
-        else:
-            result = await conn.execute(
-                text(
-                    """
-                SELECT DISTINCT bank_id, bank_name, bank_symbol
-                FROM aegis_data_availability
-                WHERE LOWER(bank_name) = LOWER(:bank_name)
-                   OR LOWER(bank_symbol) = LOWER(:bank_name)
-                LIMIT 1
-                """
-                ),
-                {"bank_name": bank_name},
-            )
-            row = result.fetchone()
-            result = row._asdict() if row else None
+            ),
+            {"bank_id": bank_id, "fiscal_year": fiscal_year, "quarter": quarter},
+        )
+        row = result.fetchone()
 
-            if not result:
-                partial_result = await conn.execute(
-                    text(
-                        """
-                    SELECT DISTINCT bank_id, bank_name, bank_symbol
-                    FROM aegis_data_availability
-                    WHERE LOWER(bank_name) LIKE LOWER(:pattern)
-                       OR LOWER(bank_symbol) LIKE LOWER(:pattern)
-                    LIMIT 1
-                    """
-                    ),
-                    {"pattern": f"%{bank_name}%"},
-                )
-                row = partial_result.fetchone()
-                result = row._asdict() if row else None
+        if row and row[0] and "transcripts" in row[0]:
+            return
 
-        if not result:
-            raise ValueError(f"Bank '{bank_name}' not found")
-
-        return {
-            "bank_id": result["bank_id"],
-            "bank_name": result["bank_name"],
-            "bank_symbol": result["bank_symbol"],
-        }
+        raise ValueError(f"No transcript data available for {bank_name} {quarter} {fiscal_year}")
 
 
 async def _generate_research_plan(
@@ -438,7 +514,7 @@ async def _process_categories(
             continue
 
         chunks = await retrieve_full_section(
-            combo=retrieval_params, sections=category["transcripts_section"], context=context
+            combo=retrieval_params, sections=category["transcript_sections"], context=context
         )
 
         if not chunks:
@@ -449,7 +525,7 @@ async def _process_categories(
                     "report_section": category.get("report_section", "Results Summary"),
                     "rejected": True,
                     "rejection_reason": (
-                        f"No {category['transcripts_section']} section data available"
+                        f"No {category['transcript_sections']} section data available"
                     ),
                 }
             )
@@ -471,14 +547,14 @@ async def _process_categories(
             fiscal_year=fiscal_year,
             category_name=category["category_name"],
             category_description=category["category_description"],
-            transcripts_section=category["transcripts_section"],
+            transcripts_section=category["transcript_sections"],
             research_plan=category_plan["extraction_strategy"],
             cross_category_notes=category_plan.get("cross_category_notes", ""),
             previous_sections=previous_summary,
             extracted_themes=extracted_themes,
         )
 
-        user_prompt = f"Extract content from this transcript section:\n\n{formatted_section}"
+        user_prompt = extraction_prompts["user_prompt"].format(formatted_section=formatted_section)
 
         messages = [
             {"role": "system", "content": system_prompt},
@@ -733,39 +809,6 @@ async def _save_to_database(
         logger.error("etl.call_summary.database_error", execution_id=execution_id, error=str(e))
 
 
-async def verify_data_availability(bank_id: int, fiscal_year: int, quarter: str) -> bool:
-    """
-    Check if transcript data is available for the specified bank and period.
-
-    Args:
-        bank_id: Bank ID
-        fiscal_year: Year (e.g., 2024)
-        quarter: Quarter (e.g., "Q3")
-
-    Returns:
-        True if transcript data is available, False otherwise
-    """
-    async with get_connection() as conn:
-        result = await conn.execute(
-            text(
-                """
-            SELECT database_names
-            FROM aegis_data_availability
-            WHERE bank_id = :bank_id
-              AND fiscal_year = :fiscal_year
-              AND quarter = :quarter
-            """
-            ),
-            {"bank_id": bank_id, "fiscal_year": fiscal_year, "quarter": quarter},
-        )
-        row = result.fetchone()
-
-        if row and row[0]:
-            return "transcripts" in row[0]
-
-        return False
-
-
 async def generate_call_summary(bank_name: str, fiscal_year: int, quarter: str) -> str:
     """
     Generate a call summary by directly calling transcript functions.
@@ -788,37 +831,13 @@ async def generate_call_summary(bank_name: str, fiscal_year: int, quarter: str) 
     )
 
     try:
-        bank_info = await get_bank_info(bank_name)
+        # Get bank info from monitored institutions config
+        bank_info = get_bank_info_from_config(bank_name)
 
-        if not await verify_data_availability(bank_info["bank_id"], fiscal_year, quarter):
-            error_msg = (
-                f"No transcript data available for {bank_info['bank_name']} {quarter} {fiscal_year}"
-            )
-
-            async with get_connection() as conn:
-                result = await conn.execute(
-                    text(
-                        """
-                    SELECT DISTINCT fiscal_year, quarter
-                    FROM aegis_data_availability
-                    WHERE bank_id = :bank_id
-                      AND 'transcripts' = ANY(database_names)
-                    ORDER BY fiscal_year DESC, quarter DESC
-                    LIMIT 10
-                    """
-                    )
-                )
-                available_periods = await result.fetchall()
-
-                if available_periods:
-                    period_list = ", ".join(
-                        [f"{p['quarter']} {p['fiscal_year']}" for p in available_periods]
-                    )
-                    error_msg += (
-                        f"\n\nAvailable periods for {bank_info['bank_name']}: {period_list}"
-                    )
-
-            raise ValueError(error_msg)
+        # Verify data availability (single database check)
+        await verify_and_get_availability(
+            bank_info["bank_id"], bank_info["bank_name"], fiscal_year, quarter
+        )
 
         ssl_config = setup_ssl()
         auth_config = await setup_authentication(execution_id, ssl_config)
@@ -834,8 +853,7 @@ async def generate_call_summary(bank_name: str, fiscal_year: int, quarter: str) 
             "ssl_config": ssl_config,
         }
 
-        bank_type = get_bank_type(bank_info["bank_id"])
-        categories = load_categories_from_xlsx(bank_type, execution_id)
+        categories = load_categories_from_xlsx(bank_info["bank_type"], execution_id)
 
         retrieval_params = {
             "bank_id": bank_info["bank_id"],
@@ -868,20 +886,8 @@ async def generate_call_summary(bank_name: str, fiscal_year: int, quarter: str) 
             execution_id=execution_id,
         )
 
-        categories_text = ""
-        for i, category in enumerate(categories, 1):
-            section_desc = {
-                "MD": "Management Discussion section only",
-                "QA": "Q&A section only",
-                "ALL": "Both Management Discussion and Q&A sections",
-            }.get(category["transcripts_section"], "ALL sections")
-
-            categories_text += f"""
-Category {i}:
-- Name: {category['category_name']}
-- Section: {section_desc}
-- Instructions: {category['category_description']}
-"""
+        # Format categories using standardized XML format
+        categories_text = format_categories_for_prompt(categories)
 
         research_prompts["system_prompt"] = research_prompts["system_prompt"].format(
             categories_list=categories_text,
@@ -891,9 +897,7 @@ Category {i}:
             fiscal_year=fiscal_year,
         )
 
-        research_prompts["user_prompt_template"] = (
-            "Analyze this transcript and create the research plan:\n\n{transcript_text}"
-        )
+        research_prompts["user_prompt_template"] = research_prompts["user_prompt"]
 
         research_plan_data = await _generate_research_plan(
             context, research_prompts, formatted_transcript, execution_id
@@ -914,7 +918,7 @@ Category {i}:
             "fiscal_year": fiscal_year,
             "context": context,
             "execution_id": execution_id,
-            "bank_type": bank_type,
+            "bank_type": bank_info["bank_type"],
         }
 
         category_results = await _process_categories(

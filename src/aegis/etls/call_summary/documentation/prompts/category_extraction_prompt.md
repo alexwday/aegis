@@ -218,6 +218,16 @@ IMPORTANT:
 
 ---
 
+## User Prompt
+
+```
+Extract content from this transcript section:
+
+{formatted_section}
+```
+
+---
+
 ## Tool Definition
 
 ```json

@@ -57,5 +57,4 @@ The ETL leverages core Aegis infrastructure for database access, LLM operations,
 | **Utils** | `aegis.utils.logging` | Structured logging with execution tracking and colored output |
 | **Utils** | `aegis.utils.ssl` | SSL certificate configuration for secure API connections |
 | **Utils** | `aegis.utils.prompt_loader` | Database-based prompt retrieval and loading system |
-| **ETL Config** | `aegis.etls.config_loader` | YAML-based configuration loader for model tiers and parameters |
-| **Transcript Utils** | `aegis.etls.call_summary.transcript_utils` | Self-contained transcript retrieval and formatting utilities |
+| **Utils** | `aegis.utils.settings` | Singleton configuration management with .env file support |

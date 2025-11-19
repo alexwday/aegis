@@ -230,7 +230,7 @@ def theme_groups_to_markdown(
         Markdown-formatted string
     """
 
-    ticker = bank_info.get('ticker', bank_info.get('bank_symbol', 'Unknown'))
+    ticker = bank_info.get("ticker", bank_info.get("bank_symbol", "Unknown"))
     markdown = f"# Key Themes Analysis - {ticker} {quarter} {fiscal_year}\n\n"
 
     for i, group in enumerate(theme_groups, 1):
