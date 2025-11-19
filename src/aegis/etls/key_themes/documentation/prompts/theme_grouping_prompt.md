@@ -3,7 +3,7 @@
 ## Metadata
 - **Model**: aegis
 - **Layer**: key_themes_etl
-- **Name**: grouping
+- **Name**: theme_grouping
 - **Version**: 6.0
 - **Framework**: CO-STAR+XML
 - **Purpose**: Review category classifications, regroup if needed, and generate dynamic context-specific titles
