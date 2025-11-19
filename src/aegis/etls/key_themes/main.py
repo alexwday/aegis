@@ -720,16 +720,6 @@ async def determine_comprehensive_grouping(
         execution_id=execution_id,
     )
 
-    # CRITICAL: Log what we got from the database
-    logger.info(
-        "regrouping.prompt_loaded",
-        execution_id=execution_id,
-        prompt_keys=list(prompt_data.keys()),
-        has_system_prompt=bool(prompt_data.get("system_prompt")),
-        has_tool_definition=bool(prompt_data.get("tool_definition")),
-        tool_definition_type=type(prompt_data.get("tool_definition")).__name__,
-    )
-
     qa_blocks_info = []
     for qa_id, qa_block in sorted(valid_qa_blocks.items(), key=lambda x: x[1].position):
         qa_blocks_info.append(
@@ -743,34 +733,16 @@ async def determine_comprehensive_grouping(
     # Format categories using standardized XML format
     categories_str = format_categories_for_prompt(categories)
 
-    # CRITICAL: Try to format system prompt and catch KeyError if placeholder is missing
-    try:
-        system_prompt = prompt_data["system_prompt"].format(
-            bank_name=context.get("bank_name", "Bank"),
-            bank_symbol=context.get("bank_symbol", "BANK"),
-            quarter=context.get("quarter", "Q"),
-            fiscal_year=context.get("fiscal_year", "Year"),
-            total_qa_blocks=len(valid_qa_blocks),
-            qa_blocks_info=qa_blocks_str,
-            categories_list=categories_str,
-            num_categories=len(categories),
-        )
-        logger.info(
-            "regrouping.system_prompt_formatted",
-            execution_id=execution_id,
-            prompt_length=len(system_prompt),
-        )
-    except KeyError as e:
-        logger.error(
-            "regrouping.format_error",
-            execution_id=execution_id,
-            missing_placeholder=str(e),
-            message=f"System prompt contains placeholder {e} that wasn't provided",
-        )
-        raise KeyError(
-            f"theme_grouping system_prompt has placeholder {e} that isn't being provided. "
-            f"Check the prompt in the database."
-        ) from e
+    system_prompt = prompt_data["system_prompt"].format(
+        bank_name=context.get("bank_name", "Bank"),
+        bank_symbol=context.get("bank_symbol", "BANK"),
+        quarter=context.get("quarter", "Q"),
+        fiscal_year=context.get("fiscal_year", "Year"),
+        total_qa_blocks=len(valid_qa_blocks),
+        qa_blocks_info=qa_blocks_str,
+        categories_list=categories_str,
+        num_categories=len(categories),
+    )
 
     messages = [
         {"role": "system", "content": system_prompt},
@@ -780,34 +752,11 @@ async def determine_comprehensive_grouping(
         },
     ]
 
-    # Debug: Log the tool definition being sent
-    logger.debug(
-        "regrouping.tool_definition",
-        execution_id=execution_id,
-        tool_def_type=type(prompt_data.get("tool_definition")).__name__,
-        tool_def_keys=list(prompt_data.get("tool_definition", {}).keys()) if isinstance(prompt_data.get("tool_definition"), dict) else None,
-        tool_def_preview=str(prompt_data.get("tool_definition"))[:500],
-    )
-
-    # CRITICAL: Check if tool_definition exists before proceeding
-    if "tool_definition" not in prompt_data or prompt_data["tool_definition"] is None:
-        logger.error(
-            "regrouping.missing_tool_definition",
-            execution_id=execution_id,
-            prompt_data_keys=list(prompt_data.keys()),
-            message="tool_definition is missing or None in prompt_data - cannot proceed with LLM call"
-        )
-        raise KeyError(
-            f"theme_grouping prompt missing 'tool_definition'. "
-            f"Available keys: {list(prompt_data.keys())}"
-        )
-
     logger.info(
         "regrouping.llm_request",
         execution_id=execution_id,
         num_qa_blocks=len(valid_qa_blocks),
         system_prompt_length=len(system_prompt),
-        tool_definition_exists=True,
     )
 
     max_retries = 3
@@ -815,15 +764,6 @@ async def determine_comprehensive_grouping(
 
     for attempt in range(max_retries):
         try:
-            # CRITICAL: Log right before making LLM call
-            logger.info(
-                "regrouping.about_to_call_llm",
-                execution_id=execution_id,
-                attempt=attempt + 1,
-                messages_count=len(messages),
-                tools_count=1,
-            )
-
             response = await complete_with_tools(
                 messages=messages,
                 tools=[prompt_data["tool_definition"]],
@@ -833,13 +773,6 @@ async def determine_comprehensive_grouping(
                     "temperature": etl_config.temperature,
                     "max_tokens": etl_config.max_tokens,
                 },
-            )
-
-            # CRITICAL: Log that LLM call returned
-            logger.info(
-                "regrouping.llm_returned",
-                execution_id=execution_id,
-                response_received=True,
             )
 
             # Debug: Log raw response structure
