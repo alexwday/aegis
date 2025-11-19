@@ -743,16 +743,34 @@ async def determine_comprehensive_grouping(
     # Format categories using standardized XML format
     categories_str = format_categories_for_prompt(categories)
 
-    system_prompt = prompt_data["system_prompt"].format(
-        bank_name=context.get("bank_name", "Bank"),
-        bank_symbol=context.get("bank_symbol", "BANK"),
-        quarter=context.get("quarter", "Q"),
-        fiscal_year=context.get("fiscal_year", "Year"),
-        total_qa_blocks=len(valid_qa_blocks),
-        qa_blocks_info=qa_blocks_str,
-        categories_list=categories_str,
-        num_categories=len(categories),
-    )
+    # CRITICAL: Try to format system prompt and catch KeyError if placeholder is missing
+    try:
+        system_prompt = prompt_data["system_prompt"].format(
+            bank_name=context.get("bank_name", "Bank"),
+            bank_symbol=context.get("bank_symbol", "BANK"),
+            quarter=context.get("quarter", "Q"),
+            fiscal_year=context.get("fiscal_year", "Year"),
+            total_qa_blocks=len(valid_qa_blocks),
+            qa_blocks_info=qa_blocks_str,
+            categories_list=categories_str,
+            num_categories=len(categories),
+        )
+        logger.info(
+            "regrouping.system_prompt_formatted",
+            execution_id=execution_id,
+            prompt_length=len(system_prompt),
+        )
+    except KeyError as e:
+        logger.error(
+            "regrouping.format_error",
+            execution_id=execution_id,
+            missing_placeholder=str(e),
+            message=f"System prompt contains placeholder {e} that wasn't provided",
+        )
+        raise KeyError(
+            f"theme_grouping system_prompt has placeholder {e} that isn't being provided. "
+            f"Check the prompt in the database."
+        ) from e
 
     messages = [
         {"role": "system", "content": system_prompt},
