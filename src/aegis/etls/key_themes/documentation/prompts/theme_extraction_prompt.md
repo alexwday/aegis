@@ -1,14 +1,14 @@
-# Theme Extraction Prompt - v4.0
+# Theme Extraction Prompt - v4.1
 
 ## Metadata
 - **Model**: aegis
 - **Layer**: key_themes_etl
 - **Name**: theme_extraction
-- **Version**: 4.0
+- **Version**: 4.1
 - **Framework**: CO-STAR+XML
 - **Purpose**: Validate Q&A content and classify into predefined categories with cumulative context
 - **Token Target**: 32768
-- **Last Updated**: 2025-11-18
+- **Last Updated**: 2025-11-19
 
 ---
 
@@ -51,27 +51,54 @@ USE THESE PREVIOUS CLASSIFICATIONS TO:
 </objective>
 
 <validation_criteria>
-Mark as INVALID (is_valid=false) if the content:
-- Only contains operator statements like "Next question please" or "Our next question comes from..."
-- Is missing either the analyst question or executive response
-- Contains only administrative content without business substance
-- Is a fragment or incomplete exchange
-- Contains only "Thank you for your question" without substantive response
-- Is cut off mid-sentence or has technical difficulties noted
-- Contains audio issues or connection problems
+Mark as INVALID (is_valid=false) ONLY if the content:
+- Contains ONLY operator statements: "Next question please", "Our next question comes from..."
+- Contains ONLY administrative content: "That concludes our Q&A", "Thank you for joining"
+- Is completely non-substantive (no business information)
+- Contains only "Thank you" with no business content
+- Has technical difficulties noted with no actual Q&A content
 - Is a duplicate or repetition of previous content
 
-Mark as VALID (is_valid=true) if the content:
-- Contains both an analyst question AND executive response
-- Discusses business metrics, strategy, guidance, or operations
-- Provides substantive information for executive decision-making
-- Contains actionable insights or forward-looking statements
+Mark as VALID (is_valid=true) if the content contains ANY of the following:
+- Both analyst question AND executive response (complete Q&A)
+- ONLY analyst question BUT discusses substantive business topic
+- ONLY executive response BUT provides substantive business information
+- Any configuration with meaningful business content
 
-Edge cases that are STILL VALID:
-- Multiple analysts asking follow-up questions in the same Q&A (process as one unit)
-- Executive providing unsolicited clarification without a question (if substantive)
-- Analyst follow-up mid-response (include the full exchange)
+IMPORTANT: Prefer inclusion over exclusion. If there's business value, mark as valid even if incomplete.
+
+Edge cases that are VALID:
+- Question without answer (mark valid with completion_status="question_only")
+- Answer without question (mark valid with completion_status="answer_only" if substantive)
+- Multiple analysts asking follow-up questions (process as one unit)
+- Executive providing unsolicited clarification (if substantive)
+- Fragment of Q&A that contains business information
 </validation_criteria>
+
+<incomplete_qa_handling>
+For Q&As that are incomplete but business-significant, use the completion_status field:
+
+COMPLETE Q&A (both question and answer present):
+- completion_status: "complete"
+- Classify based on full exchange
+- Summary covers both question and response
+
+QUESTION WITHOUT ANSWER:
+- completion_status: "question_only"
+- Mark as valid if question discusses substantive business topic
+- Classify into appropriate category based on question topic
+- Summary should note: "Analyst question about [topic] - response may be in separate block"
+- Example: "Analyst asked about NIM outlook and rate sensitivity - executive response not captured in this block"
+
+ANSWER WITHOUT QUESTION:
+- completion_status: "answer_only"
+- Mark as valid if response contains clear business substance
+- Classify based on response content (infer topic from answer)
+- Summary should note: "Executive response about [topic] - question may be in separate block"
+- Example: "Executive discussed CET1 target of 11.5% and capital deployment strategy - analyst question not captured in this block"
+
+RATIONALE: Transcript chunking sometimes separates Q&A pairs. We preserve business value by including incomplete exchanges with clear notation, allowing users to see all substantive content rather than losing information to data quality issues.
+</incomplete_qa_handling>
 
 <classification_strategy>
 <category_matching>
@@ -129,16 +156,21 @@ Financial executives who need standardized, comparable earnings call analysis
 <response_format>
 For VALID Q&As (is_valid=true):
 - is_valid: true
+- completion_status: "complete" | "question_only" | "answer_only"
 - category_name: Exact category name from the predefined list (must match exactly)
 - summary: 2-3 sentence overview for final grouping/titling (NOT the final content):
-  • Sentence 1: Core topic and what the analyst asked about
-  • Sentence 2: Key data points, metrics, or guidance mentioned
-  • Sentence 3: Strategic context to help with grouping similar Q&As
+  • For complete Q&As:
+    - Sentence 1: Core topic and what the analyst asked about
+    - Sentence 2: Key data points, metrics, or guidance mentioned
+    - Sentence 3: Strategic context to help with grouping similar Q&As
+  • For question_only: "Analyst question about [topic] - response may be in separate block"
+  • For answer_only: "Executive response about [topic] - question may be in separate block"
   • Note: This is metadata only - full verbatim content is preserved in formatting step
 - rejection_reason: "" (empty string)
 
 For INVALID Q&As (is_valid=false):
 - is_valid: false
+- completion_status: "" (empty string)
 - category_name: "" (empty string)
 - summary: "" (empty string)
 - rejection_reason: "Brief explanation" (e.g., "Operator transition only", "No substantive Q&A content")
@@ -220,7 +252,12 @@ Output: is_valid=false, rejection_reason="Incomplete exchange with audio issues"
       "properties": {
         "is_valid": {
           "type": "boolean",
-          "description": "True if content contains actual Q&A exchange, False if only operator/transition statements"
+          "description": "True if content contains actual Q&A exchange or business substance, False if only operator/transition statements"
+        },
+        "completion_status": {
+          "type": "string",
+          "enum": ["complete", "question_only", "answer_only", ""],
+          "description": "Whether Q&A is complete (has both question and answer), question_only (has question but no answer), answer_only (has answer but no question), or empty string if is_valid=false"
         },
         "category_name": {
           "type": "string",
@@ -228,14 +265,14 @@ Output: is_valid=false, rejection_reason="Incomplete exchange with audio issues"
         },
         "summary": {
           "type": "string",
-          "description": "Concise 2-3 sentence summary for final grouping and titling purposes only (full content preserved separately in formatting step). Empty string if is_valid=false"
+          "description": "Concise 2-3 sentence summary for final grouping and titling purposes only (full content preserved separately in formatting step). For incomplete Q&As, note that question or answer may be in separate block. Empty string if is_valid=false"
         },
         "rejection_reason": {
           "type": "string",
           "description": "Brief explanation if is_valid=false (e.g., 'Operator transition only', 'No substantive content'). Empty string if is_valid=true"
         }
       },
-      "required": ["is_valid", "category_name", "summary", "rejection_reason"]
+      "required": ["is_valid", "completion_status", "category_name", "summary", "rejection_reason"]
     }
   }
 }
@@ -243,42 +280,45 @@ Output: is_valid=false, rejection_reason="Incomplete exchange with audio issues"
 
 ---
 
-## What Changed from v3.1
+## What Changed from v4.0
 
-Version 4.0 represents a fundamental shift from free-form theme extraction to category-based classification with cumulative context:
+Version 4.1 relaxes validation criteria to preserve incomplete but valuable Q&A exchanges:
 
 ### Major Changes:
-- **Category Classification**: Changed from extracting free-form `theme_title` to selecting from predefined `category_name`
-- **Cumulative Context**: Added `{previous_classifications}` placeholder to build context across sequential processing
-- **Categories List**: Added `{categories_list}` and `{num_categories}` placeholders for predefined categories
-- **Consistency Focus**: Emphasizes reusing existing categories from previous classifications to avoid fragmentation
-- **Hard Classification**: Requires exact category name match, no free-form titles
+- **Relaxed Validation**: Changed from rejecting incomplete Q&As to accepting them with notation
+- **New Field**: Added `completion_status` field with values: "complete", "question_only", "answer_only"
+- **Inclusive Philosophy**: "Prefer inclusion over exclusion" - capture business value even if incomplete
+- **Data Quality Tolerance**: Handle transcript chunking issues that separate Q&A pairs
 
-### Removed Elements:
-- `theme_title` field (replaced by `category_name`)
-- Free-form theme extraction
-- "Topic - Context" title format examples
+### Validation Changes:
+- REMOVED from invalid criteria: "Is missing either the analyst question or executive response"
+- ADDED to valid criteria: "ONLY analyst question BUT discusses substantive business topic"
+- ADDED to valid criteria: "ONLY executive response BUT provides substantive business information"
+- New section: `<incomplete_qa_handling>` with guidance for question_only and answer_only
 
-### Added Elements:
-- `{categories_list}` placeholder with predefined categories
-- `{num_categories}` placeholder for category count
-- `{previous_classifications}` placeholder for cumulative context
-- Category matching strategy and rules
-- Consistency guidelines with previous classifications
-- Exact category matching requirement
+### Tool Definition Changes:
+- Added required field: `completion_status` (enum: "complete" | "question_only" | "answer_only" | "")
+- Updated summary description to note incomplete Q&As should mention "may be in separate block"
+
+### Summary Format Changes:
+- For question_only: "Analyst question about [topic] - response may be in separate block"
+- For answer_only: "Executive response about [topic] - question may be in separate block"
+- For complete: Unchanged (3-sentence format)
 
 ### Preserved Elements:
-- Validation criteria (is_valid logic)
-- Summary extraction for grouping purposes
+- Category classification (still uses 13 predefined categories)
+- Cumulative context (still builds on previous classifications)
 - Professional tone and C-suite audience
-- 2-3 sentence summary format
 - Same tool structure (extract_qa_theme function)
 
-### Benefits of v4.0:
-1. **Consistency**: Sequential processing with cumulative context ensures similar Q&As get same category
-2. **Standardization**: Predefined categories enable cross-call comparisons
-3. **Reduced Fragmentation**: Previous classifications prevent creating many small categories
-4. **Flexibility**: "Other" category handles edge cases while maintaining structure
+### Benefits of v4.1:
+1. **Reduced Information Loss**: Captures Q&As even when transcript chunking separates pairs
+2. **Data Quality Resilience**: Handles imperfect upstream data gracefully
+3. **Transparency**: Clear notation when Q&A is incomplete
+4. **Business Value**: Preserves substantive content that would have been rejected in v4.0
+
+### Why This Change:
+Business feedback indicated valuable content was being lost when transcript chunking separated questions from answers. Both pieces would be independently rejected, causing loss of business information. v4.1 preserves incomplete exchanges with clear notation rather than discarding them.
 
 ---
 

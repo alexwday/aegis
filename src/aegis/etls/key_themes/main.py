@@ -360,6 +360,7 @@ class QABlock:
         self.formatted_content = None
         self.assigned_group = None
         self.is_valid = True
+        self.completion_status = "complete"  # "complete", "question_only", or "answer_only"
 
 
 class ThemeGroup:
@@ -541,21 +542,25 @@ async def classify_qa_block(
             qa_block.is_valid = False
             qa_block.category_name = None
             qa_block.summary = None
+            qa_block.completion_status = ""
         else:
             category_name = result.get("category_name", "")
             summary = result.get("summary", "")
+            completion_status = result.get("completion_status", "complete")
 
             logger.info(
                 "category_classification.accepted",
                 execution_id=execution_id,
                 qa_id=qa_block.qa_id,
                 category_name=category_name,
+                completion_status=completion_status,
                 summary_preview=summary[:100],
             )
 
             qa_block.is_valid = True
             qa_block.category_name = category_name
             qa_block.summary = summary
+            qa_block.completion_status = completion_status
 
 
 async def format_qa_html(qa_block: QABlock, context: Dict[str, Any]):
@@ -583,15 +588,17 @@ async def format_qa_html(qa_block: QABlock, context: Dict[str, Any]):
         fiscal_year=context.get("fiscal_year", "Year"),
     )
 
+    # Add completion status context for incomplete Q&As
+    user_content = f"Format this Q&A exchange with HTML tags for emphasis:\n\n"
+    if qa_block.completion_status == "question_only":
+        user_content += "[NOTE: This block contains only the analyst question. Executive response may be in a separate block.]\n\n"
+    elif qa_block.completion_status == "answer_only":
+        user_content += "[NOTE: This block contains only the executive response. Analyst question may be in a separate block.]\n\n"
+    user_content += qa_block.original_content
+
     messages = [
         {"role": "system", "content": system_prompt},
-        {
-            "role": "user",
-            "content": (
-                "Format this Q&A exchange with HTML tags for emphasis:\n\n"
-                f"{qa_block.original_content}"
-            ),
-        },
+        {"role": "user", "content": user_content},
     ]
 
     max_retries = 3

@@ -1,14 +1,14 @@
-# HTML Formatting Prompt - v5.0
+# HTML Formatting Prompt - v5.1
 
 ## Metadata
 - **Model**: aegis
 - **Layer**: key_themes_etl
 - **Name**: html_formatting
-- **Version**: 5.0
+- **Version**: 5.1
 - **Framework**: CO-STAR+XML
 - **Purpose**: Transform Q&A content into executive-ready HTML-formatted documents with strategic emphasis
 - **Token Target**: 32768
-- **Last Updated**: 2024-09-26
+- **Last Updated**: 2025-11-19
 
 ---
 
@@ -32,9 +32,9 @@ Transform raw Q&A transcript into polished, executive-ready format:
 
 CRITICAL DISTINCTION - Two separate tasks:
 
-TASK 1 - CONTENT CLEANING (what to remove vs keep):
-- REMOVE: "Thanks for taking my question", "Great question", "Thank you", filler words
-- KEEP: Every bit of business substance - questions, answers, data, explanations, reasoning
+TASK 1 - MINIMAL CONTENT CLEANUP (preserve 95%+ verbatim):
+- REMOVE ONLY: Standalone greetings at start, standalone thank-yous at end, pure filler sounds ("um", "uh", "ah")
+- KEEP VERBATIM: ALL substantive phrasing including "So I wanted to ask", "maybe", "I think", "you know" (when contextual), qualifiers, hedges, connective phrases, original sentence structure
 
 TASK 2 - FORMAT FOR EMPHASIS (apply to cleaned content):
 1. Speaker format: <b>Name</b> (Title/Firm): content
@@ -44,7 +44,7 @@ TASK 2 - FORMAT FOR EMPHASIS (apply to cleaned content):
 5. Italic: Business segments/divisions ONLY
 6. Underline: Firm commitments with deadlines ONLY
 
-REMEMBER: Formatting adds visual emphasis. It does NOT determine what content to include.
+REMEMBER: We preserve verbatim transcript content. Formatting adds visual emphasis only.
 </objective>
 
 <style>
@@ -112,40 +112,40 @@ NEVER USE MARKDOWN:
 </emphasis_strategy>
 
 <content_cleanup_rules>
-WHAT TO REMOVE vs WHAT TO KEEP:
+MINIMAL CLEANUP ONLY - PRESERVE 95%+ VERBATIM:
 
-REMOVE COMPLETELY:
-✗ Entire speaker turns that are just "Okay, thanks" or "Got it, thank you"
-✗ Operator statements: "Next question comes from..."
-✗ Filler words: um, uh, ah, you know (when used as filler)
-✗ Opening pleasantries: "Thanks for taking my question"
-✗ Closing pleasantries: "Thank you", "I appreciate it"
-✗ Standalone acknowledgments: "Right", "Okay", "Yes" (when alone)
+REMOVE ONLY THESE SPECIFIC ITEMS:
+✗ Standalone greetings at start: "Thanks for taking my question", "Thank you for the question" (when alone at beginning)
+✗ Standalone thank-yous at end: "Thank you", "I appreciate it", "Thanks" (when alone at end)
+✗ Pure filler sounds: "um", "uh", "ah" (ONLY when adding no meaning)
+✗ Operator transitions: "Next question comes from...", "Our next question..."
+✗ Entire speaker turns that are ONLY "Okay, thanks" or "Got it, thank you" with no substance
 ✗ Meta-references: "Next slide please", "As you see on slide 12"
 
-KEEP VERBATIM:
-✓ The actual question being asked (even if multiple parts)
-✓ The complete answer with all explanations
-✓ All numbers, data points, and metrics
-✓ All reasoning and rationale
-✓ All examples and context that add understanding
-✓ All forward-looking statements
-✓ All risk discussions
-✓ Connective phrases within explanations
+KEEP EVERYTHING ELSE VERBATIM:
+✓ Complete question phrasing: "So I wanted to ask", "Can you", "Could you walk us through", "maybe"
+✓ Complete answer phrasing: "I think", "we believe", "let me", "you know" (when contextual)
+✓ All qualifiers and hedges: "approximately", "potentially", "we expect", "probably"
+✓ All conversational connectors: "So", "And", "But", "Now"
+✓ All substantive acknowledgments: "Right, and on that point...", "Yes, and let me add..."
+✓ Original sentence structure and word order
+✓ All reasoning, rationale, explanations, context, examples
+✓ All numbers, metrics, forward-looking statements, risk discussions
 
-GUIDELINE: If it contains business substance, keep it. If it's just social nicety, remove it.
+CRITICAL RULE: Do NOT rephrase or restructure. Do NOT remove connectors like "So" or "maybe". Do NOT edit for grammar or style.
 
-DO NOT SUMMARIZE - preserve the executive's complete explanation, just clean up the fluff around it.
+GUIDELINE: When in doubt, KEEP IT. We want 95%+ of the original content preserved exactly as spoken.
 </content_cleanup_rules>
 
 <output_expectations>
 Your output should be:
-- SHORTER than the input (pleasantries removed)
-- COMPLETE in business substance (all data, reasoning, context preserved)
+- SLIGHTLY SHORTER than input (only greetings/thank-yous removed)
+- 95%+ VERBATIM in all business substance
 - FORMATTED for scanning (HTML emphasis on key elements)
-- PROFESSIONAL in tone (no casual fillers or social niceties)
+- NO REPHRASING of questions or answers
+- NO RESTRUCTURING of sentences
 
-Think of it as: Take a 5-minute rambling conversation and turn it into a 3-minute executive briefing that still contains every business fact, just without the "hello, how are you" parts.
+Think of it as: Remove the "thanks for taking my question" and "thank you" bookends, remove pure filler sounds, but keep everything else exactly as spoken including all connectors, qualifiers, and conversational phrasing.
 </output_expectations>
 
 <quality_checklist>
@@ -158,7 +158,8 @@ Think of it as: Take a 5-minute rambling conversation and turn it into a 3-minut
 ✓ ALL metrics are <b>bolded</b>: NIM, ROE, PCL
 ✓ Business segments are <i>italicized</i> (and ONLY segments)
 ✓ Firm commitments are <u>underlined</u> (and ONLY firm commitments)
-✓ No filler or non-substantive content remains
+✓ Only standalone greetings/thank-yous removed, 95%+ content verbatim
+✓ Original phrasing preserved (no rephrasing or restructuring)
 ✓ All HTML tags properly closed
 ✓ NO markdown formatting used
 ✓ NO labels inserted
@@ -172,10 +173,18 @@ Jane Doe, CFO: Thanks John. So, um, on NIM, we're seeing it at around 1.65% for 
 </example_input>
 
 <example_output>
-<b>John Smith</b> (Goldman Sachs): <span style="color: #1e4d8b; font-size: 11pt; font-weight: bold;">Can you give us some color on where you see margins heading given the rate environment?</span> And touch on deposit costs as well?
+<b>John Smith</b> (Goldman Sachs): <span style="color: #1e4d8b; font-size: 11pt; font-weight: bold;">So I wanted to ask about, you know, your NIM outlook for next year.</span> Can you give us some color on where you see margins heading given the rate environment? And maybe touch on deposit costs as well?
 
-<b>Jane Doe</b> (CFO): <span style="color: #4d94ff; font-size: 11pt; font-weight: bold;">On NIM, we're seeing it at around 1.65% for Q4, and we expect it to expand to approximately 1.70% to 1.75% by mid next year.</span> <u>We're committed to reaching <b>1.80%</b> by <b>end of 2025</b></u>. On the deposit side, our costs peaked at <b>235 basis points</b> <b>last quarter</b> and we're already seeing them come down significantly.
+<b>Jane Doe</b> (CFO): <span style="color: #4d94ff; font-size: 11pt; font-weight: bold;">So, on NIM, we're seeing it at around <b>1.65%</b> for <b>Q4</b>, and we expect it to expand to approximately <b>1.70%</b> to <b>1.75%</b> by <b>mid next year</b> as deposit costs normalize.</span> <u>We're committed to reaching <b>1.80%</b> by <b>end of 2025</b></u>. On the deposit side, our costs peaked at <b>235 basis points</b> <b>last quarter</b> and we're already seeing them come down, you know, pretty significantly.
 </example_output>
+
+CHANGES MADE:
+- Removed: "Yeah, um, thanks for taking my question" at start
+- Removed: "Thank you" at end
+- Removed: "Thanks John" acknowledgment
+- Removed: standalone "um" filler sounds
+- KEPT: "So I wanted to ask", "you know", "maybe", "So,", "you know, pretty significantly"
+- KEPT: All original sentence structure and phrasing
 
 <example_input>
 Mike Johnson from JP Morgan: Thanks for taking the question. Could you talk about your capital deployment priorities? I'm particularly interested in, um, buybacks versus organic growth investments and any specific targets you have there.
@@ -249,9 +258,14 @@ Interruptions or clarifications:
 </edge_cases>
 
 <final_reminder>
-CRITICAL BALANCE TO ACHIEVE:
-✓ REMOVE all pleasantries, thank yous, acknowledgments, filler words
-✓ PRESERVE all business substance, explanations, data, reasoning
+CRITICAL REQUIREMENT: 95%+ VERBATIM PRESERVATION
+
+MINIMAL CLEANUP:
+✓ ONLY remove standalone greetings at start and thank-yous at end
+✓ ONLY remove pure filler sounds that add no meaning
+✗ DO NOT remove connectors like "So", "And", "maybe", "I think"
+✗ DO NOT rephrase or restructure sentences
+✗ DO NOT edit for grammar or style
 
 FORMATTING CHECKS:
 ✓ ALL formatting uses HTML tags (<b>, <i>, <u>, <span>, <mark>)
@@ -260,14 +274,15 @@ FORMATTING CHECKS:
 ✓ Segments are italicized with <i>Personal Banking</i> NOT *Personal Banking*
 ✓ Blue formatting highlights key sentences (others still included)
 
-CONTENT PRESERVATION:
-✓ Keep the complete business question (without "thanks for taking my question")
-✓ Keep the complete business answer (without "thanks John" or "great question")
+VERBATIM PRESERVATION:
+✓ Keep "So I wanted to ask", "Can you", "Could you walk us through"
+✓ Keep "I think", "we believe", "you know" (when contextual), "maybe", "probably"
+✓ Keep all qualifiers, hedges, connectors within substantive content
+✓ Keep original sentence structure and word order
 ✓ Keep all data, metrics, explanations, context, reasoning
-✗ Remove "thank you", "I appreciate it", "um", "you know" (as filler)
-✗ Remove entire speaker turns that are just acknowledgments
+✗ Remove ONLY: "Thanks for taking my question" at start, "Thank you" at end, standalone "um/uh/ah"
 
-REMEMBER: Clean and format the Q&A for executives - remove social niceties but preserve all business substance.
+REMEMBER: This is a transcript, not an editorial summary. Preserve what was actually said.
 </final_reminder>
 </examples>
 ```
@@ -280,16 +295,28 @@ REMEMBER: Clean and format the Q&A for executives - remove social niceties but p
 
 ---
 
-## What Changed from v4.0
+## What Changed from v5.0
 
-Version 5.0 represents a complete refinement of the HTML formatting approach with clearer guidance on the critical balance between content removal and preservation:
+Version 5.1 shifts from "polished executive summary" to "95%+ verbatim transcript preservation":
 
-- Clarified the two-task distinction: content cleaning vs formatting for emphasis
-- Made explicit that formatting is for emphasis only, not content selection
-- Reorganized emphasis strategy with simpler priority order
-- Enhanced content cleanup rules with clear "remove vs keep" guidance
-- Added explicit warnings against using markdown formatting
-- Expanded examples showing complete business context preservation
-- Improved quality checklist with comprehensive HTML tag verification
-- Added detailed edge cases handling for real-world scenarios
-- Strengthened final reminder emphasizing the critical balance
+**Major Philosophy Change:**
+- **v5.0**: Removed filler words, connectors, qualifiers → created polished but edited content
+- **v5.1**: Remove ONLY greetings/thank-yous → preserve exactly what was said
+
+**Content Cleanup Changes:**
+- REMOVED from removal list: "So I wanted to ask", "maybe", "I think", "you know" (contextual), qualifiers, hedges
+- KEPT minimal removal: Only standalone greetings at start/end, pure filler sounds
+- Added explicit "DO NOT rephrase or restructure" requirement
+- Changed from "3-minute executive briefing from 5-minute conversation" to "5-minute conversation with bookends removed"
+
+**Example Updates:**
+- Updated all examples to show verbatim preservation
+- Added "CHANGES MADE" annotations to clarify what was removed vs kept
+- Shows keeping "So", "maybe", "you know" in context
+
+**Quality Checklist:**
+- Added: "Only standalone greetings/thank-yous removed, 95%+ content verbatim"
+- Added: "Original phrasing preserved (no rephrasing or restructuring)"
+
+**Why This Change:**
+Business feedback indicated content was being modified beyond cleanup. Users need faithful transcript records, not editorial summaries. This version prioritizes fidelity over polish.
