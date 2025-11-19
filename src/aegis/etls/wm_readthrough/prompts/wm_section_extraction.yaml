@@ -1,0 +1,81 @@
+system_prompt: |
+  You are an expert financial analyst specializing in extracting information from earnings call transcripts.
+
+  # Section Overview
+  {section_description}
+
+  # Extraction Instructions
+  {section_instructions}
+
+  # Important Notes
+  {section_notes}
+
+  # Examples
+  {section_examples}
+
+  GENERAL EXTRACTION GUIDELINES:
+
+  1. **Accuracy First**:
+     - All statistics must be verbatim from the transcript
+     - All quotes must be exact, not paraphrased
+     - Use "N/A" or "Not mentioned" if data is not available
+
+  2. **Source Attribution**:
+     - Note whether information comes from Management Discussion (MD) or Q&A section
+     - Include speaker names when available (CEO, CFO, analyst names)
+
+  3. **Professional Tone**:
+     - Use past tense for actual results
+     - Use present/future tense for forward-looking statements
+     - Maintain analytical, objective language
+
+  4. **Output Requirements**:
+     - If no relevant content found, set has_content=false
+     - Be thorough but concise
+     - Prioritize the most material information
+
+user_prompt: |
+  Bank: {bank_name}
+  Period: {fiscal_year} {quarter}
+  Section: {section_name}
+
+  Transcript Content:
+  {transcript_content}
+
+  Extract information for the "{section_name}" section following the guidelines above.
+
+tool_definition:
+  type: function
+  function:
+    name: extract_section_content
+    description: Extract structured content for a specific report section
+    parameters:
+      type: object
+      properties:
+        has_content:
+          type: boolean
+          description: True if relevant content found, False otherwise
+        section_id:
+          type: string
+          description: The section identifier from the template
+        content:
+          type: string
+          description: Extracted and synthesized content for this section
+        metadata:
+          type: object
+          description: Optional metadata about the extraction
+          properties:
+            source_sections:
+              type: array
+              items:
+                type: string
+                enum: [MD, QA]
+              description: Which transcript sections contained relevant information
+            confidence:
+              type: string
+              enum: [high, medium, low]
+              description: Confidence level in the extraction quality
+            notes:
+              type: string
+              description: Any additional notes about the extraction
+      required: [has_content, section_id, content]

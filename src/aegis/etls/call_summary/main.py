@@ -219,17 +219,26 @@ def load_categories_from_xlsx(bank_type: str, execution_id: str) -> List[Dict[st
         if missing_columns:
             raise ValueError(f"Missing required columns in {file_name}: {missing_columns}")
 
-        # Optional example columns
+        # Optional columns with defaults for backward compatibility
         optional_columns = ["example_1", "example_2", "example_3"]
         for col in optional_columns:
             if col not in df.columns:
                 df[col] = ""  # Add empty column if not present
+
+        # Ensure report_section column exists even for legacy sheets
+        if "report_section" not in df.columns:
+            df["report_section"] = "Results Summary"
 
         # Convert to list of dicts, ensuring all 6 columns are present
         categories = []
         for _, row in df.iterrows():
             category = {
                 "transcript_sections": str(row["transcript_sections"]).strip(),
+                "report_section": (
+                    str(row["report_section"]).strip()
+                    if pd.notna(row["report_section"])
+                    else "Results Summary"
+                ),
                 "category_name": str(row["category_name"]).strip(),
                 "category_description": str(row["category_description"]).strip(),
                 "example_1": str(row["example_1"]).strip() if pd.notna(row["example_1"]) else "",
