@@ -6,9 +6,9 @@
 models:
   theme_extraction:
     tier: medium  # Uses config.llm.medium.model
-  formatting:
+  html_formatting:
     tier: medium  # Uses config.llm.medium.model
-  grouping:
+  theme_grouping:
     tier: medium  # Uses config.llm.medium.model
 
 # LLM Parameters

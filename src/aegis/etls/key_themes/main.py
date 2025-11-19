@@ -608,7 +608,7 @@ async def format_qa_html(qa_block: QABlock, context: Dict[str, Any]):
                 messages,
                 context,
                 {
-                    "model": etl_config.get_model("formatting"),
+                    "model": etl_config.get_model("html_formatting"),
                     "temperature": etl_config.temperature,
                     "max_tokens": etl_config.max_tokens,
                 },
@@ -714,7 +714,7 @@ async def determine_comprehensive_grouping(
     execution_id = context.get("execution_id")
     prompt_data = load_prompt_from_db(
         layer="key_themes_etl",
-        name="grouping",
+        name="theme_grouping",
         compose_with_globals=False,
         available_databases=None,
         execution_id=execution_id,
@@ -769,7 +769,7 @@ async def determine_comprehensive_grouping(
                 tools=[prompt_data["tool_definition"]],
                 context=context,
                 llm_params={
-                    "model": etl_config.get_model("grouping"),
+                    "model": etl_config.get_model("theme_grouping"),
                     "temperature": etl_config.temperature,
                     "max_tokens": etl_config.max_tokens,
                 },
