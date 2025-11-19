@@ -782,7 +782,16 @@ async def determine_comprehensive_grouping(
 
                 if tool_calls:
                     try:
-                        result = json.loads(tool_calls[0]["function"]["arguments"])
+                        # Get the arguments string and clean it
+                        arguments_str = tool_calls[0]["function"]["arguments"]
+
+                        # If it's already a dict, use it directly
+                        if isinstance(arguments_str, dict):
+                            result = arguments_str
+                        else:
+                            # Clean the string by stripping whitespace
+                            arguments_str = arguments_str.strip()
+                            result = json.loads(arguments_str)
 
                         logger.info(
                             "regrouping.parsed_result",
@@ -796,6 +805,7 @@ async def determine_comprehensive_grouping(
                             "regrouping.json_decode_error",
                             execution_id=execution_id,
                             error=str(e),
+                            arguments_preview=str(tool_calls[0]["function"]["arguments"])[:200],
                         )
                         if attempt < max_retries - 1:
                             await asyncio.sleep(2**attempt)
