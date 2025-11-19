@@ -178,30 +178,30 @@ INPUT Q&As WITH INITIAL CLASSIFICATIONS:
 - qa_6: "Other" - Branch network discussion (Summary: Branch closure program and real estate optimization strategy)
 
 OUTPUT REGROUPING (After review and adjustments):
-{
+{{
   "theme_groups": [
-    {
+    {{
       "group_title": "Capital Management & Liquidity Position: CET1 targets and buyback strategy",
       "qa_ids": ["qa_1", "qa_2"],
       "rationale": "Both Q&As focus on capital ratio management, deployment through buybacks, and return targets - cohesive capital strategy theme"
-    },
-    {
+    }},
+    {{
       "group_title": "Credit Quality & Risk Outlook: Provisioning and macroeconomic scenarios",
       "qa_ids": ["qa_3", "qa_4"],
       "rationale": "Both Q&As discuss credit provisions, quality metrics, and forward-looking risk assessments including macro impacts"
-    },
-    {
+    }},
+    {{
       "group_title": "Digital Transformation & Technology: $500M investment and adoption",
       "qa_ids": ["qa_5"],
       "rationale": "Single Q&A focused on digital banking transformation spending levels and customer engagement metrics"
-    },
-    {
+    }},
+    {{
       "group_title": "Expense Management & Efficiency: Branch optimization strategy",
       "qa_ids": ["qa_6"],
       "rationale": "Reassigned from 'Other' to 'Expense Management & Efficiency' as branch network optimization is a cost efficiency initiative"
-    }
+    }}
   ]
-}
+}}
 
 CHANGES MADE:
 - Kept capital management Q&As together (appropriate grouping)
@@ -238,47 +238,47 @@ IMPORTANT NOTES:
 ## Tool Definition
 
 ```json
-{
+{{
   "type": "function",
-  "function": {
+  "function": {{
     "name": "group_all_themes",
     "description": "Review category classifications, regroup if needed, and create dynamic context-specific titles",
-    "parameters": {
+    "parameters": {{
       "type": "object",
-      "properties": {
-        "theme_groups": {
+      "properties": {{
+        "theme_groups": {{
           "type": "array",
           "description": "Final list of categories with Q&As after review and regrouping for standardized reporting",
           "minItems": 1,
           "maxItems": 50,
-          "items": {
+          "items": {{
             "type": "object",
-            "properties": {
-              "group_title": {
+            "properties": {{
+              "group_title": {{
                 "type": "string",
                 "description": "Category name + brief context in format 'Category: Context' - category must be from predefined list (exact match required)"
-              },
-              "qa_ids": {
+              }},
+              "qa_ids": {{
                 "type": "array",
                 "description": "Array of Q&A IDs classified into this category (may include reassignments from initial classification)",
                 "minItems": 1,
-                "items": {
+                "items": {{
                   "type": "string"
-                }
-              },
-              "rationale": {
+                }}
+              }},
+              "rationale": {{
                 "type": "string",
                 "description": "Brief explanation of why these Q&As fit together in this category, including any reassignments made during review"
-              }
-            },
+              }}
+            }},
             "required": ["group_title", "qa_ids", "rationale"]
-          }
-        }
-      },
+          }}
+        }}
+      }},
       "required": ["theme_groups"]
-    }
-  }
-}
+    }}
+  }}
+}}
 ```
 
 ---

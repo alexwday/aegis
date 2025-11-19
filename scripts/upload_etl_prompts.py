@@ -41,15 +41,15 @@ ETL_CONFIGS = {
         "layer": "key_themes_etl",
         "prompts": [
             {
-                "file": "src/aegis/etls/key_themes/documentation/theme_extraction_prompt.md",
+                "file": "src/aegis/etls/key_themes/documentation/prompts/theme_extraction_prompt.md",
                 "name": "theme_extraction",
             },
             {
-                "file": "src/aegis/etls/key_themes/documentation/theme_grouping_prompt.md",
-                "name": "grouping",
+                "file": "src/aegis/etls/key_themes/documentation/prompts/theme_grouping_prompt.md",
+                "name": "theme_grouping",
             },
             {
-                "file": "src/aegis/etls/key_themes/documentation/html_formatting_prompt.md",
+                "file": "src/aegis/etls/key_themes/documentation/prompts/html_formatting_prompt.md",
                 "name": "html_formatting",
             },
         ],
@@ -99,7 +99,9 @@ def parse_markdown_prompt(file_path: Path) -> dict:
     tool_match = re.search(r"## Tool Definition\s*\n\s*```json\s*\n(.*?)\n```", content, re.DOTALL)
     if tool_match:
         try:
-            tool_def = json.loads(tool_match.group(1))
+            # Unescape double braces {{  }} to single braces { } for JSON parsing
+            json_str = tool_match.group(1).replace("{{", "{").replace("}}", "}")
+            tool_def = json.loads(json_str)
         except json.JSONDecodeError as e:
             logger.warning(f"Failed to parse tool definition: {e}")
 
