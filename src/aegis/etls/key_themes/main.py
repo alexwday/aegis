@@ -752,6 +752,15 @@ async def determine_comprehensive_grouping(
         },
     ]
 
+    # Debug: Log the tool definition being sent
+    logger.debug(
+        "regrouping.tool_definition",
+        execution_id=execution_id,
+        tool_def_type=type(prompt_data.get("tool_definition")).__name__,
+        tool_def_keys=list(prompt_data.get("tool_definition", {}).keys()) if isinstance(prompt_data.get("tool_definition"), dict) else None,
+        tool_def_preview=str(prompt_data.get("tool_definition"))[:500],
+    )
+
     logger.info(
         "regrouping.llm_request",
         execution_id=execution_id,
@@ -775,12 +784,38 @@ async def determine_comprehensive_grouping(
                 },
             )
 
+            # Debug: Log raw response structure
+            logger.debug(
+                "regrouping.llm_response",
+                execution_id=execution_id,
+                response_type=type(response).__name__,
+                response_keys=list(response.keys()) if isinstance(response, dict) else None,
+                has_choices=bool(response.get("choices")) if isinstance(response, dict) else False,
+            )
+
             if response:
                 tool_calls = (
                     response.get("choices", [{}])[0].get("message", {}).get("tool_calls", [])
                 )
 
+                # Debug: Log tool_calls structure
+                logger.debug(
+                    "regrouping.tool_calls_structure",
+                    execution_id=execution_id,
+                    has_tool_calls=bool(tool_calls),
+                    num_tool_calls=len(tool_calls) if tool_calls else 0,
+                    tool_call_preview=str(tool_calls)[:300] if tool_calls else None,
+                )
+
                 if tool_calls:
+                    # Debug: Log the function name that was called
+                    function_name = tool_calls[0].get("function", {}).get("name")
+                    logger.debug(
+                        "regrouping.function_called",
+                        execution_id=execution_id,
+                        function_name=function_name,
+                    )
+
                     try:
                         # Get the arguments string and clean it
                         arguments_str = tool_calls[0]["function"]["arguments"]
@@ -788,10 +823,62 @@ async def determine_comprehensive_grouping(
                         # If it's already a dict, use it directly
                         if isinstance(arguments_str, dict):
                             result = arguments_str
+                            logger.debug(
+                                "regrouping.arguments_already_dict",
+                                execution_id=execution_id,
+                            )
                         else:
-                            # Clean the string by stripping whitespace
+                            # Log what we received for debugging
+                            logger.debug(
+                                "regrouping.raw_arguments",
+                                execution_id=execution_id,
+                                arg_type=type(arguments_str).__name__,
+                                arg_length=len(str(arguments_str)),
+                                arg_preview=repr(str(arguments_str)[:200]),
+                            )
+
+                            # Clean the string by stripping whitespace and common issues
+                            arguments_str = str(arguments_str).strip()
+
+                            # Remove any markdown code block markers if present
+                            if arguments_str.startswith("```"):
+                                # Remove ```json or ``` at start
+                                arguments_str = arguments_str.split("\n", 1)[1] if "\n" in arguments_str else arguments_str[3:]
+                            if arguments_str.endswith("```"):
+                                arguments_str = arguments_str.rsplit("\n", 1)[0] if "\n" in arguments_str else arguments_str[:-3]
+
                             arguments_str = arguments_str.strip()
                             result = json.loads(arguments_str)
+
+                        # Validate the parsed result has the expected structure
+                        if not isinstance(result, dict):
+                            logger.error(
+                                "regrouping.invalid_result_type",
+                                execution_id=execution_id,
+                                result_type=type(result).__name__,
+                                result_repr=repr(result)[:200],
+                            )
+                            if attempt < max_retries - 1:
+                                await asyncio.sleep(2**attempt)
+                                continue
+                            raise ValueError(
+                                f"LLM returned invalid result type: {type(result).__name__}"
+                            )
+
+                        if "theme_groups" not in result:
+                            logger.error(
+                                "regrouping.missing_theme_groups",
+                                execution_id=execution_id,
+                                result_keys=list(result.keys()),
+                                result_repr=repr(result)[:300],
+                            )
+                            if attempt < max_retries - 1:
+                                await asyncio.sleep(2**attempt)
+                                continue
+                            raise KeyError(
+                                f"LLM response missing 'theme_groups' key. "
+                                f"Got keys: {list(result.keys())}"
+                            )
 
                         logger.info(
                             "regrouping.parsed_result",
@@ -805,14 +892,24 @@ async def determine_comprehensive_grouping(
                             "regrouping.json_decode_error",
                             execution_id=execution_id,
                             error=str(e),
-                            arguments_preview=str(tool_calls[0]["function"]["arguments"])[:200],
+                            error_position=e.pos if hasattr(e, 'pos') else None,
+                            arguments_type=type(tool_calls[0]["function"]["arguments"]).__name__,
+                            arguments_repr=repr(str(tool_calls[0]["function"]["arguments"])[:300]),
                         )
                         if attempt < max_retries - 1:
                             await asyncio.sleep(2**attempt)
                             continue
                         raise
 
-        except Exception:
+        except Exception as e:
+            logger.error(
+                "regrouping.unexpected_error",
+                execution_id=execution_id,
+                error=str(e),
+                error_type=type(e).__name__,
+                attempt=attempt + 1,
+                max_retries=max_retries,
+            )
             if attempt < max_retries - 1:
                 await asyncio.sleep(2**attempt)
                 continue
