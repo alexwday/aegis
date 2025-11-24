@@ -322,6 +322,9 @@ async def run_etl_with_retry(
     etl_config = ETL_CONFIGS[etl_type]
     module = etl_config["module"]
 
+    # The downstream ETLs expect the short ticker (e.g., RY) or ID, not the country suffix.
+    bank_arg = bank_symbol.replace("_", "-").strip().split("-")[0]
+
     log_prefix = f"{bank_symbol} {fiscal_year} {quarter} [{etl_type}]"
 
     if dry_run:
@@ -341,7 +344,7 @@ async def run_etl_with_retry(
         "-m",
         module,
         "--bank",
-        bank_symbol,
+        bank_arg,
         "--year",
         str(fiscal_year),
         "--quarter",
