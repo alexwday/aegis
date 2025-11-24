@@ -128,16 +128,13 @@ def load_monitored_institutions() -> Dict[str, Dict[str, Any]]:
     with open(yaml_path, 'r') as f:
         yaml_data = yaml.safe_load(f)
 
-    # Convert YAML keys (RY-CA, BMO-CA, etc.) to database symbols (RY, BMO, etc.)
-    # by removing the country suffix
+    # Use YAML keys directly (RY-CA, BMO-CA, etc.) as they match database bank_symbol
     institutions = {}
     for yaml_key, data in yaml_data.items():
-        # Extract symbol without country (RY-CA -> RY, JPM-US -> JPM)
-        db_symbol = yaml_key.split('-')[0]
-        institutions[db_symbol] = {
+        institutions[yaml_key] = {
             **data,
-            "yaml_key": yaml_key,  # Keep original key for reference
-            "db_symbol": db_symbol
+            "yaml_key": yaml_key,
+            "db_symbol": yaml_key.split('-')[0]  # Keep short symbol for reference
         }
 
     logger.info(f"Loaded {len(institutions)} monitored institutions")
