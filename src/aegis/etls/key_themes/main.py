@@ -23,6 +23,7 @@ from datetime import datetime
 from typing import Dict, Any, List
 import pandas as pd
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 from docx import Document
 from docx.shared import Pt, Inches, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -315,9 +316,15 @@ def load_categories_from_xlsx(execution_id: str) -> List[Dict[str, Any]]:
             if col not in df.columns:
                 df[col] = ""  # Add empty column if not present
 
-        # Convert to list of dicts, ensuring all 6 columns are present
+        # Convert to list of dicts, ensuring all required fields are non-empty
         categories = []
-        for _, row in df.iterrows():
+        for idx, row in df.iterrows():
+            for field in required_columns:
+                if pd.isna(row[field]) or str(row[field]).strip() == "":
+                    raise ValueError(
+                        f"Missing value for '{field}' in {file_name} (row {idx + 2})"
+                    )
+
             category = {
                 "transcript_sections": str(row["transcript_sections"]).strip(),
                 "category_name": str(row["category_name"]).strip(),
@@ -912,9 +919,14 @@ async def determine_comprehensive_grouping(
     if result and "theme_groups" in result:
         theme_groups = []
         for group_data in result["theme_groups"]:
+            group_title = group_data.get("group_title") or "Theme Group"
+            qa_ids = group_data.get("qa_ids") or []
+            if not isinstance(qa_ids, list):
+                qa_ids = list(qa_ids)
+
             group = ThemeGroup(
-                group_title=group_data["group_title"],
-                qa_ids=group_data["qa_ids"],
+                group_title=group_title,
+                qa_ids=qa_ids,
                 rationale=group_data.get("rationale", "Regrouped by category"),
             )
             theme_groups.append(group)
@@ -1387,6 +1399,7 @@ async def generate_key_themes(bank_name: str, fiscal_year: int, quarter: str) ->
         AttributeError,
         json.JSONDecodeError,
         FileNotFoundError,
+        SQLAlchemyError,
     ) as e:
         error_msg = f"Error generating key themes report: {str(e)}"
         logger.error(
@@ -1396,6 +1409,12 @@ async def generate_key_themes(bank_name: str, fiscal_year: int, quarter: str) ->
     except (ValueError, RuntimeError) as e:
         logger.error("etl.key_themes.error", execution_id=execution_id, error=str(e))
         return f"⚠️ {str(e)}"
+    except Exception as e:  # Catch-all for transport/LLM/other unexpected errors
+        error_msg = f"Error generating key themes report: {str(e)}"
+        logger.error(
+            "etl.key_themes.error", execution_id=execution_id, error=error_msg, exc_info=True
+        )
+        return f"❌ {error_msg}"
 
 
 def main():

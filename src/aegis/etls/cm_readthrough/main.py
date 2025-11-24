@@ -34,6 +34,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import pandas as pd
 import yaml
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 
 from aegis.etls.cm_readthrough.document_converter import create_combined_document
 from aegis.etls.cm_readthrough.transcript_utils import (
@@ -196,9 +197,15 @@ def load_outlook_categories(execution_id: str) -> List[Dict[str, Any]]:
             if col not in df.columns:
                 df[col] = ""  # Add empty column if not present
 
-        # Convert to list of dicts, ensuring all 6 columns are present
+        # Convert to list of dicts, ensuring all required fields are non-empty
         categories = []
-        for _, row in df.iterrows():
+        for idx, row in df.iterrows():
+            for field in required_columns:
+                if pd.isna(row[field]) or str(row[field]).strip() == "":
+                    raise ValueError(
+                        f"Missing value for '{field}' in {file_name} (row {idx + 2})"
+                    )
+
             category = {
                 "transcript_sections": str(row["transcript_sections"]).strip(),
                 "category_name": str(row["category_name"]).strip(),
@@ -268,10 +275,13 @@ def load_qa_market_volatility_regulatory_categories(execution_id: str) -> List[D
                 df[col] = ""  # Add empty column if not present
 
         categories = []
-        for _, row in df.iterrows():
-            # Skip rows with missing required fields
-            if pd.isna(row["category_name"]) or pd.isna(row["category_description"]):
-                continue
+        for idx, row in df.iterrows():
+            for field in required_columns:
+                if pd.isna(row[field]) or str(row[field]).strip() == "":
+                    raise ValueError(
+                        f"Missing value for '{field}' in "
+                        f"qa_market_volatility_regulatory_categories.xlsx (row {idx + 2})"
+                    )
 
             category = {
                 "transcript_sections": str(row["transcript_sections"]).strip(),
@@ -342,10 +352,13 @@ def load_qa_pipelines_activity_categories(execution_id: str) -> List[Dict[str, A
                 df[col] = ""  # Add empty column if not present
 
         categories = []
-        for _, row in df.iterrows():
-            # Skip rows with missing required fields
-            if pd.isna(row["category_name"]) or pd.isna(row["category_description"]):
-                continue
+        for idx, row in df.iterrows():
+            for field in required_columns:
+                if pd.isna(row[field]) or str(row[field]).strip() == "":
+                    raise ValueError(
+                        f"Missing value for '{field}' in "
+                        f"qa_pipelines_activity_categories.xlsx (row {idx + 2})"
+                    )
 
             category = {
                 "transcript_sections": str(row["transcript_sections"]).strip(),
@@ -1339,95 +1352,99 @@ async def save_to_database(
         local_filepath: Path to local DOCX file (optional)
         s3_document_name: S3 document key (optional)
     """
-    async with get_connection() as conn:
-        # Delete any existing report for the same period/type
-        delete_result = await conn.execute(
-            text(
+    try:
+        async with get_connection() as conn:
+            # Delete any existing report for the same period/type
+            delete_result = await conn.execute(
+                text(
+                    """
+                DELETE FROM aegis_reports
+                WHERE fiscal_year = :fiscal_year
+                  AND quarter = :quarter
+                  AND report_type = :report_type
+                RETURNING id
                 """
-            DELETE FROM aegis_reports
-            WHERE fiscal_year = :fiscal_year
-              AND quarter = :quarter
-              AND report_type = :report_type
-            RETURNING id
-            """
-            ),
-            {
-                "fiscal_year": fiscal_year,
-                "quarter": quarter,
-                "report_type": "cm_readthrough",
-            },
-        )
-        delete_result.fetchall()
-
-        # Insert new report
-        result = await conn.execute(
-            text(
-                """
-            INSERT INTO aegis_reports (
-                report_name,
-                report_description,
-                report_type,
-                bank_id,
-                bank_name,
-                bank_symbol,
-                fiscal_year,
-                quarter,
-                local_filepath,
-                s3_document_name,
-                s3_pdf_name,
-                generation_date,
-                generated_by,
-                execution_id,
-                metadata
-            ) VALUES (
-                :report_name,
-                :report_description,
-                :report_type,
-                :bank_id,
-                :bank_name,
-                :bank_symbol,
-                :fiscal_year,
-                :quarter,
-                :local_filepath,
-                :s3_document_name,
-                :s3_pdf_name,
-                :generation_date,
-                :generated_by,
-                :execution_id,
-                :metadata
-            )
-            RETURNING id
-            """
-            ),
-            {
-                "report_name": "Capital Markets Readthrough",
-                "report_description": (
-                    "AI-generated analysis of capital markets commentary from "
-                    "quarterly earnings calls across major U.S. and European banks. "
-                    "Extracts investment banking and trading outlook, analyst questions "
-                    "on market dynamics, risk management, M&A pipelines, and "
-                    "transaction banking."
                 ),
-                "report_type": "cm_readthrough",
-                "bank_id": None,  # Cross-bank report, no specific bank
-                "bank_name": None,  # Cross-bank report, no specific bank
-                "bank_symbol": None,  # Cross-bank report, no specific bank
-                "fiscal_year": fiscal_year,
-                "quarter": quarter,
-                "local_filepath": local_filepath,
-                "s3_document_name": s3_document_name,
-                "s3_pdf_name": None,
-                "generation_date": datetime.now(),
-                "generated_by": "cm_readthrough_etl",
-                "execution_id": str(execution_id),
-                "metadata": json.dumps(results),
-            },
-        )
-        result.fetchone()
+                {
+                    "fiscal_year": fiscal_year,
+                    "quarter": quarter,
+                    "report_type": "cm_readthrough",
+                },
+            )
+            delete_result.fetchall()
 
-        await conn.commit()
+            # Insert new report
+            result = await conn.execute(
+                text(
+                    """
+                INSERT INTO aegis_reports (
+                    report_name,
+                    report_description,
+                    report_type,
+                    bank_id,
+                    bank_name,
+                    bank_symbol,
+                    fiscal_year,
+                    quarter,
+                    local_filepath,
+                    s3_document_name,
+                    s3_pdf_name,
+                    generation_date,
+                    generated_by,
+                    execution_id,
+                    metadata
+                ) VALUES (
+                    :report_name,
+                    :report_description,
+                    :report_type,
+                    :bank_id,
+                    :bank_name,
+                    :bank_symbol,
+                    :fiscal_year,
+                    :quarter,
+                    :local_filepath,
+                    :s3_document_name,
+                    :s3_pdf_name,
+                    :generation_date,
+                    :generated_by,
+                    :execution_id,
+                    :metadata
+                )
+                RETURNING id
+                """
+                ),
+                {
+                    "report_name": "Capital Markets Readthrough",
+                    "report_description": (
+                        "AI-generated analysis of capital markets commentary from "
+                        "quarterly earnings calls across major U.S. and European banks. "
+                        "Extracts investment banking and trading outlook, analyst questions "
+                        "on market dynamics, risk management, M&A pipelines, and "
+                        "transaction banking."
+                    ),
+                    "report_type": "cm_readthrough",
+                    "bank_id": None,  # Cross-bank report, no specific bank
+                    "bank_name": None,  # Cross-bank report, no specific bank
+                    "bank_symbol": None,  # Cross-bank report, no specific bank
+                    "fiscal_year": fiscal_year,
+                    "quarter": quarter,
+                    "local_filepath": local_filepath,
+                    "s3_document_name": s3_document_name,
+                    "s3_pdf_name": None,
+                    "generation_date": datetime.now(),
+                    "generated_by": "cm_readthrough_etl",
+                    "execution_id": str(execution_id),
+                    "metadata": json.dumps(results),
+                },
+            )
+            result.fetchone()
 
-    logger.info(f"Report saved to database with execution_id: {execution_id}")
+            await conn.commit()
+
+        logger.info(f"Report saved to database with execution_id: {execution_id}")
+    except SQLAlchemyError as e:
+        logger.error("etl.cm_readthrough.database_error", execution_id=execution_id, error=str(e))
+        raise
 
 
 async def generate_cm_readthrough(
@@ -1556,6 +1573,7 @@ async def generate_cm_readthrough(
         AttributeError,
         json.JSONDecodeError,
         FileNotFoundError,
+        SQLAlchemyError,
     ) as e:
         # System errors - unexpected, likely code bugs
         error_msg = f"Error generating CM readthrough: {str(e)}"
@@ -1567,6 +1585,12 @@ async def generate_cm_readthrough(
         # User-friendly errors - expected conditions (no data, auth failure, etc.)
         logger.error("etl.cm_readthrough.error", execution_id=execution_id, error=str(e))
         return f"⚠️ {str(e)}"
+    except Exception as e:
+        error_msg = f"Error generating CM readthrough: {str(e)}"
+        logger.error(
+            "etl.cm_readthrough.error", execution_id=execution_id, error=error_msg, exc_info=True
+        )
+        return f"❌ {error_msg}"
 
 
 def main():

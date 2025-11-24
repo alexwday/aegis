@@ -229,9 +229,15 @@ def load_categories_from_xlsx(bank_type: str, execution_id: str) -> List[Dict[st
         if "report_section" not in df.columns:
             df["report_section"] = "Results Summary"
 
-        # Convert to list of dicts, ensuring all 6 columns are present
+        # Convert to list of dicts, ensuring all required fields are non-empty
         categories = []
-        for _, row in df.iterrows():
+        for idx, row in df.iterrows():
+            for field in required_columns:
+                if pd.isna(row[field]) or str(row[field]).strip() == "":
+                    raise ValueError(
+                        f"Missing value for '{field}' in {file_name} (row {idx + 2})"
+                    )
+
             category = {
                 "transcript_sections": str(row["transcript_sections"]).strip(),
                 "report_section": (
@@ -400,6 +406,18 @@ async def _generate_research_plan(
             return research_plan_data
 
         except (KeyError, IndexError, json.JSONDecodeError, TypeError) as e:
+            logger.error(
+                "etl.call_summary.research_plan_error",
+                execution_id=execution_id,
+                error=str(e),
+                attempt=attempt + 1,
+            )
+            if attempt < max_retries - 1:
+                continue
+            raise RuntimeError(
+                f"Error generating research plan after {max_retries} attempts: {str(e)}"
+            ) from e
+        except Exception as e:  # Catch transport/LLM failures (httpx/OpenAI/etc.)
             logger.error(
                 "etl.call_summary.research_plan_error",
                 execution_id=execution_id,
@@ -591,6 +609,8 @@ async def _process_categories(
                 extracted_data["index"] = i
                 extracted_data["name"] = category["category_name"]
                 extracted_data["report_section"] = category.get("report_section", "Results Summary")
+                if "title" not in extracted_data or not extracted_data.get("title"):
+                    extracted_data["title"] = category["category_name"]
 
                 category_results.append(extracted_data)
 
@@ -604,6 +624,28 @@ async def _process_categories(
                 break
 
             except (KeyError, IndexError, json.JSONDecodeError, TypeError) as e:
+                logger.error(
+                    "etl.call_summary.category_extraction_error",
+                    execution_id=execution_id,
+                    category_name=category["category_name"],
+                    error=str(e),
+                    attempt=attempt + 1,
+                )
+
+                if attempt < max_extraction_retries - 1:
+                    continue
+                category_results.append(
+                    {
+                        "index": i,
+                        "name": category["category_name"],
+                        "report_section": category.get("report_section", "Results Summary"),
+                        "rejected": True,
+                        "rejection_reason": (
+                            f"Error after {max_extraction_retries} attempts: {str(e)}"
+                        ),
+                    }
+                )
+            except Exception as e:
                 logger.error(
                     "etl.call_summary.category_extraction_error",
                     execution_id=execution_id,
@@ -812,6 +854,7 @@ async def _save_to_database(
 
     except SQLAlchemyError as e:
         logger.error("etl.call_summary.database_error", execution_id=execution_id, error=str(e))
+        raise
 
 
 async def generate_call_summary(bank_name: str, fiscal_year: int, quarter: str) -> str:
@@ -980,6 +1023,12 @@ async def generate_call_summary(bank_name: str, fiscal_year: int, quarter: str) 
         # User-friendly errors with ⚠️ prefix (expected errors)
         logger.error("etl.call_summary.error", execution_id=execution_id, error=str(e))
         return f"⚠️ {str(e)}"
+    except Exception as e:
+        error_msg = f"Error generating call summary: {str(e)}"
+        logger.error(
+            "etl.call_summary.error", execution_id=execution_id, error=error_msg, exc_info=True
+        )
+        return f"❌ {error_msg}"
 
 
 def main():

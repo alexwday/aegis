@@ -331,7 +331,8 @@ def add_structured_content_to_doc(doc, category_data: dict, heading_level: int =
         return
 
     try:
-        _add_category_heading(doc, category_data["title"], heading_level)
+        title = category_data.get("title") or category_data.get("name") or "Untitled"
+        _add_category_heading(doc, title, heading_level)
 
         statements = category_data.get("summary_statements", [])
         for idx, statement_data in enumerate(statements):
