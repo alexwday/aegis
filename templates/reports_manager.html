@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reports Manager</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .header {
+            background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+            color: white;
+            padding: 20px 0;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .table-container {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+        .detail-panel {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            padding: 30px;
+            display: none;
+        }
+        .detail-panel.show {
+            display: block;
+        }
+        .reports-table {
+            font-size: 0.9rem;
+        }
+        .reports-table tbody tr {
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .reports-table tbody tr:hover {
+            background-color: #f8f9fa;
+        }
+        .reports-table tbody tr.selected {
+            background-color: #ffeaea;
+        }
+        .badge-bank {
+            background-color: #3498db;
+        }
+        .badge-type {
+            background-color: #9b59b6;
+        }
+        .badge-period {
+            background-color: #27ae60;
+        }
+        textarea.form-control {
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
+        }
+        .btn-action {
+            margin-right: 10px;
+        }
+        .field-label {
+            font-weight: 600;
+            color: #495057;
+            margin-bottom: 5px;
+        }
+        .readonly-field {
+            background-color: #e9ecef;
+        }
+        .stats {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        .stat-card {
+            background: white;
+            padding: 15px 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            flex: 1;
+        }
+        .stat-value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #e74c3c;
+        }
+        .stat-label {
+            color: #6c757d;
+            font-size: 0.9rem;
+        }
+        .markdown-preview {
+            max-height: 500px;
+            overflow-y: auto;
+            padding: 20px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            border: 1px solid #dee2e6;
+        }
+        .delete-btn {
+            background-color: #e74c3c;
+            border-color: #e74c3c;
+        }
+        .delete-btn:hover {
+            background-color: #c0392b;
+            border-color: #c0392b;
+        }
+        .bulk-actions {
+            display: none;
+            gap: 10px;
+            align-items: center;
+        }
+        .bulk-actions.show {
+            display: flex;
+        }
+        .checkbox-cell {
+            width: 40px;
+            text-align: center;
+        }
+        .select-all-header {
+            width: 40px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="container">
+            <h1><i class="fas fa-file-alt"></i> Reports Manager</h1>
+            <p class="mb-0">View and delete reports from aegis_reports table</p>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- Statistics -->
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-value" id="totalReports">-</div>
+                <div class="stat-label">Total Reports</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="totalBanks">-</div>
+                <div class="stat-label">Banks</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="totalTypes">-</div>
+                <div class="stat-label">Report Types</div>
+            </div>
+        </div>
+
+        <!-- Search and Filter -->
+        <div class="table-container">
+            <div class="row mb-3">
+                <div class="col-md-4">
+                    <input type="text" class="form-control" id="searchInput" placeholder="Search reports...">
+                </div>
+                <div class="col-md-2">
+                    <select class="form-select" id="filterBank">
+                        <option value="">All Banks</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <select class="form-select" id="filterType">
+                        <option value="">All Types</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <select class="form-select" id="filterYear">
+                        <option value="">All Years</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <button class="btn btn-outline-primary w-100" onclick="loadReports()">
+                        <i class="fas fa-sync"></i> Refresh
+                    </button>
+                </div>
+            </div>
+
+            <!-- Bulk Actions -->
+            <div class="bulk-actions mb-3" id="bulkActions">
+                <span id="selectedCount">0 selected</span>
+                <button class="btn btn-danger btn-sm" onclick="deleteSelected()">
+                    <i class="fas fa-trash"></i> Delete Selected
+                </button>
+                <button class="btn btn-secondary btn-sm" onclick="clearSelection()">
+                    <i class="fas fa-times"></i> Clear Selection
+                </button>
+            </div>
+
+            <!-- Reports Table -->
+            <div class="table-responsive">
+                <table class="table table-hover reports-table" id="reportsTable">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="select-all-header">
+                                <input type="checkbox" id="selectAll" onclick="toggleSelectAll()">
+                            </th>
+                            <th>ID</th>
+                            <th>Bank</th>
+                            <th>Period</th>
+                            <th>Type</th>
+                            <th>Report Name</th>
+                            <th>Generated</th>
+                            <th>Size</th>
+                        </tr>
+                    </thead>
+                    <tbody id="reportsTableBody">
+                        <tr>
+                            <td colspan="8" class="text-center">
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden">Loading...</span>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Detail Panel -->
+        <div class="detail-panel" id="detailPanel">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h3 id="detailPanelTitle"><i class="fas fa-file-alt"></i> Report Details</h3>
+                <div>
+                    <button class="btn btn-danger btn-action" onclick="deleteCurrentReport()">
+                        <i class="fas fa-trash"></i> Delete Report
+                    </button>
+                    <button class="btn btn-secondary" onclick="closeDetail()">
+                        <i class="fas fa-times"></i> Close
+                    </button>
+                </div>
+            </div>
+
+            <input type="hidden" id="reportId">
+
+            <div class="row mb-3">
+                <div class="col-md-4">
+                    <label class="field-label">Bank</label>
+                    <input type="text" class="form-control readonly-field" id="bankName" readonly>
+                </div>
+                <div class="col-md-2">
+                    <label class="field-label">Symbol</label>
+                    <input type="text" class="form-control readonly-field" id="bankSymbol" readonly>
+                </div>
+                <div class="col-md-2">
+                    <label class="field-label">Year</label>
+                    <input type="text" class="form-control readonly-field" id="fiscalYear" readonly>
+                </div>
+                <div class="col-md-2">
+                    <label class="field-label">Quarter</label>
+                    <input type="text" class="form-control readonly-field" id="quarter" readonly>
+                </div>
+                <div class="col-md-2">
+                    <label class="field-label">Type</label>
+                    <input type="text" class="form-control readonly-field" id="reportType" readonly>
+                </div>
+            </div>
+
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label class="field-label">Report Name</label>
+                    <input type="text" class="form-control readonly-field" id="reportName" readonly>
+                </div>
+                <div class="col-md-6">
+                    <label class="field-label">Description</label>
+                    <input type="text" class="form-control readonly-field" id="reportDescription" readonly>
+                </div>
+            </div>
+
+            <div class="row mb-3">
+                <div class="col-md-4">
+                    <label class="field-label">Generated Date</label>
+                    <input type="text" class="form-control readonly-field" id="generationDate" readonly>
+                </div>
+                <div class="col-md-4">
+                    <label class="field-label">Last Modified</label>
+                    <input type="text" class="form-control readonly-field" id="dateLastModified" readonly>
+                </div>
+                <div class="col-md-4">
+                    <label class="field-label">Generated By</label>
+                    <input type="text" class="form-control readonly-field" id="generatedBy" readonly>
+                </div>
+            </div>
+
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label class="field-label">Local Filepath</label>
+                    <input type="text" class="form-control readonly-field" id="localFilepath" readonly>
+                </div>
+                <div class="col-md-6">
+                    <label class="field-label">S3 Document Name</label>
+                    <input type="text" class="form-control readonly-field" id="s3DocumentName" readonly>
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <label class="field-label">Metadata (JSON)</label>
+                <textarea class="form-control readonly-field" id="metadata" rows="3" readonly></textarea>
+            </div>
+
+            <div class="mb-3">
+                <label class="field-label">Markdown Content</label>
+                <div class="markdown-preview" id="markdownContent">
+                    <p class="text-muted">Loading content...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let allReports = [];
+        let currentReportId = null;
+        let selectedIds = new Set();
+
+        // Load reports on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            loadReports();
+        });
+
+        async function loadReports() {
+            try {
+                const response = await fetch('/api/reports');
+                const data = await response.json();
+
+                if (data.success) {
+                    allReports = data.reports;
+                    displayReports(allReports);
+                    updateStats(allReports);
+                    populateFilters(allReports);
+                } else {
+                    alert('Error loading reports: ' + data.error);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Failed to load reports');
+            }
+        }
+
+        function displayReports(reports) {
+            const tbody = document.getElementById('reportsTableBody');
+            tbody.innerHTML = '';
+
+            if (reports.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="8" class="text-center">No reports found</td></tr>';
+                return;
+            }
+
+            reports.forEach(report => {
+                const row = document.createElement('tr');
+                row.onclick = (e) => {
+                    if (e.target.type !== 'checkbox') {
+                        selectReport(report.id, e);
+                    }
+                };
+                if (selectedIds.has(report.id)) {
+                    row.classList.add('selected');
+                }
+                row.innerHTML = `
+                    <td class="checkbox-cell" onclick="event.stopPropagation()">
+                        <input type="checkbox"
+                               ${selectedIds.has(report.id) ? 'checked' : ''}
+                               onclick="toggleReportSelection(${report.id}, this)">
+                    </td>
+                    <td>${report.id}</td>
+                    <td><span class="badge badge-bank">${report.bank_symbol}</span> ${report.bank_name}</td>
+                    <td><span class="badge badge-period">${report.quarter} ${report.fiscal_year}</span></td>
+                    <td><span class="badge badge-type">${report.report_type}</span></td>
+                    <td><strong>${report.report_name || '-'}</strong></td>
+                    <td>${formatDate(report.generation_date)}</td>
+                    <td>${formatBytes(report.content_length)}</td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        function updateStats(reports) {
+            document.getElementById('totalReports').textContent = reports.length;
+
+            const banks = new Set(reports.map(r => r.bank_symbol));
+            document.getElementById('totalBanks').textContent = banks.size;
+
+            const types = new Set(reports.map(r => r.report_type));
+            document.getElementById('totalTypes').textContent = types.size;
+        }
+
+        function populateFilters(reports) {
+            const banks = [...new Set(reports.map(r => r.bank_symbol))].sort();
+            const types = [...new Set(reports.map(r => r.report_type))].sort();
+            const years = [...new Set(reports.map(r => r.fiscal_year))].sort((a, b) => b - a);
+
+            const bankSelect = document.getElementById('filterBank');
+            bankSelect.innerHTML = '<option value="">All Banks</option>';
+            banks.forEach(bank => {
+                const option = document.createElement('option');
+                option.value = bank;
+                option.textContent = bank;
+                bankSelect.appendChild(option);
+            });
+
+            const typeSelect = document.getElementById('filterType');
+            typeSelect.innerHTML = '<option value="">All Types</option>';
+            types.forEach(type => {
+                const option = document.createElement('option');
+                option.value = type;
+                option.textContent = type;
+                typeSelect.appendChild(option);
+            });
+
+            const yearSelect = document.getElementById('filterYear');
+            yearSelect.innerHTML = '<option value="">All Years</option>';
+            years.forEach(year => {
+                const option = document.createElement('option');
+                option.value = year;
+                option.textContent = year;
+                yearSelect.appendChild(option);
+            });
+        }
+
+        async function selectReport(id, event) {
+            currentReportId = id;
+
+            // Highlight selected row
+            document.querySelectorAll('#reportsTable tbody tr').forEach(row => {
+                row.classList.remove('selected');
+            });
+            if (event && event.currentTarget) {
+                event.currentTarget.classList.add('selected');
+            }
+
+            // Load full report details
+            try {
+                const response = await fetch(`/api/report/${id}`);
+                const data = await response.json();
+
+                if (data.success) {
+                    displayReportDetails(data.report);
+                } else {
+                    alert('Error loading report: ' + data.error);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Failed to load report details');
+            }
+        }
+
+        function displayReportDetails(report) {
+            document.getElementById('reportId').value = report.id;
+            document.getElementById('bankName').value = report.bank_name || '';
+            document.getElementById('bankSymbol').value = report.bank_symbol || '';
+            document.getElementById('fiscalYear').value = report.fiscal_year || '';
+            document.getElementById('quarter').value = report.quarter || '';
+            document.getElementById('reportType').value = report.report_type || '';
+            document.getElementById('reportName').value = report.report_name || '';
+            document.getElementById('reportDescription').value = report.report_description || '';
+            document.getElementById('generationDate').value = formatDate(report.generation_date);
+            document.getElementById('dateLastModified').value = formatDate(report.date_last_modified);
+            document.getElementById('generatedBy').value = report.generated_by || '';
+            document.getElementById('localFilepath').value = report.local_filepath || '';
+            document.getElementById('s3DocumentName').value = report.s3_document_name || '';
+
+            // Handle metadata JSON
+            if (report.metadata) {
+                document.getElementById('metadata').value =
+                    typeof report.metadata === 'string'
+                    ? report.metadata
+                    : JSON.stringify(report.metadata, null, 2);
+            } else {
+                document.getElementById('metadata').value = '';
+            }
+
+            // Display markdown content as preformatted text
+            const contentDiv = document.getElementById('markdownContent');
+            if (report.markdown_content) {
+                contentDiv.innerHTML = `<pre style="white-space: pre-wrap; word-wrap: break-word;">${escapeHtml(report.markdown_content)}</pre>`;
+            } else {
+                contentDiv.innerHTML = '<p class="text-muted">No content available</p>';
+            }
+
+            // Update title
+            document.getElementById('detailPanelTitle').innerHTML =
+                `<i class="fas fa-file-alt"></i> ${report.report_name || 'Report Details'}`;
+
+            // Show detail panel
+            document.getElementById('detailPanel').classList.add('show');
+            document.getElementById('detailPanel').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function closeDetail() {
+            document.getElementById('detailPanel').classList.remove('show');
+            document.querySelectorAll('#reportsTable tbody tr').forEach(row => {
+                row.classList.remove('selected');
+            });
+            currentReportId = null;
+        }
+
+        async function deleteCurrentReport() {
+            if (!currentReportId) {
+                alert('No report selected');
+                return;
+            }
+
+            if (!confirm('Are you sure you want to delete this report? This action cannot be undone.')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/report/${currentReportId}`, {
+                    method: 'DELETE'
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    alert(data.message);
+                    closeDetail();
+                    loadReports();
+                } else {
+                    alert('Error deleting report: ' + data.error);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Failed to delete report');
+            }
+        }
+
+        function toggleReportSelection(id, checkbox) {
+            if (checkbox.checked) {
+                selectedIds.add(id);
+            } else {
+                selectedIds.delete(id);
+            }
+            updateBulkActions();
+            updateRowSelection();
+        }
+
+        function toggleSelectAll() {
+            const selectAll = document.getElementById('selectAll');
+            const visibleReports = getFilteredReports();
+
+            if (selectAll.checked) {
+                visibleReports.forEach(r => selectedIds.add(r.id));
+            } else {
+                visibleReports.forEach(r => selectedIds.delete(r.id));
+            }
+
+            updateBulkActions();
+            displayReports(visibleReports);
+        }
+
+        function updateBulkActions() {
+            const bulkActions = document.getElementById('bulkActions');
+            const selectedCount = document.getElementById('selectedCount');
+
+            if (selectedIds.size > 0) {
+                bulkActions.classList.add('show');
+                selectedCount.textContent = `${selectedIds.size} selected`;
+            } else {
+                bulkActions.classList.remove('show');
+            }
+        }
+
+        function updateRowSelection() {
+            document.querySelectorAll('#reportsTable tbody tr').forEach(row => {
+                const checkbox = row.querySelector('input[type="checkbox"]');
+                if (checkbox) {
+                    const id = parseInt(row.querySelector('td:nth-child(2)').textContent);
+                    if (selectedIds.has(id)) {
+                        row.classList.add('selected');
+                    } else {
+                        row.classList.remove('selected');
+                    }
+                }
+            });
+        }
+
+        function clearSelection() {
+            selectedIds.clear();
+            document.getElementById('selectAll').checked = false;
+            updateBulkActions();
+            displayReports(getFilteredReports());
+        }
+
+        async function deleteSelected() {
+            if (selectedIds.size === 0) {
+                alert('No reports selected');
+                return;
+            }
+
+            if (!confirm(`Are you sure you want to delete ${selectedIds.size} report(s)? This action cannot be undone.`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/reports/delete-bulk', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ ids: Array.from(selectedIds) })
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    alert(data.message);
+                    clearSelection();
+                    closeDetail();
+                    loadReports();
+                } else {
+                    alert('Error deleting reports: ' + data.error);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Failed to delete reports');
+            }
+        }
+
+        function getFilteredReports() {
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            const filterBank = document.getElementById('filterBank').value;
+            const filterType = document.getElementById('filterType').value;
+            const filterYear = document.getElementById('filterYear').value;
+
+            return allReports.filter(report => {
+                const matchesSearch = !searchTerm ||
+                    (report.report_name && report.report_name.toLowerCase().includes(searchTerm)) ||
+                    (report.report_description && report.report_description.toLowerCase().includes(searchTerm)) ||
+                    report.bank_name.toLowerCase().includes(searchTerm);
+
+                const matchesBank = !filterBank || report.bank_symbol === filterBank;
+                const matchesType = !filterType || report.report_type === filterType;
+                const matchesYear = !filterYear || report.fiscal_year.toString() === filterYear;
+
+                return matchesSearch && matchesBank && matchesType && matchesYear;
+            });
+        }
+
+        function formatDate(dateString) {
+            if (!dateString) return '-';
+            const date = new Date(dateString);
+            return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+        }
+
+        function formatBytes(bytes) {
+            if (!bytes) return '-';
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+        }
+
+        // Search functionality
+        document.getElementById('searchInput').addEventListener('input', filterReports);
+        document.getElementById('filterBank').addEventListener('change', filterReports);
+        document.getElementById('filterType').addEventListener('change', filterReports);
+        document.getElementById('filterYear').addEventListener('change', filterReports);
+
+        function filterReports() {
+            const filtered = getFilteredReports();
+            displayReports(filtered);
+        }
+    </script>
+</body>
+</html>
