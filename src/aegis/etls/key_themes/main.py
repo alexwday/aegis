@@ -18,6 +18,7 @@ import hashlib
 import json
 import uuid
 import os
+import sys
 from collections import Counter
 from datetime import datetime
 from typing import Dict, Any, List
@@ -1425,7 +1426,12 @@ def main():
         generate_key_themes(bank_name=args.bank, fiscal_year=args.year, quarter=args.quarter)
     )
 
-    print(result)
+    is_success = isinstance(result, str) and result.strip().startswith("✅")
+    output_stream = sys.stdout if is_success else sys.stderr
+    print(result, file=output_stream)
+
+    if not is_success:
+        sys.exit(1)
 
 
 if __name__ == "__main__":
