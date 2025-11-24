@@ -58,13 +58,13 @@ ETL_CONFIGS = {
     "call_summary": {
         "module": "aegis.etls.call_summary.main",
         "report_type": "call_summary",
-        "description": "Earnings call summary by category"
+        "description": "Earnings call summary by category",
     },
     "key_themes": {
         "module": "aegis.etls.key_themes.main",
         "report_type": "key_themes",
-        "description": "Q&A themes extraction and grouping"
-    }
+        "description": "Q&A themes extraction and grouping",
+    },
 }
 
 
@@ -84,7 +84,7 @@ class ExecutionLock:
     def __enter__(self):
         """Acquire lock (blocking)."""
         logger.info(f"Attempting to acquire execution lock: {self.lock_file}")
-        self.file_handle = open(self.lock_file, 'w')
+        self.file_handle = open(self.lock_file, "w")
         try:
             # This will block until lock is available
             fcntl.flock(self.file_handle.fileno(), fcntl.LOCK_EX)
@@ -125,7 +125,7 @@ def load_monitored_institutions() -> Dict[str, Dict[str, Any]]:
     if not yaml_path.exists():
         raise FileNotFoundError(f"Monitored institutions file not found: {yaml_path}")
 
-    with open(yaml_path, 'r') as f:
+    with open(yaml_path, "r") as f:
         yaml_data = yaml.safe_load(f)
 
     # Use YAML keys directly (RY-CA, BMO-CA, etc.) as they match database bank_symbol
@@ -134,7 +134,7 @@ def load_monitored_institutions() -> Dict[str, Dict[str, Any]]:
         institutions[yaml_key] = {
             **data,
             "yaml_key": yaml_key,
-            "db_symbol": yaml_key.split('-')[0]  # Keep short symbol for reference
+            "db_symbol": yaml_key.split("-")[0],  # Keep short symbol for reference
         }
 
     logger.info(f"Loaded {len(institutions)} monitored institutions")
@@ -142,8 +142,7 @@ def load_monitored_institutions() -> Dict[str, Dict[str, Any]]:
 
 
 async def get_data_availability(
-    bank_symbols: Optional[List[str]] = None,
-    from_year: Optional[int] = None
+    bank_symbols: Optional[List[str]] = None, from_year: Optional[int] = None
 ) -> List[Dict[str, Any]]:
     """
     Query aegis_data_availability table for banks with transcript data.
@@ -192,7 +191,7 @@ async def get_data_availability(
             "bank_symbol": row.bank_symbol,
             "fiscal_year": row.fiscal_year,
             "quarter": row.quarter,
-            "database_names": row.database_names
+            "database_names": row.database_names,
         }
         for row in rows
     ]
@@ -201,7 +200,9 @@ async def get_data_availability(
     return availability
 
 
-async def get_existing_reports(bank_symbols: Optional[List[str]] = None) -> Set[Tuple[int, int, str, str]]:
+async def get_existing_reports(
+    bank_symbols: Optional[List[str]] = None,
+) -> Set[Tuple[int, int, str, str]]:
     """
     Query aegis_reports table for existing reports.
 
@@ -232,10 +233,7 @@ async def get_existing_reports(bank_symbols: Optional[List[str]] = None) -> Set[
         result = await conn.execute(text(query), params)
         rows = result.fetchall()
 
-    existing = {
-        (row.bank_id, row.fiscal_year, row.quarter, row.report_type)
-        for row in rows
-    }
+    existing = {(row.bank_id, row.fiscal_year, row.quarter, row.report_type) for row in rows}
 
     logger.info(f"Found {len(existing)} existing reports")
     return existing
@@ -245,7 +243,7 @@ def identify_gaps(
     availability: List[Dict[str, Any]],
     existing_reports: Set[Tuple[int, int, str, str]],
     institutions: Dict[str, Dict[str, Any]],
-    etl_filter: Optional[str] = None
+    etl_filter: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """
     Identify missing reports by comparing availability to existing reports.
@@ -283,15 +281,17 @@ def identify_gaps(
             # Check if report exists
             report_key = (bank_id, fiscal_year, quarter, report_type)
             if report_key not in existing_reports:
-                gaps.append({
-                    "etl_type": etl_type,
-                    "bank_id": bank_id,
-                    "bank_name": data["bank_name"],
-                    "bank_symbol": bank_symbol,
-                    "fiscal_year": fiscal_year,
-                    "quarter": quarter,
-                    "report_type": report_type
-                })
+                gaps.append(
+                    {
+                        "etl_type": etl_type,
+                        "bank_id": bank_id,
+                        "bank_name": data["bank_name"],
+                        "bank_symbol": bank_symbol,
+                        "fiscal_year": fiscal_year,
+                        "quarter": quarter,
+                        "report_type": report_type,
+                    }
+                )
 
     logger.info(f"Identified {len(gaps)} missing reports")
     return gaps
@@ -302,7 +302,8 @@ async def run_etl_with_retry(
     bank_symbol: str,
     fiscal_year: int,
     quarter: str,
-    dry_run: bool = False
+    dry_run: bool = False,
+    verbose: bool = False,
 ) -> Dict[str, Any]:
     """
     Execute an ETL with exponential backoff retry logic.
@@ -313,6 +314,7 @@ async def run_etl_with_retry(
         fiscal_year: Fiscal year
         quarter: Quarter (Q1-Q4)
         dry_run: If True, skip actual execution
+        verbose: If True, stream subprocess output to console
 
     Returns:
         Result dictionary with success status and metadata
@@ -330,7 +332,7 @@ async def run_etl_with_retry(
             "etl_type": etl_type,
             "bank_symbol": bank_symbol,
             "fiscal_year": fiscal_year,
-            "quarter": quarter
+            "quarter": quarter,
         }
 
     # Build command
@@ -343,7 +345,7 @@ async def run_etl_with_retry(
         "--year",
         str(fiscal_year),
         "--quarter",
-        quarter
+        quarter,
     ]
 
     # Retry loop with exponential backoff
@@ -353,12 +355,20 @@ async def run_etl_with_retry(
             start_time = time.time()
 
             # Run ETL subprocess
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=3600  # 1 hour timeout
-            )
+            if verbose:
+                # Stream output in real-time
+                print(f"\n{'='*60}")
+                print(f"OUTPUT: {log_prefix}")
+                print(f"{'='*60}")
+                result = subprocess.run(cmd, timeout=3600)  # 1 hour timeout
+                stdout_output = ""
+                stderr_output = ""
+            else:
+                result = subprocess.run(
+                    cmd, capture_output=True, text=True, timeout=3600  # 1 hour timeout
+                )
+                stdout_output = result.stdout or ""
+                stderr_output = result.stderr or ""
 
             duration = time.time() - start_time
 
@@ -371,10 +381,13 @@ async def run_etl_with_retry(
                     "fiscal_year": fiscal_year,
                     "quarter": quarter,
                     "duration": duration,
-                    "attempts": attempt
+                    "attempts": attempt,
                 }
             else:
-                error_msg = result.stderr[-500:] if result.stderr else "Unknown error"
+                error_msg = stderr_output[-500:] if stderr_output else "Unknown error"
+                if not verbose and stdout_output:
+                    # Also check stdout for errors when not in verbose mode
+                    error_msg += f"\n[stdout]: {stdout_output[-500:]}"
                 logger.error(f"❌ Failed {log_prefix} (attempt {attempt}): {error_msg}")
 
                 if attempt < MAX_RETRIES:
@@ -391,7 +404,7 @@ async def run_etl_with_retry(
                         "fiscal_year": fiscal_year,
                         "quarter": quarter,
                         "error": error_msg,
-                        "attempts": attempt
+                        "attempts": attempt,
                     }
 
         except subprocess.TimeoutExpired:
@@ -404,7 +417,7 @@ async def run_etl_with_retry(
                     "fiscal_year": fiscal_year,
                     "quarter": quarter,
                     "error": "Timeout after 1 hour",
-                    "attempts": attempt
+                    "attempts": attempt,
                 }
             delay = min(INITIAL_RETRY_DELAY * (2 ** (attempt - 1)), MAX_RETRY_DELAY)
             await asyncio.sleep(delay)
@@ -419,13 +432,18 @@ async def run_etl_with_retry(
                     "fiscal_year": fiscal_year,
                     "quarter": quarter,
                     "error": str(e),
-                    "attempts": attempt
+                    "attempts": attempt,
                 }
             delay = min(INITIAL_RETRY_DELAY * (2 ** (attempt - 1)), MAX_RETRY_DELAY)
             await asyncio.sleep(delay)
 
 
-async def execute_etls_parallel(gaps: List[Dict[str, Any]], dry_run: bool = False, max_parallel: int = MAX_PARALLEL_ETLS) -> Dict[str, Any]:
+async def execute_etls_parallel(
+    gaps: List[Dict[str, Any]],
+    dry_run: bool = False,
+    max_parallel: int = MAX_PARALLEL_ETLS,
+    verbose: bool = False,
+) -> Dict[str, Any]:
     """
     Execute ETLs in parallel across banks.
 
@@ -436,11 +454,14 @@ async def execute_etls_parallel(gaps: List[Dict[str, Any]], dry_run: bool = Fals
         gaps: List of ETL jobs to execute
         dry_run: If True, skip actual execution
         max_parallel: Maximum number of banks to process in parallel
+        verbose: If True, stream subprocess output in real-time
 
     Returns:
         Execution summary with success/failure counts
     """
-    logger.info(f"Starting parallel execution of {len(gaps)} ETL jobs (max {max_parallel} parallel)")
+    logger.info(
+        f"Starting parallel execution of {len(gaps)} ETL jobs (max {max_parallel} parallel)"
+    )
     start_time = time.time()
 
     # Group gaps by bank-period (so call_summary and key_themes for same bank run sequentially)
@@ -456,7 +477,9 @@ async def execute_etls_parallel(gaps: List[Dict[str, Any]], dry_run: bool = Fals
     # Execute with semaphore to limit parallelism
     semaphore = asyncio.Semaphore(max_parallel)
 
-    async def process_bank_period(bank_symbol: str, fiscal_year: int, quarter: str, jobs: List[Dict[str, Any]]):
+    async def process_bank_period(
+        bank_symbol: str, fiscal_year: int, quarter: str, jobs: List[Dict[str, Any]]
+    ):
         """Process all ETLs for a single bank-period sequentially."""
         async with semaphore:
             results = []
@@ -466,7 +489,8 @@ async def execute_etls_parallel(gaps: List[Dict[str, Any]], dry_run: bool = Fals
                     bank_symbol=bank_symbol,
                     fiscal_year=fiscal_year,
                     quarter=quarter,
-                    dry_run=dry_run
+                    dry_run=dry_run,
+                    verbose=verbose,
                 )
                 results.append(result)
             return results
@@ -493,7 +517,7 @@ async def execute_etls_parallel(gaps: List[Dict[str, Any]], dry_run: bool = Fals
         "successful": successful,
         "failed": failed,
         "duration": duration,
-        "results": results
+        "results": results,
     }
 
     logger.info(f"Execution complete: {successful}/{len(results)} successful in {duration:.1f}s")
@@ -506,7 +530,7 @@ def print_summary(
     availability: List[Dict[str, Any]],
     existing_reports: Set[Tuple[int, int, str, str]],
     gaps: List[Dict[str, Any]],
-    execution_summary: Optional[Dict[str, Any]] = None
+    execution_summary: Optional[Dict[str, Any]] = None,
 ):
     """Print execution summary to console."""
     print("\n" + "=" * 80)
@@ -549,13 +573,15 @@ def print_summary(
         print(f"Duration: {execution_summary['duration']:.1f}s")
 
         # Show failures if any
-        failures = [r for r in execution_summary['results'] if not r.get('success')]
+        failures = [r for r in execution_summary["results"] if not r.get("success")]
         if failures:
             print("\nFailed Jobs:")
             for failure in failures:
-                error_preview = failure.get('error', 'Unknown')[:100]
-                print(f"  ❌ {failure['bank_symbol']} {failure['fiscal_year']} {failure['quarter']} "
-                      f"[{failure['etl_type']}]: {error_preview}")
+                error_preview = failure.get("error", "Unknown")[:100]
+                print(
+                    f"  ❌ {failure['bank_symbol']} {failure['fiscal_year']} {failure['quarter']} "
+                    f"[{failure['etl_type']}]: {error_preview}"
+                )
         print()
 
     print("=" * 80 + "\n")
@@ -585,43 +611,39 @@ Examples:
 
   # No lock (for testing - allows concurrent runs)
   python scripts/etl_orchestrator.py --no-lock
-        """
+        """,
     )
 
     parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Preview gaps without executing ETLs"
+        "--dry-run", action="store_true", help="Preview gaps without executing ETLs"
+    )
+
+    parser.add_argument("--bank-symbol", help="Process specific bank only (e.g., RY-CA, JPM-US)")
+
+    parser.add_argument(
+        "--etl-type", choices=["call_summary", "key_themes"], help="Process specific ETL type only"
     )
 
     parser.add_argument(
-        "--bank-symbol",
-        help="Process specific bank only (e.g., RY-CA, JPM-US)"
-    )
-
-    parser.add_argument(
-        "--etl-type",
-        choices=["call_summary", "key_themes"],
-        help="Process specific ETL type only"
-    )
-
-    parser.add_argument(
-        "--no-lock",
-        action="store_true",
-        help="Disable execution lock (for testing only)"
+        "--no-lock", action="store_true", help="Disable execution lock (for testing only)"
     )
 
     parser.add_argument(
         "--max-parallel",
         type=int,
         default=MAX_PARALLEL_ETLS,
-        help=f"Maximum parallel bank processes (default: {MAX_PARALLEL_ETLS})"
+        help=f"Maximum parallel bank processes (default: {MAX_PARALLEL_ETLS})",
     )
 
     parser.add_argument(
-        "--from-year",
-        type=int,
-        help="Only process data from this fiscal year forward (e.g., 2024)"
+        "--from-year", type=int, help="Only process data from this fiscal year forward (e.g., 2024)"
+    )
+
+    parser.add_argument(
+        "--verbose",
+        "-v",
+        action="store_true",
+        help="Stream subprocess output in real-time (useful for debugging)",
     )
 
     args = parser.parse_args()
@@ -680,7 +702,9 @@ async def _run_orchestrator(args, execution_id: str):
 
     # Execute ETLs
     logger.info(f"Executing {len(gaps)} ETL jobs...")
-    execution_summary = await execute_etls_parallel(gaps, dry_run=args.dry_run, max_parallel=args.max_parallel)
+    execution_summary = await execute_etls_parallel(
+        gaps, dry_run=args.dry_run, max_parallel=args.max_parallel, verbose=args.verbose
+    )
 
     # Print final summary
     print_summary(institutions, availability, existing_reports, gaps, execution_summary)
