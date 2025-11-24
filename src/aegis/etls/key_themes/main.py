@@ -14,7 +14,6 @@ Usage:
 
 import argparse
 import asyncio
-import hashlib
 import json
 import uuid
 import os
@@ -1190,11 +1189,7 @@ async def generate_key_themes(bank_name: str, fiscal_year: int, quarter: str) ->
         output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "output")
         os.makedirs(output_dir, exist_ok=True)
 
-        content_hash = hashlib.md5(
-            f"{bank_info['bank_id']}_{fiscal_year}_{quarter}_{datetime.now().isoformat()}".encode()
-        ).hexdigest()[:8]
-
-        filename_base = f"{bank_info['bank_symbol']}_{fiscal_year}_{quarter}_{content_hash}"
+        filename_base = f"{bank_info['bank_symbol']}_{fiscal_year}_{quarter}"
         docx_filename = f"{filename_base}.docx"
         filepath = os.path.join(output_dir, docx_filename)
 

@@ -24,7 +24,6 @@ Usage:
 
 import argparse
 import asyncio
-import hashlib
 import json
 import os
 import uuid
@@ -1509,13 +1508,10 @@ async def generate_cm_readthrough(
         output_dir = Path(__file__).parent / "output"
         output_dir.mkdir(exist_ok=True)
 
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        content_hash = hashlib.md5(f"{fiscal_year}_{quarter}_{timestamp}".encode()).hexdigest()[:8]
-
         if output_path:
             docx_path = Path(output_path)
         else:
-            docx_path = output_dir / f"CM_Readthrough_{fiscal_year}_{quarter}_{content_hash}.docx"
+            docx_path = output_dir / f"CM_Readthrough_{fiscal_year}_{quarter}.docx"
 
         create_combined_document(results, str(docx_path))
         logger.info(
