@@ -529,25 +529,33 @@ async def extract_all_sections(
                 num_quarters=8,
             )
 
-            # Get units for the chart metric
+            # Get is_bps flag for the chart metric
             chart_metric_data = next(
                 (m for m in all_metrics if m["parameter"] == chart_metric_name), None
             )
-            chart_units = chart_metric_data["units"] if chart_metric_data else ""
+            chart_is_bps = chart_metric_data.get("is_bps", False) if chart_metric_data else False
 
-            chart_json = format_chart_json(chart_metric_name, chart_history, chart_units)
+            chart_json = format_chart_json(chart_metric_name, chart_history, chart_is_bps)
             sections["1_keymetrics_chart"] = chart_json
 
             # Add chart data to debug log
             llm_debug_log["sections"]["1_keymetrics_chart"] = {
                 "metric_name": chart_metric_name,
-                "units": chart_units,
+                "is_bps": chart_is_bps,
+                "unit_label": chart_json.get("unit", ""),
                 "raw_history": chart_history,
-                "formatted_data_points": chart_json.get("data_points", []),
-                "data_points_count": len(chart_json.get("data_points", [])),
+                "formatted_quarters": chart_json.get("quarters", []),
+                "formatted_values": chart_json.get("values", []),
+                "data_points_count": len(chart_json.get("values", [])),
             }
         else:
-            sections["1_keymetrics_chart"] = {"metric_name": "N/A", "units": "", "data_points": []}
+            sections["1_keymetrics_chart"] = {
+                "label": "N/A",
+                "unit": "",
+                "decimal_places": 0,
+                "quarters": [],
+                "values": [],
+            }
             llm_debug_log["sections"]["1_keymetrics_chart"] = {
                 "metric_name": "N/A",
                 "reason": "No chart metric selected",
@@ -555,7 +563,13 @@ async def extract_all_sections(
             }
     else:
         sections["1_keymetrics_tiles"] = {"source": "Supp Pack", "metrics": []}
-        sections["1_keymetrics_chart"] = {"metric_name": "N/A", "units": "", "data_points": []}
+        sections["1_keymetrics_chart"] = {
+            "label": "N/A",
+            "unit": "",
+            "decimal_places": 0,
+            "quarters": [],
+            "values": [],
+        }
         llm_debug_log["sections"]["1_keymetrics_selection"] = {
             "available_metrics": 0,
             "chart_metric": "",

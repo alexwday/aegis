@@ -665,7 +665,7 @@ async def retrieve_metric_history(
 
 
 def format_chart_json(
-    metric_name: str, history: List[Dict[str, Any]], units: str = ""
+    metric_name: str, history: List[Dict[str, Any]], is_bps: bool = False
 ) -> Dict[str, Any]:
     """
     Format historical data into the JSON structure for the chart.
@@ -673,32 +673,45 @@ def format_chart_json(
     Args:
         metric_name: Name of the metric being charted
         history: List of historical data points from retrieve_metric_history()
-        units: Units for the metric (e.g., "millions", "%")
+        is_bps: If True, value is a percentage; if False, value is in millions
 
     Returns:
-        Formatted JSON structure for 1_keymetrics_chart.json:
+        Formatted JSON structure for 1_keymetrics_chart.json matching template expectations:
         {
-            "metric_name": "Net Income",
-            "units": "millions",
-            "data_points": [
-                {"label": "Q4 2022", "value": 4200},
-                {"label": "Q1 2023", "value": 4350},
-                ...
-            ]
+            "label": "Net Income",
+            "unit": "$M",
+            "decimal_places": 0,
+            "quarters": ["Q3 23", "Q4 23", ...],
+            "values": [4200, 4350, ...]
         }
     """
-    data_points = []
+    quarters = []
+    values = []
+
     for h in history:
         if h["value"] is not None:
-            data_points.append(
-                {
-                    "label": h["quarter"],
-                    "value": h["value"],
-                }
-            )
+            # Format quarter label as "Q3 23" style
+            q_label = h["quarter"]  # e.g., "Q3 2023"
+            parts = q_label.split()
+            if len(parts) == 2:
+                q_label = f"{parts[0]} {parts[1][2:]}"  # "Q3 2023" -> "Q3 23"
+            quarters.append(q_label)
+            values.append(h["value"])
+
+    # Determine unit label and decimal places based on is_bps flag
+    # is_bps=True: value is a percentage (e.g., ROE 13.5%)
+    # is_bps=False: value is in millions (e.g., Net Income $4,200M)
+    if is_bps:
+        unit_label = "%"
+        decimal_places = 2
+    else:
+        unit_label = "$M"
+        decimal_places = 0
 
     return {
-        "metric_name": metric_name,
-        "units": units,
-        "data_points": data_points,
+        "label": metric_name,
+        "unit": unit_label,
+        "decimal_places": decimal_places,
+        "quarters": quarters,
+        "values": values,
     }
