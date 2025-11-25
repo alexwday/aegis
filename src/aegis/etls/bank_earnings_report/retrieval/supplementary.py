@@ -462,9 +462,8 @@ def format_delta(value: Optional[float], units: str, is_bps: bool = False) -> Di
 
     # Use BPS display if flagged or if units indicate basis points
     if is_bps or units == "bps":
-        # Display as basis points (multiply percentage by 100)
-        bps_val = abs_val * 100
-        display = f"{arrow} {bps_val:.0f}bps" if value != 0 else "—"
+        # Display as basis points - value is already in bps, don't multiply
+        display = f"{arrow} {abs_val:.0f}bps" if value != 0 else "—"
     else:
         # Display as percentage
         display = f"{arrow} {abs_val:.1f}%" if value != 0 else "—"
