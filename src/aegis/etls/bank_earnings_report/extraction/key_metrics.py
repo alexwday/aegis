@@ -275,6 +275,7 @@ Return exactly {num_metrics} KPI names."""
                             "name": m["parameter"],
                             "value": m["actual"],
                             "units": m.get("units", ""),
+                            "is_bps": m.get("is_bps", False),
                             "qoq": m["qoq"],
                             "yoy": m["yoy"],
                             "2y": m.get("2y"),
