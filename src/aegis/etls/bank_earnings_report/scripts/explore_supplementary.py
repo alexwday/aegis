@@ -37,9 +37,9 @@ async def explore_table():
         # 2. Distinct banks
         print("\n### 2. Distinct Banks ###")
         result = await conn.execute(text("""
-            SELECT DISTINCT bank, bank_symbol
+            SELECT DISTINCT "bank", "bank_symbol"
             FROM benchmarking_report
-            ORDER BY bank
+            ORDER BY "bank"
         """))
         rows = result.fetchall()
         print(tabulate(rows, headers=["bank", "bank_symbol"], tablefmt="simple"))
@@ -47,9 +47,9 @@ async def explore_table():
         # 3. Distinct periods (yr_Qtr, quarter, fiscal_year)
         print("\n### 3. Sample Periods (first 20) ###")
         result = await conn.execute(text("""
-            SELECT DISTINCT "yr_Qtr", quarter, fiscal_year
+            SELECT DISTINCT "yr_Qtr", "quarter", "fiscal_year"
             FROM benchmarking_report
-            ORDER BY fiscal_year DESC, quarter DESC
+            ORDER BY "fiscal_year" DESC, "quarter" DESC
             LIMIT 20
         """))
         rows = result.fetchall()
@@ -58,9 +58,9 @@ async def explore_table():
         # 4. Distinct parameters (looking for dividend-related)
         print("\n### 4. All Distinct Parameters ###")
         result = await conn.execute(text("""
-            SELECT DISTINCT parameter
+            SELECT DISTINCT "Parameter"
             FROM benchmarking_report
-            ORDER BY parameter
+            ORDER BY "Parameter"
         """))
         rows = result.fetchall()
         for row in rows:
@@ -74,32 +74,32 @@ async def explore_table():
         # 5. Search for dividend in parameter names (case-insensitive)
         print("\n### 5. Dividend-Related Parameters (case-insensitive search) ###")
         result = await conn.execute(text("""
-            SELECT DISTINCT parameter, "Platform", "Units"
+            SELECT DISTINCT "Parameter", "Platform", "Units"
             FROM benchmarking_report
-            WHERE LOWER(parameter) LIKE '%dividend%'
-            ORDER BY parameter
+            WHERE LOWER("Parameter") LIKE '%dividend%'
+            ORDER BY "Parameter"
         """))
         rows = result.fetchall()
         if rows:
-            print(tabulate(rows, headers=["parameter", "Platform", "Units"], tablefmt="simple"))
+            print(tabulate(rows, headers=["Parameter", "Platform", "Units"], tablefmt="simple"))
         else:
             print("No parameters containing 'dividend' found.")
 
         # 6. If dividend found, show sample data for one bank/period
         print("\n### 6. Sample Dividend Data (if exists) ###")
         result = await conn.execute(text("""
-            SELECT bank, bank_symbol, fiscal_year, quarter, parameter,
+            SELECT "bank", "bank_symbol", "fiscal_year", "quarter", "Parameter",
                    "Actual", "QoQ", "YoY", "Units", "Platform"
             FROM benchmarking_report
-            WHERE LOWER(parameter) LIKE '%dividend%'
-            ORDER BY fiscal_year DESC, quarter DESC
+            WHERE LOWER("Parameter") LIKE '%dividend%'
+            ORDER BY "fiscal_year" DESC, "quarter" DESC
             LIMIT 10
         """))
         rows = result.fetchall()
         if rows:
             print(tabulate(
                 rows,
-                headers=["bank", "symbol", "year", "qtr", "parameter", "Actual", "QoQ", "YoY", "Units", "Platform"],
+                headers=["bank", "symbol", "year", "qtr", "Parameter", "Actual", "QoQ", "YoY", "Units", "Platform"],
                 tablefmt="simple"
             ))
         else:
@@ -143,27 +143,27 @@ async def explore_table():
         # 10. Check for RBC dividend specifically
         print("\n### 10. RBC Dividend Data (all periods) ###")
         result = await conn.execute(text("""
-            SELECT fiscal_year, quarter, parameter, "Actual", "QoQ", "YoY", "Units"
+            SELECT "fiscal_year", "quarter", "Parameter", "Actual", "QoQ", "YoY", "Units"
             FROM benchmarking_report
-            WHERE (bank_symbol = 'RY' OR LOWER(bank) LIKE '%royal%')
-              AND LOWER(parameter) LIKE '%dividend%'
-            ORDER BY fiscal_year DESC, quarter DESC
+            WHERE ("bank_symbol" = 'RY' OR LOWER("bank") LIKE '%royal%')
+              AND LOWER("Parameter") LIKE '%dividend%'
+            ORDER BY "fiscal_year" DESC, "quarter" DESC
         """))
         rows = result.fetchall()
         if rows:
             print(tabulate(
                 rows,
-                headers=["year", "qtr", "parameter", "Actual", "QoQ", "YoY", "Units"],
+                headers=["year", "qtr", "Parameter", "Actual", "QoQ", "YoY", "Units"],
                 tablefmt="simple"
             ))
         else:
             print("No RBC dividend data found. Trying broader search...")
             # Try searching for any RBC data to see what parameters exist
             result = await conn.execute(text("""
-                SELECT DISTINCT parameter
+                SELECT DISTINCT "Parameter"
                 FROM benchmarking_report
-                WHERE bank_symbol = 'RY' OR LOWER(bank) LIKE '%royal%'
-                ORDER BY parameter
+                WHERE "bank_symbol" = 'RY' OR LOWER("bank") LIKE '%royal%'
+                ORDER BY "Parameter"
                 LIMIT 30
             """))
             rows = result.fetchall()
