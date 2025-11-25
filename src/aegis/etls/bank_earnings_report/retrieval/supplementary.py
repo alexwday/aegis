@@ -511,3 +511,182 @@ def format_key_metrics_json(metrics: List[Dict[str, Any]]) -> Dict[str, Any]:
         "source": "Supp Pack",
         "metrics": formatted_metrics,
     }
+
+
+# =============================================================================
+# Historical Data Retrieval for Charts
+# =============================================================================
+
+
+def get_previous_quarters(fiscal_year: int, quarter: str, num_quarters: int = 8) -> List[tuple]:
+    """
+    Calculate the previous N quarters from a given quarter.
+
+    Args:
+        fiscal_year: Starting fiscal year (e.g., 2024)
+        quarter: Starting quarter (e.g., 'Q3')
+        num_quarters: Number of quarters to retrieve (default 8)
+
+    Returns:
+        List of (year, quarter) tuples in chronological order (oldest first)
+    """
+    quarters = ["Q1", "Q2", "Q3", "Q4"]
+    q_idx = quarters.index(quarter)
+
+    result = []
+    current_year = fiscal_year
+    current_q_idx = q_idx
+
+    # Include the current quarter and go back num_quarters-1 more
+    for _ in range(num_quarters):
+        result.append((current_year, quarters[current_q_idx]))
+        current_q_idx -= 1
+        if current_q_idx < 0:
+            current_q_idx = 3
+            current_year -= 1
+
+    # Reverse to get chronological order (oldest first)
+    return list(reversed(result))
+
+
+async def retrieve_metric_history(
+    bank_symbol: str,
+    metric_name: str,
+    fiscal_year: int,
+    quarter: str,
+    context: Dict[str, Any],
+    num_quarters: int = 8,
+) -> List[Dict[str, Any]]:
+    """
+    Retrieve historical data for a specific metric across multiple quarters.
+
+    Args:
+        bank_symbol: Bank symbol with suffix (e.g., 'RY-CA')
+        metric_name: Parameter name to retrieve (e.g., 'Net Income')
+        fiscal_year: Current fiscal year
+        quarter: Current quarter
+        context: Execution context with execution_id
+        num_quarters: Number of quarters to retrieve (default 8)
+
+    Returns:
+        List of dicts with quarter data in chronological order:
+        [
+            {"quarter": "Q4 2022", "value": 4200.0},
+            {"quarter": "Q1 2023", "value": 4350.0},
+            ...
+        ]
+    """
+    logger = get_logger()
+    execution_id = context.get("execution_id")
+
+    # Get list of quarters to query
+    quarters_to_query = get_previous_quarters(fiscal_year, quarter, num_quarters)
+
+    logger.info(
+        "etl.bank_earnings_report.retrieve_metric_history",
+        execution_id=execution_id,
+        bank_symbol=bank_symbol,
+        metric_name=metric_name,
+        quarters=len(quarters_to_query),
+    )
+
+    try:
+        async with get_connection() as conn:
+            # Build query for all quarters at once
+            result = await conn.execute(
+                text(
+                    """
+                    SELECT
+                        "fiscal_year",
+                        "quarter",
+                        "Actual"
+                    FROM benchmarking_report
+                    WHERE "bank_symbol" = :bank_symbol
+                      AND "Parameter" = :metric_name
+                      AND "Platform" = 'Enterprise'
+                      AND ("fiscal_year", "quarter") IN :quarters
+                    ORDER BY "fiscal_year", "quarter"
+                """
+                ),
+                {
+                    "bank_symbol": bank_symbol,
+                    "metric_name": metric_name,
+                    "quarters": tuple(quarters_to_query),
+                },
+            )
+
+            # Build a lookup dict from results
+            data_lookup = {}
+            for row in result:
+                key = (row[0], row[1])  # (year, quarter)
+                data_lookup[key] = float(row[2]) if row[2] is not None else None
+
+            # Build output in chronological order
+            history = []
+            for year, q in quarters_to_query:
+                value = data_lookup.get((year, q))
+                history.append(
+                    {
+                        "quarter": f"{q} {year}",
+                        "fiscal_year": year,
+                        "quarter_num": q,
+                        "value": value,
+                    }
+                )
+
+            logger.info(
+                "etl.bank_earnings_report.metric_history_retrieved",
+                execution_id=execution_id,
+                metric_name=metric_name,
+                data_points=len([h for h in history if h["value"] is not None]),
+            )
+
+            return history
+
+    except Exception as e:
+        logger.error(
+            "etl.bank_earnings_report.metric_history_error",
+            execution_id=execution_id,
+            error=str(e),
+        )
+        return []
+
+
+def format_chart_json(
+    metric_name: str, history: List[Dict[str, Any]], units: str = ""
+) -> Dict[str, Any]:
+    """
+    Format historical data into the JSON structure for the chart.
+
+    Args:
+        metric_name: Name of the metric being charted
+        history: List of historical data points from retrieve_metric_history()
+        units: Units for the metric (e.g., "millions", "%")
+
+    Returns:
+        Formatted JSON structure for 1_keymetrics_chart.json:
+        {
+            "metric_name": "Net Income",
+            "units": "millions",
+            "data_points": [
+                {"label": "Q4 2022", "value": 4200},
+                {"label": "Q1 2023", "value": 4350},
+                ...
+            ]
+        }
+    """
+    data_points = []
+    for h in history:
+        if h["value"] is not None:
+            data_points.append(
+                {
+                    "label": h["quarter"],
+                    "value": h["value"],
+                }
+            )
+
+    return {
+        "metric_name": metric_name,
+        "units": units,
+        "data_points": data_points,
+    }

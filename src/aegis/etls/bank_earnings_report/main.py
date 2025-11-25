@@ -5,7 +5,7 @@ Generates quarterly earnings reports by retrieving data from multiple sources
 and rendering to HTML via Jinja2 template.
 
 Usage:
-    python -m aegis.etls.bank_earnings_report.main --bank "Royal Bank of Canada" --year 2024 --quarter Q3
+    python -m aegis.etls.bank_earnings_report.main --bank "Royal Bank" --year 2024 --quarter Q3
     python -m aegis.etls.bank_earnings_report.main --bank RY --year 2024 --quarter Q3
     python -m aegis.etls.bank_earnings_report.main --bank 1 --year 2024 --quarter Q3
 """
@@ -226,9 +226,7 @@ async def verify_data_availability(
         row = result.fetchone()
 
         if not row or not row[0]:
-            raise ValueError(
-                f"No data available for {bank_name} {quarter} {fiscal_year}"
-            )
+            raise ValueError(f"No data available for {bank_name} {quarter} {fiscal_year}")
 
         available_dbs = row[0]
         availability = {
@@ -440,8 +438,10 @@ async def extract_all_sections(
         retrieve_all_metrics,
         retrieve_metrics_by_names,
         format_key_metrics_json,
+        retrieve_metric_history,
+        format_chart_json,
     )
-    from .extraction.key_metrics import select_top_metrics
+    from .extraction.key_metrics import select_chart_and_tile_metrics
 
     execution_id = context.get("execution_id")
     db_symbol = f"{bank_info['bank_symbol']}-CA"
@@ -457,9 +457,7 @@ async def extract_all_sections(
     # =========================================================================
     # Section 0: Header Params (no DB needed)
     # =========================================================================
-    sections["0_header_params"] = extract_header_params(
-        bank_info, fiscal_year, quarter
-    )
+    sections["0_header_params"] = extract_header_params(bank_info, fiscal_year, quarter)
     logger.info("etl.bank_earnings_report.section_complete", section="0_header_params")
 
     # =========================================================================
@@ -470,7 +468,7 @@ async def extract_all_sections(
     logger.info("etl.bank_earnings_report.section_complete", section="0_header_dividend")
 
     # =========================================================================
-    # Section 1: Key Metrics Tiles (from supplementary + LLM selection)
+    # Section 1: Key Metrics Tiles + Chart (from supplementary + LLM selection)
     # =========================================================================
     all_metrics = await retrieve_all_metrics(db_symbol, fiscal_year, quarter, context)
 
@@ -483,90 +481,99 @@ async def extract_all_sections(
     }
 
     if all_metrics:
-        # LLM selects top 6 metrics
-        selection_result = await select_top_metrics(
+        # LLM selects 1 chart metric + 6 tile metrics
+        selection_result = await select_chart_and_tile_metrics(
             metrics=all_metrics,
             bank_name=bank_info["bank_name"],
             quarter=quarter,
             fiscal_year=fiscal_year,
             context=context,
-            num_metrics=6,
+            num_tile_metrics=6,
         )
 
-        # Store debug info
-        llm_debug_log["sections"]["1_keymetrics_tiles"] = {
+        # Store debug info for chart and tiles
+        llm_debug_log["sections"]["1_keymetrics_selection"] = {
             "available_metrics": selection_result.get("available_metrics", 0),
-            "selected_metrics": selection_result.get("selected_metrics", []),
-            "reasoning": selection_result.get("reasoning", ""),
+            "available_chartable": selection_result.get("available_chartable", []),
+            "chart_metric": selection_result.get("chart_metric", ""),
+            "chart_reasoning": selection_result.get("chart_reasoning", ""),
+            "tile_metrics": selection_result.get("tile_metrics", []),
+            "tile_reasoning": selection_result.get("tile_reasoning", ""),
             "all_metrics_summary": selection_result.get("all_metrics_summary", []),
         }
 
-        # Retrieve the selected metrics
-        selected_names = selection_result.get("selected_metrics", [])
-        selected_metrics = await retrieve_metrics_by_names(
-            db_symbol, fiscal_year, quarter, selected_names, context
+        # Retrieve the selected tile metrics
+        tile_names = selection_result.get("tile_metrics", [])
+        tile_metrics = await retrieve_metrics_by_names(
+            db_symbol, fiscal_year, quarter, tile_names, context
         )
+        sections["1_keymetrics_tiles"] = format_key_metrics_json(tile_metrics)
 
-        sections["1_keymetrics_tiles"] = format_key_metrics_json(selected_metrics)
+        # Retrieve historical data for the chart metric
+        chart_metric_name = selection_result.get("chart_metric")
+        if chart_metric_name:
+            chart_history = await retrieve_metric_history(
+                bank_symbol=db_symbol,
+                metric_name=chart_metric_name,
+                fiscal_year=fiscal_year,
+                quarter=quarter,
+                context=context,
+                num_quarters=8,
+            )
+
+            # Get units for the chart metric
+            chart_metric_data = next(
+                (m for m in all_metrics if m["parameter"] == chart_metric_name), None
+            )
+            chart_units = chart_metric_data["units"] if chart_metric_data else ""
+
+            sections["1_keymetrics_chart"] = format_chart_json(
+                chart_metric_name, chart_history, chart_units
+            )
+        else:
+            sections["1_keymetrics_chart"] = {"metric_name": "N/A", "units": "", "data_points": []}
     else:
         sections["1_keymetrics_tiles"] = {"source": "Supp Pack", "metrics": []}
-        llm_debug_log["sections"]["1_keymetrics_tiles"] = {
+        sections["1_keymetrics_chart"] = {"metric_name": "N/A", "units": "", "data_points": []}
+        llm_debug_log["sections"]["1_keymetrics_selection"] = {
             "available_metrics": 0,
-            "selected_metrics": [],
-            "reasoning": "No metrics available",
+            "chart_metric": "",
+            "chart_reasoning": "No metrics available",
+            "tile_metrics": [],
+            "tile_reasoning": "No metrics available",
         }
 
     # Store debug log in context for later saving
     context["llm_debug_log"] = llm_debug_log
 
     logger.info("etl.bank_earnings_report.section_complete", section="1_keymetrics_tiles")
+    logger.info("etl.bank_earnings_report.section_complete", section="1_keymetrics_chart")
 
     # =========================================================================
     # Placeholder sections (not yet implemented)
     # =========================================================================
 
     # Key Metrics Overview - placeholder (template uses .narrative)
-    sections["1_keymetrics_overview"] = {
-        "narrative": "Overview content not yet implemented."
-    }
-
-    # Key Metrics Chart - placeholder with empty data
-    sections["1_keymetrics_chart"] = {
-        "metric_name": "Net Income",
-        "data_points": []
-    }
+    sections["1_keymetrics_overview"] = {"narrative": "Overview content not yet implemented."}
 
     # Key Metrics Items of Note - placeholder (template uses .source and .entries)
-    sections["1_keymetrics_items"] = {
-        "source": "Supp Pack",
-        "entries": []
-    }
+    sections["1_keymetrics_items"] = {"source": "Supp Pack", "entries": []}
 
     # Narrative - placeholder (template uses .entries)
-    sections["2_narrative"] = {
-        "entries": []
-    }
+    sections["2_narrative"] = {"entries": []}
 
     # Analyst Focus - placeholder (template uses .source and .entries)
-    sections["3_analyst_focus"] = {
-        "source": "Transcript",
-        "entries": []
-    }
+    sections["3_analyst_focus"] = {"source": "Transcript", "entries": []}
 
     # Segments - placeholder (template uses .entries)
-    sections["4_segments"] = {
-        "entries": []
-    }
+    sections["4_segments"] = {"entries": []}
 
-    # Capital & Risk - placeholder (template uses .source, .regulatory_capital, .rwa, .liquidity_credit)
+    # Capital & Risk - placeholder (uses .source, .regulatory_capital, .rwa, .liquidity_credit)
     sections["5_capital_risk"] = {
         "source": "Pillar 3",
         "regulatory_capital": [],
-        "rwa": {
-            "components": [],
-            "total": ""
-        },
-        "liquidity_credit": []
+        "rwa": {"components": [], "total": ""},
+        "liquidity_credit": [],
     }
 
     logger.info(
@@ -698,8 +705,12 @@ async def save_to_database(
                     """
                 ),
                 {
-                    "report_name": f"{bank_info['bank_symbol']} {quarter} {fiscal_year} Earnings Report",
-                    "report_description": "Quarterly earnings report with key metrics, narratives, and analysis",
+                    "report_name": (
+                        f"{bank_info['bank_symbol']} {quarter} {fiscal_year} Earnings Report"
+                    ),
+                    "report_description": (
+                        "Quarterly earnings report with key metrics, narratives, and analysis"
+                    ),
                     "report_type": "bank_earnings_report",
                     "bank_id": bank_info["bank_id"],
                     "bank_name": bank_info["bank_name"],
@@ -736,9 +747,7 @@ async def save_to_database(
 # =============================================================================
 
 
-async def generate_bank_earnings_report(
-    bank_name: str, fiscal_year: int, quarter: str
-) -> str:
+async def generate_bank_earnings_report(bank_name: str, fiscal_year: int, quarter: str) -> str:
     """
     Generate a bank earnings report.
 
@@ -805,12 +814,8 @@ async def generate_bank_earnings_report(
         supplementary_task = retrieve_supplementary_data(
             bank_info["bank_id"], fiscal_year, quarter, context
         )
-        pillar3_task = retrieve_pillar3_data(
-            bank_info["bank_id"], fiscal_year, quarter, context
-        )
-        rts_task = retrieve_rts_data(
-            bank_info["bank_id"], fiscal_year, quarter, context
-        )
+        pillar3_task = retrieve_pillar3_data(bank_info["bank_id"], fiscal_year, quarter, context)
+        rts_task = retrieve_rts_data(bank_info["bank_id"], fiscal_year, quarter, context)
         transcript_task = retrieve_transcript_data(
             bank_info["bank_id"], fiscal_year, quarter, context
         )
@@ -834,9 +839,7 @@ async def generate_bank_earnings_report(
         # =================================================================
         # Stage 3: Section Extraction
         # =================================================================
-        sections = await extract_all_sections(
-            bank_info, fiscal_year, quarter, raw_data, context
-        )
+        sections = await extract_all_sections(bank_info, fiscal_year, quarter, raw_data, context)
 
         # =================================================================
         # Stage 4: Template Rendering
@@ -870,9 +873,7 @@ async def generate_bank_earnings_report(
         # =================================================================
         # Stage 5: Database Storage
         # =================================================================
-        await save_to_database(
-            bank_info, fiscal_year, quarter, output_path, execution_id
-        )
+        await save_to_database(bank_info, fiscal_year, quarter, output_path, execution_id)
 
         logger.info(
             "etl.bank_earnings_report.completed",
