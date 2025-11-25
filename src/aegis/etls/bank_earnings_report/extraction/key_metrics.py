@@ -115,9 +115,17 @@ async def select_top_metrics(
     system_prompt = """You are a senior financial analyst. Select the most important KPIs for a bank's quarterly earnings summary.
 
 Use your financial expertise to identify:
-1. Core metrics that always matter (revenue, earnings, EPS, ROE, capital ratios)
+1. Core metrics that always matter (revenue, earnings, EPS, ROE, efficiency)
 2. Metrics with notable changes that tell this quarter's story
-3. A balanced view across profitability, efficiency, and risk
+3. A balanced view across profitability and operational performance
+
+IMPORTANT: The report has a separate "Capital & Risk" section that covers regulatory capital and credit metrics.
+AVOID selecting these unless they show truly exceptional changes (>15% YoY):
+- CET1 Ratio, Tier 1 Capital, Total Capital Ratio, Leverage Ratio
+- Credit RWA, Market RWA, Operational RWA, Total RWA
+- LCR, NSFR, PCL Ratio, GIL Ratio
+
+Focus on earnings, revenue, margins, efficiency, and growth metrics for the key metrics tiles.
 
 Return EXACTLY the metric names as shown in the table - do not modify them."""
 
@@ -126,7 +134,9 @@ Return EXACTLY the metric names as shown in the table - do not modify them."""
 
 {metrics_table}
 
-Choose {num_metrics} metrics that best summarize this quarter's performance. Return the exact metric names from the table."""
+Choose {num_metrics} metrics that best summarize this quarter's performance.
+Avoid capital/risk metrics (CET1, RWA, LCR, PCL, etc.) - those have their own section.
+Return the exact metric names from the table."""
 
     # Define the tool for structured output
     tool_definition = {
