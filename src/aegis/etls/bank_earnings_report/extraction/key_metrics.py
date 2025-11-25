@@ -15,63 +15,49 @@ from aegis.utils.settings import config
 
 def format_metrics_for_llm(metrics: List[Dict[str, Any]]) -> str:
     """
-    Format metrics list into a structured string for LLM analysis.
+    Format metrics list into a compact table for LLM analysis.
+
+    Only includes metric name, value, and change data - no descriptions.
+    LLM uses its own financial knowledge to evaluate importance.
 
     Args:
         metrics: List of metric dicts from retrieve_all_metrics()
 
     Returns:
-        Formatted string with all metric details for LLM prompt
+        Formatted table string for LLM prompt
     """
-    lines = []
 
-    for i, m in enumerate(metrics, 1):
-        # Format change percentages
-        def fmt_pct(val):
-            if val is None:
-                return "N/A"
-            sign = "+" if val > 0 else ""
-            return f"{sign}{val:.1f}%"
+    def fmt_pct(val):
+        if val is None:
+            return "—"
+        sign = "+" if val > 0 else ""
+        return f"{sign}{val:.1f}%"
 
-        # Format actual value with units
-        if m["actual"] is not None:
-            if m["units"] == "%" or m["meta_unit"] in ("percentage", "percent"):
-                actual_str = f"{m['actual']:.2f}%"
-            elif m["units"] == "millions":
-                actual_str = f"${m['actual']:,.0f}M"
-            else:
-                actual_str = f"{m['actual']:,.2f}"
+    def fmt_val(m):
+        if m["actual"] is None:
+            return "N/A"
+        if m["units"] == "%" or m.get("is_bps"):
+            return f"{m['actual']:.2f}%"
+        elif m["units"] == "millions":
+            return f"${m['actual']:,.0f}M"
         else:
-            actual_str = "N/A"
+            return f"{m['actual']:,.2f}"
 
-        # Determine direction indicator
-        direction = ""
-        if m["higher_is_better"] is True:
-            direction = "(↑ better)"
-        elif m["higher_is_better"] is False:
-            direction = "(↓ better)"
+    # Build a compact table
+    lines = [
+        "| Metric | Value | QoQ | YoY | 2Y | 3Y | 5Y |",
+        "|--------|-------|-----|-----|----|----|----| ",
+    ]
 
-        # Build metric entry
-        lines.append(f"--- Metric {i}: {m['parameter']} ---")
-        lines.append(f"  Value: {actual_str} {direction}")
-        lines.append(
-            f"  Changes: QoQ={fmt_pct(m['qoq'])}, YoY={fmt_pct(m['yoy'])}, "
-            f"2Y={fmt_pct(m.get('2y'))}, 3Y={fmt_pct(m.get('3y'))}, "
-            f"4Y={fmt_pct(m.get('4y'))}, 5Y={fmt_pct(m.get('5y'))}"
-        )
-        if m["description"]:
-            desc = (
-                m["description"][:100] + "..." if len(m["description"]) > 100 else m["description"]
-            )
-            lines.append(f"  Description: {desc}")
-        if m["analyst_usage"]:
-            usage = (
-                m["analyst_usage"][:100] + "..."
-                if len(m["analyst_usage"]) > 100
-                else m["analyst_usage"]
-            )
-            lines.append(f"  Analyst Usage: {usage}")
-        lines.append("")
+    for m in metrics:
+        name = m["parameter"]
+        val = fmt_val(m)
+        qoq = fmt_pct(m["qoq"])
+        yoy = fmt_pct(m["yoy"])
+        y2 = fmt_pct(m.get("2y"))
+        y3 = fmt_pct(m.get("3y"))
+        y5 = fmt_pct(m.get("5y"))
+        lines.append(f"| {name} | {val} | {qoq} | {yoy} | {y2} | {y3} | {y5} |")
 
     return "\n".join(lines)
 
@@ -126,64 +112,21 @@ async def select_top_metrics(
     metrics_table = format_metrics_for_llm(metrics)
 
     # Build the system prompt
-    system_prompt = """You are a senior financial analyst specializing in Canadian bank earnings reports. Your task is to select the most important key performance indicators (KPIs) for a quarterly earnings report summary display.
+    system_prompt = """You are a senior financial analyst. Select the most important KPIs for a bank's quarterly earnings summary.
 
-## Selection Framework
+Use your financial expertise to identify:
+1. Core metrics that always matter (revenue, earnings, EPS, ROE, capital ratios)
+2. Metrics with notable changes that tell this quarter's story
+3. A balanced view across profitability, efficiency, and risk
 
-Think carefully about what makes a metric "newsworthy" for this quarter's report:
-
-### Tier 1: Core Metrics (Always Consider)
-These fundamental metrics should be included unless there's a compelling reason not to:
-- Total Revenue, Net Income, Diluted EPS
-- Return on Equity (ROE), Return on Assets (ROA)
-- CET1 Ratio (regulatory capital)
-
-### Tier 2: Noteworthy Changes
-Beyond core metrics, look for KPIs with SIGNIFICANT changes that tell a story:
-- Large QoQ or YoY moves (typically >5-10% for most metrics)
-- Multi-year trend changes (compare 2Y, 3Y, 5Y to see if recent change is acceleration or reversal)
-- Consider the "higher_is_better" indicator to understand if a change is positive or negative news
-
-### Tier 3: Contextual Importance
-Some metrics become important based on current banking environment:
-- Credit quality metrics during economic uncertainty (PCL, NPL ratios)
-- Efficiency metrics when cost management is a focus
-- Capital ratios during regulatory changes
-
-## Critical Judgment Required
-
-Do NOT select a metric just because:
-- It has a large percentage change on a small base (e.g., +50% on an obscure metric)
-- The description sounds important but the actual values are unremarkable
-- It's listed in "Analyst Usage" but shows no meaningful movement
-
-DO select metrics that:
-- Tell the quarter's story (what went well, what's challenged)
-- Would be mentioned in a CEO's earnings call opening remarks
-- Show meaningful absolute dollar or basis point impacts
-- Represent trends that investors would care about
-
-## Output Requirements
-Return EXACTLY the KPI names as they appear in the data - do not modify, paraphrase, or abbreviate them."""
+Return EXACTLY the metric names as shown in the table - do not modify them."""
 
     # Build the user prompt
-    user_prompt = f"""Select the top {num_metrics} most important KPIs for {bank_name}'s {quarter} {fiscal_year} quarterly earnings report.
-
-## Available Metrics ({len(metrics)} total)
+    user_prompt = f"""Select {num_metrics} key metrics for {bank_name}'s {quarter} {fiscal_year} earnings report summary.
 
 {metrics_table}
 
-## Your Task
-
-Analyze these metrics and select the {num_metrics} that best represent the key story of this quarter's performance.
-
-Consider:
-1. Which core financial metrics must be included?
-2. Which metrics show significant or unusual changes worth highlighting?
-3. Do any metrics show a trend reversal or acceleration when comparing short-term (QoQ, YoY) vs longer-term (3Y, 5Y) changes?
-4. What would a CFO or analyst want to see at a glance?
-
-Return exactly {num_metrics} KPI names."""
+Choose {num_metrics} metrics that best summarize this quarter's performance. Return the exact metric names from the table."""
 
     # Define the tool for structured output
     tool_definition = {
