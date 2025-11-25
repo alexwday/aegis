@@ -1,0 +1,14 @@
+{
+  "execution_id": "2d1f546b-1ccd-4ee5-9668-edae3afd59fc",
+  "bank": "Royal Bank of Canada",
+  "period": "Q2 2025",
+  "sections": {
+    "1_keymetrics_selection": {
+      "available_metrics": 0,
+      "chart_metric": "",
+      "chart_reasoning": "No metrics available",
+      "tile_metrics": [],
+      "tile_reasoning": "No metrics available"
+    }
+  }
+}

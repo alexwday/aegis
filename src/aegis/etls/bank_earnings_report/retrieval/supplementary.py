@@ -592,10 +592,26 @@ async def retrieve_metric_history(
 
     try:
         async with get_connection() as conn:
-            # Build query for all quarters at once
+            # Build WHERE clause for each quarter pair
+            # Can't use IN with tuple of tuples in asyncpg, so build OR conditions
+            quarter_conditions = []
+            params = {
+                "bank_symbol": bank_symbol,
+                "metric_name": metric_name,
+            }
+
+            for i, (year, q) in enumerate(quarters_to_query):
+                quarter_conditions.append(
+                    f'("fiscal_year" = :year_{i} AND "quarter" = :quarter_{i})'
+                )
+                params[f"year_{i}"] = year
+                params[f"quarter_{i}"] = q
+
+            quarter_filter = " OR ".join(quarter_conditions)
+
             result = await conn.execute(
                 text(
-                    """
+                    f"""
                     SELECT
                         "fiscal_year",
                         "quarter",
@@ -604,15 +620,11 @@ async def retrieve_metric_history(
                     WHERE "bank_symbol" = :bank_symbol
                       AND "Parameter" = :metric_name
                       AND "Platform" = 'Enterprise'
-                      AND ("fiscal_year", "quarter") IN :quarters
+                      AND ({quarter_filter})
                     ORDER BY "fiscal_year", "quarter"
                 """
                 ),
-                {
-                    "bank_symbol": bank_symbol,
-                    "metric_name": metric_name,
-                    "quarters": tuple(quarters_to_query),
-                },
+                params,
             )
 
             # Build a lookup dict from results
