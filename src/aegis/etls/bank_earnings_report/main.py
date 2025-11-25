@@ -500,9 +500,9 @@ async def extract_all_sections(
     # Placeholder sections (not yet implemented)
     # =========================================================================
 
-    # Key Metrics Overview - placeholder
+    # Key Metrics Overview - placeholder (template uses .narrative)
     sections["1_keymetrics_overview"] = {
-        "paragraph": "Overview content not yet implemented."
+        "narrative": "Overview content not yet implemented."
     }
 
     # Key Metrics Chart - placeholder with empty data
@@ -511,29 +511,37 @@ async def extract_all_sections(
         "data_points": []
     }
 
-    # Key Metrics Items of Note - placeholder
+    # Key Metrics Items of Note - placeholder (template uses .source and .entries)
     sections["1_keymetrics_items"] = {
-        "items": []
+        "source": "Supp Pack",
+        "entries": []
     }
 
-    # Narrative - placeholder
+    # Narrative - placeholder (template uses .entries)
     sections["2_narrative"] = {
-        "content": []
+        "entries": []
     }
 
-    # Analyst Focus - placeholder
+    # Analyst Focus - placeholder (template uses .source and .entries)
     sections["3_analyst_focus"] = {
-        "exchanges": []
+        "source": "Transcript",
+        "entries": []
     }
 
-    # Segments - placeholder
+    # Segments - placeholder (template uses .entries)
     sections["4_segments"] = {
-        "segments": []
+        "entries": []
     }
 
-    # Capital & Risk - placeholder
+    # Capital & Risk - placeholder (template uses .source, .regulatory_capital, .rwa, .liquidity_credit)
     sections["5_capital_risk"] = {
-        "metrics": []
+        "source": "Pillar 3",
+        "regulatory_capital": [],
+        "rwa": {
+            "components": [],
+            "total": ""
+        },
+        "liquidity_credit": []
     }
 
     logger.info(
