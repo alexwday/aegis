@@ -145,7 +145,7 @@ async def explore_table():
         result = await conn.execute(text("""
             SELECT "fiscal_year", "quarter", "Parameter", "Actual", "QoQ", "YoY", "Units"
             FROM benchmarking_report
-            WHERE ("bank_symbol" = 'RY' OR LOWER("bank") LIKE '%royal%')
+            WHERE ("bank_symbol" = 'RY-CA' OR "bank" = 'RBC')
               AND LOWER("Parameter") LIKE '%dividend%'
             ORDER BY "fiscal_year" DESC, "quarter" DESC
         """))
@@ -162,7 +162,7 @@ async def explore_table():
             result = await conn.execute(text("""
                 SELECT DISTINCT "Parameter"
                 FROM benchmarking_report
-                WHERE "bank_symbol" = 'RY' OR LOWER("bank") LIKE '%royal%'
+                WHERE "bank_symbol" = 'RY-CA' OR "bank" = 'RBC'
                 ORDER BY "Parameter"
                 LIMIT 30
             """))
