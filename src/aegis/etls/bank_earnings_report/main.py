@@ -421,21 +421,30 @@ async def extract_all_sections(
     context: Dict[str, Any],
 ) -> Dict[str, Any]:
     """
-    Extract all JSON sections from raw data using LLM.
-
-    TODO: Implement LLM-based extraction for each section.
+    Extract all JSON sections for the earnings report.
 
     Args:
         bank_info: Bank information
         fiscal_year: Fiscal year
         quarter: Quarter
-        raw_data: Combined raw data from all sources
+        raw_data: Combined raw data from all sources (currently unused)
         context: Execution context
 
     Returns:
         Dict mapping section names to extracted JSON data
     """
+    # Import retrieval and extraction functions
+    from .retrieval.supplementary import (
+        retrieve_dividend,
+        format_dividend_json,
+        retrieve_all_metrics,
+        retrieve_metrics_by_names,
+        format_key_metrics_json,
+    )
+    from .extraction.key_metrics import select_top_metrics
+
     execution_id = context.get("execution_id")
+    db_symbol = f"{bank_info['bank_symbol']}-CA"
 
     logger.info(
         "etl.bank_earnings_report.extract_sections_start",
@@ -445,21 +454,87 @@ async def extract_all_sections(
 
     sections = {}
 
-    # Section 0: Header (no LLM needed)
+    # =========================================================================
+    # Section 0: Header Params (no DB needed)
+    # =========================================================================
     sections["0_header_params"] = extract_header_params(
         bank_info, fiscal_year, quarter
     )
+    logger.info("etl.bank_earnings_report.section_complete", section="0_header_params")
 
-    # TODO: Implement LLM extraction for remaining sections:
-    # sections["0_header_dividend"] = await extract_dividend(raw_data, context)
-    # sections["1_keymetrics_overview"] = await extract_overview(raw_data, context)
-    # sections["1_keymetrics_tiles"] = await extract_metrics_tiles(raw_data, context)
-    # sections["1_keymetrics_chart"] = await extract_metrics_chart(raw_data, context)
-    # sections["1_keymetrics_items"] = await extract_items_of_note(raw_data, context)
-    # sections["2_narrative"] = await extract_narrative(raw_data, context)
-    # sections["3_analyst_focus"] = await extract_analyst_qa(raw_data, context)
-    # sections["4_segments"] = await extract_segments(raw_data, context)
-    # sections["5_capital_risk"] = await extract_capital_risk(raw_data, context)
+    # =========================================================================
+    # Section 0: Header Dividend (from supplementary)
+    # =========================================================================
+    dividend_data = await retrieve_dividend(db_symbol, fiscal_year, quarter, context)
+    sections["0_header_dividend"] = format_dividend_json(dividend_data)
+    logger.info("etl.bank_earnings_report.section_complete", section="0_header_dividend")
+
+    # =========================================================================
+    # Section 1: Key Metrics Tiles (from supplementary + LLM selection)
+    # =========================================================================
+    all_metrics = await retrieve_all_metrics(db_symbol, fiscal_year, quarter, context)
+
+    if all_metrics:
+        # LLM selects top 6 metrics
+        selected_names = await select_top_metrics(
+            metrics=all_metrics,
+            bank_name=bank_info["bank_name"],
+            quarter=quarter,
+            fiscal_year=fiscal_year,
+            context=context,
+            num_metrics=6,
+        )
+
+        # Retrieve the selected metrics
+        selected_metrics = await retrieve_metrics_by_names(
+            db_symbol, fiscal_year, quarter, selected_names, context
+        )
+
+        sections["1_keymetrics_tiles"] = format_key_metrics_json(selected_metrics)
+    else:
+        sections["1_keymetrics_tiles"] = {"source": "Supp Pack", "metrics": []}
+
+    logger.info("etl.bank_earnings_report.section_complete", section="1_keymetrics_tiles")
+
+    # =========================================================================
+    # Placeholder sections (not yet implemented)
+    # =========================================================================
+
+    # Key Metrics Overview - placeholder
+    sections["1_keymetrics_overview"] = {
+        "paragraph": "Overview content not yet implemented."
+    }
+
+    # Key Metrics Chart - placeholder with empty data
+    sections["1_keymetrics_chart"] = {
+        "metric_name": "Net Income",
+        "data_points": []
+    }
+
+    # Key Metrics Items of Note - placeholder
+    sections["1_keymetrics_items"] = {
+        "items": []
+    }
+
+    # Narrative - placeholder
+    sections["2_narrative"] = {
+        "content": []
+    }
+
+    # Analyst Focus - placeholder
+    sections["3_analyst_focus"] = {
+        "exchanges": []
+    }
+
+    # Segments - placeholder
+    sections["4_segments"] = {
+        "segments": []
+    }
+
+    # Capital & Risk - placeholder
+    sections["5_capital_risk"] = {
+        "metrics": []
+    }
 
     logger.info(
         "etl.bank_earnings_report.extract_sections_complete",
