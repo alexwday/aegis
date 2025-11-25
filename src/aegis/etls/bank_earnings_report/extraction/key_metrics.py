@@ -47,7 +47,7 @@ async def select_top_metrics(
     fiscal_year: int,
     context: Dict[str, Any],
     num_metrics: int = 6,
-) -> List[str]:
+) -> Dict[str, Any]:
     """
     Use LLM to select the top N most important metrics.
 
@@ -65,7 +65,11 @@ async def select_top_metrics(
         num_metrics: Number of metrics to select (default 6)
 
     Returns:
-        List of parameter names (kpi_name) for the selected metrics
+        Dict with:
+            - selected_metrics: List of parameter names (kpi_name)
+            - reasoning: LLM's explanation for selection
+            - available_metrics: Count of metrics available
+            - prompt: The prompt sent to LLM
     """
     logger = get_logger()
     execution_id = context.get("execution_id")
@@ -75,7 +79,12 @@ async def select_top_metrics(
             "etl.bank_earnings_report.no_metrics_for_selection",
             execution_id=execution_id,
         )
-        return []
+        return {
+            "selected_metrics": [],
+            "reasoning": "No metrics available for selection",
+            "available_metrics": 0,
+            "prompt": "",
+        }
 
     # Format metrics table for LLM
     metrics_table = format_metrics_for_llm(metrics)
@@ -176,14 +185,34 @@ Return the {num_metrics} most important KPI names that should be featured in the
                         validated=validated,
                     )
 
-                return validated
+                return {
+                    "selected_metrics": validated,
+                    "reasoning": reasoning,
+                    "available_metrics": len(metrics),
+                    "prompt": user_prompt,
+                    "all_metrics_summary": [
+                        {
+                            "name": m["parameter"],
+                            "value": m["actual"],
+                            "qoq": m["qoq"],
+                            "yoy": m["yoy"],
+                        }
+                        for m in metrics
+                    ],
+                }
 
         # Fallback if no tool call
         logger.warning(
             "etl.bank_earnings_report.no_tool_call_response",
             execution_id=execution_id,
         )
-        return _fallback_metric_selection(metrics, num_metrics)
+        fallback = _fallback_metric_selection(metrics, num_metrics)
+        return {
+            "selected_metrics": fallback,
+            "reasoning": "Fallback selection used - no LLM tool call response",
+            "available_metrics": len(metrics),
+            "prompt": user_prompt,
+        }
 
     except Exception as e:
         logger.error(
@@ -191,7 +220,13 @@ Return the {num_metrics} most important KPI names that should be featured in the
             execution_id=execution_id,
             error=str(e),
         )
-        return _fallback_metric_selection(metrics, num_metrics)
+        fallback = _fallback_metric_selection(metrics, num_metrics)
+        return {
+            "selected_metrics": fallback,
+            "reasoning": f"Fallback selection used - error: {str(e)}",
+            "available_metrics": len(metrics),
+            "prompt": user_prompt,
+        }
 
 
 def _fallback_metric_selection(

@@ -474,9 +474,17 @@ async def extract_all_sections(
     # =========================================================================
     all_metrics = await retrieve_all_metrics(db_symbol, fiscal_year, quarter, context)
 
+    # Initialize LLM debug log
+    llm_debug_log = {
+        "execution_id": str(execution_id),
+        "bank": bank_info["bank_name"],
+        "period": f"{quarter} {fiscal_year}",
+        "sections": {},
+    }
+
     if all_metrics:
         # LLM selects top 6 metrics
-        selected_names = await select_top_metrics(
+        selection_result = await select_top_metrics(
             metrics=all_metrics,
             bank_name=bank_info["bank_name"],
             quarter=quarter,
@@ -485,7 +493,16 @@ async def extract_all_sections(
             num_metrics=6,
         )
 
+        # Store debug info
+        llm_debug_log["sections"]["1_keymetrics_tiles"] = {
+            "available_metrics": selection_result.get("available_metrics", 0),
+            "selected_metrics": selection_result.get("selected_metrics", []),
+            "reasoning": selection_result.get("reasoning", ""),
+            "all_metrics_summary": selection_result.get("all_metrics_summary", []),
+        }
+
         # Retrieve the selected metrics
+        selected_names = selection_result.get("selected_metrics", [])
         selected_metrics = await retrieve_metrics_by_names(
             db_symbol, fiscal_year, quarter, selected_names, context
         )
@@ -493,6 +510,14 @@ async def extract_all_sections(
         sections["1_keymetrics_tiles"] = format_key_metrics_json(selected_metrics)
     else:
         sections["1_keymetrics_tiles"] = {"source": "Supp Pack", "metrics": []}
+        llm_debug_log["sections"]["1_keymetrics_tiles"] = {
+            "available_metrics": 0,
+            "selected_metrics": [],
+            "reasoning": "No metrics available",
+        }
+
+    # Store debug log in context for later saving
+    context["llm_debug_log"] = llm_debug_log
 
     logger.info("etl.bank_earnings_report.section_complete", section="1_keymetrics_tiles")
 
@@ -823,6 +848,18 @@ async def generate_bank_earnings_report(
         output_path = output_dir / filename
 
         render_report(sections, output_path)
+
+        # Save LLM debug log alongside the report
+        if "llm_debug_log" in context:
+            debug_filename = f"{bank_info['bank_symbol']}_{fiscal_year}_{quarter}_llm_debug.json"
+            debug_path = output_dir / debug_filename
+            with open(debug_path, "w", encoding="utf-8") as f:
+                json.dump(context["llm_debug_log"], f, indent=2, default=str)
+            logger.info(
+                "etl.bank_earnings_report.debug_log_saved",
+                execution_id=execution_id,
+                debug_path=str(debug_path),
+            )
 
         logger.info(
             "etl.bank_earnings_report.rendered",
