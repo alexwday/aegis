@@ -424,9 +424,7 @@ def format_metric_value(actual: Optional[float], units: str, meta_unit: str) -> 
         return f"{actual:.2f}"
 
 
-def format_delta(
-    value: Optional[float], units: str, meta_unit: str, higher_is_better: Optional[bool]
-) -> Dict[str, Any]:
+def format_delta(value: Optional[float], units: str, meta_unit: str) -> Dict[str, Any]:
     """
     Format a QoQ or YoY delta value.
 
@@ -434,10 +432,10 @@ def format_delta(
         value: Delta value (percentage or basis points)
         units: Units from benchmarking_report
         meta_unit: Unit type from kpi_metadata
-        higher_is_better: Whether higher values are good (affects direction)
 
     Returns:
         Dict with value, direction, and display string
+        - direction is simply "positive" for increase, "negative" for decrease
     """
     if value is None:
         return {"value": 0, "direction": "neutral", "display": "—"}
@@ -445,15 +443,8 @@ def format_delta(
     # Determine if this is a basis points metric
     is_bps = meta_unit in ("bps", "basis_points", "percentage", "percent", "%")
 
-    # Calculate direction based on higher_is_better
-    if higher_is_better is None:
-        # Default: positive change is positive
-        direction = "positive" if value > 0 else "negative" if value < 0 else "neutral"
-    elif higher_is_better:
-        direction = "positive" if value > 0 else "negative" if value < 0 else "neutral"
-    else:
-        # Lower is better (e.g., efficiency ratio) - flip the direction
-        direction = "negative" if value > 0 else "positive" if value < 0 else "neutral"
+    # Simple: increase = positive (green), decrease = negative (red)
+    direction = "positive" if value > 0 else "negative" if value < 0 else "neutral"
 
     # Format display
     arrow = "▲" if value > 0 else "▼" if value < 0 else "—"
@@ -500,12 +491,8 @@ def format_key_metrics_json(metrics: List[Dict[str, Any]]) -> Dict[str, Any]:
                 "value": format_metric_value(
                     metric["actual"], metric["units"], metric["meta_unit"]
                 ),
-                "qoq": format_delta(
-                    metric["qoq"], metric["units"], metric["meta_unit"], metric["higher_is_better"]
-                ),
-                "yoy": format_delta(
-                    metric["yoy"], metric["units"], metric["meta_unit"], metric["higher_is_better"]
-                ),
+                "qoq": format_delta(metric["qoq"], metric["units"], metric["meta_unit"]),
+                "yoy": format_delta(metric["yoy"], metric["units"], metric["meta_unit"]),
             }
         )
 
