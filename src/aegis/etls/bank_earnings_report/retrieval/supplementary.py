@@ -197,6 +197,7 @@ async def retrieve_all_metrics(
             "4y": float,           # 4-year change
             "5y": float,           # 5-year change
             "units": str,          # Units from benchmarking_report
+            "bps": float,          # Basis points change from benchmarking_report
             "description": str,    # From kpi_metadata
             "meta_unit": str,      # Unit type from kpi_metadata
             "higher_is_better": bool,  # Direction indicator
@@ -228,6 +229,7 @@ async def retrieve_all_metrics(
                         br."4Y",
                         br."5Y",
                         br."Units",
+                        br."BPS",
                         km.description,
                         km.unit as meta_unit,
                         km.higher_is_better,
@@ -261,10 +263,11 @@ async def retrieve_all_metrics(
                         "4y": float(row[6]) if row[6] is not None else None,
                         "5y": float(row[7]) if row[7] is not None else None,
                         "units": row[8] if row[8] else "",
-                        "description": row[9] if row[9] else "",
-                        "meta_unit": row[10] if row[10] else "",
-                        "higher_is_better": row[11] if row[11] is not None else None,
-                        "analyst_usage": row[12] if row[12] else "",
+                        "bps": float(row[9]) if row[9] is not None else None,
+                        "description": row[10] if row[10] else "",
+                        "meta_unit": row[11] if row[11] else "",
+                        "higher_is_better": row[12] if row[12] is not None else None,
+                        "analyst_usage": row[13] if row[13] else "",
                     }
                 )
 
@@ -325,6 +328,7 @@ async def retrieve_metrics_by_names(
                         br."QoQ",
                         br."YoY",
                         br."Units",
+                        br."BPS",
                         km.description,
                         km.unit as meta_unit,
                         km.higher_is_better
@@ -354,9 +358,10 @@ async def retrieve_metrics_by_names(
                     "qoq": float(row[2]) if row[2] is not None else None,
                     "yoy": float(row[3]) if row[3] is not None else None,
                     "units": row[4] if row[4] else "",
-                    "description": row[5] if row[5] else "",
-                    "meta_unit": row[6] if row[6] else "",
-                    "higher_is_better": row[7] if row[7] is not None else None,
+                    "bps": float(row[5]) if row[5] is not None else None,
+                    "description": row[6] if row[6] else "",
+                    "meta_unit": row[7] if row[7] else "",
+                    "higher_is_better": row[8] if row[8] is not None else None,
                 }
 
             # Return in the order requested
@@ -424,14 +429,16 @@ def format_metric_value(actual: Optional[float], units: str, meta_unit: str) -> 
         return f"{actual:.2f}"
 
 
-def format_delta(value: Optional[float], units: str, meta_unit: str) -> Dict[str, Any]:
+def format_delta(
+    value: Optional[float], units: str, bps: Optional[float] = None
+) -> Dict[str, Any]:
     """
     Format a QoQ or YoY delta value.
 
     Args:
-        value: Delta value (percentage or basis points)
-        units: Units from benchmarking_report
-        meta_unit: Unit type from kpi_metadata
+        value: Delta value (percentage change)
+        units: Units from benchmarking_report (e.g., "millions", "%", "bps")
+        bps: Basis points value from benchmarking_report (if available)
 
     Returns:
         Dict with value, direction, and display string
@@ -440,9 +447,6 @@ def format_delta(value: Optional[float], units: str, meta_unit: str) -> Dict[str
     if value is None:
         return {"value": 0, "direction": "neutral", "display": "—"}
 
-    # Determine if this is a basis points metric
-    is_bps = meta_unit in ("bps", "basis_points", "percentage", "percent", "%")
-
     # Simple: increase = positive (green), decrease = negative (red)
     direction = "positive" if value > 0 else "negative" if value < 0 else "neutral"
 
@@ -450,11 +454,13 @@ def format_delta(value: Optional[float], units: str, meta_unit: str) -> Dict[str
     arrow = "▲" if value > 0 else "▼" if value < 0 else "—"
     abs_val = abs(value)
 
-    if is_bps and abs_val < 10:
-        # Show as basis points for small percentage changes
-        bps = abs_val * 100
-        display = f"{arrow} {bps:.0f}bps" if value != 0 else "—"
+    # Use BPS display if units indicate basis points or if bps value provided
+    if units == "bps" or (bps is not None and units in ("%", "bps", "")):
+        # Display as basis points
+        bps_val = abs(bps) if bps is not None else abs_val * 100
+        display = f"{arrow} {bps_val:.0f}bps" if value != 0 else "—"
     else:
+        # Display as percentage
         display = f"{arrow} {abs_val:.1f}%" if value != 0 else "—"
 
     return {"value": abs_val, "direction": direction, "display": display}
@@ -491,8 +497,8 @@ def format_key_metrics_json(metrics: List[Dict[str, Any]]) -> Dict[str, Any]:
                 "value": format_metric_value(
                     metric["actual"], metric["units"], metric["meta_unit"]
                 ),
-                "qoq": format_delta(metric["qoq"], metric["units"], metric["meta_unit"]),
-                "yoy": format_delta(metric["yoy"], metric["units"], metric["meta_unit"]),
+                "qoq": format_delta(metric["qoq"], metric["units"], metric.get("bps")),
+                "yoy": format_delta(metric["yoy"], metric["units"], metric.get("bps")),
             }
         )
 
