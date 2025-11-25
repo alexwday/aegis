@@ -507,7 +507,15 @@ async def extract_all_sections(
         tile_metrics = await retrieve_metrics_by_names(
             db_symbol, fiscal_year, quarter, tile_names, context
         )
-        sections["1_keymetrics_tiles"] = format_key_metrics_json(tile_metrics)
+        tiles_json = format_key_metrics_json(tile_metrics)
+        sections["1_keymetrics_tiles"] = tiles_json
+
+        # Add tile metrics data to debug log
+        llm_debug_log["sections"]["1_keymetrics_tiles"] = {
+            "requested_metrics": tile_names,
+            "retrieved_count": len(tile_metrics),
+            "formatted_metrics": tiles_json.get("metrics", []),
+        }
 
         # Retrieve historical data for the chart metric
         chart_metric_name = selection_result.get("chart_metric")
@@ -527,11 +535,24 @@ async def extract_all_sections(
             )
             chart_units = chart_metric_data["units"] if chart_metric_data else ""
 
-            sections["1_keymetrics_chart"] = format_chart_json(
-                chart_metric_name, chart_history, chart_units
-            )
+            chart_json = format_chart_json(chart_metric_name, chart_history, chart_units)
+            sections["1_keymetrics_chart"] = chart_json
+
+            # Add chart data to debug log
+            llm_debug_log["sections"]["1_keymetrics_chart"] = {
+                "metric_name": chart_metric_name,
+                "units": chart_units,
+                "raw_history": chart_history,
+                "formatted_data_points": chart_json.get("data_points", []),
+                "data_points_count": len(chart_json.get("data_points", [])),
+            }
         else:
             sections["1_keymetrics_chart"] = {"metric_name": "N/A", "units": "", "data_points": []}
+            llm_debug_log["sections"]["1_keymetrics_chart"] = {
+                "metric_name": "N/A",
+                "reason": "No chart metric selected",
+                "data_points_count": 0,
+            }
     else:
         sections["1_keymetrics_tiles"] = {"source": "Supp Pack", "metrics": []}
         sections["1_keymetrics_chart"] = {"metric_name": "N/A", "units": "", "data_points": []}
