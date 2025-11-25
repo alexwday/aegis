@@ -15,27 +15,63 @@ from aegis.utils.settings import config
 
 def format_metrics_for_llm(metrics: List[Dict[str, Any]]) -> str:
     """
-    Format metrics list into a table string for LLM analysis.
+    Format metrics list into a structured string for LLM analysis.
 
     Args:
         metrics: List of metric dicts from retrieve_all_metrics()
 
     Returns:
-        Formatted table string for LLM prompt
+        Formatted string with all metric details for LLM prompt
     """
-    lines = [
-        "| KPI Name | Value | QoQ Change | YoY Change | Description | Analyst Usage |",
-        "|----------|-------|------------|------------|-------------|---------------|",
-    ]
+    lines = []
 
-    for m in metrics:
-        qoq_str = f"{m['qoq']:.1f}%" if m['qoq'] is not None else "N/A"
-        yoy_str = f"{m['yoy']:.1f}%" if m['yoy'] is not None else "N/A"
-        actual_str = f"{m['actual']:.2f}" if m['actual'] is not None else "N/A"
-        desc = (m['description'][:50] + "...") if len(m['description']) > 50 else m['description']
-        usage = (m['analyst_usage'][:50] + "...") if len(m['analyst_usage']) > 50 else m['analyst_usage']
+    for i, m in enumerate(metrics, 1):
+        # Format change percentages
+        def fmt_pct(val):
+            if val is None:
+                return "N/A"
+            sign = "+" if val > 0 else ""
+            return f"{sign}{val:.1f}%"
 
-        lines.append(f"| {m['parameter']} | {actual_str} | {qoq_str} | {yoy_str} | {desc} | {usage} |")
+        # Format actual value with units
+        if m["actual"] is not None:
+            if m["units"] == "%" or m["meta_unit"] in ("percentage", "percent"):
+                actual_str = f"{m['actual']:.2f}%"
+            elif m["units"] == "millions":
+                actual_str = f"${m['actual']:,.0f}M"
+            else:
+                actual_str = f"{m['actual']:,.2f}"
+        else:
+            actual_str = "N/A"
+
+        # Determine direction indicator
+        direction = ""
+        if m["higher_is_better"] is True:
+            direction = "(↑ better)"
+        elif m["higher_is_better"] is False:
+            direction = "(↓ better)"
+
+        # Build metric entry
+        lines.append(f"--- Metric {i}: {m['parameter']} ---")
+        lines.append(f"  Value: {actual_str} {direction}")
+        lines.append(
+            f"  Changes: QoQ={fmt_pct(m['qoq'])}, YoY={fmt_pct(m['yoy'])}, "
+            f"2Y={fmt_pct(m.get('2y'))}, 3Y={fmt_pct(m.get('3y'))}, "
+            f"4Y={fmt_pct(m.get('4y'))}, 5Y={fmt_pct(m.get('5y'))}"
+        )
+        if m["description"]:
+            desc = (
+                m["description"][:100] + "..." if len(m["description"]) > 100 else m["description"]
+            )
+            lines.append(f"  Description: {desc}")
+        if m["analyst_usage"]:
+            usage = (
+                m["analyst_usage"][:100] + "..."
+                if len(m["analyst_usage"]) > 100
+                else m["analyst_usage"]
+            )
+            lines.append(f"  Analyst Usage: {usage}")
+        lines.append("")
 
     return "\n".join(lines)
 
@@ -90,26 +126,64 @@ async def select_top_metrics(
     metrics_table = format_metrics_for_llm(metrics)
 
     # Build the system prompt
-    system_prompt = """You are a financial analyst expert specializing in bank earnings reports.
+    system_prompt = """You are a senior financial analyst specializing in Canadian bank earnings reports. Your task is to select the most important key performance indicators (KPIs) for a quarterly earnings report summary display.
 
-Your task is to select the most important key performance indicators (KPIs) for a quarterly earnings report summary tile display.
+## Selection Framework
 
-Selection criteria (in order of importance):
-1. **Core Financial Metrics**: Prioritize fundamental metrics like Revenue, Net Income, EPS, ROE that are always important
-2. **Significant Changes**: Metrics with notable QoQ or YoY changes (>5% change) deserve attention as they indicate meaningful shifts
-3. **Analyst Focus**: Metrics that analysts commonly track and discuss
-4. **Balanced Coverage**: Ensure a mix of profitability, efficiency, and capital metrics
+Think carefully about what makes a metric "newsworthy" for this quarter's report:
 
-You must return EXACTLY the KPI names as they appear in the table - do not modify or paraphrase them."""
+### Tier 1: Core Metrics (Always Consider)
+These fundamental metrics should be included unless there's a compelling reason not to:
+- Total Revenue, Net Income, Diluted EPS
+- Return on Equity (ROE), Return on Assets (ROA)
+- CET1 Ratio (regulatory capital)
+
+### Tier 2: Noteworthy Changes
+Beyond core metrics, look for KPIs with SIGNIFICANT changes that tell a story:
+- Large QoQ or YoY moves (typically >5-10% for most metrics)
+- Multi-year trend changes (compare 2Y, 3Y, 5Y to see if recent change is acceleration or reversal)
+- Consider the "higher_is_better" indicator to understand if a change is positive or negative news
+
+### Tier 3: Contextual Importance
+Some metrics become important based on current banking environment:
+- Credit quality metrics during economic uncertainty (PCL, NPL ratios)
+- Efficiency metrics when cost management is a focus
+- Capital ratios during regulatory changes
+
+## Critical Judgment Required
+
+Do NOT select a metric just because:
+- It has a large percentage change on a small base (e.g., +50% on an obscure metric)
+- The description sounds important but the actual values are unremarkable
+- It's listed in "Analyst Usage" but shows no meaningful movement
+
+DO select metrics that:
+- Tell the quarter's story (what went well, what's challenged)
+- Would be mentioned in a CEO's earnings call opening remarks
+- Show meaningful absolute dollar or basis point impacts
+- Represent trends that investors would care about
+
+## Output Requirements
+Return EXACTLY the KPI names as they appear in the data - do not modify, paraphrase, or abbreviate them."""
 
     # Build the user prompt
-    user_prompt = f"""Select the top {num_metrics} most important KPIs for {bank_name}'s {quarter} {fiscal_year} earnings report.
+    user_prompt = f"""Select the top {num_metrics} most important KPIs for {bank_name}'s {quarter} {fiscal_year} quarterly earnings report.
 
-Available metrics:
+## Available Metrics ({len(metrics)} total)
 
 {metrics_table}
 
-Return the {num_metrics} most important KPI names that should be featured in the key metrics tiles section of the earnings report."""
+## Your Task
+
+Analyze these metrics and select the {num_metrics} that best represent the key story of this quarter's performance.
+
+Consider:
+1. Which core financial metrics must be included?
+2. Which metrics show significant or unusual changes worth highlighting?
+3. Do any metrics show a trend reversal or acceleration when comparing short-term (QoQ, YoY) vs longer-term (3Y, 5Y) changes?
+4. What would a CFO or analyst want to see at a glance?
+
+Return exactly {num_metrics} KPI names."""
 
     # Define the tool for structured output
     tool_definition = {
@@ -123,13 +197,18 @@ Return the {num_metrics} most important KPI names that should be featured in the
                     "selected_metrics": {
                         "type": "array",
                         "items": {"type": "string"},
-                        "description": "List of KPI names exactly as they appear in the metrics table",
+                        "description": "List of KPI names exactly as they appear in the metrics data",
                         "minItems": num_metrics,
                         "maxItems": num_metrics,
                     },
                     "reasoning": {
                         "type": "string",
-                        "description": "Brief explanation of why these metrics were selected",
+                        "description": (
+                            "Detailed explanation of the selection rationale. For each selected metric, "
+                            "explain WHY it was chosen (e.g., 'Net Income selected as core metric showing "
+                            "+8% YoY growth indicating strong quarter'). Also note any metrics that were "
+                            "considered but not selected and why."
+                        ),
                     },
                 },
                 "required": ["selected_metrics", "reasoning"],
@@ -143,8 +222,8 @@ Return the {num_metrics} most important KPI names that should be featured in the
     ]
 
     try:
-        # Use medium model for this task
-        model_config = config.llm.medium
+        # Use large model for this task - need good reasoning for metric selection
+        model_config = config.llm.large
 
         response = await complete_with_tools(
             messages=messages,
@@ -152,7 +231,8 @@ Return the {num_metrics} most important KPI names that should be featured in the
             context=context,
             llm_params={
                 "model": model_config.model,
-                "temperature": 0.1,  # Low temperature for consistent selection
+                "temperature": 0.2,  # Slightly higher for nuanced selection
+                "max_tokens": 2000,  # Allow room for detailed reasoning
             },
         )
 
@@ -194,8 +274,14 @@ Return the {num_metrics} most important KPI names that should be featured in the
                         {
                             "name": m["parameter"],
                             "value": m["actual"],
+                            "units": m.get("units", ""),
                             "qoq": m["qoq"],
                             "yoy": m["yoy"],
+                            "2y": m.get("2y"),
+                            "3y": m.get("3y"),
+                            "4y": m.get("4y"),
+                            "5y": m.get("5y"),
+                            "higher_is_better": m.get("higher_is_better"),
                         }
                         for m in metrics
                     ],
@@ -229,9 +315,7 @@ Return the {num_metrics} most important KPI names that should be featured in the
         }
 
 
-def _fallback_metric_selection(
-    metrics: List[Dict[str, Any]], num_metrics: int
-) -> List[str]:
+def _fallback_metric_selection(metrics: List[Dict[str, Any]], num_metrics: int) -> List[str]:
     """
     Fallback metric selection when LLM fails.
 

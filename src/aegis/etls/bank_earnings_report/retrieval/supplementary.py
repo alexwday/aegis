@@ -49,7 +49,8 @@ async def retrieve_dividend(
     try:
         async with get_connection() as conn:
             result = await conn.execute(
-                text("""
+                text(
+                    """
                     SELECT "Actual", "QoQ", "YoY", "Units"
                     FROM benchmarking_report
                     WHERE "bank_symbol" = :bank_symbol
@@ -58,7 +59,8 @@ async def retrieve_dividend(
                       AND "Parameter" = 'Dividends Declared'
                       AND "Platform" = 'Enterprise'
                     LIMIT 1
-                """),
+                """
+                ),
                 {
                     "bank_symbol": bank_symbol,
                     "fiscal_year": fiscal_year,
@@ -190,6 +192,10 @@ async def retrieve_all_metrics(
             "actual": float,       # Current value
             "qoq": float,          # Quarter-over-quarter change
             "yoy": float,          # Year-over-year change
+            "2y": float,           # 2-year change
+            "3y": float,           # 3-year change
+            "4y": float,           # 4-year change
+            "5y": float,           # 5-year change
             "units": str,          # Units from benchmarking_report
             "description": str,    # From kpi_metadata
             "meta_unit": str,      # Unit type from kpi_metadata
@@ -210,12 +216,17 @@ async def retrieve_all_metrics(
     try:
         async with get_connection() as conn:
             result = await conn.execute(
-                text("""
+                text(
+                    """
                     SELECT
                         br."Parameter",
                         br."Actual",
                         br."QoQ",
                         br."YoY",
+                        br."2Y",
+                        br."3Y",
+                        br."4Y",
+                        br."5Y",
                         br."Units",
                         km.description,
                         km.unit as meta_unit,
@@ -228,7 +239,8 @@ async def retrieve_all_metrics(
                       AND br."quarter" = :quarter
                       AND br."Platform" = 'Enterprise'
                     ORDER BY br."Parameter"
-                """),
+                """
+                ),
                 {
                     "bank_symbol": bank_symbol,
                     "fiscal_year": fiscal_year,
@@ -238,17 +250,23 @@ async def retrieve_all_metrics(
 
             metrics = []
             for row in result:
-                metrics.append({
-                    "parameter": row[0],
-                    "actual": float(row[1]) if row[1] is not None else None,
-                    "qoq": float(row[2]) if row[2] is not None else None,
-                    "yoy": float(row[3]) if row[3] is not None else None,
-                    "units": row[4] if row[4] else "",
-                    "description": row[5] if row[5] else "",
-                    "meta_unit": row[6] if row[6] else "",
-                    "higher_is_better": row[7] if row[7] is not None else None,
-                    "analyst_usage": row[8] if row[8] else "",
-                })
+                metrics.append(
+                    {
+                        "parameter": row[0],
+                        "actual": float(row[1]) if row[1] is not None else None,
+                        "qoq": float(row[2]) if row[2] is not None else None,
+                        "yoy": float(row[3]) if row[3] is not None else None,
+                        "2y": float(row[4]) if row[4] is not None else None,
+                        "3y": float(row[5]) if row[5] is not None else None,
+                        "4y": float(row[6]) if row[6] is not None else None,
+                        "5y": float(row[7]) if row[7] is not None else None,
+                        "units": row[8] if row[8] else "",
+                        "description": row[9] if row[9] else "",
+                        "meta_unit": row[10] if row[10] else "",
+                        "higher_is_better": row[11] if row[11] is not None else None,
+                        "analyst_usage": row[12] if row[12] else "",
+                    }
+                )
 
             logger.info(
                 "etl.bank_earnings_report.metrics_retrieved",
@@ -299,7 +317,8 @@ async def retrieve_metrics_by_names(
     try:
         async with get_connection() as conn:
             result = await conn.execute(
-                text("""
+                text(
+                    """
                     SELECT
                         br."Parameter",
                         br."Actual",
@@ -316,7 +335,8 @@ async def retrieve_metrics_by_names(
                       AND br."quarter" = :quarter
                       AND br."Platform" = 'Enterprise'
                       AND br."Parameter" = ANY(:metric_names)
-                """),
+                """
+                ),
                 {
                     "bank_symbol": bank_symbol,
                     "fiscal_year": fiscal_year,
@@ -474,18 +494,20 @@ def format_key_metrics_json(metrics: List[Dict[str, Any]]) -> Dict[str, Any]:
     formatted_metrics = []
 
     for metric in metrics:
-        formatted_metrics.append({
-            "label": metric["parameter"],
-            "value": format_metric_value(
-                metric["actual"], metric["units"], metric["meta_unit"]
-            ),
-            "qoq": format_delta(
-                metric["qoq"], metric["units"], metric["meta_unit"], metric["higher_is_better"]
-            ),
-            "yoy": format_delta(
-                metric["yoy"], metric["units"], metric["meta_unit"], metric["higher_is_better"]
-            ),
-        })
+        formatted_metrics.append(
+            {
+                "label": metric["parameter"],
+                "value": format_metric_value(
+                    metric["actual"], metric["units"], metric["meta_unit"]
+                ),
+                "qoq": format_delta(
+                    metric["qoq"], metric["units"], metric["meta_unit"], metric["higher_is_better"]
+                ),
+                "yoy": format_delta(
+                    metric["yoy"], metric["units"], metric["meta_unit"], metric["higher_is_better"]
+                ),
+            }
+        )
 
     return {
         "source": "Supp Pack",
