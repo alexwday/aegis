@@ -685,6 +685,16 @@ def format_chart_json(
             "values": [4200, 4350, ...]
         }
     """
+    # Determine unit label and decimal places based on is_bps flag
+    # is_bps=True: value is a percentage (e.g., ROE 13.5%)
+    # is_bps=False: value is in millions (e.g., Net Income $4,200M)
+    if is_bps:
+        unit_label = "%"
+        decimal_places = 2
+    else:
+        unit_label = "$M"
+        decimal_places = 0
+
     quarters = []
     values = []
 
@@ -696,17 +706,8 @@ def format_chart_json(
             if len(parts) == 2:
                 q_label = f"{parts[0]} {parts[1][2:]}"  # "Q3 2023" -> "Q3 23"
             quarters.append(q_label)
-            values.append(h["value"])
-
-    # Determine unit label and decimal places based on is_bps flag
-    # is_bps=True: value is a percentage (e.g., ROE 13.5%)
-    # is_bps=False: value is in millions (e.g., Net Income $4,200M)
-    if is_bps:
-        unit_label = "%"
-        decimal_places = 2
-    else:
-        unit_label = "$M"
-        decimal_places = 0
+            # Round value to match decimal_places for consistent display
+            values.append(round(h["value"], decimal_places))
 
     return {
         "label": metric_name,
