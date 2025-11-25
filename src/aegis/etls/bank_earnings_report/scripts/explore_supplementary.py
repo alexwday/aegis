@@ -47,7 +47,7 @@ async def explore_table():
         # 3. Distinct periods (yr_Qtr, quarter, fiscal_year)
         print("\n### 3. Sample Periods (first 20) ###")
         result = await conn.execute(text("""
-            SELECT DISTINCT yr_Qtr, quarter, fiscal_year
+            SELECT DISTINCT "yr_Qtr", quarter, fiscal_year
             FROM benchmarking_report
             ORDER BY fiscal_year DESC, quarter DESC
             LIMIT 20
