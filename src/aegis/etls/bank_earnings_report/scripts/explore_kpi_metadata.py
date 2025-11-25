@@ -48,7 +48,7 @@ async def explore_kpi_metadata():
         # 3. Sample of kpi_metadata
         print("\n### 3. Sample KPI Metadata (first 10) ###")
         result = await conn.execute(text("""
-            SELECT id, kpi_name, description, unit, higher_is_better
+            SELECT id, kpi_name, LEFT(description, 60) as description, unit, higher_is_better
             FROM kpi_metadata
             ORDER BY id
             LIMIT 10
@@ -57,8 +57,7 @@ async def explore_kpi_metadata():
         print(tabulate(
             rows,
             headers=["id", "kpi_name", "description", "unit", "higher_is_better"],
-            tablefmt="simple",
-            maxcolwidths=[5, 30, 50, 10, 15]
+            tablefmt="simple"
         ))
 
         # 4. Check how kpi_name maps to Parameter in benchmarking_report
@@ -104,10 +103,9 @@ async def explore_kpi_metadata():
                 br."QoQ",
                 br."YoY",
                 br."Units",
-                km.description,
+                LEFT(km.description, 40) as description,
                 km.unit as meta_unit,
-                km.higher_is_better,
-                km.analyst_usage
+                km.higher_is_better
             FROM benchmarking_report br
             LEFT JOIN kpi_metadata km ON br."Parameter" = km.kpi_name
             WHERE br."bank_symbol" = 'RY-CA'
@@ -121,9 +119,8 @@ async def explore_kpi_metadata():
         if rows:
             print(tabulate(
                 rows,
-                headers=["Parameter", "Actual", "QoQ", "YoY", "Units", "description", "meta_unit", "higher_better", "analyst_usage"],
-                tablefmt="simple",
-                maxcolwidths=[25, 10, 8, 8, 8, 40, 10, 12, 30]
+                headers=["Parameter", "Actual", "QoQ", "YoY", "Units", "description", "meta_unit", "higher_better"],
+                tablefmt="simple"
             ))
         else:
             print("No data found for RBC Q3 2024. Trying to find available periods...")
@@ -155,7 +152,7 @@ async def explore_kpi_metadata():
         # 8. Show key_drivers and analyst_usage columns
         print("\n### 8. KPI Metadata with key_drivers and analyst_usage ###")
         result = await conn.execute(text("""
-            SELECT kpi_name, key_drivers, analyst_usage
+            SELECT kpi_name, LEFT(key_drivers, 50) as key_drivers, LEFT(analyst_usage, 50) as analyst_usage
             FROM kpi_metadata
             WHERE key_drivers IS NOT NULL OR analyst_usage IS NOT NULL
             LIMIT 10
@@ -165,8 +162,7 @@ async def explore_kpi_metadata():
             print(tabulate(
                 rows,
                 headers=["kpi_name", "key_drivers", "analyst_usage"],
-                tablefmt="simple",
-                maxcolwidths=[25, 50, 50]
+                tablefmt="simple"
             ))
         else:
             print("No key_drivers or analyst_usage data found.")
