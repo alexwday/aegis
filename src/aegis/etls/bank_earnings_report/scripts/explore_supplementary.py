@@ -171,6 +171,36 @@ async def explore_table():
             for row in rows:
                 print(f"  {row[0]}")
 
+        # 11. Check for exact "Dividends Declared" parameter
+        print("\n### 11. 'Dividends Declared' Parameter (exact match) ###")
+        result = await conn.execute(text("""
+            SELECT "bank", "bank_symbol", "fiscal_year", "quarter",
+                   "Actual", "QoQ", "YoY", "Units", "Platform"
+            FROM benchmarking_report
+            WHERE "Parameter" = 'Dividends Declared'
+            ORDER BY "bank", "fiscal_year" DESC, "quarter" DESC
+            LIMIT 20
+        """))
+        rows = result.fetchall()
+        if rows:
+            print(tabulate(
+                rows,
+                headers=["bank", "symbol", "year", "qtr", "Actual", "QoQ", "YoY", "Units", "Platform"],
+                tablefmt="simple"
+            ))
+        else:
+            print("No 'Dividends Declared' parameter found. Checking similar names...")
+            result = await conn.execute(text("""
+                SELECT DISTINCT "Parameter"
+                FROM benchmarking_report
+                WHERE LOWER("Parameter") LIKE '%divid%'
+                ORDER BY "Parameter"
+            """))
+            rows = result.fetchall()
+            print("\nParameters containing 'divid':")
+            for row in rows:
+                print(f"  {row[0]}")
+
 
 def main():
     """Entry point."""
