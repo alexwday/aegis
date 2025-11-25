@@ -1,0 +1,12 @@
+# Monitored Financial Institutions - Canadian Banks Only
+# Format: ticker: {id, name, type, path_safe_name}
+# IDs match the shared institution IDs used across Aegis
+
+# Canadian Banks (7)
+RY-CA: {id: 1, name: "Royal Bank of Canada", type: "Canadian_Banks", path_safe_name: "RY-CA_Royal_Bank_of_Canada"}
+BMO-CA: {id: 2, name: "Bank of Montreal", type: "Canadian_Banks", path_safe_name: "BMO-CA_Bank_of_Montreal"}
+CM-CA: {id: 3, name: "Canadian Imperial Bank of Commerce", type: "Canadian_Banks", path_safe_name: "CM-CA_Canadian_Imperial_Bank_of_Commerce"}
+NA-CA: {id: 4, name: "National Bank of Canada", type: "Canadian_Banks", path_safe_name: "NA-CA_National_Bank_of_Canada"}
+BNS-CA: {id: 5, name: "Bank of Nova Scotia", type: "Canadian_Banks", path_safe_name: "BNS-CA_Bank_of_Nova_Scotia"}
+TD-CA: {id: 6, name: "Toronto-Dominion Bank", type: "Canadian_Banks", path_safe_name: "TD-CA_Toronto-Dominion_Bank"}
+LB-CA: {id: 7, name: "Laurentian Bank", type: "Canadian_Banks", path_safe_name: "LB-CA_Laurentian_Bank"}

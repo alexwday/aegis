@@ -1,0 +1,45 @@
+{
+  "source": "RTS",
+  "entries": [
+    {
+      "description": "Restructuring charges for workforce optimization program announced in Q2. Primarily severance costs across Canadian retail and U.S. operations.",
+      "impact": {
+        "value": -165,
+        "direction": "negative",
+        "display": "▼ $165 M"
+      },
+      "segment": "Corporate",
+      "timing": "One-time"
+    },
+    {
+      "description": "Gain on sale of non-core real estate portfolio in Western Canada. Part of ongoing branch footprint rationalization.",
+      "impact": {
+        "value": 85,
+        "direction": "positive",
+        "display": "▲ $85 M"
+      },
+      "segment": "Canadian P&C",
+      "timing": "One-time"
+    },
+    {
+      "description": "Amortization of intangibles from 2022 wealth management acquisition. Expected to continue for 6 more quarters.",
+      "impact": {
+        "value": -45,
+        "direction": "negative",
+        "display": "▼ $45 M"
+      },
+      "segment": "Wealth Mgmt",
+      "timing": "Recurring"
+    },
+    {
+      "description": "Release of legal provision following favorable settlement. Related to legacy trading practices matter.",
+      "impact": {
+        "value": 40,
+        "direction": "positive",
+        "display": "▲ $40 M"
+      },
+      "segment": "Capital Markets",
+      "timing": "One-time"
+    }
+  ]
+}

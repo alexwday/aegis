@@ -1,0 +1,1452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bank Quarterly Earnings Report</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #f0f2f5;
+            --card: #ffffff;
+            --text-main: #1a202c;
+            --text-muted: #64748b;
+            --border: #e2e8f0;
+            --accent: #005587; /* Generic Bank Blue */
+            --accent-2: #0ea5e9;
+            --pos: #16a34a; /* Green */
+            --neg: #dc2626; /* Red */
+            --warning: #f59e0b;
+            --shadow: 0 12px 30px rgba(0, 40, 80, 0.08);
+        }
+        body { 
+            font-family: 'Manrope', 'Segoe UI', sans-serif; 
+            background: radial-gradient(120% 120% at 20% 20%, #f1f6ff 0%, #eef2f7 35%, #e7edf4 100%); 
+            color: var(--text-main); 
+            margin: 24px; 
+        }
+        .page-shell {
+            position: relative;
+            z-index: 1;
+        }
+        .page-shell::after {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background: radial-gradient(600px at 10% 10%, rgba(14, 165, 233, 0.08), transparent 45%),
+                        radial-gradient(500px at 90% 20%, rgba(0, 85, 135, 0.08), transparent 45%);
+            z-index: -1;
+            pointer-events: none;
+        }
+        
+        /* Hero - V5 Dark Elegant with Gradient Mesh */
+        .hero {
+            display: grid;
+            grid-template-columns: 2fr 1.05fr;
+            gap: 20px;
+            align-items: center;
+            background: #0a0a0c;
+            color: #f8fafc;
+            padding: 6px 40px;
+            border-radius: 4px;
+            box-shadow:
+                0 1px 0 rgba(255,255,255,0.03),
+                0 20px 50px rgba(0, 0, 0, 0.5);
+            position: relative;
+            overflow: hidden;
+            border: 1px solid #2a2a2a;
+        }
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background:
+                radial-gradient(circle at 0% 0%, rgba(59, 130, 246, 0.35) 0%, transparent 45%),
+                radial-gradient(circle at 100% 100%, rgba(139, 92, 246, 0.3) 0%, transparent 45%),
+                radial-gradient(circle at 80% 20%, rgba(14, 165, 233, 0.25) 0%, transparent 40%),
+                radial-gradient(circle at 20% 80%, rgba(16, 185, 129, 0.2) 0%, transparent 40%);
+            pointer-events: none;
+        }
+        .hero::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background:
+                radial-gradient(ellipse 60% 40% at 50% -10%, rgba(255,255,255,0.04) 0%, transparent 60%),
+                linear-gradient(180deg, rgba(255,255,255,0.02) 0%, transparent 30%);
+            pointer-events: none;
+        }
+        .hero h1 {
+            color: #ffffff;
+            font-size: 38px;
+            margin: 6px 0 6px 0;
+            font-weight: 500;
+            letter-spacing: 0.5px;
+        }
+        .hero .sub-header {
+            color: #a0a0a0;
+            margin-bottom: 12px;
+            letter-spacing: 0.3px;
+            font-size: 16px;
+        }
+        .pill-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 6px;
+        }
+        .pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 10px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.12);
+            color: #f8fafc;
+            font-size: 11px;
+            letter-spacing: 0.2px;
+        }
+        .pill-muted {
+            background: rgba(255, 255, 255, 0.08);
+            color: #dce5f2;
+        }
+        .hero-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
+        }
+        .hero-stat {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 10px;
+            padding: 10px 12px;
+        }
+        .hero-stat-label {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #d7e3f2;
+            margin-bottom: 4px;
+            font-weight: 600;
+        }
+        .hero-stat-value {
+            font-size: 18px;
+            font-weight: 700;
+            color: #ffffff;
+            margin-bottom: 4px;
+        }
+        .hero-stat-delta {
+            font-size: 12px;
+            font-weight: 600;
+            color: #d7e3f2;
+        }
+        .hero-right {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid #2a2a2a;
+            border-radius: 4px;
+            padding: 18px 20px;
+        }
+        .hero-label {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: #808080;
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+        .hero-footnote {
+            font-size: 11px;
+            color: #d7e3f2;
+            margin-top: 8px;
+            display: block;
+        }
+        .hero .dividend-amount {
+            color: #ffffff;
+            font-weight: 500;
+        }
+        .hero .dividend-change span {
+            color: #808080;
+        }
+        .hero .dividend-change .pos {
+            color: #4ade80;
+        }
+        
+        /* Grid Layout */
+        .grid-container {
+            display: grid;
+            gap: 20px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        .full-row { grid-column: 1 / -1; }
+        .half-half { 
+            display: grid; 
+            grid-template-columns: 1fr 1fr; 
+            gap: 20px; 
+        }
+
+        /* Cards */
+        .card { 
+            background: var(--card); 
+            padding: 20px; 
+            border-radius: 10px; 
+            border: 1px solid #dce2ec; 
+            box-shadow: 0 6px 20px rgba(15, 41, 76, 0.07); 
+        }
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 12px;
+            margin-bottom: 10px;
+        }
+        .section-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+        .pill-soft {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 10px;
+            border-radius: 8px;
+            background: #f1f5f9;
+            color: #334155;
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.2px;
+        }
+        .pill-soft.accent {
+            background: rgba(0, 85, 135, 0.12);
+            color: #004a7f;
+            border: 1px solid rgba(0, 85, 135, 0.2);
+        }
+        
+        /* Typography */
+        h1 { font-size: 24px; margin: 0 0 5px 0; color: var(--accent); }
+        h2 { font-size: 16px; text-transform: uppercase; color: var(--text-muted); margin-top: 0; border-bottom: 1px solid var(--border); padding-bottom: 10px; letter-spacing: 0.5px; }
+        .sub-header { font-size: 14px; color: var(--text-muted); margin-bottom: 20px; }
+        
+        /* Enhanced Metric Badges */
+        .metric-box { 
+            flex: 1; 
+            background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%); 
+            padding: 14px 12px;
+            border-radius: 8px; 
+            text-align: center; 
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.04);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        .metric-box:hover { 
+            transform: translateY(-2px); 
+            box-shadow: 0 4px 8px rgba(0,0,0,0.08);
+            background: linear-gradient(135deg, #ffffff 0%, #ffffff 100%);
+        }
+        .metric-label { 
+            display: block; 
+            font-size: 11px; 
+            color: var(--accent);
+            margin-bottom: 6px; 
+            text-transform: uppercase; 
+            letter-spacing: 0.8px;
+            font-weight: 700;
+        }
+        .metric-val { 
+            font-size: 20px; 
+            font-weight: 700; 
+            color: #1a202c;
+            margin-bottom: 6px;
+            display: block;
+        }
+        .metric-changes-container {
+            display: flex; 
+            justify-content: center; 
+            gap: 0; 
+            margin-top: 6px;
+            padding-top: 6px;
+            border-top: 1px solid #f0f4f8;
+        }
+        .metric-change-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 0 22px;
+        }
+        .metric-change-item:first-child {
+            border-right: 1px solid #e2e8f0;
+        }
+        .change-label {
+            font-size: 9px;
+            color: #94a3b8;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 2px;
+            font-weight: 700;
+        }
+        .delta {
+            font-size: 12px;
+            font-weight: 700;
+            display: block;
+        }
+        /* Legacy delta classes (for any hardcoded content) */
+        .pos { color: var(--pos); }
+        .neg { color: var(--neg); }
+        .neutral { color: var(--text-muted); }
+
+        /* Dynamic delta classes for template rendering - use direction from JSON */
+        .positive { color: var(--pos); }
+        .negative { color: var(--neg); }
+        .delta-positive { color: #4ade80; }
+        .delta-negative { color: #f87171; }
+        .delta-neutral { color: #808080; }
+
+        /* Dividend Section */
+        .dividend-display {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        .dividend-amount {
+            font-size: 22px;
+            font-weight: bold;
+            color: var(--accent);
+        }
+        .dividend-change {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 14px;
+        }
+
+        /* Items of Note Table */
+        .items-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+            background: #fafbfc;
+            border-radius: 6px;
+            overflow: hidden;
+        }
+        .items-table th {
+            text-align: left;
+            color: var(--text-muted);
+            font-weight: 600;
+            padding: 10px;
+            background: #f1f5f9;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .items-table td {
+            padding: 10px;
+            border-bottom: 1px solid var(--border);
+        }
+        .items-table tr:last-child td {
+            border-bottom: none;
+        }
+        .item-description {
+            font-weight: 500;
+            color: var(--text-main);
+        }
+        .impact-value {
+            text-align: right;
+            font-size: 12px;
+            font-weight: 700;
+        }
+        .change-col {
+            text-align: right;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        /* Tables */
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th { text-align: left; color: var(--text-muted); font-weight: 600; padding: 8px; border-bottom: 2px solid var(--border); font-size: 11px; }
+        td { padding: 8px; border-bottom: 1px solid var(--border); }
+        .num { text-align: right; font-family: 'Consolas', monospace; }
+
+        /* Quotes Section */
+        .quote-box { 
+            background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); 
+            border-left: 3px solid var(--accent); 
+            padding: 12px 15px; 
+            margin-bottom: 12px; 
+            border-radius: 0 6px 6px 0;
+            font-size: 13px;
+        }
+        .quote-source { 
+            font-size: 10px; 
+            color: var(--accent); 
+            text-transform: uppercase; 
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+            font-weight: 600;
+        }
+        .quote-text {
+            color: #2d3748;
+            line-height: 1.5;
+        }
+
+        /* Q&A Section */
+        .qa-item {
+            background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+            border-radius: 8px;
+            padding: 14px 12px;
+            margin-bottom: 10px;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.04);
+            transition: all 0.3s ease;
+        }
+        .qa-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.08);
+            background: linear-gradient(135deg, #ffffff 0%, #ffffff 100%);
+        }
+        .qa-theme {
+            font-weight: 600;
+            font-size: 12px;
+            color: var(--accent);
+            text-transform: uppercase;
+            margin-bottom: 6px;
+            letter-spacing: 0.3px;
+        }
+        .qa-content {
+            font-size: 12px;
+            color: #4a5568;
+            line-height: 1.5;
+        }
+
+        /* Source Tag */
+        .source-tag { 
+            font-size: 9px; 
+            color: #66798d; 
+            display: inline-flex; 
+            align-items: center;
+            gap: 4px;
+            text-transform: uppercase; 
+            letter-spacing: 0.5px;
+            background: #eef2f7;
+            padding: 3px 8px;
+            border-radius: 6px;
+            border: 1px solid #dce2ec;
+        }
+
+        /* Risk Metrics */
+        .risk-category {
+            margin-bottom: 20px;
+            background: #fafbfc;
+            padding: 15px;
+            border-radius: 6px;
+        }
+        .risk-category-title {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--accent);
+            text-transform: uppercase;
+            margin-bottom: 12px;
+            letter-spacing: 0.5px;
+        }
+        .risk-metric {
+            display: flex;
+            justify-content: space-between;
+            padding: 6px 0;
+            border-bottom: 1px solid #f0f0f0;
+            font-size: 12px;
+        }
+        .risk-metric:last-child {
+            border-bottom: none;
+        }
+        .risk-label {
+            color: var(--text-muted);
+        }
+        .risk-value {
+            font-weight: 600;
+            font-family: 'Consolas', monospace;
+        }
+
+        /* Progress Bars */
+        .progress-bar {
+            height: 10px;
+            background: #e0e0e0;
+            border-radius: 5px;
+            overflow: hidden;
+            margin: 8px 0;
+        }
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(to right, var(--accent), #0080d5);
+            position: relative;
+            transition: width 0.3s;
+        }
+        .progress-marker {
+            position: absolute;
+            right: -1px;
+            top: 0;
+            width: 2px;
+            height: 100%;
+            background: white;
+        }
+
+        /* Enhanced Segment Table */
+        .segment-table th {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .segment-table td {
+            font-size: 12px;
+        }
+        .segment-name {
+            font-weight: 500;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="page-shell">
+    <div class="grid-container">
+        
+        <!-- ============================================
+             SECTION 0: Header/Hero
+             DATA SOURCES:
+               - 0_header_params.json (bank_name, fiscal_quarter, fiscal_year, period_ending)
+               - 0_header_dividend.json (dividend.amount, dividend.qoq, dividend.yoy)
+             ============================================ -->
+        <div class="hero full-row">
+            <div>
+                <h1 style="font-size: 36px; font-family: 'Inter', sans-serif; font-weight: 600;">Bank of Canada (Example)</h1>
+                <div class="sub-header">Fiscal Q3 2025 Report • Period Ending July 31</div>
+            </div>
+            <div class="hero-right" style="display: flex; align-items: center; gap: 16px; width: fit-content; margin-left: auto; padding: 8px 16px;">
+                <div>
+                    <div class="hero-label" style="font-size: 10px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 2px;">Quarterly Dividend</div>
+                    <span class="dividend-amount" style="font-size: 24px; font-family: 'Inter', sans-serif; font-weight: 600;">$1.10/share</span>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 2px; padding-left: 14px; border-left: 1px solid rgba(255,255,255,0.1);">
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                        <span style="font-size: 9px; color: #808080; text-transform: uppercase; width: 24px;">QoQ</span>
+                        <span style="font-size: 12px; font-weight: 600;" class="delta-positive">▲ 4.8%</span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                        <span style="font-size: 9px; color: #808080; text-transform: uppercase; width: 24px;">YoY</span>
+                        <span style="font-size: 12px; font-weight: 600;" class="delta-positive">▲ 10.0%</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============================================
+             SECTION 1: Key Financial Metrics
+             SUBSECTIONS:
+               - 1a: Overview (1_keymetrics_overview.json)
+               - 1b: Metric Tiles (1_keymetrics_tiles.json)
+               - 1c: NIM Trend Chart (1_keymetrics_chart.json)
+               - 1d: Items of Note (1_keymetrics_items.json)
+             ============================================ -->
+        <div class="card full-row">
+            <!-- -------- Subsection 1a: Overview --------
+                 DATA SOURCE: 1_keymetrics_overview.json (narrative)
+                 SOURCE: RTS
+            -->
+            <div style="margin-bottom: 20px;">
+                <h3 style="font-size: 14px; color: var(--text-muted); margin: 0 0 10px 0;">OVERVIEW</h3>
+                <p style="font-size: 12px; color: var(--text-main); line-height: 1.5; margin: 0;">
+                    A resilient quarter underpinned by the bank's diversified business model, with Wealth Management emerging as the standout performer on record AUM and strong net new flows. Canadian P&C benefited from robust mortgage and business lending volumes, though competitive pricing pressures weighed on margins. U.S. Retail remains a work-in-progress, with management executing on strategic repositioning toward affluent segments while absorbing elevated provision expenses. Credit quality held up better than expected, particularly in the closely-watched commercial real estate portfolio where conservative underwriting continues to limit new impaired loan formations. Management signaled confidence in achieving positive operating leverage by year-end as expense growth moderates and digital adoption gains drive efficiency improvements.
+                </p>
+            </div>
+
+            <!-- -------- Subsection 1b: Key Metric Tiles --------
+                 DATA SOURCE: 1_keymetrics_tiles.json (metrics array)
+                 SOURCE: Supp Pack
+            -->
+            <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--border);">
+            <div class="section-header" style="align-items: center;">
+                <h3 style="font-size: 14px; color: var(--text-muted); margin: 0;">KEY METRICS</h3>
+                <div class="section-actions" style="align-items: center;">
+                    <span class="pill-soft">Source: Supp Pack</span>
+                    <span class="pill-soft">Adjusted figures</span>
+                    <span class="pill-soft">Currency: CAD</span>
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 12px;">
+                <!-- Left side: metric tiles in 3-column rows -->
+                <div style="flex: 3; display: flex; flex-direction: column; gap: 12px;">
+                    
+                    <div style="display: flex; gap: 12px;">
+                        
+                        <div class="metric-box" style="flex: 1;">
+                            <span class="metric-label">Total Revenue</span>
+                            <span class="metric-val">$9,200 M</span>
+                            <div class="metric-changes-container">
+                                <div class="metric-change-item">
+                                    <span class="change-label">QoQ</span>
+                                    <span class="delta positive">▲ 2.3%</span>
+                                </div>
+                                <div class="metric-change-item">
+                                    <span class="change-label">YoY</span>
+                                    <span class="delta positive">▲ 6.8%</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="metric-box" style="flex: 1;">
+                            <span class="metric-label">Pre-Provision Earnings</span>
+                            <span class="metric-val">$3,180 M</span>
+                            <div class="metric-changes-container">
+                                <div class="metric-change-item">
+                                    <span class="change-label">QoQ</span>
+                                    <span class="delta positive">▲ 2.1%</span>
+                                </div>
+                                <div class="metric-change-item">
+                                    <span class="change-label">YoY</span>
+                                    <span class="delta positive">▲ 5.8%</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="metric-box" style="flex: 1;">
+                            <span class="metric-label">Net Income (Adj)</span>
+                            <span class="metric-val">$2,450 M</span>
+                            <div class="metric-changes-container">
+                                <div class="metric-change-item">
+                                    <span class="change-label">QoQ</span>
+                                    <span class="delta positive">▲ 1.8%</span>
+                                </div>
+                                <div class="metric-change-item">
+                                    <span class="change-label">YoY</span>
+                                    <span class="delta positive">▲ 4.2%</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                    </div>
+                    
+                    <div style="display: flex; gap: 12px;">
+                        
+                        <div class="metric-box" style="flex: 1;">
+                            <span class="metric-label">Return on Equity</span>
+                            <span class="metric-val">13.8%</span>
+                            <div class="metric-changes-container">
+                                <div class="metric-change-item">
+                                    <span class="change-label">QoQ</span>
+                                    <span class="delta negative">▼ 40bps</span>
+                                </div>
+                                <div class="metric-change-item">
+                                    <span class="change-label">YoY</span>
+                                    <span class="delta negative">▼ 20bps</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="metric-box" style="flex: 1;">
+                            <span class="metric-label">Efficiency Ratio</span>
+                            <span class="metric-val">54.2%</span>
+                            <div class="metric-changes-container">
+                                <div class="metric-change-item">
+                                    <span class="change-label">QoQ</span>
+                                    <span class="delta positive">▲ 50bps</span>
+                                </div>
+                                <div class="metric-change-item">
+                                    <span class="change-label">YoY</span>
+                                    <span class="delta positive">▲ 210bps</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="metric-box" style="flex: 1;">
+                            <span class="metric-label">Operating Leverage</span>
+                            <span class="metric-val">+1.2%</span>
+                            <div class="metric-changes-container">
+                                <div class="metric-change-item">
+                                    <span class="change-label">QoQ</span>
+                                    <span class="delta positive">▲ 80bps</span>
+                                </div>
+                                <div class="metric-change-item">
+                                    <span class="change-label">YoY</span>
+                                    <span class="delta positive">▲ 150bps</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                    </div>
+                    
+                </div>
+                
+                <!-- -------- Subsection 1c: Trend Chart --------
+                     DATA SOURCE: 1_keymetrics_chart.json (label, quarters, values)
+                     SOURCE: Supp Pack
+                     NOTE: This chart is rendered dynamically via JavaScript
+                -->
+                <div id="trend-chart-container" style="flex: 2; background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%); border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.04); display: flex; flex-direction: column;">
+                    <!-- Chart will be rendered here by JavaScript -->
+                </div>
+
+                <!-- Chart data embedded for JavaScript -->
+                <script id="trend-chart-data" type="application/json">
+                {"decimal_places": 2, "label": "Net Interest Margin - 8Q Trend", "quarters": ["Q4\u002723", "Q1\u002724", "Q2\u002724", "Q3\u002724", "Q4\u002724", "Q1\u002725", "Q2\u002725", "Q3\u002725"], "unit": "%", "values": [1.52, 1.54, 1.58, 1.64, 1.71, 1.76, 1.74, 1.68]}
+                </script>
+            </div>
+            </div>
+
+            <!-- -------- Subsection 1d: Items of Note --------
+                 DATA SOURCE: 1_keymetrics_items.json (items array)
+                 SOURCE: RTS
+                 NOTE: Variable-length list - loops through all items in JSON
+            -->
+            <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--border);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <h3 style="font-size: 14px; color: var(--text-muted); margin: 0;">ITEMS OF NOTE</h3>
+                    <div style="display: flex; gap: 8px;">
+                        <span class="pill-soft">Source: RTS</span>
+                        <span class="pill-soft">Currency: CAD</span>
+                    </div>
+                </div>
+                <table class="items-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 50%;">Description</th>
+                            <th style="width: 18%; text-align: right;">Impact</th>
+                            <th style="width: 16%; text-align: center;">Segment</th>
+                            <th style="width: 16%; text-align: center;">Timing</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        
+                        <tr>
+                            <td class="item-description">Restructuring charges for workforce optimization program announced in Q2. Primarily severance costs across Canadian retail and U.S. operations.</td>
+                            <td class="impact-value"><span class="delta negative">▼ $165 M</span></td>
+                            <td style="text-align: center; font-size: 12px;">Corporate</td>
+                            <td style="text-align: center; font-size: 12px;">One-time</td>
+                        </tr>
+                        
+                        <tr>
+                            <td class="item-description">Gain on sale of non-core real estate portfolio in Western Canada. Part of ongoing branch footprint rationalization.</td>
+                            <td class="impact-value"><span class="delta positive">▲ $85 M</span></td>
+                            <td style="text-align: center; font-size: 12px;">Canadian P&C</td>
+                            <td style="text-align: center; font-size: 12px;">One-time</td>
+                        </tr>
+                        
+                        <tr>
+                            <td class="item-description">Amortization of intangibles from 2022 wealth management acquisition. Expected to continue for 6 more quarters.</td>
+                            <td class="impact-value"><span class="delta negative">▼ $45 M</span></td>
+                            <td style="text-align: center; font-size: 12px;">Wealth Mgmt</td>
+                            <td style="text-align: center; font-size: 12px;">Recurring</td>
+                        </tr>
+                        
+                        <tr>
+                            <td class="item-description">Release of legal provision following favorable settlement. Related to legacy trading practices matter.</td>
+                            <td class="impact-value"><span class="delta positive">▲ $40 M</span></td>
+                            <td style="text-align: center; font-size: 12px;">Capital Markets</td>
+                            <td style="text-align: center; font-size: 12px;">One-time</td>
+                        </tr>
+                        
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ============================================
+             SECTION 2: Management Narrative
+             DATA SOURCE: 2_narrative.json (entries array with type: rts|transcript)
+             NOTE: Variable-length, ordered list. RTS = plain text, Transcript = quoted style
+             ============================================ -->
+        <div class="half-half">
+            <div class="card">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <h2 style="margin: 0; border-bottom: none; padding-bottom: 0;">Management Narrative</h2>
+                    <div style="display: flex; gap: 8px;">
+                        <span class="pill-soft">Source: Transcripts</span>
+                        <span class="pill-soft">Source: RTS</span>
+                    </div>
+                </div>
+
+                
+                
+                <!-- RTS item -->
+                <div style="padding: 0 0 20px 0;">
+                    <div style="font-size: 12px; color: var(--text-main); line-height: 1.5;">The bank's diversified business model delivered resilient performance this quarter, with particular strength in Wealth Management and Canadian Personal Banking. Record AUM levels and robust mortgage volumes more than offset headwinds in Capital Markets trading activity. The credit environment remains manageable with PCL ratio within guided range and strong allowance coverage providing downside protection.</div>
+                </div>
+                
+                
+                
+                <!-- Transcript quote -->
+                <div style="padding: 8px 0 20px 0; margin: 0 24px; position: relative;">
+                    <span style="position: absolute; top: 0; left: -8px; font-size: 36px; color: #cbd5e1; font-family: Georgia, serif; line-height: 1;">"</span>
+                    <div style="font-size: 12px; color: var(--text-main); line-height: 1.5; font-style: italic; padding-left: 16px; padding-right: 16px;">We are managing through this credit normalization cycle from a position of strength, with robust capital levels and conservative underwriting standards.</div>
+                    <span style="position: absolute; bottom: 28px; right: -4px; font-size: 36px; color: #cbd5e1; font-family: Georgia, serif; line-height: 1;">"</span>
+                    <div style="font-size: 10px; color: var(--text-muted); margin-top: 6px; font-weight: 600; text-align: right; padding-right: 16px;">— John Smith, CEO</div>
+                </div>
+                
+                
+                
+                <!-- RTS item -->
+                <div style="padding: 0 0 20px 0;">
+                    <div style="font-size: 12px; color: var(--text-main); line-height: 1.5;">Digital adoption across retail channels reached 73% this quarter, up from 68% a year ago. Management highlighted that automation of routine transactions is enabling branch staff to focus on higher-value advisory conversations, contributing to improved client satisfaction scores. Investment in AI-powered fraud detection has reduced losses by 22% YoY while enhancing customer experience through faster transaction approvals.</div>
+                </div>
+                
+                
+                
+                <!-- Transcript quote -->
+                <div style="padding: 8px 0 20px 0; margin: 0 24px; position: relative;">
+                    <span style="position: absolute; top: 0; left: -8px; font-size: 36px; color: #cbd5e1; font-family: Georgia, serif; line-height: 1;">"</span>
+                    <div style="font-size: 12px; color: var(--text-main); line-height: 1.5; font-style: italic; padding-left: 16px; padding-right: 16px;">We remain confident in achieving positive operating leverage by year-end as expense growth moderates and revenue momentum builds across our fee-based businesses.</div>
+                    <span style="position: absolute; bottom: 28px; right: -4px; font-size: 36px; color: #cbd5e1; font-family: Georgia, serif; line-height: 1;">"</span>
+                    <div style="font-size: 10px; color: var(--text-muted); margin-top: 6px; font-weight: 600; text-align: right; padding-right: 16px;">— Sarah Johnson, CFO</div>
+                </div>
+                
+                
+                
+                <!-- RTS item -->
+                <div style="padding: 0 0 20px 0;">
+                    <div style="font-size: 12px; color: var(--text-main); line-height: 1.5;">Credit quality metrics remained stable with gross impaired loans flat quarter-over-quarter. The allowance coverage ratio increased to 158%, reflecting management's proactive approach to reserving against potential deterioration in the commercial real estate and unsecured consumer portfolios. Stage 3 formations were elevated but within expectations, with recoveries improving sequentially as workout teams accelerate resolution timelines.</div>
+                </div>
+                
+                
+                
+                <!-- Transcript quote -->
+                <div style="padding: 8px 0 20px 0; margin: 0 24px; position: relative;">
+                    <span style="position: absolute; top: 0; left: -8px; font-size: 36px; color: #cbd5e1; font-family: Georgia, serif; line-height: 1;">"</span>
+                    <div style="font-size: 12px; color: var(--text-main); line-height: 1.5; font-style: italic; padding-left: 16px; padding-right: 16px;">Our technology investments are paying dividends—we've reduced time-to-yes on commercial loans by 40% while maintaining underwriting discipline. This is translating directly into market share gains in our core mid-market segment.</div>
+                    <span style="position: absolute; bottom: 28px; right: -4px; font-size: 36px; color: #cbd5e1; font-family: Georgia, serif; line-height: 1;">"</span>
+                    <div style="font-size: 10px; color: var(--text-muted); margin-top: 6px; font-weight: 600; text-align: right; padding-right: 16px;">— Michael Chen, Head of Commercial Banking</div>
+                </div>
+                
+                
+            </div>
+
+            <!-- ============================================
+                 SECTION 3: Analyst Focus
+                 DATA SOURCE: 3_analyst_focus.json (entries array with theme, question, answer)
+                 NOTE: Variable-length Q&A list from earnings call transcripts
+                 ============================================ -->
+            <div class="card">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <h2 style="margin: 0; border-bottom: none; padding-bottom: 0;">Analyst Focus</h2>
+                    <div style="display: flex; gap: 8px;">
+                        <span class="pill-soft">Source: Transcripts</span>
+                    </div>
+                </div>
+
+                
+                <div class="qa-item">
+                    <div style="margin-bottom: 8px;">
+                        <span style="font-size: 11px; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;">NIM Outlook</span>
+                        <span style="font-size: 11px; color: #94a3b8; margin: 0 6px;">—</span>
+                        <span style="font-size: 11px; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;">Given deposit cost pressures, what's your NIM trajectory for H2?</span>
+                    </div>
+                    <div style="font-size: 12px; color: var(--text-main); line-height: 1.5;">
+                        CFO expects NIM to stabilize at current levels through Q4, with modest expansion in 2026 as rate cuts flow through. Deposit betas have peaked at 45% and are expected to decline as promotional high-interest savings account campaigns roll off. Asset repricing tailwinds from the fixed-rate mortgage book should provide a 5-8bp benefit over the next four quarters.
+                    </div>
+                </div>
+                
+                <div class="qa-item">
+                    <div style="margin-bottom: 8px;">
+                        <span style="font-size: 11px; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;">CRE Exposure</span>
+                        <span style="font-size: 11px; color: #94a3b8; margin: 0 6px;">—</span>
+                        <span style="font-size: 11px; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;">Office portfolio concerns given recent market stress?</span>
+                    </div>
+                    <div style="font-size: 12px; color: var(--text-main); line-height: 1.5;">
+                        CRO noted office exposure is 2.8% of total loans with 58% average LTV. Reserved for 15% cumulative losses, seeing limited new formations. Portfolio is concentrated in Class A properties in major metros with strong tenant credit profiles. Management actively monitoring $450M of loans with near-term maturities for potential extensions or modifications.
+                    </div>
+                </div>
+                
+                <div class="qa-item">
+                    <div style="margin-bottom: 8px;">
+                        <span style="font-size: 11px; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;">Capital Allocation</span>
+                        <span style="font-size: 11px; color: #94a3b8; margin: 0 6px;">—</span>
+                        <span style="font-size: 11px; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;">Buyback pace given strong CET1 ratio?</span>
+                    </div>
+                    <div style="font-size: 12px; color: var(--text-main); line-height: 1.5;">
+                        CEO prioritizing organic growth first, maintaining dividend trajectory. Will accelerate buybacks if CET1 exceeds 13.5% persistently.
+                    </div>
+                </div>
+                
+                <div class="qa-item">
+                    <div style="margin-bottom: 8px;">
+                        <span style="font-size: 11px; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;">U.S. Strategy</span>
+                        <span style="font-size: 11px; color: #94a3b8; margin: 0 6px;">—</span>
+                        <span style="font-size: 11px; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;">Path to profitability improvement in U.S. retail?</span>
+                    </div>
+                    <div style="font-size: 12px; color: var(--text-main); line-height: 1.5;">
+                        Management targeting breakeven by Q2 2026 through expense rationalization and selective market exits. Focus on wealth management integration.
+                    </div>
+                </div>
+                
+            </div>
+        </div>
+
+        <!-- ============================================
+             SECTION 4: Segment Performance
+             DATA SOURCE: 4_segments.json (entries array with name, description, revenue, net_income, roe)
+             NOTE: Variable-length list of business segments with metrics
+             ============================================ -->
+        <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px;">
+            <div class="card">
+                <div class="section-header" style="align-items: center;">
+                    <h2 style="margin: 0; border-bottom: none; padding-bottom: 0;">Segment Performance</h2>
+                    <div class="section-actions" style="align-items: center;">
+                        <span class="pill-soft">Source: RTS</span>
+                        <span class="pill-soft">Source: Supp Pack</span>
+                        <span class="pill-soft">Adjusted figures</span>
+                        <span class="pill-soft">Currency: CAD</span>
+                    </div>
+                </div>
+
+                <div style="display: flex; flex-direction: column; margin-top: 10px;">
+                    
+                    <div class="qa-item">
+                        <div style="margin-bottom: 8px;">
+                            <div style="margin-bottom: 4px;">
+                                <span style="font-size: 11px; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;">Canadian P&C</span>
+                            </div>
+                            <div style="font-size: 12px; color: var(--text-main); line-height: 1.5;">Strong volume growth in mortgages (+7%) and business lending (+9%), partially offset by compressed margins from competitive pricing. Credit card balances continue to normalize while maintaining industry-leading loss rates.</div>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; padding-top: 8px; border-top: 1px solid #e2e8f0;">
+                            <div style="flex: 1; text-align: center;">
+                                <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 4px;">
+                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px; width: 70px;">Revenue</span>
+                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 700; width: 55px;">QoQ</span>
+                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 700; width: 55px;">YoY</span>
+                                </div>
+                                <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
+                                    <span style="font-size: 11px; font-weight: 700; color: var(--text-main); width: 70px;">$4,200 M</span>
+                                    <span class="delta positive" style="font-size: 11px; width: 55px;">▲ 2.1%</span>
+                                    <span class="delta positive" style="font-size: 11px; width: 55px;">▲ 5.2%</span>
+                                </div>
+                            </div>
+                            <div style="flex: 1; text-align: center; border-left: 1px solid #e2e8f0;">
+                                <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 4px;">
+                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px; width: 70px;">Net Income</span>
+                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 700; width: 55px;">QoQ</span>
+                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 700; width: 55px;">YoY</span>
+                                </div>
+                                <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
+                                    <span style="font-size: 11px; font-weight: 700; color: var(--text-main); width: 70px;">$1,100 M</span>
+                                    <span class="delta positive" style="font-size: 11px; width: 55px;">▲ 1.8%</span>
+                                    <span class="delta positive" style="font-size: 11px; width: 55px;">▲ 4.5%</span>
+                                </div>
+                            </div>
+                            <div style="flex: 1; text-align: center; border-left: 1px solid #e2e8f0;">
+                                <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 4px;">
+                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px; width: 70px;">ROE</span>
+                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 700; width: 55px;">QoQ</span>
+                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 700; width: 55px;">YoY</span>
+                                </div>
+                                <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
+                                    <span style="font-size: 11px; font-weight: 700; color: var(--text-main); width: 70px;">22.5%</span>
+                                    <span class="delta negative" style="font-size: 11px; width: 55px;">▼ 20bps</span>
+                                    <span class="delta positive" style="font-size: 11px; width: 55px;">▲ 40bps</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="qa-item">
+                        <div style="margin-bottom: 8px;">
+                            <div style="margin-bottom: 4px;">
+                                <span style="font-size: 11px; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;">U.S. Retail</span>
+                            </div>
+                            <div style="font-size: 12px; color: var(--text-main); line-height: 1.5;">Challenged by higher provision expenses ($120M increase) and strategic repositioning costs; focusing on affluent segments. Branch rationalization program on track to deliver $85M in annual run-rate savings by Q2 2026.</div>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; padding-top: 8px; border-top: 1px solid #e2e8f0;">
+                            <div style="flex: 1; text-align: center;">
+                                <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 4px;">
+                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px; width: 70px;">Revenue</span>
+                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 700; width: 55px;">QoQ</span>
+                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 700; width: 55px;">YoY</span>
+                                </div>
+                                <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
+                                    <span style="font-size: 11px; font-weight: 700; color: var(--text-main); width: 70px;">$2,100 M</span>
+                                    <span class="delta negative" style="font-size: 11px; width: 55px;">▼ 3.2%</span>
+                                    <span class="delta negative" style="font-size: 11px; width: 55px;">▼ 8.1%</span>
+                                </div>
+                            </div>
+                            <div style="flex: 1; text-align: center; border-left: 1px solid #e2e8f0;">
+                                <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 4px;">
+                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px; width: 70px;">Net Income</span>
+                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 700; width: 55px;">QoQ</span>
+                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 700; width: 55px;">YoY</span>
+                                </div>
+                                <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
+                                    <span style="font-size: 11px; font-weight: 700; color: var(--text-main); width: 70px;">$450 M</span>
+                                    <span class="delta negative" style="font-size: 11px; width: 55px;">▼ 5.1%</span>
+                                    <span class="delta negative" style="font-size: 11px; width: 55px;">▼ 12.3%</span>
+                                </div>
+                            </div>
+                            <div style="flex: 1; text-align: center; border-left: 1px solid #e2e8f0;">
+                                <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 4px;">
+                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px; width: 70px;">ROE</span>
+                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 700; width: 55px;">QoQ</span>
+                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 700; width: 55px;">YoY</span>
+                                </div>
+                                <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
+                                    <span style="font-size: 11px; font-weight: 700; color: var(--text-main); width: 70px;">8.3%</span>
+                                    <span class="delta negative" style="font-size: 11px; width: 55px;">▼ 60bps</span>
+                                    <span class="delta negative" style="font-size: 11px; width: 55px;">▼ 180bps</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="qa-item">
+                        <div style="margin-bottom: 8px;">
+                            <div style="margin-bottom: 4px;">
+                                <span style="font-size: 11px; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;">Wealth Management</span>
+                            </div>
+                            <div style="font-size: 12px; color: var(--text-main); line-height: 1.5;">Record AUM of $850B driven by strong market appreciation and $45B in net new flows; fee income growth of 14%. High-net-worth client acquisition up 23% YoY through advisor team expansion and digital onboarding enhancements.</div>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; padding-top: 8px; border-top: 1px solid #e2e8f0;">
+                            <div style="flex: 1; text-align: center;">
+                                <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 4px;">
+                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px; width: 70px;">Revenue</span>
+                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 700; width: 55px;">QoQ</span>
+                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 700; width: 55px;">YoY</span>
+                                </div>
+                                <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
+                                    <span style="font-size: 11px; font-weight: 700; color: var(--text-main); width: 70px;">$1,800 M</span>
+                                    <span class="delta positive" style="font-size: 11px; width: 55px;">▲ 4.5%</span>
+                                    <span class="delta positive" style="font-size: 11px; width: 55px;">▲ 12.0%</span>
+                                </div>
+                            </div>
+                            <div style="flex: 1; text-align: center; border-left: 1px solid #e2e8f0;">
+                                <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 4px;">
+                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px; width: 70px;">Net Income</span>
+                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 700; width: 55px;">QoQ</span>
+                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 700; width: 55px;">YoY</span>
+                                </div>
+                                <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
+                                    <span style="font-size: 11px; font-weight: 700; color: var(--text-main); width: 70px;">$550 M</span>
+                                    <span class="delta positive" style="font-size: 11px; width: 55px;">▲ 6.2%</span>
+                                    <span class="delta positive" style="font-size: 11px; width: 55px;">▲ 15.3%</span>
+                                </div>
+                            </div>
+                            <div style="flex: 1; text-align: center; border-left: 1px solid #e2e8f0;">
+                                <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 4px;">
+                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px; width: 70px;">ROE</span>
+                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 700; width: 55px;">QoQ</span>
+                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 700; width: 55px;">YoY</span>
+                                </div>
+                                <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
+                                    <span style="font-size: 11px; font-weight: 700; color: var(--text-main); width: 70px;">28.2%</span>
+                                    <span class="delta positive" style="font-size: 11px; width: 55px;">▲ 80bps</span>
+                                    <span class="delta positive" style="font-size: 11px; width: 55px;">▲ 220bps</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="qa-item">
+                        <div style="margin-bottom: 8px;">
+                            <div style="margin-bottom: 4px;">
+                                <span style="font-size: 11px; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;">Capital Markets</span>
+                            </div>
+                            <div style="font-size: 12px; color: var(--text-main); line-height: 1.5;">Softer trading revenues offset by strong M&A advisory fees; robust pipeline with $2.3B in announced deals expected to close in H2. Fixed income underwriting rebounding with league table share gains in Canadian investment-grade issuance.</div>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; padding-top: 8px; border-top: 1px solid #e2e8f0;">
+                            <div style="flex: 1; text-align: center;">
+                                <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 4px;">
+                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px; width: 70px;">Revenue</span>
+                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 700; width: 55px;">QoQ</span>
+                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 700; width: 55px;">YoY</span>
+                                </div>
+                                <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
+                                    <span style="font-size: 11px; font-weight: 700; color: var(--text-main); width: 70px;">$1,100 M</span>
+                                    <span class="delta negative" style="font-size: 11px; width: 55px;">▼ 8.3%</span>
+                                    <span class="delta negative" style="font-size: 11px; width: 55px;">▼ 2.0%</span>
+                                </div>
+                            </div>
+                            <div style="flex: 1; text-align: center; border-left: 1px solid #e2e8f0;">
+                                <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 4px;">
+                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px; width: 70px;">Net Income</span>
+                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 700; width: 55px;">QoQ</span>
+                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 700; width: 55px;">YoY</span>
+                                </div>
+                                <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
+                                    <span style="font-size: 11px; font-weight: 700; color: var(--text-main); width: 70px;">$320 M</span>
+                                    <span class="delta negative" style="font-size: 11px; width: 55px;">▼ 10.1%</span>
+                                    <span class="delta positive" style="font-size: 11px; width: 55px;">▲ 1.2%</span>
+                                </div>
+                            </div>
+                            <div style="flex: 1; text-align: center; border-left: 1px solid #e2e8f0;">
+                                <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 4px;">
+                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px; width: 70px;">ROE</span>
+                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 700; width: 55px;">QoQ</span>
+                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 700; width: 55px;">YoY</span>
+                                </div>
+                                <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
+                                    <span style="font-size: 11px; font-weight: 700; color: var(--text-main); width: 70px;">15.6%</span>
+                                    <span class="delta negative" style="font-size: 11px; width: 55px;">▼ 40bps</span>
+                                    <span class="delta positive" style="font-size: 11px; width: 55px;">▲ 10bps</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                </div>
+            </div>
+
+            <!-- ============================================
+                 SECTION 5: Capital & Risk Metrics
+                 DATA SOURCE: 5_capital_risk.json
+                 SUBSECTIONS:
+                   - regulatory_capital (4 ratio tiles)
+                   - rwa (composition bars + total)
+                   - liquidity_credit (4 metrics table)
+                 ============================================ -->
+            <div class="card">
+                <div class="section-header" style="align-items: center;">
+                    <h2 style="margin: 0; border-bottom: none; padding-bottom: 0;">Capital & Risk Metrics</h2>
+                    <div class="section-actions" style="align-items: center;">
+                        <span class="pill-soft">Source: Pillar 3</span>
+                    </div>
+                </div>
+
+                <!-- Regulatory Capital Ratios -->
+                <div class="qa-item">
+                    <div style="margin-bottom: 8px;">
+                        <div style="margin-bottom: 4px;">
+                            <span style="font-size: 11px; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;">Regulatory Capital</span>
+                        </div>
+                    </div>
+
+                    <!-- Capital Ratios 2x2 Grid -->
+                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;">
+                        
+                        <div style="background: #f8fafc; border-radius: 6px; padding: 10px; border: 1px solid #e2e8f0;">
+                            <div style="text-align: center; margin-bottom: 6px;">
+                                <div style="font-size: 9px; color: #64748b; text-transform: uppercase; font-weight: 600; margin-bottom: 4px;">CET1 Ratio <span style="font-weight: 400; text-transform: none;">(min 11.5%)</span></div>
+                                <div style="font-size: 14px; font-weight: 700; color: var(--text-main);">13.2%</div>
+                            </div>
+                            <div style="display: flex; border-top: 1px solid #e2e8f0; padding-top: 6px;">
+                                <div style="flex: 1; text-align: center; border-right: 1px solid #e2e8f0;">
+                                    <div style="font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 600; margin-bottom: 2px;">QoQ</div>
+                                    <span class="delta positive" style="font-size: 10px;">▲ 10bps</span>
+                                </div>
+                                <div style="flex: 1; text-align: center;">
+                                    <div style="font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 600; margin-bottom: 2px;">YoY</div>
+                                    <span class="delta positive" style="font-size: 10px;">▲ 30bps</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div style="background: #f8fafc; border-radius: 6px; padding: 10px; border: 1px solid #e2e8f0;">
+                            <div style="text-align: center; margin-bottom: 6px;">
+                                <div style="font-size: 9px; color: #64748b; text-transform: uppercase; font-weight: 600; margin-bottom: 4px;">Tier 1</div>
+                                <div style="font-size: 14px; font-weight: 700; color: var(--text-main);">14.8%</div>
+                            </div>
+                            <div style="display: flex; border-top: 1px solid #e2e8f0; padding-top: 6px;">
+                                <div style="flex: 1; text-align: center; border-right: 1px solid #e2e8f0;">
+                                    <div style="font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 600; margin-bottom: 2px;">QoQ</div>
+                                    <span class="delta positive" style="font-size: 10px;">▲ 15bps</span>
+                                </div>
+                                <div style="flex: 1; text-align: center;">
+                                    <div style="font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 600; margin-bottom: 2px;">YoY</div>
+                                    <span class="delta positive" style="font-size: 10px;">▲ 40bps</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div style="background: #f8fafc; border-radius: 6px; padding: 10px; border: 1px solid #e2e8f0;">
+                            <div style="text-align: center; margin-bottom: 6px;">
+                                <div style="font-size: 9px; color: #64748b; text-transform: uppercase; font-weight: 600; margin-bottom: 4px;">Total Capital</div>
+                                <div style="font-size: 14px; font-weight: 700; color: var(--text-main);">16.9%</div>
+                            </div>
+                            <div style="display: flex; border-top: 1px solid #e2e8f0; padding-top: 6px;">
+                                <div style="flex: 1; text-align: center; border-right: 1px solid #e2e8f0;">
+                                    <div style="font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 600; margin-bottom: 2px;">QoQ</div>
+                                    <span class="delta positive" style="font-size: 10px;">▲ 20bps</span>
+                                </div>
+                                <div style="flex: 1; text-align: center;">
+                                    <div style="font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 600; margin-bottom: 2px;">YoY</div>
+                                    <span class="delta positive" style="font-size: 10px;">▲ 50bps</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div style="background: #f8fafc; border-radius: 6px; padding: 10px; border: 1px solid #e2e8f0;">
+                            <div style="text-align: center; margin-bottom: 6px;">
+                                <div style="font-size: 9px; color: #64748b; text-transform: uppercase; font-weight: 600; margin-bottom: 4px;">Leverage</div>
+                                <div style="font-size: 14px; font-weight: 700; color: var(--text-main);">4.2%</div>
+                            </div>
+                            <div style="display: flex; border-top: 1px solid #e2e8f0; padding-top: 6px;">
+                                <div style="flex: 1; text-align: center; border-right: 1px solid #e2e8f0;">
+                                    <div style="font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 600; margin-bottom: 2px;">QoQ</div>
+                                    <span class="delta negative" style="font-size: 10px;">▼ 5bps</span>
+                                </div>
+                                <div style="flex: 1; text-align: center;">
+                                    <div style="font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 600; margin-bottom: 2px;">YoY</div>
+                                    <span class="delta positive" style="font-size: 10px;">▲ 10bps</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                    </div>
+                </div>
+
+                <!-- RWA Breakdown -->
+                <div class="qa-item">
+                    <div style="margin-bottom: 8px;">
+                        <div style="margin-bottom: 4px;">
+                            <span style="font-size: 11px; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;">RWA Composition</span>
+                        </div>
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 6px;">
+                        
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span style="font-size: 10px; color: #64748b; width: 65px;">Credit</span>
+                            <div style="flex: 1; height: 6px; background: #e2e8f0; border-radius: 3px; overflow: hidden;">
+                                <div style="width: 80.8%; height: 100%; background: #005587; border-radius: 3px;"></div>
+                            </div>
+                            <span style="font-size: 11px; font-weight: 600; color: var(--text-main); width: 50px; text-align: right;">$420B</span>
+                        </div>
+                        
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span style="font-size: 10px; color: #64748b; width: 65px;">Market</span>
+                            <div style="flex: 1; height: 6px; background: #e2e8f0; border-radius: 3px; overflow: hidden;">
+                                <div style="width: 12.5%; height: 100%; background: #0ea5e9; border-radius: 3px;"></div>
+                            </div>
+                            <span style="font-size: 11px; font-weight: 600; color: var(--text-main); width: 50px; text-align: right;">$65B</span>
+                        </div>
+                        
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span style="font-size: 10px; color: #64748b; width: 65px;">Operational</span>
+                            <div style="flex: 1; height: 6px; background: #e2e8f0; border-radius: 3px; overflow: hidden;">
+                                <div style="width: 6.7%; height: 100%; background: #64748b; border-radius: 3px;"></div>
+                            </div>
+                            <span style="font-size: 11px; font-weight: 600; color: var(--text-main); width: 50px; text-align: right;">$35B</span>
+                        </div>
+                        
+                        <div style="display: flex; align-items: center; gap: 8px; padding-top: 6px; border-top: 1px solid #e2e8f0; margin-top: 2px;">
+                            <span style="font-size: 10px; color: var(--text-main); font-weight: 600; width: 65px;">Total RWA</span>
+                            <div style="flex: 1;"></div>
+                            <span style="font-size: 12px; font-weight: 700; color: var(--text-main); width: 50px; text-align: right;">$520B</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Liquidity & Credit Quality -->
+                <div class="qa-item">
+                    <div style="margin-bottom: 8px;">
+                        <div style="margin-bottom: 4px;">
+                            <span style="font-size: 11px; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;">Liquidity & Credit Quality</span>
+                        </div>
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 6px;">
+                        <!-- Header row -->
+                        <div style="display: flex; align-items: center; padding-bottom: 4px; border-bottom: 1px solid #e2e8f0;">
+                            <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 600; width: 65px;">Metric</span>
+                            <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 700; flex: 1; text-align: center;">Value</span>
+                            <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 700; flex: 1; text-align: center;">QoQ</span>
+                            <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 700; flex: 1; text-align: center;">YoY</span>
+                        </div>
+                        
+                        <div style="display: flex; align-items: center;">
+                            <span style="font-size: 10px; color: #64748b; font-weight: 600; width: 65px;">LCR</span>
+                            <span style="font-size: 11px; font-weight: 700; color: var(--text-main); flex: 1; text-align: center;">132%</span>
+                            <span class="delta positive" style="font-size: 11px; flex: 1; text-align: center;">▲ 3%</span>
+                            <span class="delta positive" style="font-size: 11px; flex: 1; text-align: center;">▲ 8%</span>
+                        </div>
+                        
+                        <div style="display: flex; align-items: center;">
+                            <span style="font-size: 10px; color: #64748b; font-weight: 600; width: 65px;">NSFR</span>
+                            <span style="font-size: 11px; font-weight: 700; color: var(--text-main); flex: 1; text-align: center;">118%</span>
+                            <span class="delta positive" style="font-size: 11px; flex: 1; text-align: center;">▲ 2%</span>
+                            <span class="delta positive" style="font-size: 11px; flex: 1; text-align: center;">▲ 5%</span>
+                        </div>
+                        
+                        <div style="display: flex; align-items: center;">
+                            <span style="font-size: 10px; color: #64748b; font-weight: 600; width: 65px;">PCL Ratio</span>
+                            <span style="font-size: 11px; font-weight: 700; color: var(--text-main); flex: 1; text-align: center;">42 bps</span>
+                            <span class="delta negative" style="font-size: 11px; flex: 1; text-align: center;">▲ 6 bps</span>
+                            <span class="delta negative" style="font-size: 11px; flex: 1; text-align: center;">▲ 12 bps</span>
+                        </div>
+                        
+                        <div style="display: flex; align-items: center;">
+                            <span style="font-size: 10px; color: #64748b; font-weight: 600; width: 65px;">GIL Ratio</span>
+                            <span style="font-size: 11px; font-weight: 700; color: var(--text-main); flex: 1; text-align: center;">0.68%</span>
+                            <span class="delta negative" style="font-size: 11px; flex: 1; text-align: center;">▲ 3 bps</span>
+                            <span class="delta negative" style="font-size: 11px; flex: 1; text-align: center;">▲ 8 bps</span>
+                        </div>
+                        
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+    </div>
+
+    <!-- ============================================
+         JavaScript for Dynamic Chart Rendering
+         ============================================ -->
+    <script>
+    (function() {
+        // Render trend chart from embedded JSON data
+        function renderTrendChart() {
+            const dataEl = document.getElementById('trend-chart-data');
+            const container = document.getElementById('trend-chart-container');
+            if (!dataEl || !container) return;
+
+            const data = JSON.parse(dataEl.textContent);
+            const { label, unit, decimal_places, quarters, values } = data;
+
+            // Calculate stats
+            const min = Math.min(...values);
+            const max = Math.max(...values);
+            const avg = values.reduce((a, b) => a + b, 0) / values.length;
+            const current = values[values.length - 1];
+            const minIdx = values.indexOf(min);
+            const maxIdx = values.indexOf(max);
+
+            // Calculate Y-axis range with padding
+            const range = max - min;
+            const padding = range * 0.15;
+            const yMin = min - padding;
+            const yMax = max + padding;
+
+            // Format number for display
+            const fmt = (v) => v.toFixed(decimal_places);
+
+            // Calculate Y coordinate (inverted because SVG y=0 is top)
+            const yCoord = (v) => 100 - ((v - yMin) / (yMax - yMin)) * 100;
+
+            // X positions for 8 points (SVG viewBox 0-320)
+            const xPositions = [30, 70, 110, 150, 190, 230, 270, 310];
+            const xPercents = xPositions.map(x => (x / 320) * 100);
+
+            // Build SVG points
+            const points = values.map((v, i) => `${xPositions[i]},${yCoord(v)}`).join(' ');
+            const polygonPoints = points + ` ${xPositions[xPositions.length-1]},100 ${xPositions[0]},100`;
+
+            // Build vertical guide lines
+            const guideLines = values.map((v, i) =>
+                `<line x1="${xPositions[i]}" y1="100" x2="${xPositions[i]}" y2="${yCoord(v)}" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,2" />`
+            ).join('');
+
+            // Build data point circles (color-coded for min/max/current)
+            const circles = values.map((v, i) => {
+                let fill = '#005587';
+                let r = 3;
+                let strokeWidth = 1.5;
+                if (i === minIdx) fill = '#dc2626';
+                if (i === maxIdx) fill = '#16a34a';
+                if (i === values.length - 1) { r = 4; strokeWidth = 2; }
+                return `<circle cx="${xPositions[i]}" cy="${yCoord(v)}" r="${r}" fill="${fill}" stroke="white" stroke-width="${strokeWidth}" />`;
+            }).join('');
+
+            // Build value labels - positioned above the data points
+            const valueLabels = values.map((v, i) => {
+                let color = '#64748b';
+                let fontSize = '10px';
+                let fontWeight = 'normal';
+                if (i === minIdx) { color = '#dc2626'; fontSize = '12px'; fontWeight = '700'; }
+                if (i === maxIdx) { color = '#16a34a'; fontSize = '12px'; fontWeight = '700'; }
+                if (i === values.length - 1) { color = '#005587'; fontSize = '12px'; fontWeight = '700'; }
+                const topPercent = yCoord(v) - 18; // Offset to position labels well above data points
+                return `<div style="position: absolute; left: ${xPercents[i]}%; top: ${topPercent}%; transform: translateX(-50%); font-size: ${fontSize}; color: ${color}; font-weight: ${fontWeight};">${fmt(v)}</div>`;
+            }).join('');
+
+            // Build quarter labels
+            const quarterLabels = quarters.map((q, i) =>
+                `<span style="position: absolute; left: ${xPercents[i]}%; transform: translateX(-50%); font-size: 9px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700;">${q}</span>`
+            ).join('');
+
+            // Y-axis labels
+            const yAxisTop = fmt(yMax);
+            const yAxisMid = fmt((yMin + yMax) / 2);
+            const yAxisBottom = fmt(yMin);
+
+            // Average line Y position
+            const avgY = yCoord(avg);
+
+            container.innerHTML = `
+                <div style="margin-bottom: 10px;">
+                    <span class="metric-label">${label}</span>
+                </div>
+
+                <div style="position: relative; flex: 1; min-height: 80px;">
+                    <!-- Y-axis labels -->
+                    <div style="position: absolute; left: -5px; top: 0; font-size: 9px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700;">${yAxisTop}${unit}</div>
+                    <div style="position: absolute; left: -5px; top: 45%; font-size: 9px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700;">${yAxisMid}${unit}</div>
+                    <div style="position: absolute; left: -5px; bottom: 0; font-size: 9px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700;">${yAxisBottom}${unit}</div>
+
+                    <!-- Grid lines -->
+                    <div style="position: absolute; width: 100%; height: 100%; left: 0; top: 0;">
+                        <div style="position: absolute; width: 100%; height: 1px; background: #f0f4f8; top: 0;"></div>
+                        <div style="position: absolute; width: 100%; height: 1px; background: #f0f4f8; top: 50%;"></div>
+                        <div style="position: absolute; width: 100%; height: 1px; background: #f0f4f8; bottom: 0;"></div>
+                    </div>
+
+                    <!-- Chart SVG -->
+                    <svg style="position: absolute; width: 100%; height: 100%; left: 0; top: 0;" viewBox="0 0 320 100" preserveAspectRatio="none">
+                        <defs>
+                            <linearGradient id="chartGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                                <stop offset="0%" style="stop-color:#005587;stop-opacity:0.2" />
+                                <stop offset="100%" style="stop-color:#005587;stop-opacity:0.02" />
+                            </linearGradient>
+                        </defs>
+                        ${guideLines}
+                        <polygon points="${polygonPoints}" fill="url(#chartGradient)" />
+                        <line x1="20" y1="${avgY}" x2="320" y2="${avgY}" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="4,3" />
+                        <polyline points="${points}" fill="none" stroke="#005587" stroke-width="2.5" />
+                        ${circles}
+                    </svg>
+
+                    <!-- Value labels -->
+                    ${valueLabels}
+                </div>
+
+                <!-- X-axis labels -->
+                <div style="position: relative; margin: 5px 0; height: 12px;">
+                    ${quarterLabels}
+                </div>
+
+                <!-- Bottom summary stats -->
+                <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #f0f4f8;">
+                    <div style="display: flex; justify-content: center; gap: 0;">
+                        <div style="text-align: center; padding: 0 24px; border-right: 1px solid #e2e8f0;">
+                            <span class="change-label">Low</span>
+                            <span class="delta neg">${fmt(min)}${unit}</span>
+                        </div>
+                        <div style="text-align: center; padding: 0 24px; border-right: 1px solid #e2e8f0;">
+                            <span class="change-label">Avg</span>
+                            <span class="delta" style="color: #f59e0b;">${fmt(avg)}${unit}</span>
+                        </div>
+                        <div style="text-align: center; padding: 0 24px; border-right: 1px solid #e2e8f0;">
+                            <span class="change-label">High</span>
+                            <span class="delta pos">${fmt(max)}${unit}</span>
+                        </div>
+                        <div style="text-align: center; padding: 0 24px;">
+                            <span class="change-label">Current</span>
+                            <span class="delta" style="color: #005587;">${fmt(current)}${unit}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Run on DOM ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', renderTrendChart);
+        } else {
+            renderTrendChart();
+        }
+    })();
+    </script>
+
+</body>
+</html> 

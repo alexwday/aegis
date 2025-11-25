@@ -1,0 +1,67 @@
+{
+  "source": "Pillar 3",
+  "regulatory_capital": [
+    {
+      "label": "CET1 Ratio",
+      "min_requirement": "11.5%",
+      "value": "13.2%",
+      "qoq": { "direction": "positive", "display": "▲ 10bps" },
+      "yoy": { "direction": "positive", "display": "▲ 30bps" }
+    },
+    {
+      "label": "Tier 1",
+      "min_requirement": null,
+      "value": "14.8%",
+      "qoq": { "direction": "positive", "display": "▲ 15bps" },
+      "yoy": { "direction": "positive", "display": "▲ 40bps" }
+    },
+    {
+      "label": "Total Capital",
+      "min_requirement": null,
+      "value": "16.9%",
+      "qoq": { "direction": "positive", "display": "▲ 20bps" },
+      "yoy": { "direction": "positive", "display": "▲ 50bps" }
+    },
+    {
+      "label": "Leverage",
+      "min_requirement": null,
+      "value": "4.2%",
+      "qoq": { "direction": "negative", "display": "▼ 5bps" },
+      "yoy": { "direction": "positive", "display": "▲ 10bps" }
+    }
+  ],
+  "rwa": {
+    "components": [
+      { "label": "Credit", "value": "$420B", "percentage": 80.8, "color": "#005587" },
+      { "label": "Market", "value": "$65B", "percentage": 12.5, "color": "#0ea5e9" },
+      { "label": "Operational", "value": "$35B", "percentage": 6.7, "color": "#64748b" }
+    ],
+    "total": "$520B"
+  },
+  "liquidity_credit": [
+    {
+      "label": "LCR",
+      "value": "132%",
+      "qoq": { "direction": "positive", "display": "▲ 3%" },
+      "yoy": { "direction": "positive", "display": "▲ 8%" }
+    },
+    {
+      "label": "NSFR",
+      "value": "118%",
+      "qoq": { "direction": "positive", "display": "▲ 2%" },
+      "yoy": { "direction": "positive", "display": "▲ 5%" }
+    },
+    {
+      "label": "PCL Ratio",
+      "value": "42 bps",
+      "qoq": { "direction": "negative", "display": "▲ 6 bps" },
+      "yoy": { "direction": "negative", "display": "▲ 12 bps" }
+    },
+    {
+      "label": "GIL Ratio",
+      "value": "0.68%",
+      "qoq": { "direction": "negative", "display": "▲ 3 bps" },
+      "yoy": { "direction": "negative", "display": "▲ 8 bps" }
+    }
+  ]
+}

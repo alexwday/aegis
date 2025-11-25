@@ -1,0 +1,41 @@
+{
+  "source": "Supp Pack",
+  "metrics": [
+    {
+      "label": "Total Revenue",
+      "value": "$9,200 M",
+      "qoq": { "value": 2.3, "direction": "positive", "display": "▲ 2.3%" },
+      "yoy": { "value": 6.8, "direction": "positive", "display": "▲ 6.8%" }
+    },
+    {
+      "label": "Pre-Provision Earnings",
+      "value": "$3,180 M",
+      "qoq": { "value": 2.1, "direction": "positive", "display": "▲ 2.1%" },
+      "yoy": { "value": 5.8, "direction": "positive", "display": "▲ 5.8%" }
+    },
+    {
+      "label": "Net Income (Adj)",
+      "value": "$2,450 M",
+      "qoq": { "value": 1.8, "direction": "positive", "display": "▲ 1.8%" },
+      "yoy": { "value": 4.2, "direction": "positive", "display": "▲ 4.2%" }
+    },
+    {
+      "label": "Return on Equity",
+      "value": "13.8%",
+      "qoq": { "value": -0.40, "direction": "negative", "display": "▼ 40bps" },
+      "yoy": { "value": -0.20, "direction": "negative", "display": "▼ 20bps" }
+    },
+    {
+      "label": "Efficiency Ratio",
+      "value": "54.2%",
+      "qoq": { "value": 0.50, "direction": "positive", "display": "▲ 50bps" },
+      "yoy": { "value": 2.10, "direction": "positive", "display": "▲ 210bps" }
+    },
+    {
+      "label": "Operating Leverage",
+      "value": "+1.2%",
+      "qoq": { "value": 0.80, "direction": "positive", "display": "▲ 80bps" },
+      "yoy": { "value": 1.50, "direction": "positive", "display": "▲ 150bps" }
+    }
+  ]
+}

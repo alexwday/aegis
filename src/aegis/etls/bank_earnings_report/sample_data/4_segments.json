@@ -1,0 +1,80 @@
+{
+  "entries": [
+    {
+      "name": "Canadian P&C",
+      "description": "Strong volume growth in mortgages (+7%) and business lending (+9%), partially offset by compressed margins from competitive pricing. Credit card balances continue to normalize while maintaining industry-leading loss rates.",
+      "revenue": {
+        "value": "$4,200 M",
+        "qoq": { "direction": "positive", "display": "▲ 2.1%" },
+        "yoy": { "direction": "positive", "display": "▲ 5.2%" }
+      },
+      "net_income": {
+        "value": "$1,100 M",
+        "qoq": { "direction": "positive", "display": "▲ 1.8%" },
+        "yoy": { "direction": "positive", "display": "▲ 4.5%" }
+      },
+      "roe": {
+        "value": "22.5%",
+        "qoq": { "direction": "negative", "display": "▼ 20bps" },
+        "yoy": { "direction": "positive", "display": "▲ 40bps" }
+      }
+    },
+    {
+      "name": "U.S. Retail",
+      "description": "Challenged by higher provision expenses ($120M increase) and strategic repositioning costs; focusing on affluent segments. Branch rationalization program on track to deliver $85M in annual run-rate savings by Q2 2026.",
+      "revenue": {
+        "value": "$2,100 M",
+        "qoq": { "direction": "negative", "display": "▼ 3.2%" },
+        "yoy": { "direction": "negative", "display": "▼ 8.1%" }
+      },
+      "net_income": {
+        "value": "$450 M",
+        "qoq": { "direction": "negative", "display": "▼ 5.1%" },
+        "yoy": { "direction": "negative", "display": "▼ 12.3%" }
+      },
+      "roe": {
+        "value": "8.3%",
+        "qoq": { "direction": "negative", "display": "▼ 60bps" },
+        "yoy": { "direction": "negative", "display": "▼ 180bps" }
+      }
+    },
+    {
+      "name": "Wealth Management",
+      "description": "Record AUM of $850B driven by strong market appreciation and $45B in net new flows; fee income growth of 14%. High-net-worth client acquisition up 23% YoY through advisor team expansion and digital onboarding enhancements.",
+      "revenue": {
+        "value": "$1,800 M",
+        "qoq": { "direction": "positive", "display": "▲ 4.5%" },
+        "yoy": { "direction": "positive", "display": "▲ 12.0%" }
+      },
+      "net_income": {
+        "value": "$550 M",
+        "qoq": { "direction": "positive", "display": "▲ 6.2%" },
+        "yoy": { "direction": "positive", "display": "▲ 15.3%" }
+      },
+      "roe": {
+        "value": "28.2%",
+        "qoq": { "direction": "positive", "display": "▲ 80bps" },
+        "yoy": { "direction": "positive", "display": "▲ 220bps" }
+      }
+    },
+    {
+      "name": "Capital Markets",
+      "description": "Softer trading revenues offset by strong M&A advisory fees; robust pipeline with $2.3B in announced deals expected to close in H2. Fixed income underwriting rebounding with league table share gains in Canadian investment-grade issuance.",
+      "revenue": {
+        "value": "$1,100 M",
+        "qoq": { "direction": "negative", "display": "▼ 8.3%" },
+        "yoy": { "direction": "negative", "display": "▼ 2.0%" }
+      },
+      "net_income": {
+        "value": "$320 M",
+        "qoq": { "direction": "negative", "display": "▼ 10.1%" },
+        "yoy": { "direction": "positive", "display": "▲ 1.2%" }
+      },
+      "roe": {
+        "value": "15.6%",
+        "qoq": { "direction": "negative", "display": "▼ 40bps" },
+        "yoy": { "direction": "positive", "display": "▲ 10bps" }
+      }
+    }
+  ]
+}

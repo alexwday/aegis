@@ -1,0 +1,15 @@
+{
+  "dividend": {
+    "amount": "$1.10/share",
+    "qoq": {
+      "value": 4.8,
+      "direction": "positive",
+      "display": "▲ 4.8%"
+    },
+    "yoy": {
+      "value": 10.0,
+      "direction": "positive",
+      "display": "▲ 10.0%"
+    }
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "source": "Transcripts",
+  "entries": [
+    {
+      "theme": "NIM Outlook",
+      "question": "Given deposit cost pressures, what's your NIM trajectory for H2?",
+      "answer": "CFO expects NIM to stabilize at current levels through Q4, with modest expansion in 2026 as rate cuts flow through. Deposit betas have peaked at 45% and are expected to decline as promotional high-interest savings account campaigns roll off. Asset repricing tailwinds from the fixed-rate mortgage book should provide a 5-8bp benefit over the next four quarters."
+    },
+    {
+      "theme": "CRE Exposure",
+      "question": "Office portfolio concerns given recent market stress?",
+      "answer": "CRO noted office exposure is 2.8% of total loans with 58% average LTV. Reserved for 15% cumulative losses, seeing limited new formations. Portfolio is concentrated in Class A properties in major metros with strong tenant credit profiles. Management actively monitoring $450M of loans with near-term maturities for potential extensions or modifications."
+    },
+    {
+      "theme": "Capital Allocation",
+      "question": "Buyback pace given strong CET1 ratio?",
+      "answer": "CEO prioritizing organic growth first, maintaining dividend trajectory. Will accelerate buybacks if CET1 exceeds 13.5% persistently."
+    },
+    {
+      "theme": "U.S. Strategy",
+      "question": "Path to profitability improvement in U.S. retail?",
+      "answer": "Management targeting breakeven by Q2 2026 through expense rationalization and selective market exits. Focus on wealth management integration."
+    }
+  ]
+}
