@@ -120,6 +120,37 @@ async def get_available_periods() -> List[Dict[str, Any]]:
     ]
 
 
+async def get_all_platforms(fiscal_year: int, quarter: str) -> List[str]:
+    """
+    Get ALL distinct platforms in the database for the given period (not filtered by MONITORED_PLATFORMS).
+
+    Args:
+        fiscal_year: Fiscal year
+        quarter: Quarter (e.g., 'Q2')
+
+    Returns:
+        List of all platform names found in the database
+    """
+    query = """
+        SELECT DISTINCT "Platform"
+        FROM benchmarking_report
+        WHERE bank_symbol = ANY(:symbols)
+          AND fiscal_year = :fiscal_year
+          AND quarter = :quarter
+          AND "Platform" != 'Enterprise'
+        ORDER BY "Platform"
+    """
+
+    async with get_connection() as conn:
+        result = await conn.execute(
+            text(query),
+            {"symbols": CANADIAN_BANK_SYMBOLS, "fiscal_year": fiscal_year, "quarter": quarter},
+        )
+        rows = result.fetchall()
+
+    return [row.Platform for row in rows]
+
+
 async def get_bank_segments(
     bank_symbol: str, fiscal_year: int, quarter: str
 ) -> List[str]:
@@ -256,6 +287,70 @@ async def get_metric_details(
 # =============================================================================
 # Analysis Functions
 # =============================================================================
+
+
+def analyze_platform_coverage(
+    all_bank_platforms: Dict[str, List[str]],
+    all_platforms_in_db: List[str],
+) -> Dict[str, Any]:
+    """
+    Analyze platform coverage across all banks - shows common vs bank-specific platforms.
+
+    Args:
+        all_bank_platforms: Dict mapping bank_symbol -> [list of platforms]
+        all_platforms_in_db: List of all unique platforms found in the database
+
+    Returns:
+        Dict with platform analysis including common and bank-specific
+    """
+    banks_with_data = [b for b, platforms in all_bank_platforms.items() if platforms]
+
+    if not banks_with_data:
+        return {
+            "all_platforms": [],
+            "common_platforms": [],
+            "bank_specific_platforms": {},
+            "platform_bank_coverage": {},
+        }
+
+    # Find common platforms (present in ALL banks that have data)
+    platform_sets = [set(all_bank_platforms[b]) for b in banks_with_data]
+    common_platforms = set.intersection(*platform_sets) if platform_sets else set()
+
+    # Build platform -> banks mapping
+    platform_banks = defaultdict(set)
+    for bank, platforms in all_bank_platforms.items():
+        for platform in platforms:
+            platform_banks[platform].add(bank)
+
+    # Find bank-specific platforms
+    bank_specific = {}
+    for bank in banks_with_data:
+        unique = set(all_bank_platforms[bank]) - common_platforms
+        if unique:
+            bank_specific[bank] = list(sorted(unique))
+
+    # Platform coverage details
+    platform_coverage = {}
+    for platform in all_platforms_in_db:
+        banks = platform_banks.get(platform, set())
+        platform_coverage[platform] = {
+            "banks": list(sorted(banks)),
+            "bank_count": len(banks),
+            "coverage_pct": len(banks) / len(CANADIAN_BANK_SYMBOLS) * 100,
+            "is_common": platform in common_platforms,
+            "is_monitored": platform in MONITORED_PLATFORMS,
+        }
+
+    return {
+        "all_platforms": all_platforms_in_db,
+        "total_unique_platforms": len(all_platforms_in_db),
+        "common_platforms": list(sorted(common_platforms)),
+        "common_count": len(common_platforms),
+        "bank_specific_platforms": bank_specific,
+        "platform_bank_coverage": platform_coverage,
+        "banks_analyzed": banks_with_data,
+    }
 
 
 def analyze_segment_coverage(
@@ -495,6 +590,7 @@ def print_analysis_report(
     segment_coverage: Dict[str, Dict[str, Any]],
     metric_analyses: Dict[str, Dict[str, Any]],
     core_selections: Dict[str, Dict[str, Any]],
+    platform_analysis: Optional[Dict[str, Any]] = None,
 ):
     """Print comprehensive analysis report to console."""
     print("\n" + "=" * 100)
@@ -515,9 +611,55 @@ def print_analysis_report(
         for bank in banks_missing:
             print(f"  ✗ {bank} ({BANK_NAMES.get(bank, 'Unknown')})")
 
-    # Segment coverage
-    print("\n\n📈 SEGMENT COVERAGE")
+    # Platform analysis (NEW SECTION)
+    if platform_analysis:
+        print("\n\n" + "=" * 100)
+        print("🏢 PLATFORM ANALYSIS (All Platforms in Database)")
+        print("=" * 100)
+        print(f"Total unique platforms found: {platform_analysis.get('total_unique_platforms', 0)}")
+        print(f"Common across ALL banks: {platform_analysis.get('common_count', 0)}")
+
+        # Common platforms
+        common = platform_analysis.get("common_platforms", [])
+        if common:
+            print(f"\n🔵 COMMON PLATFORMS ({len(common)}) - Present in ALL banks:")
+            print("-" * 80)
+            for platform in common:
+                monitored = " [MONITORED]" if platform in MONITORED_PLATFORMS else ""
+                print(f"  ✓ {platform}{monitored}")
+
+        # All platforms with coverage
+        print(f"\n📋 ALL PLATFORMS BY COVERAGE:")
+        print("-" * 80)
+        coverage_data = platform_analysis.get("platform_bank_coverage", {})
+        # Sort by bank count descending
+        sorted_platforms = sorted(
+            coverage_data.items(), key=lambda x: (-x[1]["bank_count"], x[0])
+        )
+        for platform, info in sorted_platforms:
+            bank_count = info["bank_count"]
+            pct = info["coverage_pct"]
+            is_common = "✓" if info["is_common"] else "△" if bank_count > 0 else "✗"
+            monitored = " [MONITORED]" if info["is_monitored"] else ""
+            print(f"  {is_common} {platform}: {bank_count}/{len(CANADIAN_BANK_SYMBOLS)} banks ({pct:.0f}%){monitored}")
+            if not info["is_common"] and info["banks"]:
+                print(f"      Banks: {', '.join(info['banks'])}")
+
+        # Bank-specific platforms
+        bank_specific = platform_analysis.get("bank_specific_platforms", {})
+        if bank_specific:
+            print(f"\n🟡 BANK-SPECIFIC PLATFORMS:")
+            print("-" * 80)
+            for bank, platforms in sorted(bank_specific.items()):
+                print(f"\n  {bank} ({BANK_NAMES.get(bank, 'Unknown')}):")
+                for platform in platforms:
+                    monitored = " [MONITORED]" if platform in MONITORED_PLATFORMS else ""
+                    print(f"    • {platform}{monitored}")
+
+    # Segment coverage (filtered to MONITORED_PLATFORMS)
+    print("\n\n📈 MONITORED SEGMENT COVERAGE")
     print("-" * 100)
+    print("(These are the segments we specifically track from MONITORED_PLATFORMS)")
     for segment in MONITORED_PLATFORMS:
         coverage = segment_coverage.get(segment, {})
         bank_count = coverage.get("bank_count", 0)
@@ -653,14 +795,22 @@ async def main():
         print(f"   Available periods: {len(periods)}")
         print(f"   Banks with data: {periods[0]['bank_count'] if periods else 0}")
 
-        # Collect segment data for each bank
+        # Get ALL platforms in the database (not filtered)
+        all_platforms_in_db = await get_all_platforms(fiscal_year, quarter)
+        print(f"   Total platforms in DB: {len(all_platforms_in_db)}")
+
+        # Collect ALL platform data for each bank (not filtered by MONITORED_PLATFORMS)
+        all_bank_platforms = {}
         segment_data = {}
         for bank_symbol in CANADIAN_BANK_SYMBOLS:
-            segments = await get_bank_segments(bank_symbol, fiscal_year, quarter)
+            # Get ALL segments for this bank (for platform analysis)
+            all_segments = await get_bank_segments(bank_symbol, fiscal_year, quarter)
+            all_bank_platforms[bank_symbol] = all_segments
 
-            if segments:
+            # Also collect metrics for MONITORED segments only
+            if all_segments:
                 segment_data[bank_symbol] = {}
-                for segment in segments:
+                for segment in all_segments:
                     if segment in MONITORED_PLATFORMS:
                         metrics = await get_segment_metrics(
                             bank_symbol, fiscal_year, quarter, segment
@@ -671,7 +821,10 @@ async def main():
             print(f"❌ No segment data found for {quarter} {fiscal_year}")
             return
 
-        # Analyze segment coverage
+        # Analyze platform coverage (ALL platforms)
+        platform_analysis = analyze_platform_coverage(all_bank_platforms, all_platforms_in_db)
+
+        # Analyze segment coverage (MONITORED_PLATFORMS only)
         segment_coverage = analyze_segment_coverage(segment_data)
 
         # Analyze metrics per segment
@@ -733,6 +886,7 @@ async def main():
             segment_coverage,
             metric_analyses,
             core_selections,
+            platform_analysis,
         )
 
         # Output JSON if requested
@@ -741,6 +895,7 @@ async def main():
                 "fiscal_year": fiscal_year,
                 "quarter": quarter,
                 "banks_analyzed": list(segment_data.keys()),
+                "platform_analysis": platform_analysis,
                 "segment_coverage": segment_coverage,
                 "metric_analyses": metric_analyses,
                 "core_selections": core_selections,
