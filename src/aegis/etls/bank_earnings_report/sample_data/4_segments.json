@@ -1,80 +1,124 @@
 {
   "entries": [
     {
-      "name": "Canadian P&C",
-      "description": "Strong volume growth in mortgages (+7%) and business lending (+9%), partially offset by compressed margins from competitive pricing. Credit card balances continue to normalize while maintaining industry-leading loss rates.",
-      "revenue": {
-        "value": "$4,200 M",
-        "qoq": { "direction": "positive", "display": "▲ 2.1%" },
-        "yoy": { "direction": "positive", "display": "▲ 5.2%" }
-      },
-      "net_income": {
-        "value": "$1,100 M",
-        "qoq": { "direction": "positive", "display": "▲ 1.8%" },
-        "yoy": { "direction": "positive", "display": "▲ 4.5%" }
-      },
-      "roe": {
-        "value": "22.5%",
-        "qoq": { "direction": "negative", "display": "▼ 20bps" },
-        "yoy": { "direction": "positive", "display": "▲ 40bps" }
-      }
-    },
-    {
-      "name": "U.S. Retail",
-      "description": "Challenged by higher provision expenses ($120M increase) and strategic repositioning costs; focusing on affluent segments. Branch rationalization program on track to deliver $85M in annual run-rate savings by Q2 2026.",
-      "revenue": {
-        "value": "$2,100 M",
-        "qoq": { "direction": "negative", "display": "▼ 3.2%" },
-        "yoy": { "direction": "negative", "display": "▼ 8.1%" }
-      },
-      "net_income": {
-        "value": "$450 M",
-        "qoq": { "direction": "negative", "display": "▼ 5.1%" },
-        "yoy": { "direction": "negative", "display": "▼ 12.3%" }
-      },
-      "roe": {
-        "value": "8.3%",
-        "qoq": { "direction": "negative", "display": "▼ 60bps" },
-        "yoy": { "direction": "negative", "display": "▼ 180bps" }
-      }
+      "name": "U.S. & International Banking",
+      "description": "U.S. and international retail banking operations including personal banking, commercial lending, and cross-border services",
+      "metrics": [
+        {
+          "label": "Total Revenue",
+          "value": "$2,100 M",
+          "qoq": { "value": 3.2, "direction": "negative", "display": "▼ 3.2%" },
+          "yoy": { "value": 8.1, "direction": "negative", "display": "▼ 8.1%" }
+        },
+        {
+          "label": "PCL Ratio",
+          "value": "0.42%",
+          "qoq": { "value": 8, "direction": "negative", "display": "▲ 8bps" },
+          "yoy": { "value": 15, "direction": "negative", "display": "▲ 15bps" }
+        },
+        {
+          "label": "Deposit Growth",
+          "value": "4.2%",
+          "qoq": { "value": 0.8, "direction": "positive", "display": "▲ 0.8%" },
+          "yoy": { "value": 2.1, "direction": "positive", "display": "▲ 2.1%" }
+        }
+      ]
     },
     {
       "name": "Wealth Management",
-      "description": "Record AUM of $850B driven by strong market appreciation and $45B in net new flows; fee income growth of 14%. High-net-worth client acquisition up 23% YoY through advisor team expansion and digital onboarding enhancements.",
-      "revenue": {
-        "value": "$1,800 M",
-        "qoq": { "direction": "positive", "display": "▲ 4.5%" },
-        "yoy": { "direction": "positive", "display": "▲ 12.0%" }
-      },
-      "net_income": {
-        "value": "$550 M",
-        "qoq": { "direction": "positive", "display": "▲ 6.2%" },
-        "yoy": { "direction": "positive", "display": "▲ 15.3%" }
-      },
-      "roe": {
-        "value": "28.2%",
-        "qoq": { "direction": "positive", "display": "▲ 80bps" },
-        "yoy": { "direction": "positive", "display": "▲ 220bps" }
-      }
+      "description": "Wealth management including private banking, asset management, brokerage, and investment services",
+      "metrics": [
+        {
+          "label": "AUM",
+          "value": "$850 B",
+          "qoq": { "value": 4.5, "direction": "positive", "display": "▲ 4.5%" },
+          "yoy": { "value": 14.2, "direction": "positive", "display": "▲ 14.2%" }
+        },
+        {
+          "label": "Fee Income",
+          "value": "$1,200 M",
+          "qoq": { "value": 3.8, "direction": "positive", "display": "▲ 3.8%" },
+          "yoy": { "value": 12.0, "direction": "positive", "display": "▲ 12.0%" }
+        },
+        {
+          "label": "Return on Equity",
+          "value": "28.2%",
+          "qoq": { "value": 80, "direction": "positive", "display": "▲ 80bps" },
+          "yoy": { "value": 220, "direction": "positive", "display": "▲ 220bps" }
+        }
+      ]
+    },
+    {
+      "name": "Insurance",
+      "description": "Insurance products including life, health, property, and reinsurance",
+      "metrics": [
+        {
+          "label": "Premium Revenue",
+          "value": "$1,450 M",
+          "qoq": { "value": 2.8, "direction": "positive", "display": "▲ 2.8%" },
+          "yoy": { "value": 6.5, "direction": "positive", "display": "▲ 6.5%" }
+        },
+        {
+          "label": "Claims Ratio",
+          "value": "68.5%",
+          "qoq": { "value": 1.2, "direction": "negative", "display": "▲ 1.2%" },
+          "yoy": { "value": 2.8, "direction": "negative", "display": "▲ 2.8%" }
+        },
+        {
+          "label": "Investment Income",
+          "value": "$320 M",
+          "qoq": { "value": 5.2, "direction": "positive", "display": "▲ 5.2%" },
+          "yoy": { "value": 8.9, "direction": "positive", "display": "▲ 8.9%" }
+        }
+      ]
     },
     {
       "name": "Capital Markets",
-      "description": "Softer trading revenues offset by strong M&A advisory fees; robust pipeline with $2.3B in announced deals expected to close in H2. Fixed income underwriting rebounding with league table share gains in Canadian investment-grade issuance.",
-      "revenue": {
-        "value": "$1,100 M",
-        "qoq": { "direction": "negative", "display": "▼ 8.3%" },
-        "yoy": { "direction": "negative", "display": "▼ 2.0%" }
-      },
-      "net_income": {
-        "value": "$320 M",
-        "qoq": { "direction": "negative", "display": "▼ 10.1%" },
-        "yoy": { "direction": "positive", "display": "▲ 1.2%" }
-      },
-      "roe": {
-        "value": "15.6%",
-        "qoq": { "direction": "negative", "display": "▼ 40bps" },
-        "yoy": { "direction": "positive", "display": "▲ 10bps" }
-      }
+      "description": "Investment banking, trading, advisory, and corporate banking services",
+      "metrics": [
+        {
+          "label": "Trading Revenue",
+          "value": "$650 M",
+          "qoq": { "value": 8.3, "direction": "negative", "display": "▼ 8.3%" },
+          "yoy": { "value": 2.0, "direction": "negative", "display": "▼ 2.0%" }
+        },
+        {
+          "label": "Advisory Fees",
+          "value": "$280 M",
+          "qoq": { "value": 15.2, "direction": "positive", "display": "▲ 15.2%" },
+          "yoy": { "value": 22.5, "direction": "positive", "display": "▲ 22.5%" }
+        },
+        {
+          "label": "Return on Equity",
+          "value": "15.6%",
+          "qoq": { "value": 40, "direction": "negative", "display": "▼ 40bps" },
+          "yoy": { "value": 10, "direction": "positive", "display": "▲ 10bps" }
+        }
+      ]
+    },
+    {
+      "name": "Corporate Support",
+      "description": "Corporate treasury, technology, and other enterprise functions",
+      "metrics": [
+        {
+          "label": "Net Interest Income",
+          "value": "$85 M",
+          "qoq": { "value": 12.5, "direction": "negative", "display": "▼ 12.5%" },
+          "yoy": { "value": 18.2, "direction": "negative", "display": "▼ 18.2%" }
+        },
+        {
+          "label": "Technology Expense",
+          "value": "$420 M",
+          "qoq": { "value": 3.5, "direction": "negative", "display": "▲ 3.5%" },
+          "yoy": { "value": 8.2, "direction": "negative", "display": "▲ 8.2%" }
+        },
+        {
+          "label": "Operating Costs",
+          "value": "$580 M",
+          "qoq": { "value": 1.8, "direction": "negative", "display": "▲ 1.8%" },
+          "yoy": { "value": 4.5, "direction": "negative", "display": "▲ 4.5%" }
+        }
+      ]
     }
   ]
 }

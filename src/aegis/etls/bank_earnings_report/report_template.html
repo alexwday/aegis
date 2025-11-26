@@ -766,42 +766,20 @@
                             <div style="font-size: 12px; color: var(--text-main); line-height: 1.5;">{{ segment.description }}</div>
                         </div>
                         <div style="display: flex; justify-content: space-between; padding-top: 8px; border-top: 1px solid #e2e8f0;">
-                            <div style="flex: 1; text-align: center;">
+                            {% for metric in segment.metrics %}
+                            <div style="flex: 1; text-align: center;{% if not loop.first %} border-left: 1px solid #e2e8f0;{% endif %}">
                                 <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 4px;">
-                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px; width: 70px;">Revenue</span>
+                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px; width: 70px;">{{ metric.label }}</span>
                                     <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 700; width: 55px;">QoQ</span>
                                     <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 700; width: 55px;">YoY</span>
                                 </div>
                                 <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
-                                    <span style="font-size: 11px; font-weight: 700; color: var(--text-main); width: 70px;">{{ segment.revenue.value }}</span>
-                                    <span class="delta {{ segment.revenue.qoq.direction }}" style="font-size: 11px; width: 55px;">{{ segment.revenue.qoq.display }}</span>
-                                    <span class="delta {{ segment.revenue.yoy.direction }}" style="font-size: 11px; width: 55px;">{{ segment.revenue.yoy.display }}</span>
+                                    <span style="font-size: 11px; font-weight: 700; color: var(--text-main); width: 70px;">{{ metric.value }}</span>
+                                    <span class="delta {{ metric.qoq.direction }}" style="font-size: 11px; width: 55px;">{{ metric.qoq.display }}</span>
+                                    <span class="delta {{ metric.yoy.direction }}" style="font-size: 11px; width: 55px;">{{ metric.yoy.display }}</span>
                                 </div>
                             </div>
-                            <div style="flex: 1; text-align: center; border-left: 1px solid #e2e8f0;">
-                                <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 4px;">
-                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px; width: 70px;">Net Income</span>
-                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 700; width: 55px;">QoQ</span>
-                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 700; width: 55px;">YoY</span>
-                                </div>
-                                <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
-                                    <span style="font-size: 11px; font-weight: 700; color: var(--text-main); width: 70px;">{{ segment.net_income.value }}</span>
-                                    <span class="delta {{ segment.net_income.qoq.direction }}" style="font-size: 11px; width: 55px;">{{ segment.net_income.qoq.display }}</span>
-                                    <span class="delta {{ segment.net_income.yoy.direction }}" style="font-size: 11px; width: 55px;">{{ segment.net_income.yoy.display }}</span>
-                                </div>
-                            </div>
-                            <div style="flex: 1; text-align: center; border-left: 1px solid #e2e8f0;">
-                                <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 4px;">
-                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px; width: 70px;">ROE</span>
-                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 700; width: 55px;">QoQ</span>
-                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 700; width: 55px;">YoY</span>
-                                </div>
-                                <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
-                                    <span style="font-size: 11px; font-weight: 700; color: var(--text-main); width: 70px;">{{ segment.roe.value }}</span>
-                                    <span class="delta {{ segment.roe.qoq.direction }}" style="font-size: 11px; width: 55px;">{{ segment.roe.qoq.display }}</span>
-                                    <span class="delta {{ segment.roe.yoy.direction }}" style="font-size: 11px; width: 55px;">{{ segment.roe.yoy.display }}</span>
-                                </div>
-                            </div>
+                            {% endfor %}
                         </div>
                     </div>
                     {% endfor %}

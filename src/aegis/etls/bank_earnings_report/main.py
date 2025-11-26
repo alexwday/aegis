@@ -440,8 +440,16 @@ async def extract_all_sections(
         format_key_metrics_json,
         retrieve_metric_history,
         format_chart_json,
+        retrieve_available_platforms,
+        retrieve_segment_metrics,
+        format_segment_json,
     )
     from .extraction.key_metrics import select_chart_and_tile_metrics
+    from .extraction.segment_metrics import (
+        normalize_segment_name,
+        select_top_segment_metrics,
+        MONITORED_SEGMENTS,
+    )
 
     execution_id = context.get("execution_id")
     db_symbol = f"{bank_info['bank_symbol']}-CA"
@@ -629,8 +637,114 @@ async def extract_all_sections(
     # Analyst Focus - placeholder (template uses .source and .entries)
     sections["3_analyst_focus"] = {"source": "Transcript", "entries": []}
 
-    # Segments - placeholder (template uses .entries)
-    sections["4_segments"] = {"entries": []}
+    # =========================================================================
+    # Section 4: Segment Performance (from supplementary + LLM selection)
+    # =========================================================================
+    logger.info(
+        "etl.bank_earnings_report.segments_start",
+        execution_id=execution_id,
+    )
+
+    # Get all platforms available in the database for this bank/period
+    available_platforms = await retrieve_available_platforms(
+        db_symbol, fiscal_year, quarter, context
+    )
+
+    # Match platforms to our monitored segments
+    segment_entries = []
+    segment_debug = {
+        "available_platforms": available_platforms,
+        "matched_segments": [],
+        "segment_selections": {},
+    }
+
+    for platform in available_platforms:
+        # Normalize platform name to our standard segment names
+        segment_name = normalize_segment_name(platform)
+
+        if segment_name:
+            logger.info(
+                "etl.bank_earnings_report.segment_matched",
+                execution_id=execution_id,
+                platform=platform,
+                segment=segment_name,
+            )
+
+            segment_debug["matched_segments"].append(
+                {
+                    "platform": platform,
+                    "normalized_to": segment_name,
+                }
+            )
+
+            # Retrieve all metrics for this segment
+            segment_metrics = await retrieve_segment_metrics(
+                db_symbol, fiscal_year, quarter, platform, context
+            )
+
+            if segment_metrics:
+                # Use LLM to select top 3 metrics for this segment
+                selection = await select_top_segment_metrics(
+                    metrics=segment_metrics,
+                    segment_name=segment_name,
+                    bank_name=bank_info["bank_name"],
+                    quarter=quarter,
+                    fiscal_year=fiscal_year,
+                    context=context,
+                    num_metrics=3,
+                )
+
+                # Store debug info
+                segment_debug["segment_selections"][segment_name] = {
+                    "platform": platform,
+                    "available_metrics": len(segment_metrics),
+                    "selected_metrics": selection.get("selected_metrics", []),
+                    "reasoning": selection.get("reasoning", ""),
+                }
+
+                # Get segment description from our config (placeholder for now)
+                # TODO: In future, this description will come from RTS driver narrative
+                segment_info = MONITORED_SEGMENTS.get(segment_name, {})
+                description = segment_info.get(
+                    "description", f"Performance metrics for {segment_name} segment."
+                )
+
+                # Format the segment entry
+                segment_entry = format_segment_json(
+                    segment_name=segment_name,
+                    description=description,
+                    selected_metrics=selection.get("metrics_data", []),
+                )
+                segment_entries.append(segment_entry)
+
+                logger.info(
+                    "etl.bank_earnings_report.segment_complete",
+                    execution_id=execution_id,
+                    segment=segment_name,
+                    metrics_selected=len(selection.get("metrics_data", [])),
+                )
+            else:
+                logger.warning(
+                    "etl.bank_earnings_report.segment_no_metrics",
+                    execution_id=execution_id,
+                    segment=segment_name,
+                    platform=platform,
+                )
+        else:
+            logger.debug(
+                "etl.bank_earnings_report.platform_not_monitored",
+                execution_id=execution_id,
+                platform=platform,
+            )
+
+    sections["4_segments"] = {"entries": segment_entries}
+    llm_debug_log["sections"]["4_segments"] = segment_debug
+
+    logger.info(
+        "etl.bank_earnings_report.segments_complete",
+        execution_id=execution_id,
+        segments_found=len(segment_entries),
+    )
 
     # Capital & Risk - placeholder (uses .source, .regulatory_capital, .rwa, .liquidity_credit)
     sections["5_capital_risk"] = {

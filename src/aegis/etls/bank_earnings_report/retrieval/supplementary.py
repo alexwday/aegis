@@ -719,3 +719,274 @@ def format_chart_json(
         "quarters": quarters,
         "values": values,
     }
+
+
+# =============================================================================
+# Segment Performance Retrieval
+# =============================================================================
+
+
+async def retrieve_available_platforms(
+    bank_symbol: str, fiscal_year: int, quarter: str, context: Dict[str, Any]
+) -> List[str]:
+    """
+    Retrieve all distinct platforms available for a bank/period.
+
+    This identifies which business segments have data in the benchmarking_report table.
+
+    Args:
+        bank_symbol: Bank symbol with suffix (e.g., 'RY-CA')
+        fiscal_year: Fiscal year (e.g., 2024)
+        quarter: Quarter (e.g., 'Q3')
+        context: Execution context with execution_id
+
+    Returns:
+        List of platform names (excluding 'Enterprise' which is the overall bank)
+    """
+    logger = get_logger()
+    execution_id = context.get("execution_id")
+
+    logger.info(
+        "etl.bank_earnings_report.retrieve_platforms",
+        execution_id=execution_id,
+        bank_symbol=bank_symbol,
+        period=f"{quarter} {fiscal_year}",
+    )
+
+    try:
+        async with get_connection() as conn:
+            result = await conn.execute(
+                text(
+                    """
+                    SELECT DISTINCT "Platform"
+                    FROM benchmarking_report
+                    WHERE "bank_symbol" = :bank_symbol
+                      AND "fiscal_year" = :fiscal_year
+                      AND "quarter" = :quarter
+                      AND "Platform" IS NOT NULL
+                      AND "Platform" != 'Enterprise'
+                    ORDER BY "Platform"
+                """
+                ),
+                {
+                    "bank_symbol": bank_symbol,
+                    "fiscal_year": fiscal_year,
+                    "quarter": quarter,
+                },
+            )
+
+            platforms = [row[0] for row in result]
+
+            logger.info(
+                "etl.bank_earnings_report.platforms_retrieved",
+                execution_id=execution_id,
+                bank_symbol=bank_symbol,
+                platform_count=len(platforms),
+                platforms=platforms,
+            )
+
+            return platforms
+
+    except Exception as e:
+        logger.error(
+            "etl.bank_earnings_report.platforms_error",
+            execution_id=execution_id,
+            error=str(e),
+        )
+        return []
+
+
+async def retrieve_segment_metrics(
+    bank_symbol: str,
+    fiscal_year: int,
+    quarter: str,
+    platform: str,
+    context: Dict[str, Any],
+) -> List[Dict[str, Any]]:
+    """
+    Retrieve all metrics for a specific business segment (platform).
+
+    Similar to retrieve_all_metrics but filtered by a specific Platform value
+    instead of 'Enterprise'.
+
+    Args:
+        bank_symbol: Bank symbol with suffix (e.g., 'RY-CA')
+        fiscal_year: Fiscal year (e.g., 2024)
+        quarter: Quarter (e.g., 'Q3')
+        platform: Platform name (e.g., 'Canadian P&C')
+        context: Execution context with execution_id
+
+    Returns:
+        List of metric dicts, each containing:
+        {
+            "parameter": str,      # KPI name
+            "actual": float,       # Current value
+            "qoq": float,          # Quarter-over-quarter change
+            "yoy": float,          # Year-over-year change
+            "2y": float,           # 2-year change
+            "3y": float,           # 3-year change
+            "4y": float,           # 4-year change
+            "5y": float,           # 5-year change
+            "units": str,          # Units from benchmarking_report
+            "is_bps": bool,        # Whether to display changes as basis points
+            "description": str,    # From kpi_metadata
+            "meta_unit": str,      # Unit type from kpi_metadata
+            "higher_is_better": bool,  # Direction indicator
+            "analyst_usage": str,  # How analysts use this metric
+        }
+    """
+    logger = get_logger()
+    execution_id = context.get("execution_id")
+
+    logger.info(
+        "etl.bank_earnings_report.retrieve_segment_metrics",
+        execution_id=execution_id,
+        bank_symbol=bank_symbol,
+        period=f"{quarter} {fiscal_year}",
+        platform=platform,
+    )
+
+    try:
+        async with get_connection() as conn:
+            result = await conn.execute(
+                text(
+                    """
+                    SELECT
+                        br."Parameter",
+                        br."Actual",
+                        br."QoQ",
+                        br."YoY",
+                        br."2Y",
+                        br."3Y",
+                        br."4Y",
+                        br."5Y",
+                        br."Units",
+                        br."BPS",
+                        km.description,
+                        km.unit as meta_unit,
+                        km.higher_is_better,
+                        km.analyst_usage
+                    FROM benchmarking_report br
+                    LEFT JOIN kpi_metadata km ON br."Parameter" = km.kpi_name
+                    WHERE br."bank_symbol" = :bank_symbol
+                      AND br."fiscal_year" = :fiscal_year
+                      AND br."quarter" = :quarter
+                      AND br."Platform" = :platform
+                    ORDER BY br."Parameter"
+                """
+                ),
+                {
+                    "bank_symbol": bank_symbol,
+                    "fiscal_year": fiscal_year,
+                    "quarter": quarter,
+                    "platform": platform,
+                },
+            )
+
+            metrics = []
+            for row in result:
+                # BPS field is "Yes"/"No" indicating if metric should display as basis points
+                bps_raw = row[9]
+                is_bps = bps_raw in ("Yes", "yes", True, 1) if bps_raw else False
+
+                metrics.append(
+                    {
+                        "parameter": row[0],
+                        "actual": float(row[1]) if row[1] is not None else None,
+                        "qoq": float(row[2]) if row[2] is not None else None,
+                        "yoy": float(row[3]) if row[3] is not None else None,
+                        "2y": float(row[4]) if row[4] is not None else None,
+                        "3y": float(row[5]) if row[5] is not None else None,
+                        "4y": float(row[6]) if row[6] is not None else None,
+                        "5y": float(row[7]) if row[7] is not None else None,
+                        "units": row[8] if row[8] else "",
+                        "is_bps": is_bps,
+                        "description": row[10] if row[10] else "",
+                        "meta_unit": row[11] if row[11] else "",
+                        "higher_is_better": row[12] if row[12] is not None else None,
+                        "analyst_usage": row[13] if row[13] else "",
+                    }
+                )
+
+            logger.info(
+                "etl.bank_earnings_report.segment_metrics_retrieved",
+                execution_id=execution_id,
+                platform=platform,
+                metric_count=len(metrics),
+            )
+
+            return metrics
+
+    except Exception as e:
+        logger.error(
+            "etl.bank_earnings_report.segment_metrics_error",
+            execution_id=execution_id,
+            platform=platform,
+            error=str(e),
+        )
+        return []
+
+
+def format_segment_metric_display(
+    metric: Dict[str, Any],
+) -> Dict[str, Any]:
+    """
+    Format a single metric for display in segment container.
+
+    Uses the same formatting as key metrics tiles.
+
+    Args:
+        metric: Metric dict from retrieve_segment_metrics()
+
+    Returns:
+        Formatted metric dict:
+        {
+            "label": "Total Revenue",
+            "value": "$4,200 M",
+            "qoq": {"value": 2.1, "direction": "positive", "display": "▲ 2.1%"},
+            "yoy": {"value": 5.2, "direction": "positive", "display": "▲ 5.2%"}
+        }
+    """
+    return {
+        "label": metric["parameter"],
+        "value": format_metric_value(metric["actual"], metric["units"], metric["meta_unit"]),
+        "qoq": format_delta(metric["qoq"], metric["units"], metric.get("is_bps", False)),
+        "yoy": format_delta(metric["yoy"], metric["units"], metric.get("is_bps", False)),
+    }
+
+
+def format_segment_json(
+    segment_name: str,
+    description: str,
+    selected_metrics: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """
+    Format a segment entry with its highlighted metrics for the template.
+
+    The output structure matches the expected 4_segments.json format but with
+    dynamic metrics instead of fixed revenue/net_income/roe.
+
+    Args:
+        segment_name: Normalized segment name (e.g., "Canadian P&C")
+        description: Segment description (from RTS or placeholder)
+        selected_metrics: List of 3 metric dicts selected by LLM
+
+    Returns:
+        Formatted segment entry:
+        {
+            "name": "Canadian P&C",
+            "description": "...",
+            "metrics": [
+                {"label": "Total Revenue", "value": "$4,200 M", "qoq": {...}, "yoy": {...}},
+                {"label": "Net Interest Margin", "value": "2.45%", "qoq": {...}, "yoy": {...}},
+                {"label": "Efficiency Ratio", "value": "52.3%", "qoq": {...}, "yoy": {...}}
+            ]
+        }
+    """
+    formatted_metrics = [format_segment_metric_display(m) for m in selected_metrics]
+
+    return {
+        "name": segment_name,
+        "description": description,
+        "metrics": formatted_metrics,
+    }
