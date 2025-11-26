@@ -291,9 +291,9 @@ async def main():
     await explore_table_data()
 
     # Get available parameters - adjust these based on what explore_table_data shows
-    bank_symbol = "RY"
+    bank_symbol = "RY-CA"
     fiscal_year = 2025
-    quarter = "Q2"
+    quarter = "Q3"
     platform = "Enterprise"
 
     print(f"\n📊 Fetching parameters for {bank_symbol} {quarter} {fiscal_year} ({platform})...")
