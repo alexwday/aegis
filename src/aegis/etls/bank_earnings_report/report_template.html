@@ -759,28 +759,33 @@
                 <div style="display: flex; flex-direction: column; margin-top: 10px;">
                     {% for segment in _4_segments.entries %}
                     <div class="qa-item">
+                        <!-- Segment header and description -->
                         <div style="margin-bottom: 8px;">
                             <div style="margin-bottom: 4px;">
                                 <span style="font-size: 11px; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;">{{ segment.name }}</span>
                             </div>
                             <div style="font-size: 12px; color: var(--text-main); line-height: 1.5;">{{ segment.description }}</div>
                         </div>
-                        <!-- Metrics row - slim tile style layout -->
-                        <div style="display: flex; justify-content: space-between; padding-top: 8px; border-top: 1px solid #e2e8f0; gap: 12px;">
+                        <!-- Metrics row - 3 equal sections with vertical dividers -->
+                        <div style="display: flex; border-top: 1px solid #e2e8f0; padding-top: 10px;">
                             {% for metric in segment.metrics %}
-                            <div style="flex: 1; background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%); border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 12px;">
-                                <!-- Metric name centered at top, full width -->
-                                <div style="font-size: 10px; color: var(--accent); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700; text-align: center; margin-bottom: 6px;">{{ metric.label }}</div>
-                                <!-- Grid layout: 3 columns for Current/QoQ/YoY -->
-                                <div style="display: grid; grid-template-columns: 1fr auto auto; gap: 4px 8px; align-items: center;">
-                                    <!-- Label row -->
-                                    <span style="font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700; text-align: center;">Current</span>
-                                    <span style="font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700; text-align: center;">QoQ</span>
-                                    <span style="font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700; text-align: center;">YoY</span>
-                                    <!-- Value row -->
-                                    <span style="font-size: 12px; font-weight: 700; color: var(--text-main); text-align: center;">{{ metric.value }}</span>
-                                    <span class="delta {{ metric.qoq.direction }}" style="font-size: 11px; text-align: center;">{{ metric.qoq.display }}</span>
-                                    <span class="delta {{ metric.yoy.direction }}" style="font-size: 11px; text-align: center;">{{ metric.yoy.display }}</span>
+                            <div style="flex: 1; text-align: center;{% if not loop.first %} border-left: 1px solid #e2e8f0;{% endif %} padding: 0 8px;">
+                                <!-- Metric name centered at top -->
+                                <div style="font-size: 10px; color: var(--accent); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700; margin-bottom: 8px;">{{ metric.label }}</div>
+                                <!-- 3 invisible columns for Current/QoQ/YoY -->
+                                <div style="display: flex; justify-content: space-around;">
+                                    <div style="text-align: center;">
+                                        <div style="font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700; margin-bottom: 2px;">Current</div>
+                                        <div style="font-size: 12px; font-weight: 700; color: var(--text-main);">{{ metric.value }}</div>
+                                    </div>
+                                    <div style="text-align: center;">
+                                        <div style="font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700; margin-bottom: 2px;">QoQ</div>
+                                        <div class="delta {{ metric.qoq.direction }}" style="font-size: 11px;">{{ metric.qoq.display }}</div>
+                                    </div>
+                                    <div style="text-align: center;">
+                                        <div style="font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700; margin-bottom: 2px;">YoY</div>
+                                        <div class="delta {{ metric.yoy.direction }}" style="font-size: 11px;">{{ metric.yoy.display }}</div>
+                                    </div>
                                 </div>
                             </div>
                             {% endfor %}
