@@ -769,11 +769,11 @@
                         <!-- Metrics row - 3 equal sections with vertical dividers -->
                         <div style="display: flex; border-top: 1px solid #e2e8f0; padding-top: 10px;">
                             {% for metric in segment.metrics %}
-                            <div style="flex: 1; text-align: center;{% if not loop.first %} border-left: 1px solid #e2e8f0;{% endif %} padding: 0 8px;">
+                            <div style="flex: 1; text-align: center;{% if not loop.first %} border-left: 1px solid #e2e8f0; padding-left: 16px;{% endif %}{% if not loop.last %} padding-right: 16px;{% endif %}">
                                 <!-- Metric name centered at top -->
                                 <div style="font-size: 10px; color: var(--accent); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700; margin-bottom: 8px;">{{ metric.label }}</div>
-                                <!-- 3 invisible columns for Current/QoQ/YoY -->
-                                <div style="display: flex; justify-content: space-around;">
+                                <!-- 3 clustered columns for Current/QoQ/YoY -->
+                                <div style="display: flex; justify-content: center; gap: 12px;">
                                     <div style="text-align: center;">
                                         <div style="font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700; margin-bottom: 2px;">Current</div>
                                         <div style="font-size: 12px; font-weight: 700; color: var(--text-main);">{{ metric.value }}</div>
