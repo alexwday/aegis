@@ -953,25 +953,21 @@
 
             // Format value for display - matches Python format_metric_value logic
             // unit: "$M" for millions, "%" for percentage
+            // Uses up to 2 decimal places, strips trailing zeros
+            const stripTrailingZeros = (s) => s.replace(/\.?0+$/, '');
+
             const formatValue = (v, forAxis = false) => {
                 if (unit === '%') {
                     // Percentage: keep decimals, add % suffix
                     return v.toFixed(decimal_places) + '%';
                 } else if (unit === '$M') {
-                    // Currency in millions
+                    // Currency in millions - up to 2 decimal places, strip trailing zeros
                     if (Math.abs(v) >= 1000) {
-                        // Convert to billions: $X.X B
-                        return '$' + (v / 1000).toFixed(1) + ' B';
-                    } else if (Math.abs(v) >= 1) {
-                        // Keep as millions with commas: $X,XXX M
-                        // For axis labels, use shorter format
-                        if (forAxis) {
-                            return '$' + v.toLocaleString('en-US', {maximumFractionDigits: 0}) + ' M';
-                        }
-                        return '$' + v.toLocaleString('en-US', {maximumFractionDigits: 0}) + ' M';
+                        // Convert to billions: $X.XX B (strip .00)
+                        return '$' + stripTrailingZeros((v / 1000).toFixed(2)) + ' B';
                     } else {
-                        // Small number (less than 1 million), keep decimals
-                        return '$' + v.toFixed(decimal_places) + ' M';
+                        // Keep as millions: $X.XX M (strip .00)
+                        return '$' + stripTrailingZeros(v.toFixed(2)) + ' M';
                     }
                 } else {
                     // Default: format with commas and decimals
@@ -983,17 +979,16 @@
                 }
             };
 
-            // Compact format for chart data point labels (no unit suffix, just the number)
+            // Compact format for chart data point labels (no $ prefix for cleaner display)
             const formatChartLabel = (v) => {
                 if (unit === '%') {
                     return v.toFixed(decimal_places);
                 } else if (unit === '$M') {
+                    // Currency - up to 2 decimal places, strip trailing zeros
                     if (Math.abs(v) >= 1000) {
-                        return (v / 1000).toFixed(1) + 'B';
-                    } else if (Math.abs(v) >= 1) {
-                        return v.toLocaleString('en-US', {maximumFractionDigits: 0}) + 'M';
+                        return stripTrailingZeros((v / 1000).toFixed(2)) + 'B';
                     } else {
-                        return v.toFixed(decimal_places);
+                        return stripTrailingZeros(v.toFixed(2)) + 'M';
                     }
                 } else {
                     return v.toLocaleString('en-US', {maximumFractionDigits: decimal_places});

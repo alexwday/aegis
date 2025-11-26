@@ -419,10 +419,13 @@ def format_metric_value(actual: Optional[float], units: str, meta_unit: str) -> 
         return f"{actual:.0f} bps"
 
     # Handle millions (default for dollar amounts)
+    # Use up to 2 decimal places, but strip trailing zeros
     if units == "millions" or meta_unit in ("millions", "currency"):
         if actual >= 1000:
-            return f"${actual / 1000:,.1f} B"
-        return f"${actual:,.0f} M"
+            formatted = f"{actual / 1000:,.2f}".rstrip("0").rstrip(".")
+            return f"${formatted} B"
+        formatted = f"{actual:,.2f}".rstrip("0").rstrip(".")
+        return f"${formatted} M"
 
     # Handle ratio metrics
     if meta_unit == "ratio":
