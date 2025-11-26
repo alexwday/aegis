@@ -299,7 +299,6 @@
         .delta {
             font-size: 12px;
             font-weight: 700;
-            display: block;
         }
         /* Legacy delta classes (for any hardcoded content) */
         .pos { color: var(--pos); }
@@ -582,123 +581,207 @@
                 </div>
             </div>
 
-            <div style="display: flex; gap: 12px;">
-                <!-- Left side: metric tiles in 3-column rows -->
-                <div style="flex: 3; display: flex; flex-direction: column; gap: 12px;">
-                    
-                    <div style="display: flex; gap: 12px;">
-                        
-                        <div class="metric-box" style="flex: 1;">
-                            <span class="metric-label">Total Revenue</span>
-                            <span class="metric-val">$9,200 M</span>
-                            <div class="metric-changes-container">
-                                <div class="metric-change-item">
-                                    <span class="change-label">QoQ</span>
-                                    <span class="delta positive">▲ 2.3%</span>
-                                </div>
-                                <div class="metric-change-item">
-                                    <span class="change-label">YoY</span>
-                                    <span class="delta positive">▲ 6.8%</span>
-                                </div>
-                            </div>
+            <!-- Unified 5-column grid for main tiles, chart, and slim tiles
+                 Row 1: Main tile 1, Main tile 2, Main tile 3, Chart (spans 2 cols, 2 rows)
+                 Row 2: Main tile 4, Main tile 5, Main tile 6, (chart continues)
+                 Row 3: Slim tile 1, Slim tile 2, Slim tile 3, Slim tile 4, Slim tile 5
+            -->
+            <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px;">
+                <!-- Main tiles (6 tiles in positions 1-3 of rows 1-2) -->
+                
+                <div class="metric-box">
+                    <span class="metric-label">Total Revenue</span>
+                    <span class="metric-val">$9,200 M</span>
+                    <div class="metric-changes-container">
+                        <div class="metric-change-item">
+                            <span class="change-label">QoQ</span>
+                            <span class="delta positive">▲ 2.3%</span>
                         </div>
-                        
-                        <div class="metric-box" style="flex: 1;">
-                            <span class="metric-label">Pre-Provision Earnings</span>
-                            <span class="metric-val">$3,180 M</span>
-                            <div class="metric-changes-container">
-                                <div class="metric-change-item">
-                                    <span class="change-label">QoQ</span>
-                                    <span class="delta positive">▲ 2.1%</span>
-                                </div>
-                                <div class="metric-change-item">
-                                    <span class="change-label">YoY</span>
-                                    <span class="delta positive">▲ 5.8%</span>
-                                </div>
-                            </div>
+                        <div class="metric-change-item">
+                            <span class="change-label">YoY</span>
+                            <span class="delta positive">▲ 6.8%</span>
                         </div>
-                        
-                        <div class="metric-box" style="flex: 1;">
-                            <span class="metric-label">Net Income (Adj)</span>
-                            <span class="metric-val">$2,450 M</span>
-                            <div class="metric-changes-container">
-                                <div class="metric-change-item">
-                                    <span class="change-label">QoQ</span>
-                                    <span class="delta positive">▲ 1.8%</span>
-                                </div>
-                                <div class="metric-change-item">
-                                    <span class="change-label">YoY</span>
-                                    <span class="delta positive">▲ 4.2%</span>
-                                </div>
-                            </div>
-                        </div>
-                        
                     </div>
-                    
-                    <div style="display: flex; gap: 12px;">
-                        
-                        <div class="metric-box" style="flex: 1;">
-                            <span class="metric-label">Return on Equity</span>
-                            <span class="metric-val">13.8%</span>
-                            <div class="metric-changes-container">
-                                <div class="metric-change-item">
-                                    <span class="change-label">QoQ</span>
-                                    <span class="delta negative">▼ 40bps</span>
-                                </div>
-                                <div class="metric-change-item">
-                                    <span class="change-label">YoY</span>
-                                    <span class="delta negative">▼ 20bps</span>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="metric-box" style="flex: 1;">
-                            <span class="metric-label">Efficiency Ratio</span>
-                            <span class="metric-val">54.2%</span>
-                            <div class="metric-changes-container">
-                                <div class="metric-change-item">
-                                    <span class="change-label">QoQ</span>
-                                    <span class="delta positive">▲ 50bps</span>
-                                </div>
-                                <div class="metric-change-item">
-                                    <span class="change-label">YoY</span>
-                                    <span class="delta positive">▲ 210bps</span>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="metric-box" style="flex: 1;">
-                            <span class="metric-label">Operating Leverage</span>
-                            <span class="metric-val">+1.2%</span>
-                            <div class="metric-changes-container">
-                                <div class="metric-change-item">
-                                    <span class="change-label">QoQ</span>
-                                    <span class="delta positive">▲ 80bps</span>
-                                </div>
-                                <div class="metric-change-item">
-                                    <span class="change-label">YoY</span>
-                                    <span class="delta positive">▲ 150bps</span>
-                                </div>
-                            </div>
-                        </div>
-                        
-                    </div>
-                    
                 </div>
                 
-                <!-- -------- Subsection 1c: Trend Chart --------
+                
+                <div class="metric-box">
+                    <span class="metric-label">Pre-Provision Earnings</span>
+                    <span class="metric-val">$3,180 M</span>
+                    <div class="metric-changes-container">
+                        <div class="metric-change-item">
+                            <span class="change-label">QoQ</span>
+                            <span class="delta positive">▲ 2.1%</span>
+                        </div>
+                        <div class="metric-change-item">
+                            <span class="change-label">YoY</span>
+                            <span class="delta positive">▲ 5.8%</span>
+                        </div>
+                    </div>
+                </div>
+                
+                
+                <div class="metric-box">
+                    <span class="metric-label">Net Income (Adj)</span>
+                    <span class="metric-val">$2,450 M</span>
+                    <div class="metric-changes-container">
+                        <div class="metric-change-item">
+                            <span class="change-label">QoQ</span>
+                            <span class="delta positive">▲ 1.8%</span>
+                        </div>
+                        <div class="metric-change-item">
+                            <span class="change-label">YoY</span>
+                            <span class="delta positive">▲ 4.2%</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- -------- Trend Chart (after 3rd main tile) --------
                      DATA SOURCE: 1_keymetrics_chart.json (label, quarters, values)
                      SOURCE: Supp Pack
-                     NOTE: This chart is rendered dynamically via JavaScript
+                     NOTE: Chart spans columns 4-5 and rows 1-2
                 -->
-                <div id="trend-chart-container" style="flex: 2; background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%); border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.04); display: flex; flex-direction: column;">
+                <div id="trend-chart-container" style="grid-column: span 2; grid-row: span 2; background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%); border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.04); display: flex; flex-direction: column;">
                     <!-- Chart will be rendered here by JavaScript -->
                 </div>
+                
+                
+                <div class="metric-box">
+                    <span class="metric-label">Return on Equity</span>
+                    <span class="metric-val">13.8%</span>
+                    <div class="metric-changes-container">
+                        <div class="metric-change-item">
+                            <span class="change-label">QoQ</span>
+                            <span class="delta negative">▼ 40bps</span>
+                        </div>
+                        <div class="metric-change-item">
+                            <span class="change-label">YoY</span>
+                            <span class="delta negative">▼ 20bps</span>
+                        </div>
+                    </div>
+                </div>
+                
+                
+                <div class="metric-box">
+                    <span class="metric-label">Efficiency Ratio</span>
+                    <span class="metric-val">54.2%</span>
+                    <div class="metric-changes-container">
+                        <div class="metric-change-item">
+                            <span class="change-label">QoQ</span>
+                            <span class="delta positive">▲ 50bps</span>
+                        </div>
+                        <div class="metric-change-item">
+                            <span class="change-label">YoY</span>
+                            <span class="delta positive">▲ 210bps</span>
+                        </div>
+                    </div>
+                </div>
+                
+                
+                <div class="metric-box">
+                    <span class="metric-label">Operating Leverage</span>
+                    <span class="metric-val">+1.2%</span>
+                    <div class="metric-changes-container">
+                        <div class="metric-change-item">
+                            <span class="change-label">QoQ</span>
+                            <span class="delta positive">▲ 80bps</span>
+                        </div>
+                        <div class="metric-change-item">
+                            <span class="change-label">YoY</span>
+                            <span class="delta positive">▲ 150bps</span>
+                        </div>
+                    </div>
+                </div>
+                
+                
 
                 <!-- Chart data embedded for JavaScript -->
                 <script id="trend-chart-data" type="application/json">
                 {"decimal_places": 2, "label": "Net Interest Margin - 8Q Trend", "quarters": ["Q4\u002723", "Q1\u002724", "Q2\u002724", "Q3\u002724", "Q4\u002724", "Q1\u002725", "Q2\u002725", "Q3\u002725"], "unit": "%", "values": [1.52, 1.54, 1.58, 1.64, 1.71, 1.76, 1.74, 1.68]}
                 </script>
+
+                <!-- Slim tiles (5 tiles spanning full row 3) -->
+                
+                <div style="background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%); border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.04);">
+                    <!-- Metric name centered, matching main tile label style -->
+                    <div style="font-size: 10px; color: var(--accent); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700; text-align: center; margin-bottom: 6px;">NIM</div>
+                    <!-- Grid layout: 3 columns for Current/QoQ/YoY -->
+                    <div style="display: grid; grid-template-columns: 1fr auto auto; gap: 4px 8px; align-items: center;">
+                        <!-- Label row -->
+                        <span style="font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700; text-align: center;">Current</span>
+                        <span style="font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700; text-align: center;">QoQ</span>
+                        <span style="font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700; text-align: center;">YoY</span>
+                        <!-- Value row -->
+                        <span style="font-size: 14px; font-weight: 700; color: var(--text-main); text-align: center;">2.45%</span>
+                        <span class="delta negative" style="font-size: 10px; font-weight: 600; text-align: center;">▼ 3bps</span>
+                        <span class="delta negative" style="font-size: 10px; font-weight: 600; text-align: center;">▼ 8bps</span>
+                    </div>
+                </div>
+                
+                <div style="background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%); border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.04);">
+                    <!-- Metric name centered, matching main tile label style -->
+                    <div style="font-size: 10px; color: var(--accent); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700; text-align: center; margin-bottom: 6px;">Loan Growth</div>
+                    <!-- Grid layout: 3 columns for Current/QoQ/YoY -->
+                    <div style="display: grid; grid-template-columns: 1fr auto auto; gap: 4px 8px; align-items: center;">
+                        <!-- Label row -->
+                        <span style="font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700; text-align: center;">Current</span>
+                        <span style="font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700; text-align: center;">QoQ</span>
+                        <span style="font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700; text-align: center;">YoY</span>
+                        <!-- Value row -->
+                        <span style="font-size: 14px; font-weight: 700; color: var(--text-main); text-align: center;">+5.2%</span>
+                        <span class="delta positive" style="font-size: 10px; font-weight: 600; text-align: center;">▲ 0.8%</span>
+                        <span class="delta positive" style="font-size: 10px; font-weight: 600; text-align: center;">▲ 2.1%</span>
+                    </div>
+                </div>
+                
+                <div style="background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%); border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.04);">
+                    <!-- Metric name centered, matching main tile label style -->
+                    <div style="font-size: 10px; color: var(--accent); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700; text-align: center; margin-bottom: 6px;">PCL Ratio</div>
+                    <!-- Grid layout: 3 columns for Current/QoQ/YoY -->
+                    <div style="display: grid; grid-template-columns: 1fr auto auto; gap: 4px 8px; align-items: center;">
+                        <!-- Label row -->
+                        <span style="font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700; text-align: center;">Current</span>
+                        <span style="font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700; text-align: center;">QoQ</span>
+                        <span style="font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700; text-align: center;">YoY</span>
+                        <!-- Value row -->
+                        <span style="font-size: 14px; font-weight: 700; color: var(--text-main); text-align: center;">0.25%</span>
+                        <span class="delta negative" style="font-size: 10px; font-weight: 600; text-align: center;">▲ 2bps</span>
+                        <span class="delta negative" style="font-size: 10px; font-weight: 600; text-align: center;">▲ 5bps</span>
+                    </div>
+                </div>
+                
+                <div style="background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%); border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.04);">
+                    <!-- Metric name centered, matching main tile label style -->
+                    <div style="font-size: 10px; color: var(--accent); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700; text-align: center; margin-bottom: 6px;">AUM Growth</div>
+                    <!-- Grid layout: 3 columns for Current/QoQ/YoY -->
+                    <div style="display: grid; grid-template-columns: 1fr auto auto; gap: 4px 8px; align-items: center;">
+                        <!-- Label row -->
+                        <span style="font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700; text-align: center;">Current</span>
+                        <span style="font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700; text-align: center;">QoQ</span>
+                        <span style="font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700; text-align: center;">YoY</span>
+                        <!-- Value row -->
+                        <span style="font-size: 14px; font-weight: 700; color: var(--text-main); text-align: center;">+14.2%</span>
+                        <span class="delta positive" style="font-size: 10px; font-weight: 600; text-align: center;">▲ 4.5%</span>
+                        <span class="delta positive" style="font-size: 10px; font-weight: 600; text-align: center;">▲ 14.2%</span>
+                    </div>
+                </div>
+                
+                <div style="background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%); border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.04);">
+                    <!-- Metric name centered, matching main tile label style -->
+                    <div style="font-size: 10px; color: var(--accent); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700; text-align: center; margin-bottom: 6px;">Book Value</div>
+                    <!-- Grid layout: 3 columns for Current/QoQ/YoY -->
+                    <div style="display: grid; grid-template-columns: 1fr auto auto; gap: 4px 8px; align-items: center;">
+                        <!-- Label row -->
+                        <span style="font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700; text-align: center;">Current</span>
+                        <span style="font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700; text-align: center;">QoQ</span>
+                        <span style="font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700; text-align: center;">YoY</span>
+                        <!-- Value row -->
+                        <span style="font-size: 14px; font-weight: 700; color: var(--text-main); text-align: center;">$85.20</span>
+                        <span class="delta positive" style="font-size: 10px; font-weight: 600; text-align: center;">▲ 2.3%</span>
+                        <span class="delta positive" style="font-size: 10px; font-weight: 600; text-align: center;">▲ 8.5%</span>
+                    </div>
+                </div>
+                
             </div>
             </div>
 
@@ -891,8 +974,8 @@
 
         <!-- ============================================
              SECTION 4: Segment Performance
-             DATA SOURCE: 4_segments.json (entries array with name, description, revenue, net_income, roe)
-             NOTE: Variable-length list of business segments with metrics
+             DATA SOURCE: 4_segments.json (entries array with name, description, core_metrics, highlighted_metrics)
+             NOTE: Variable-length list of business segments with two metric columns
              ============================================ -->
         <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px;">
             <div class="card">
@@ -908,190 +991,497 @@
 
                 <div style="display: flex; flex-direction: column; margin-top: 10px;">
                     
-                    <div class="qa-item">
-                        <div style="margin-bottom: 8px;">
-                            <div style="margin-bottom: 4px;">
-                                <span style="font-size: 11px; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;">Canadian P&C</span>
+                    <div class="qa-item" style="padding: 10px 12px; margin-bottom: 8px;">
+                        <!-- Segment header and description -->
+                        <div style="margin-bottom: 6px;">
+                            <div style="margin-bottom: 2px;">
+                                <span style="font-size: 11px; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;">Canadian Banking</span>
                             </div>
-                            <div style="font-size: 12px; color: var(--text-main); line-height: 1.5;">Strong volume growth in mortgages (+7%) and business lending (+9%), partially offset by compressed margins from competitive pricing. Credit card balances continue to normalize while maintaining industry-leading loss rates.</div>
+                            <div style="font-size: 11px; color: var(--text-main); line-height: 1.4;">Canadian retail and commercial banking including personal banking, mortgages, deposits, business lending, and credit cards. Strong volume growth in mortgages (+7%) and business lending (+9%), partially offset by compressed margins from competitive pricing.</div>
                         </div>
-                        <div style="display: flex; justify-content: space-between; padding-top: 8px; border-top: 1px solid #e2e8f0;">
-                            <div style="flex: 1; text-align: center;">
-                                <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 4px;">
-                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px; width: 70px;">Revenue</span>
-                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 700; width: 55px;">QoQ</span>
-                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 700; width: 55px;">YoY</span>
-                                </div>
-                                <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
-                                    <span style="font-size: 11px; font-weight: 700; color: var(--text-main); width: 70px;">$4,200 M</span>
-                                    <span class="delta positive" style="font-size: 11px; width: 55px;">▲ 2.1%</span>
-                                    <span class="delta positive" style="font-size: 11px; width: 55px;">▲ 5.2%</span>
-                                </div>
+                        <!-- Two-column metrics layout -->
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                            <!-- Left column: Core Metrics -->
+                            <div style="background: #f8fafc; border-radius: 4px; padding: 6px 8px;">
+                                <table style="width: 100%; border-collapse: collapse; font-size: 11px; table-layout: fixed;">
+                                    <colgroup>
+                                        <col style="width: 38%;">
+                                        <col style="width: 24%;">
+                                        <col style="width: 19%;">
+                                        <col style="width: 19%;">
+                                    </colgroup>
+                                    <thead>
+                                        <tr>
+                                            <th style="text-align: left; font-weight: 500; color: #64748b; padding: 2px 4px; border-bottom: 1px solid #e2e8f0;">Metric</th>
+                                            <th style="text-align: right; font-weight: 500; color: #64748b; padding: 2px 4px; border-bottom: 1px solid #e2e8f0;">Current</th>
+                                            <th style="text-align: right; font-weight: 500; color: #64748b; padding: 2px 4px; border-bottom: 1px solid #e2e8f0;">QoQ</th>
+                                            <th style="text-align: right; font-weight: 500; color: #64748b; padding: 2px 4px; border-bottom: 1px solid #e2e8f0;">YoY</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        
+                                        <tr>
+                                            <td style="padding: 2px 4px; color: #334155; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Total Revenue</td>
+                                            <td style="padding: 2px 4px; text-align: right; font-family: 'Consolas', monospace; font-size: 10px; white-space: nowrap;">$4,200 M</td>
+                                            <td class="delta positive" style="padding: 2px 4px; text-align: right; font-size: 10px; white-space: nowrap;">▲ 2.1%</td>
+                                            <td class="delta positive" style="padding: 2px 4px; text-align: right; font-size: 10px; white-space: nowrap;">▲ 5.2%</td>
+                                        </tr>
+                                        
+                                        <tr>
+                                            <td style="padding: 2px 4px; color: #334155; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Net Income</td>
+                                            <td style="padding: 2px 4px; text-align: right; font-family: 'Consolas', monospace; font-size: 10px; white-space: nowrap;">$1,100 M</td>
+                                            <td class="delta positive" style="padding: 2px 4px; text-align: right; font-size: 10px; white-space: nowrap;">▲ 1.8%</td>
+                                            <td class="delta positive" style="padding: 2px 4px; text-align: right; font-size: 10px; white-space: nowrap;">▲ 4.5%</td>
+                                        </tr>
+                                        
+                                        <tr>
+                                            <td style="padding: 2px 4px; color: #334155; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Efficiency Ratio</td>
+                                            <td style="padding: 2px 4px; text-align: right; font-family: 'Consolas', monospace; font-size: 10px; white-space: nowrap;">52.3%</td>
+                                            <td class="delta negative" style="padding: 2px 4px; text-align: right; font-size: 10px; white-space: nowrap;">▲ 20bps</td>
+                                            <td class="delta positive" style="padding: 2px 4px; text-align: right; font-size: 10px; white-space: nowrap;">▼ 40bps</td>
+                                        </tr>
+                                        
+                                    </tbody>
+                                </table>
                             </div>
-                            <div style="flex: 1; text-align: center; border-left: 1px solid #e2e8f0;">
-                                <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 4px;">
-                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px; width: 70px;">Net Income</span>
-                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 700; width: 55px;">QoQ</span>
-                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 700; width: 55px;">YoY</span>
-                                </div>
-                                <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
-                                    <span style="font-size: 11px; font-weight: 700; color: var(--text-main); width: 70px;">$1,100 M</span>
-                                    <span class="delta positive" style="font-size: 11px; width: 55px;">▲ 1.8%</span>
-                                    <span class="delta positive" style="font-size: 11px; width: 55px;">▲ 4.5%</span>
-                                </div>
-                            </div>
-                            <div style="flex: 1; text-align: center; border-left: 1px solid #e2e8f0;">
-                                <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 4px;">
-                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px; width: 70px;">ROE</span>
-                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 700; width: 55px;">QoQ</span>
-                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 700; width: 55px;">YoY</span>
-                                </div>
-                                <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
-                                    <span style="font-size: 11px; font-weight: 700; color: var(--text-main); width: 70px;">22.5%</span>
-                                    <span class="delta negative" style="font-size: 11px; width: 55px;">▼ 20bps</span>
-                                    <span class="delta positive" style="font-size: 11px; width: 55px;">▲ 40bps</span>
-                                </div>
+                            <!-- Right column: Highlighted Metrics -->
+                            <div style="background: #f8fafc; border-radius: 4px; padding: 6px 8px;">
+                                <table style="width: 100%; border-collapse: collapse; font-size: 11px; table-layout: fixed;">
+                                    <colgroup>
+                                        <col style="width: 38%;">
+                                        <col style="width: 24%;">
+                                        <col style="width: 19%;">
+                                        <col style="width: 19%;">
+                                    </colgroup>
+                                    <thead>
+                                        <tr>
+                                            <th style="text-align: left; font-weight: 500; color: #64748b; padding: 2px 4px; border-bottom: 1px solid #e2e8f0;">Metric</th>
+                                            <th style="text-align: right; font-weight: 500; color: #64748b; padding: 2px 4px; border-bottom: 1px solid #e2e8f0;">Current</th>
+                                            <th style="text-align: right; font-weight: 500; color: #64748b; padding: 2px 4px; border-bottom: 1px solid #e2e8f0;">QoQ</th>
+                                            <th style="text-align: right; font-weight: 500; color: #64748b; padding: 2px 4px; border-bottom: 1px solid #e2e8f0;">YoY</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        
+                                        <tr>
+                                            <td style="padding: 2px 4px; color: #334155; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">NIM</td>
+                                            <td style="padding: 2px 4px; text-align: right; font-family: 'Consolas', monospace; font-size: 10px; white-space: nowrap;">2.45%</td>
+                                            <td class="delta negative" style="padding: 2px 4px; text-align: right; font-size: 10px; white-space: nowrap;">▼ 3bps</td>
+                                            <td class="delta negative" style="padding: 2px 4px; text-align: right; font-size: 10px; white-space: nowrap;">▼ 8bps</td>
+                                        </tr>
+                                        
+                                        <tr>
+                                            <td style="padding: 2px 4px; color: #334155; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Loan Growth</td>
+                                            <td style="padding: 2px 4px; text-align: right; font-family: 'Consolas', monospace; font-size: 10px; white-space: nowrap;">+5.2%</td>
+                                            <td class="delta positive" style="padding: 2px 4px; text-align: right; font-size: 10px; white-space: nowrap;">▲ 0.8%</td>
+                                            <td class="delta positive" style="padding: 2px 4px; text-align: right; font-size: 10px; white-space: nowrap;">▲ 2.1%</td>
+                                        </tr>
+                                        
+                                        <tr>
+                                            <td style="padding: 2px 4px; color: #334155; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">PCL Ratio</td>
+                                            <td style="padding: 2px 4px; text-align: right; font-family: 'Consolas', monospace; font-size: 10px; white-space: nowrap;">0.25%</td>
+                                            <td class="delta negative" style="padding: 2px 4px; text-align: right; font-size: 10px; white-space: nowrap;">▲ 2bps</td>
+                                            <td class="delta negative" style="padding: 2px 4px; text-align: right; font-size: 10px; white-space: nowrap;">▲ 5bps</td>
+                                        </tr>
+                                        
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
                     </div>
                     
-                    <div class="qa-item">
-                        <div style="margin-bottom: 8px;">
-                            <div style="margin-bottom: 4px;">
-                                <span style="font-size: 11px; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;">U.S. Retail</span>
+                    <div class="qa-item" style="padding: 10px 12px; margin-bottom: 8px;">
+                        <!-- Segment header and description -->
+                        <div style="margin-bottom: 6px;">
+                            <div style="margin-bottom: 2px;">
+                                <span style="font-size: 11px; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;">U.S. & International Banking</span>
                             </div>
-                            <div style="font-size: 12px; color: var(--text-main); line-height: 1.5;">Challenged by higher provision expenses ($120M increase) and strategic repositioning costs; focusing on affluent segments. Branch rationalization program on track to deliver $85M in annual run-rate savings by Q2 2026.</div>
+                            <div style="font-size: 11px; color: var(--text-main); line-height: 1.4;">U.S. and international retail banking operations including personal banking, commercial lending, and cross-border services. Challenged by higher provision expenses and strategic repositioning costs.</div>
                         </div>
-                        <div style="display: flex; justify-content: space-between; padding-top: 8px; border-top: 1px solid #e2e8f0;">
-                            <div style="flex: 1; text-align: center;">
-                                <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 4px;">
-                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px; width: 70px;">Revenue</span>
-                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 700; width: 55px;">QoQ</span>
-                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 700; width: 55px;">YoY</span>
-                                </div>
-                                <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
-                                    <span style="font-size: 11px; font-weight: 700; color: var(--text-main); width: 70px;">$2,100 M</span>
-                                    <span class="delta negative" style="font-size: 11px; width: 55px;">▼ 3.2%</span>
-                                    <span class="delta negative" style="font-size: 11px; width: 55px;">▼ 8.1%</span>
-                                </div>
+                        <!-- Two-column metrics layout -->
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                            <!-- Left column: Core Metrics -->
+                            <div style="background: #f8fafc; border-radius: 4px; padding: 6px 8px;">
+                                <table style="width: 100%; border-collapse: collapse; font-size: 11px; table-layout: fixed;">
+                                    <colgroup>
+                                        <col style="width: 38%;">
+                                        <col style="width: 24%;">
+                                        <col style="width: 19%;">
+                                        <col style="width: 19%;">
+                                    </colgroup>
+                                    <thead>
+                                        <tr>
+                                            <th style="text-align: left; font-weight: 500; color: #64748b; padding: 2px 4px; border-bottom: 1px solid #e2e8f0;">Metric</th>
+                                            <th style="text-align: right; font-weight: 500; color: #64748b; padding: 2px 4px; border-bottom: 1px solid #e2e8f0;">Current</th>
+                                            <th style="text-align: right; font-weight: 500; color: #64748b; padding: 2px 4px; border-bottom: 1px solid #e2e8f0;">QoQ</th>
+                                            <th style="text-align: right; font-weight: 500; color: #64748b; padding: 2px 4px; border-bottom: 1px solid #e2e8f0;">YoY</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        
+                                        <tr>
+                                            <td style="padding: 2px 4px; color: #334155; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Total Revenue</td>
+                                            <td style="padding: 2px 4px; text-align: right; font-family: 'Consolas', monospace; font-size: 10px; white-space: nowrap;">$2,100 M</td>
+                                            <td class="delta negative" style="padding: 2px 4px; text-align: right; font-size: 10px; white-space: nowrap;">▼ 3.2%</td>
+                                            <td class="delta negative" style="padding: 2px 4px; text-align: right; font-size: 10px; white-space: nowrap;">▼ 8.1%</td>
+                                        </tr>
+                                        
+                                        <tr>
+                                            <td style="padding: 2px 4px; color: #334155; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Net Income</td>
+                                            <td style="padding: 2px 4px; text-align: right; font-family: 'Consolas', monospace; font-size: 10px; white-space: nowrap;">$450 M</td>
+                                            <td class="delta negative" style="padding: 2px 4px; text-align: right; font-size: 10px; white-space: nowrap;">▼ 5.1%</td>
+                                            <td class="delta negative" style="padding: 2px 4px; text-align: right; font-size: 10px; white-space: nowrap;">▼ 12.3%</td>
+                                        </tr>
+                                        
+                                        <tr>
+                                            <td style="padding: 2px 4px; color: #334155; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Efficiency Ratio</td>
+                                            <td style="padding: 2px 4px; text-align: right; font-family: 'Consolas', monospace; font-size: 10px; white-space: nowrap;">58.2%</td>
+                                            <td class="delta negative" style="padding: 2px 4px; text-align: right; font-size: 10px; white-space: nowrap;">▲ 45bps</td>
+                                            <td class="delta negative" style="padding: 2px 4px; text-align: right; font-size: 10px; white-space: nowrap;">▲ 120bps</td>
+                                        </tr>
+                                        
+                                    </tbody>
+                                </table>
                             </div>
-                            <div style="flex: 1; text-align: center; border-left: 1px solid #e2e8f0;">
-                                <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 4px;">
-                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px; width: 70px;">Net Income</span>
-                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 700; width: 55px;">QoQ</span>
-                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 700; width: 55px;">YoY</span>
-                                </div>
-                                <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
-                                    <span style="font-size: 11px; font-weight: 700; color: var(--text-main); width: 70px;">$450 M</span>
-                                    <span class="delta negative" style="font-size: 11px; width: 55px;">▼ 5.1%</span>
-                                    <span class="delta negative" style="font-size: 11px; width: 55px;">▼ 12.3%</span>
-                                </div>
-                            </div>
-                            <div style="flex: 1; text-align: center; border-left: 1px solid #e2e8f0;">
-                                <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 4px;">
-                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px; width: 70px;">ROE</span>
-                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 700; width: 55px;">QoQ</span>
-                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 700; width: 55px;">YoY</span>
-                                </div>
-                                <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
-                                    <span style="font-size: 11px; font-weight: 700; color: var(--text-main); width: 70px;">8.3%</span>
-                                    <span class="delta negative" style="font-size: 11px; width: 55px;">▼ 60bps</span>
-                                    <span class="delta negative" style="font-size: 11px; width: 55px;">▼ 180bps</span>
-                                </div>
+                            <!-- Right column: Highlighted Metrics -->
+                            <div style="background: #f8fafc; border-radius: 4px; padding: 6px 8px;">
+                                <table style="width: 100%; border-collapse: collapse; font-size: 11px; table-layout: fixed;">
+                                    <colgroup>
+                                        <col style="width: 38%;">
+                                        <col style="width: 24%;">
+                                        <col style="width: 19%;">
+                                        <col style="width: 19%;">
+                                    </colgroup>
+                                    <thead>
+                                        <tr>
+                                            <th style="text-align: left; font-weight: 500; color: #64748b; padding: 2px 4px; border-bottom: 1px solid #e2e8f0;">Metric</th>
+                                            <th style="text-align: right; font-weight: 500; color: #64748b; padding: 2px 4px; border-bottom: 1px solid #e2e8f0;">Current</th>
+                                            <th style="text-align: right; font-weight: 500; color: #64748b; padding: 2px 4px; border-bottom: 1px solid #e2e8f0;">QoQ</th>
+                                            <th style="text-align: right; font-weight: 500; color: #64748b; padding: 2px 4px; border-bottom: 1px solid #e2e8f0;">YoY</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        
+                                        <tr>
+                                            <td style="padding: 2px 4px; color: #334155; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">PCL Ratio</td>
+                                            <td style="padding: 2px 4px; text-align: right; font-family: 'Consolas', monospace; font-size: 10px; white-space: nowrap;">0.42%</td>
+                                            <td class="delta negative" style="padding: 2px 4px; text-align: right; font-size: 10px; white-space: nowrap;">▲ 8bps</td>
+                                            <td class="delta negative" style="padding: 2px 4px; text-align: right; font-size: 10px; white-space: nowrap;">▲ 15bps</td>
+                                        </tr>
+                                        
+                                        <tr>
+                                            <td style="padding: 2px 4px; color: #334155; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Deposit Growth</td>
+                                            <td style="padding: 2px 4px; text-align: right; font-family: 'Consolas', monospace; font-size: 10px; white-space: nowrap;">4.2%</td>
+                                            <td class="delta positive" style="padding: 2px 4px; text-align: right; font-size: 10px; white-space: nowrap;">▲ 0.8%</td>
+                                            <td class="delta positive" style="padding: 2px 4px; text-align: right; font-size: 10px; white-space: nowrap;">▲ 2.1%</td>
+                                        </tr>
+                                        
+                                        <tr>
+                                            <td style="padding: 2px 4px; color: #334155; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">ROE</td>
+                                            <td style="padding: 2px 4px; text-align: right; font-family: 'Consolas', monospace; font-size: 10px; white-space: nowrap;">8.3%</td>
+                                            <td class="delta negative" style="padding: 2px 4px; text-align: right; font-size: 10px; white-space: nowrap;">▼ 60bps</td>
+                                            <td class="delta negative" style="padding: 2px 4px; text-align: right; font-size: 10px; white-space: nowrap;">▼ 180bps</td>
+                                        </tr>
+                                        
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
                     </div>
                     
-                    <div class="qa-item">
-                        <div style="margin-bottom: 8px;">
-                            <div style="margin-bottom: 4px;">
+                    <div class="qa-item" style="padding: 10px 12px; margin-bottom: 8px;">
+                        <!-- Segment header and description -->
+                        <div style="margin-bottom: 6px;">
+                            <div style="margin-bottom: 2px;">
                                 <span style="font-size: 11px; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;">Wealth Management</span>
                             </div>
-                            <div style="font-size: 12px; color: var(--text-main); line-height: 1.5;">Record AUM of $850B driven by strong market appreciation and $45B in net new flows; fee income growth of 14%. High-net-worth client acquisition up 23% YoY through advisor team expansion and digital onboarding enhancements.</div>
+                            <div style="font-size: 11px; color: var(--text-main); line-height: 1.4;">Wealth management including private banking, asset management, brokerage, and investment services. Record AUM of $850B driven by strong market appreciation and $45B in net new flows.</div>
                         </div>
-                        <div style="display: flex; justify-content: space-between; padding-top: 8px; border-top: 1px solid #e2e8f0;">
-                            <div style="flex: 1; text-align: center;">
-                                <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 4px;">
-                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px; width: 70px;">Revenue</span>
-                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 700; width: 55px;">QoQ</span>
-                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 700; width: 55px;">YoY</span>
-                                </div>
-                                <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
-                                    <span style="font-size: 11px; font-weight: 700; color: var(--text-main); width: 70px;">$1,800 M</span>
-                                    <span class="delta positive" style="font-size: 11px; width: 55px;">▲ 4.5%</span>
-                                    <span class="delta positive" style="font-size: 11px; width: 55px;">▲ 12.0%</span>
-                                </div>
+                        <!-- Two-column metrics layout -->
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                            <!-- Left column: Core Metrics -->
+                            <div style="background: #f8fafc; border-radius: 4px; padding: 6px 8px;">
+                                <table style="width: 100%; border-collapse: collapse; font-size: 11px; table-layout: fixed;">
+                                    <colgroup>
+                                        <col style="width: 38%;">
+                                        <col style="width: 24%;">
+                                        <col style="width: 19%;">
+                                        <col style="width: 19%;">
+                                    </colgroup>
+                                    <thead>
+                                        <tr>
+                                            <th style="text-align: left; font-weight: 500; color: #64748b; padding: 2px 4px; border-bottom: 1px solid #e2e8f0;">Metric</th>
+                                            <th style="text-align: right; font-weight: 500; color: #64748b; padding: 2px 4px; border-bottom: 1px solid #e2e8f0;">Current</th>
+                                            <th style="text-align: right; font-weight: 500; color: #64748b; padding: 2px 4px; border-bottom: 1px solid #e2e8f0;">QoQ</th>
+                                            <th style="text-align: right; font-weight: 500; color: #64748b; padding: 2px 4px; border-bottom: 1px solid #e2e8f0;">YoY</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        
+                                        <tr>
+                                            <td style="padding: 2px 4px; color: #334155; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Total Revenue</td>
+                                            <td style="padding: 2px 4px; text-align: right; font-family: 'Consolas', monospace; font-size: 10px; white-space: nowrap;">$1,800 M</td>
+                                            <td class="delta positive" style="padding: 2px 4px; text-align: right; font-size: 10px; white-space: nowrap;">▲ 4.5%</td>
+                                            <td class="delta positive" style="padding: 2px 4px; text-align: right; font-size: 10px; white-space: nowrap;">▲ 12.0%</td>
+                                        </tr>
+                                        
+                                        <tr>
+                                            <td style="padding: 2px 4px; color: #334155; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Net Income</td>
+                                            <td style="padding: 2px 4px; text-align: right; font-family: 'Consolas', monospace; font-size: 10px; white-space: nowrap;">$550 M</td>
+                                            <td class="delta positive" style="padding: 2px 4px; text-align: right; font-size: 10px; white-space: nowrap;">▲ 6.2%</td>
+                                            <td class="delta positive" style="padding: 2px 4px; text-align: right; font-size: 10px; white-space: nowrap;">▲ 15.3%</td>
+                                        </tr>
+                                        
+                                        <tr>
+                                            <td style="padding: 2px 4px; color: #334155; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Efficiency Ratio</td>
+                                            <td style="padding: 2px 4px; text-align: right; font-family: 'Consolas', monospace; font-size: 10px; white-space: nowrap;">68.5%</td>
+                                            <td class="delta positive" style="padding: 2px 4px; text-align: right; font-size: 10px; white-space: nowrap;">▼ 30bps</td>
+                                            <td class="delta positive" style="padding: 2px 4px; text-align: right; font-size: 10px; white-space: nowrap;">▼ 85bps</td>
+                                        </tr>
+                                        
+                                    </tbody>
+                                </table>
                             </div>
-                            <div style="flex: 1; text-align: center; border-left: 1px solid #e2e8f0;">
-                                <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 4px;">
-                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px; width: 70px;">Net Income</span>
-                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 700; width: 55px;">QoQ</span>
-                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 700; width: 55px;">YoY</span>
-                                </div>
-                                <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
-                                    <span style="font-size: 11px; font-weight: 700; color: var(--text-main); width: 70px;">$550 M</span>
-                                    <span class="delta positive" style="font-size: 11px; width: 55px;">▲ 6.2%</span>
-                                    <span class="delta positive" style="font-size: 11px; width: 55px;">▲ 15.3%</span>
-                                </div>
-                            </div>
-                            <div style="flex: 1; text-align: center; border-left: 1px solid #e2e8f0;">
-                                <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 4px;">
-                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px; width: 70px;">ROE</span>
-                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 700; width: 55px;">QoQ</span>
-                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 700; width: 55px;">YoY</span>
-                                </div>
-                                <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
-                                    <span style="font-size: 11px; font-weight: 700; color: var(--text-main); width: 70px;">28.2%</span>
-                                    <span class="delta positive" style="font-size: 11px; width: 55px;">▲ 80bps</span>
-                                    <span class="delta positive" style="font-size: 11px; width: 55px;">▲ 220bps</span>
-                                </div>
+                            <!-- Right column: Highlighted Metrics -->
+                            <div style="background: #f8fafc; border-radius: 4px; padding: 6px 8px;">
+                                <table style="width: 100%; border-collapse: collapse; font-size: 11px; table-layout: fixed;">
+                                    <colgroup>
+                                        <col style="width: 38%;">
+                                        <col style="width: 24%;">
+                                        <col style="width: 19%;">
+                                        <col style="width: 19%;">
+                                    </colgroup>
+                                    <thead>
+                                        <tr>
+                                            <th style="text-align: left; font-weight: 500; color: #64748b; padding: 2px 4px; border-bottom: 1px solid #e2e8f0;">Metric</th>
+                                            <th style="text-align: right; font-weight: 500; color: #64748b; padding: 2px 4px; border-bottom: 1px solid #e2e8f0;">Current</th>
+                                            <th style="text-align: right; font-weight: 500; color: #64748b; padding: 2px 4px; border-bottom: 1px solid #e2e8f0;">QoQ</th>
+                                            <th style="text-align: right; font-weight: 500; color: #64748b; padding: 2px 4px; border-bottom: 1px solid #e2e8f0;">YoY</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        
+                                        <tr>
+                                            <td style="padding: 2px 4px; color: #334155; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">AUM</td>
+                                            <td style="padding: 2px 4px; text-align: right; font-family: 'Consolas', monospace; font-size: 10px; white-space: nowrap;">$850 B</td>
+                                            <td class="delta positive" style="padding: 2px 4px; text-align: right; font-size: 10px; white-space: nowrap;">▲ 4.5%</td>
+                                            <td class="delta positive" style="padding: 2px 4px; text-align: right; font-size: 10px; white-space: nowrap;">▲ 14.2%</td>
+                                        </tr>
+                                        
+                                        <tr>
+                                            <td style="padding: 2px 4px; color: #334155; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Fee Income</td>
+                                            <td style="padding: 2px 4px; text-align: right; font-family: 'Consolas', monospace; font-size: 10px; white-space: nowrap;">$1,200 M</td>
+                                            <td class="delta positive" style="padding: 2px 4px; text-align: right; font-size: 10px; white-space: nowrap;">▲ 3.8%</td>
+                                            <td class="delta positive" style="padding: 2px 4px; text-align: right; font-size: 10px; white-space: nowrap;">▲ 12.0%</td>
+                                        </tr>
+                                        
+                                        <tr>
+                                            <td style="padding: 2px 4px; color: #334155; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">ROE</td>
+                                            <td style="padding: 2px 4px; text-align: right; font-family: 'Consolas', monospace; font-size: 10px; white-space: nowrap;">28.2%</td>
+                                            <td class="delta positive" style="padding: 2px 4px; text-align: right; font-size: 10px; white-space: nowrap;">▲ 80bps</td>
+                                            <td class="delta positive" style="padding: 2px 4px; text-align: right; font-size: 10px; white-space: nowrap;">▲ 220bps</td>
+                                        </tr>
+                                        
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
                     </div>
                     
-                    <div class="qa-item">
-                        <div style="margin-bottom: 8px;">
-                            <div style="margin-bottom: 4px;">
+                    <div class="qa-item" style="padding: 10px 12px; margin-bottom: 8px;">
+                        <!-- Segment header and description -->
+                        <div style="margin-bottom: 6px;">
+                            <div style="margin-bottom: 2px;">
                                 <span style="font-size: 11px; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;">Capital Markets</span>
                             </div>
-                            <div style="font-size: 12px; color: var(--text-main); line-height: 1.5;">Softer trading revenues offset by strong M&A advisory fees; robust pipeline with $2.3B in announced deals expected to close in H2. Fixed income underwriting rebounding with league table share gains in Canadian investment-grade issuance.</div>
+                            <div style="font-size: 11px; color: var(--text-main); line-height: 1.4;">Investment banking, trading, advisory, and corporate banking services. Softer trading revenues offset by strong M&A advisory fees with robust pipeline.</div>
                         </div>
-                        <div style="display: flex; justify-content: space-between; padding-top: 8px; border-top: 1px solid #e2e8f0;">
-                            <div style="flex: 1; text-align: center;">
-                                <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 4px;">
-                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px; width: 70px;">Revenue</span>
-                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 700; width: 55px;">QoQ</span>
-                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 700; width: 55px;">YoY</span>
-                                </div>
-                                <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
-                                    <span style="font-size: 11px; font-weight: 700; color: var(--text-main); width: 70px;">$1,100 M</span>
-                                    <span class="delta negative" style="font-size: 11px; width: 55px;">▼ 8.3%</span>
-                                    <span class="delta negative" style="font-size: 11px; width: 55px;">▼ 2.0%</span>
-                                </div>
+                        <!-- Two-column metrics layout -->
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                            <!-- Left column: Core Metrics -->
+                            <div style="background: #f8fafc; border-radius: 4px; padding: 6px 8px;">
+                                <table style="width: 100%; border-collapse: collapse; font-size: 11px; table-layout: fixed;">
+                                    <colgroup>
+                                        <col style="width: 38%;">
+                                        <col style="width: 24%;">
+                                        <col style="width: 19%;">
+                                        <col style="width: 19%;">
+                                    </colgroup>
+                                    <thead>
+                                        <tr>
+                                            <th style="text-align: left; font-weight: 500; color: #64748b; padding: 2px 4px; border-bottom: 1px solid #e2e8f0;">Metric</th>
+                                            <th style="text-align: right; font-weight: 500; color: #64748b; padding: 2px 4px; border-bottom: 1px solid #e2e8f0;">Current</th>
+                                            <th style="text-align: right; font-weight: 500; color: #64748b; padding: 2px 4px; border-bottom: 1px solid #e2e8f0;">QoQ</th>
+                                            <th style="text-align: right; font-weight: 500; color: #64748b; padding: 2px 4px; border-bottom: 1px solid #e2e8f0;">YoY</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        
+                                        <tr>
+                                            <td style="padding: 2px 4px; color: #334155; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Total Revenue</td>
+                                            <td style="padding: 2px 4px; text-align: right; font-family: 'Consolas', monospace; font-size: 10px; white-space: nowrap;">$1,100 M</td>
+                                            <td class="delta negative" style="padding: 2px 4px; text-align: right; font-size: 10px; white-space: nowrap;">▼ 8.3%</td>
+                                            <td class="delta negative" style="padding: 2px 4px; text-align: right; font-size: 10px; white-space: nowrap;">▼ 2.0%</td>
+                                        </tr>
+                                        
+                                        <tr>
+                                            <td style="padding: 2px 4px; color: #334155; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Net Income</td>
+                                            <td style="padding: 2px 4px; text-align: right; font-family: 'Consolas', monospace; font-size: 10px; white-space: nowrap;">$320 M</td>
+                                            <td class="delta negative" style="padding: 2px 4px; text-align: right; font-size: 10px; white-space: nowrap;">▼ 10.1%</td>
+                                            <td class="delta positive" style="padding: 2px 4px; text-align: right; font-size: 10px; white-space: nowrap;">▲ 1.2%</td>
+                                        </tr>
+                                        
+                                        <tr>
+                                            <td style="padding: 2px 4px; color: #334155; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Efficiency Ratio</td>
+                                            <td style="padding: 2px 4px; text-align: right; font-family: 'Consolas', monospace; font-size: 10px; white-space: nowrap;">62.8%</td>
+                                            <td class="delta negative" style="padding: 2px 4px; text-align: right; font-size: 10px; white-space: nowrap;">▲ 85bps</td>
+                                            <td class="delta negative" style="padding: 2px 4px; text-align: right; font-size: 10px; white-space: nowrap;">▲ 25bps</td>
+                                        </tr>
+                                        
+                                    </tbody>
+                                </table>
                             </div>
-                            <div style="flex: 1; text-align: center; border-left: 1px solid #e2e8f0;">
-                                <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 4px;">
-                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px; width: 70px;">Net Income</span>
-                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 700; width: 55px;">QoQ</span>
-                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 700; width: 55px;">YoY</span>
-                                </div>
-                                <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
-                                    <span style="font-size: 11px; font-weight: 700; color: var(--text-main); width: 70px;">$320 M</span>
-                                    <span class="delta negative" style="font-size: 11px; width: 55px;">▼ 10.1%</span>
-                                    <span class="delta positive" style="font-size: 11px; width: 55px;">▲ 1.2%</span>
-                                </div>
+                            <!-- Right column: Highlighted Metrics -->
+                            <div style="background: #f8fafc; border-radius: 4px; padding: 6px 8px;">
+                                <table style="width: 100%; border-collapse: collapse; font-size: 11px; table-layout: fixed;">
+                                    <colgroup>
+                                        <col style="width: 38%;">
+                                        <col style="width: 24%;">
+                                        <col style="width: 19%;">
+                                        <col style="width: 19%;">
+                                    </colgroup>
+                                    <thead>
+                                        <tr>
+                                            <th style="text-align: left; font-weight: 500; color: #64748b; padding: 2px 4px; border-bottom: 1px solid #e2e8f0;">Metric</th>
+                                            <th style="text-align: right; font-weight: 500; color: #64748b; padding: 2px 4px; border-bottom: 1px solid #e2e8f0;">Current</th>
+                                            <th style="text-align: right; font-weight: 500; color: #64748b; padding: 2px 4px; border-bottom: 1px solid #e2e8f0;">QoQ</th>
+                                            <th style="text-align: right; font-weight: 500; color: #64748b; padding: 2px 4px; border-bottom: 1px solid #e2e8f0;">YoY</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        
+                                        <tr>
+                                            <td style="padding: 2px 4px; color: #334155; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Trading Revenue</td>
+                                            <td style="padding: 2px 4px; text-align: right; font-family: 'Consolas', monospace; font-size: 10px; white-space: nowrap;">$650 M</td>
+                                            <td class="delta negative" style="padding: 2px 4px; text-align: right; font-size: 10px; white-space: nowrap;">▼ 8.3%</td>
+                                            <td class="delta negative" style="padding: 2px 4px; text-align: right; font-size: 10px; white-space: nowrap;">▼ 2.0%</td>
+                                        </tr>
+                                        
+                                        <tr>
+                                            <td style="padding: 2px 4px; color: #334155; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Advisory Fees</td>
+                                            <td style="padding: 2px 4px; text-align: right; font-family: 'Consolas', monospace; font-size: 10px; white-space: nowrap;">$280 M</td>
+                                            <td class="delta positive" style="padding: 2px 4px; text-align: right; font-size: 10px; white-space: nowrap;">▲ 15.2%</td>
+                                            <td class="delta positive" style="padding: 2px 4px; text-align: right; font-size: 10px; white-space: nowrap;">▲ 22.5%</td>
+                                        </tr>
+                                        
+                                        <tr>
+                                            <td style="padding: 2px 4px; color: #334155; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">ROE</td>
+                                            <td style="padding: 2px 4px; text-align: right; font-family: 'Consolas', monospace; font-size: 10px; white-space: nowrap;">15.6%</td>
+                                            <td class="delta negative" style="padding: 2px 4px; text-align: right; font-size: 10px; white-space: nowrap;">▼ 40bps</td>
+                                            <td class="delta positive" style="padding: 2px 4px; text-align: right; font-size: 10px; white-space: nowrap;">▲ 10bps</td>
+                                        </tr>
+                                        
+                                    </tbody>
+                                </table>
                             </div>
-                            <div style="flex: 1; text-align: center; border-left: 1px solid #e2e8f0;">
-                                <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 4px;">
-                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px; width: 70px;">ROE</span>
-                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 700; width: 55px;">QoQ</span>
-                                    <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 700; width: 55px;">YoY</span>
-                                </div>
-                                <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
-                                    <span style="font-size: 11px; font-weight: 700; color: var(--text-main); width: 70px;">15.6%</span>
-                                    <span class="delta negative" style="font-size: 11px; width: 55px;">▼ 40bps</span>
-                                    <span class="delta positive" style="font-size: 11px; width: 55px;">▲ 10bps</span>
-                                </div>
+                        </div>
+                    </div>
+                    
+                    <div class="qa-item" style="padding: 10px 12px; margin-bottom: 8px;">
+                        <!-- Segment header and description -->
+                        <div style="margin-bottom: 6px;">
+                            <div style="margin-bottom: 2px;">
+                                <span style="font-size: 11px; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;">Corporate Support</span>
+                            </div>
+                            <div style="font-size: 11px; color: var(--text-main); line-height: 1.4;">Corporate treasury, technology, and other enterprise functions. Focused on technology investment and operational efficiency improvements.</div>
+                        </div>
+                        <!-- Two-column metrics layout -->
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                            <!-- Left column: Core Metrics -->
+                            <div style="background: #f8fafc; border-radius: 4px; padding: 6px 8px;">
+                                <table style="width: 100%; border-collapse: collapse; font-size: 11px; table-layout: fixed;">
+                                    <colgroup>
+                                        <col style="width: 38%;">
+                                        <col style="width: 24%;">
+                                        <col style="width: 19%;">
+                                        <col style="width: 19%;">
+                                    </colgroup>
+                                    <thead>
+                                        <tr>
+                                            <th style="text-align: left; font-weight: 500; color: #64748b; padding: 2px 4px; border-bottom: 1px solid #e2e8f0;">Metric</th>
+                                            <th style="text-align: right; font-weight: 500; color: #64748b; padding: 2px 4px; border-bottom: 1px solid #e2e8f0;">Current</th>
+                                            <th style="text-align: right; font-weight: 500; color: #64748b; padding: 2px 4px; border-bottom: 1px solid #e2e8f0;">QoQ</th>
+                                            <th style="text-align: right; font-weight: 500; color: #64748b; padding: 2px 4px; border-bottom: 1px solid #e2e8f0;">YoY</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        
+                                        <tr>
+                                            <td style="padding: 2px 4px; color: #334155; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Total Revenue</td>
+                                            <td style="padding: 2px 4px; text-align: right; font-family: 'Consolas', monospace; font-size: 10px; white-space: nowrap;">$85 M</td>
+                                            <td class="delta negative" style="padding: 2px 4px; text-align: right; font-size: 10px; white-space: nowrap;">▼ 12.5%</td>
+                                            <td class="delta negative" style="padding: 2px 4px; text-align: right; font-size: 10px; white-space: nowrap;">▼ 18.2%</td>
+                                        </tr>
+                                        
+                                        <tr>
+                                            <td style="padding: 2px 4px; color: #334155; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Net Income</td>
+                                            <td style="padding: 2px 4px; text-align: right; font-family: 'Consolas', monospace; font-size: 10px; white-space: nowrap;">-$120 M</td>
+                                            <td class="delta negative" style="padding: 2px 4px; text-align: right; font-size: 10px; white-space: nowrap;">▼ 8.2%</td>
+                                            <td class="delta negative" style="padding: 2px 4px; text-align: right; font-size: 10px; white-space: nowrap;">▼ 15.5%</td>
+                                        </tr>
+                                        
+                                        <tr>
+                                            <td style="padding: 2px 4px; color: #334155; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Efficiency Ratio</td>
+                                            <td style="padding: 2px 4px; text-align: right; font-family: 'Consolas', monospace; font-size: 10px; white-space: nowrap;">N/A</td>
+                                            <td class="delta neutral" style="padding: 2px 4px; text-align: right; font-size: 10px; white-space: nowrap;">—</td>
+                                            <td class="delta neutral" style="padding: 2px 4px; text-align: right; font-size: 10px; white-space: nowrap;">—</td>
+                                        </tr>
+                                        
+                                    </tbody>
+                                </table>
+                            </div>
+                            <!-- Right column: Highlighted Metrics -->
+                            <div style="background: #f8fafc; border-radius: 4px; padding: 6px 8px;">
+                                <table style="width: 100%; border-collapse: collapse; font-size: 11px; table-layout: fixed;">
+                                    <colgroup>
+                                        <col style="width: 38%;">
+                                        <col style="width: 24%;">
+                                        <col style="width: 19%;">
+                                        <col style="width: 19%;">
+                                    </colgroup>
+                                    <thead>
+                                        <tr>
+                                            <th style="text-align: left; font-weight: 500; color: #64748b; padding: 2px 4px; border-bottom: 1px solid #e2e8f0;">Metric</th>
+                                            <th style="text-align: right; font-weight: 500; color: #64748b; padding: 2px 4px; border-bottom: 1px solid #e2e8f0;">Current</th>
+                                            <th style="text-align: right; font-weight: 500; color: #64748b; padding: 2px 4px; border-bottom: 1px solid #e2e8f0;">QoQ</th>
+                                            <th style="text-align: right; font-weight: 500; color: #64748b; padding: 2px 4px; border-bottom: 1px solid #e2e8f0;">YoY</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        
+                                        <tr>
+                                            <td style="padding: 2px 4px; color: #334155; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Tech Expense</td>
+                                            <td style="padding: 2px 4px; text-align: right; font-family: 'Consolas', monospace; font-size: 10px; white-space: nowrap;">$420 M</td>
+                                            <td class="delta negative" style="padding: 2px 4px; text-align: right; font-size: 10px; white-space: nowrap;">▲ 3.5%</td>
+                                            <td class="delta negative" style="padding: 2px 4px; text-align: right; font-size: 10px; white-space: nowrap;">▲ 8.2%</td>
+                                        </tr>
+                                        
+                                        <tr>
+                                            <td style="padding: 2px 4px; color: #334155; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Operating Costs</td>
+                                            <td style="padding: 2px 4px; text-align: right; font-family: 'Consolas', monospace; font-size: 10px; white-space: nowrap;">$580 M</td>
+                                            <td class="delta negative" style="padding: 2px 4px; text-align: right; font-size: 10px; white-space: nowrap;">▲ 1.8%</td>
+                                            <td class="delta negative" style="padding: 2px 4px; text-align: right; font-size: 10px; white-space: nowrap;">▲ 4.5%</td>
+                                        </tr>
+                                        
+                                        <tr>
+                                            <td style="padding: 2px 4px; color: #334155; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">FTE Count</td>
+                                            <td style="padding: 2px 4px; text-align: right; font-family: 'Consolas', monospace; font-size: 10px; white-space: nowrap;">12,450</td>
+                                            <td class="delta positive" style="padding: 2px 4px; text-align: right; font-size: 10px; white-space: nowrap;">▲ 1.2%</td>
+                                            <td class="delta positive" style="padding: 2px 4px; text-align: right; font-size: 10px; white-space: nowrap;">▲ 3.8%</td>
+                                        </tr>
+                                        
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
                     </div>
@@ -1318,8 +1708,49 @@
             const yMin = min - padding;
             const yMax = max + padding;
 
-            // Format number for display
-            const fmt = (v) => v.toFixed(decimal_places);
+            // Format value for display - matches Python format_metric_value logic
+            // unit: "$M" for millions, "%" for percentage
+            // Uses up to 2 decimal places, strips trailing zeros
+            const stripTrailingZeros = (s) => s.replace(/\.?0+$/, '');
+
+            const formatValue = (v, forAxis = false) => {
+                if (unit === '%') {
+                    // Percentage: keep decimals, add % suffix
+                    return v.toFixed(decimal_places) + '%';
+                } else if (unit === '$M') {
+                    // Currency in millions - up to 2 decimal places, strip trailing zeros
+                    if (Math.abs(v) >= 1000) {
+                        // Convert to billions: $X.XX B (strip .00)
+                        return '$' + stripTrailingZeros((v / 1000).toFixed(2)) + ' B';
+                    } else {
+                        // Keep as millions: $X.XX M (strip .00)
+                        return '$' + stripTrailingZeros(v.toFixed(2)) + ' M';
+                    }
+                } else {
+                    // Default: format with commas and decimals
+                    if (Math.abs(v) >= 1000) {
+                        return v.toLocaleString('en-US', {maximumFractionDigits: decimal_places});
+                    } else {
+                        return v.toFixed(decimal_places);
+                    }
+                }
+            };
+
+            // Compact format for chart data point labels (no $ prefix for cleaner display)
+            const formatChartLabel = (v) => {
+                if (unit === '%') {
+                    return v.toFixed(decimal_places);
+                } else if (unit === '$M') {
+                    // Currency - up to 2 decimal places, strip trailing zeros
+                    if (Math.abs(v) >= 1000) {
+                        return stripTrailingZeros((v / 1000).toFixed(2)) + 'B';
+                    } else {
+                        return stripTrailingZeros(v.toFixed(2)) + 'M';
+                    }
+                } else {
+                    return v.toLocaleString('en-US', {maximumFractionDigits: decimal_places});
+                }
+            };
 
             // Calculate Y coordinate (inverted because SVG y=0 is top)
             const yCoord = (v) => 100 - ((v - yMin) / (yMax - yMin)) * 100;
@@ -1351,24 +1782,24 @@
             // Build value labels - positioned above the data points
             const valueLabels = values.map((v, i) => {
                 let color = '#64748b';
-                let fontSize = '10px';
+                let fontSize = '9px';
                 let fontWeight = 'normal';
-                if (i === minIdx) { color = '#dc2626'; fontSize = '12px'; fontWeight = '700'; }
-                if (i === maxIdx) { color = '#16a34a'; fontSize = '12px'; fontWeight = '700'; }
-                if (i === values.length - 1) { color = '#005587'; fontSize = '12px'; fontWeight = '700'; }
+                if (i === minIdx) { color = '#dc2626'; fontSize = '10px'; fontWeight = '700'; }
+                if (i === maxIdx) { color = '#16a34a'; fontSize = '10px'; fontWeight = '700'; }
+                if (i === values.length - 1) { color = '#005587'; fontSize = '10px'; fontWeight = '700'; }
                 const topPercent = yCoord(v) - 18; // Offset to position labels well above data points
-                return `<div style="position: absolute; left: ${xPercents[i]}%; top: ${topPercent}%; transform: translateX(-50%); font-size: ${fontSize}; color: ${color}; font-weight: ${fontWeight};">${fmt(v)}</div>`;
+                return `<div style="position: absolute; left: ${xPercents[i]}%; top: ${topPercent}%; transform: translateX(-50%); font-size: ${fontSize}; color: ${color}; font-weight: ${fontWeight}; white-space: nowrap;">${formatChartLabel(v)}</div>`;
             }).join('');
 
-            // Build quarter labels
+            // Build quarter labels - use white-space: nowrap to prevent wrapping
             const quarterLabels = quarters.map((q, i) =>
-                `<span style="position: absolute; left: ${xPercents[i]}%; transform: translateX(-50%); font-size: 9px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700;">${q}</span>`
+                `<span style="position: absolute; left: ${xPercents[i]}%; transform: translateX(-50%); font-size: 9px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.3px; font-weight: 700; white-space: nowrap;">${q}</span>`
             ).join('');
 
-            // Y-axis labels
-            const yAxisTop = fmt(yMax);
-            const yAxisMid = fmt((yMin + yMax) / 2);
-            const yAxisBottom = fmt(yMin);
+            // Y-axis labels with proper formatting
+            const yAxisTop = formatValue(yMax, true);
+            const yAxisMid = formatValue((yMin + yMax) / 2, true);
+            const yAxisBottom = formatValue(yMin, true);
 
             // Average line Y position
             const avgY = yCoord(avg);
@@ -1380,9 +1811,9 @@
 
                 <div style="position: relative; flex: 1; min-height: 80px;">
                     <!-- Y-axis labels -->
-                    <div style="position: absolute; left: -5px; top: 0; font-size: 9px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700;">${yAxisTop}${unit}</div>
-                    <div style="position: absolute; left: -5px; top: 45%; font-size: 9px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700;">${yAxisMid}${unit}</div>
-                    <div style="position: absolute; left: -5px; bottom: 0; font-size: 9px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700;">${yAxisBottom}${unit}</div>
+                    <div style="position: absolute; left: -5px; top: 0; font-size: 8px; color: #94a3b8; letter-spacing: 0.3px; font-weight: 600; white-space: nowrap;">${yAxisTop}</div>
+                    <div style="position: absolute; left: -5px; top: 45%; font-size: 8px; color: #94a3b8; letter-spacing: 0.3px; font-weight: 600; white-space: nowrap;">${yAxisMid}</div>
+                    <div style="position: absolute; left: -5px; bottom: 0; font-size: 8px; color: #94a3b8; letter-spacing: 0.3px; font-weight: 600; white-space: nowrap;">${yAxisBottom}</div>
 
                     <!-- Grid lines -->
                     <div style="position: absolute; width: 100%; height: 100%; left: 0; top: 0;">
@@ -1411,28 +1842,28 @@
                 </div>
 
                 <!-- X-axis labels -->
-                <div style="position: relative; margin: 5px 0; height: 12px;">
+                <div style="position: relative; margin: 5px 0; height: 14px; overflow: visible;">
                     ${quarterLabels}
                 </div>
 
                 <!-- Bottom summary stats -->
                 <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #f0f4f8;">
                     <div style="display: flex; justify-content: center; gap: 0;">
-                        <div style="text-align: center; padding: 0 24px; border-right: 1px solid #e2e8f0;">
+                        <div style="text-align: center; padding: 0 16px; border-right: 1px solid #e2e8f0;">
                             <span class="change-label">Low</span>
-                            <span class="delta neg">${fmt(min)}${unit}</span>
+                            <span class="delta neg" style="white-space: nowrap;">${formatValue(min)}</span>
                         </div>
-                        <div style="text-align: center; padding: 0 24px; border-right: 1px solid #e2e8f0;">
+                        <div style="text-align: center; padding: 0 16px; border-right: 1px solid #e2e8f0;">
                             <span class="change-label">Avg</span>
-                            <span class="delta" style="color: #f59e0b;">${fmt(avg)}${unit}</span>
+                            <span class="delta" style="color: #f59e0b; white-space: nowrap;">${formatValue(avg)}</span>
                         </div>
-                        <div style="text-align: center; padding: 0 24px; border-right: 1px solid #e2e8f0;">
+                        <div style="text-align: center; padding: 0 16px; border-right: 1px solid #e2e8f0;">
                             <span class="change-label">High</span>
-                            <span class="delta pos">${fmt(max)}${unit}</span>
+                            <span class="delta pos" style="white-space: nowrap;">${formatValue(max)}</span>
                         </div>
-                        <div style="text-align: center; padding: 0 24px;">
+                        <div style="text-align: center; padding: 0 16px;">
                             <span class="change-label">Current</span>
-                            <span class="delta" style="color: #005587;">${fmt(current)}${unit}</span>
+                            <span class="delta" style="color: #005587; white-space: nowrap;">${formatValue(current)}</span>
                         </div>
                     </div>
                 </div>

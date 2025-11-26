@@ -1,0 +1,35 @@
+{
+  "source": "Supp Pack",
+  "metrics": [
+    {
+      "label": "NIM",
+      "value": "2.45%",
+      "qoq": { "value": 3, "direction": "negative", "display": "▼ 3bps" },
+      "yoy": { "value": 8, "direction": "negative", "display": "▼ 8bps" }
+    },
+    {
+      "label": "Loan Growth",
+      "value": "+5.2%",
+      "qoq": { "value": 0.8, "direction": "positive", "display": "▲ 0.8%" },
+      "yoy": { "value": 2.1, "direction": "positive", "display": "▲ 2.1%" }
+    },
+    {
+      "label": "PCL Ratio",
+      "value": "0.25%",
+      "qoq": { "value": 2, "direction": "negative", "display": "▲ 2bps" },
+      "yoy": { "value": 5, "direction": "negative", "display": "▲ 5bps" }
+    },
+    {
+      "label": "AUM Growth",
+      "value": "+14.2%",
+      "qoq": { "value": 4.5, "direction": "positive", "display": "▲ 4.5%" },
+      "yoy": { "value": 14.2, "direction": "positive", "display": "▲ 14.2%" }
+    },
+    {
+      "label": "Book Value",
+      "value": "$85.20",
+      "qoq": { "value": 2.3, "direction": "positive", "display": "▲ 2.3%" },
+      "yoy": { "value": 8.5, "direction": "positive", "display": "▲ 8.5%" }
+    }
+  ]
+}
