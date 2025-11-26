@@ -35,8 +35,66 @@ TARGET_METRICS = [
 ]
 
 
-async def get_enterprise_parameters() -> List[Dict[str, Any]]:
-    """Fetch all Enterprise segment parameters for RBC Q3 2025."""
+async def explore_table_data() -> None:
+    """Explore what data exists in the benchmarking_report table."""
+    print("\n🔍 Exploring benchmarking_report table...")
+
+    try:
+        async with get_connection() as conn:
+            # Check distinct bank symbols
+            result = await conn.execute(
+                text('SELECT DISTINCT "bank_symbol" FROM benchmarking_report LIMIT 10')
+            )
+            symbols = [row[0] for row in result.fetchall()]
+            print(f"\n   Bank symbols: {symbols}")
+
+            # Check distinct fiscal years
+            result = await conn.execute(
+                text('SELECT DISTINCT "fiscal_year" FROM benchmarking_report ORDER BY 1 DESC LIMIT 5')
+            )
+            years = [row[0] for row in result.fetchall()]
+            print(f"   Fiscal years: {years}")
+
+            # Check distinct quarters
+            result = await conn.execute(
+                text('SELECT DISTINCT "quarter" FROM benchmarking_report')
+            )
+            quarters = [row[0] for row in result.fetchall()]
+            print(f"   Quarters: {quarters}")
+
+            # Check distinct platforms
+            result = await conn.execute(
+                text('SELECT DISTINCT "Platform" FROM benchmarking_report')
+            )
+            platforms = [row[0] for row in result.fetchall()]
+            print(f"   Platforms: {platforms}")
+
+            # Check latest data for RY
+            result = await conn.execute(
+                text("""
+                    SELECT DISTINCT "bank_symbol", "fiscal_year", "quarter", "Platform"
+                    FROM benchmarking_report
+                    WHERE "bank_symbol" LIKE '%RY%' OR "bank_symbol" LIKE '%Royal%'
+                    ORDER BY "fiscal_year" DESC, "quarter" DESC
+                    LIMIT 10
+                """)
+            )
+            rows = result.fetchall()
+            if rows:
+                print(f"\n   RBC data available:")
+                for row in rows:
+                    print(f"      {row[0]} | {row[1]} {row[2]} | {row[3]}")
+    except Exception as e:
+        print(f"\n❌ Error exploring table: {e}")
+
+
+async def get_enterprise_parameters(
+    bank_symbol: str = "RY",
+    fiscal_year: int = 2025,
+    quarter: str = "Q2",
+    platform: str = "Enterprise"
+) -> List[Dict[str, Any]]:
+    """Fetch all Enterprise segment parameters for specified bank/period."""
 
     try:
         async with get_connection() as conn:
@@ -50,13 +108,19 @@ async def get_enterprise_parameters() -> List[Dict[str, Any]]:
                         "QoQ" as qoq,
                         "YoY" as yoy
                     FROM benchmarking_report
-                    WHERE "bank_symbol" = 'RY'
-                      AND "fiscal_year" = 2025
-                      AND "quarter" = 'Q3'
-                      AND "Platform" = 'Enterprise'
+                    WHERE "bank_symbol" = :bank_symbol
+                      AND "fiscal_year" = :fiscal_year
+                      AND "quarter" = :quarter
+                      AND "Platform" = :platform
                     ORDER BY "Parameter"
                     """
-                )
+                ),
+                {
+                    "bank_symbol": bank_symbol,
+                    "fiscal_year": fiscal_year,
+                    "quarter": quarter,
+                    "platform": platform,
+                },
             )
             rows = result.fetchall()
             return [dict(row._mapping) for row in rows]
@@ -223,12 +287,21 @@ async def main():
         "auth_config": auth_config,
     }
 
-    # Get available parameters
-    print("\n📊 Fetching Enterprise parameters from database...")
-    params = await get_enterprise_parameters()
+    # First explore what's in the table
+    await explore_table_data()
+
+    # Get available parameters - adjust these based on what explore_table_data shows
+    bank_symbol = "RY"
+    fiscal_year = 2025
+    quarter = "Q2"
+    platform = "Enterprise"
+
+    print(f"\n📊 Fetching parameters for {bank_symbol} {quarter} {fiscal_year} ({platform})...")
+    params = await get_enterprise_parameters(bank_symbol, fiscal_year, quarter, platform)
 
     if not params:
-        print("\n⚠️  No parameters found. Cannot proceed with metric matching.")
+        print("\n⚠️  No parameters found with these filters.")
+        print("   Check the explore output above and adjust the query parameters.")
         return
 
     print(f"\n✅ Found {len(params)} parameters:\n")
