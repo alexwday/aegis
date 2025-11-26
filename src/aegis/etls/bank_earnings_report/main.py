@@ -449,6 +449,7 @@ async def extract_all_sections(
         select_top_segment_metrics,
         MONITORED_PLATFORMS,
         SEGMENT_METADATA,
+        CORE_SEGMENT_METRICS,
     )
 
     execution_id = context.get("execution_id")
@@ -701,7 +702,17 @@ async def extract_all_sections(
         )
 
         if segment_metrics:
-            # Use LLM to select top 3 metrics for this segment
+            # Build lookup for core metrics
+            metrics_by_name = {m["parameter"]: m for m in segment_metrics}
+
+            # Get core metrics (Revenue, Net Income, Efficiency Ratio)
+            core_metrics_data = []
+            for core_name in CORE_SEGMENT_METRICS:
+                if core_name in metrics_by_name:
+                    core_metrics_data.append(metrics_by_name[core_name])
+
+            # Use LLM to select top 3 highlighted metrics for this segment
+            # Exclude core metrics from LLM selection
             selection = await select_top_segment_metrics(
                 metrics=segment_metrics,
                 segment_name=platform,
@@ -715,6 +726,7 @@ async def extract_all_sections(
             # Store debug info
             segment_debug["segment_selections"][platform] = {
                 "available_metrics": len(segment_metrics),
+                "core_metrics": [m["parameter"] for m in core_metrics_data],
                 "selected_metrics": selection.get("selected_metrics", []),
                 "reasoning": selection.get("reasoning", ""),
             }
@@ -726,11 +738,12 @@ async def extract_all_sections(
                 "description", f"Performance metrics for {platform} segment."
             )
 
-            # Format the segment entry
+            # Format the segment entry with both core and highlighted metrics
             segment_entry = format_segment_json(
                 segment_name=platform,
                 description=description,
-                selected_metrics=selection.get("metrics_data", []),
+                core_metrics=core_metrics_data,
+                highlighted_metrics=selection.get("metrics_data", []),
             )
             segment_entries.append(segment_entry)
 
@@ -738,7 +751,8 @@ async def extract_all_sections(
                 "etl.bank_earnings_report.segment_complete",
                 execution_id=execution_id,
                 segment=platform,
-                metrics_selected=len(selection.get("metrics_data", [])),
+                core_metrics=len(core_metrics_data),
+                highlighted_metrics=len(selection.get("metrics_data", [])),
             )
         else:
             logger.warning(

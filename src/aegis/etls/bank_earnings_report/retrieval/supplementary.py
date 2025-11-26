@@ -1022,35 +1022,45 @@ def format_segment_metric_display(
 def format_segment_json(
     segment_name: str,
     description: str,
-    selected_metrics: List[Dict[str, Any]],
+    core_metrics: List[Dict[str, Any]],
+    highlighted_metrics: List[Dict[str, Any]],
 ) -> Dict[str, Any]:
     """
-    Format a segment entry with its highlighted metrics for the template.
+    Format a segment entry with core and highlighted metrics for the template.
 
-    The output structure matches the expected 4_segments.json format but with
-    dynamic metrics instead of fixed revenue/net_income/roe.
+    The output has two metric lists:
+    - core_metrics: Fixed metrics (Revenue, Net Income, Efficiency Ratio)
+    - highlighted_metrics: LLM-selected segment-specific metrics
 
     Args:
         segment_name: Normalized segment name (e.g., "Canadian P&C")
         description: Segment description (from RTS or placeholder)
-        selected_metrics: List of 3 metric dicts selected by LLM
+        core_metrics: List of core metric dicts (Revenue, Net Income, Efficiency Ratio)
+        highlighted_metrics: List of 3 metric dicts selected by LLM
 
     Returns:
         Formatted segment entry:
         {
             "name": "Canadian P&C",
             "description": "...",
-            "metrics": [
+            "core_metrics": [
                 {"label": "Total Revenue", "value": "$4,200 M", "qoq": {...}, "yoy": {...}},
-                {"label": "Net Interest Margin", "value": "2.45%", "qoq": {...}, "yoy": {...}},
+                {"label": "Net Income", "value": "$1,200 M", "qoq": {...}, "yoy": {...}},
                 {"label": "Efficiency Ratio", "value": "52.3%", "qoq": {...}, "yoy": {...}}
+            ],
+            "highlighted_metrics": [
+                {"label": "NIM", "value": "2.45%", "qoq": {...}, "yoy": {...}},
+                {"label": "Loan Growth", "value": "+5.2%", "qoq": {...}, "yoy": {...}},
+                {"label": "PCL Ratio", "value": "0.25%", "qoq": {...}, "yoy": {...}}
             ]
         }
     """
-    formatted_metrics = [format_segment_metric_display(m) for m in selected_metrics]
+    formatted_core = [format_segment_metric_display(m) for m in core_metrics]
+    formatted_highlighted = [format_segment_metric_display(m) for m in highlighted_metrics]
 
     return {
         "name": segment_name,
         "description": description,
-        "metrics": formatted_metrics,
+        "core_metrics": formatted_core,
+        "highlighted_metrics": formatted_highlighted,
     }

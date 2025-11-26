@@ -741,8 +741,8 @@
 
         <!-- ============================================
              SECTION 4: Segment Performance
-             DATA SOURCE: 4_segments.json (entries array with name, description, revenue, net_income, roe)
-             NOTE: Variable-length list of business segments with metrics
+             DATA SOURCE: 4_segments.json (entries array with name, description, core_metrics, highlighted_metrics)
+             NOTE: Variable-length list of business segments with two metric columns
              ============================================ -->
         <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px;">
             <div class="card">
@@ -760,43 +760,62 @@
                     {% for segment in _4_segments.entries %}
                     <div class="qa-item">
                         <!-- Segment header and description -->
-                        <div style="margin-bottom: 8px;">
+                        <div style="margin-bottom: 12px;">
                             <div style="margin-bottom: 4px;">
                                 <span style="font-size: 11px; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;">{{ segment.name }}</span>
                             </div>
                             <div style="font-size: 12px; color: var(--text-main); line-height: 1.5;">{{ segment.description }}</div>
                         </div>
-                        <!-- Metrics row - 9-column grid (3 metrics x 3 values each) with dividers -->
-                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 20px 1fr 1fr 1fr 20px 1fr 1fr 1fr; border-top: 1px solid #e2e8f0; padding-top: 10px; gap: 4px 4px;">
-                            {% for metric in segment.metrics %}
-                            <!-- Metric title spanning 3 columns -->
-                            <div style="grid-column: span 3; text-align: center; font-size: 10px; color: var(--accent); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700; margin-bottom: 4px;">{{ metric.label }}</div>
-                            {% if not loop.last %}
-                            <!-- Divider placeholder for title row -->
-                            <div></div>
-                            {% endif %}
-                            {% endfor %}
-
-                            {% for metric in segment.metrics %}
-                            <!-- Labels: Current, QoQ, YoY -->
-                            <div style="text-align: center; font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700;">Current</div>
-                            <div style="text-align: center; font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700;">QoQ</div>
-                            <div style="text-align: center; font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700;">YoY</div>
-                            {% if not loop.last %}
-                            <!-- Vertical divider -->
-                            <div style="border-left: 1px solid #e2e8f0; grid-row: span 2; justify-self: center;"></div>
-                            {% endif %}
-                            {% endfor %}
-
-                            {% for metric in segment.metrics %}
-                            <!-- Values -->
-                            <div style="text-align: center; font-size: 12px; font-weight: 700; color: var(--text-main);">{{ metric.value }}</div>
-                            <div class="delta {{ metric.qoq.direction }}" style="text-align: center; font-size: 11px;">{{ metric.qoq.display }}</div>
-                            <div class="delta {{ metric.yoy.direction }}" style="text-align: center; font-size: 11px;">{{ metric.yoy.display }}</div>
-                            {% if not loop.last %}
-                            <!-- Divider continues from above -->
-                            {% endif %}
-                            {% endfor %}
+                        <!-- Two-column metrics layout -->
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; border-top: 1px solid #e2e8f0; padding-top: 12px;">
+                            <!-- Left column: Core Metrics -->
+                            <div style="background: #f8fafc; border-radius: 6px; padding: 10px;">
+                                <div style="font-size: 11px; font-weight: 600; color: #475569; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid #e2e8f0;">Core Metrics</div>
+                                <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+                                    <thead>
+                                        <tr>
+                                            <th style="text-align: left; font-weight: 500; color: #64748b; padding: 4px 6px; border-bottom: 1px solid #e2e8f0;">Metric</th>
+                                            <th style="text-align: right; font-weight: 500; color: #64748b; padding: 4px 6px; border-bottom: 1px solid #e2e8f0; width: 65px;">Current</th>
+                                            <th style="text-align: right; font-weight: 500; color: #64748b; padding: 4px 6px; border-bottom: 1px solid #e2e8f0; width: 55px;">QoQ</th>
+                                            <th style="text-align: right; font-weight: 500; color: #64748b; padding: 4px 6px; border-bottom: 1px solid #e2e8f0; width: 55px;">YoY</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for metric in segment.core_metrics %}
+                                        <tr>
+                                            <td style="padding: 6px; color: #334155;">{{ metric.label }}</td>
+                                            <td style="padding: 6px; text-align: right; font-family: 'Consolas', monospace; font-size: 11px;">{{ metric.value }}</td>
+                                            <td class="delta {{ metric.qoq.direction }}" style="padding: 6px; text-align: right; font-size: 11px;">{{ metric.qoq.display }}</td>
+                                            <td class="delta {{ metric.yoy.direction }}" style="padding: 6px; text-align: right; font-size: 11px;">{{ metric.yoy.display }}</td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                            <!-- Right column: Highlighted Metrics -->
+                            <div style="background: #f8fafc; border-radius: 6px; padding: 10px;">
+                                <div style="font-size: 11px; font-weight: 600; color: #475569; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid #e2e8f0;">Highlighted Metrics</div>
+                                <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+                                    <thead>
+                                        <tr>
+                                            <th style="text-align: left; font-weight: 500; color: #64748b; padding: 4px 6px; border-bottom: 1px solid #e2e8f0;">Metric</th>
+                                            <th style="text-align: right; font-weight: 500; color: #64748b; padding: 4px 6px; border-bottom: 1px solid #e2e8f0; width: 65px;">Current</th>
+                                            <th style="text-align: right; font-weight: 500; color: #64748b; padding: 4px 6px; border-bottom: 1px solid #e2e8f0; width: 55px;">QoQ</th>
+                                            <th style="text-align: right; font-weight: 500; color: #64748b; padding: 4px 6px; border-bottom: 1px solid #e2e8f0; width: 55px;">YoY</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for metric in segment.highlighted_metrics %}
+                                        <tr>
+                                            <td style="padding: 6px; color: #334155;">{{ metric.label }}</td>
+                                            <td style="padding: 6px; text-align: right; font-family: 'Consolas', monospace; font-size: 11px;">{{ metric.value }}</td>
+                                            <td class="delta {{ metric.qoq.direction }}" style="padding: 6px; text-align: right; font-size: 11px;">{{ metric.qoq.display }}</td>
+                                            <td class="delta {{ metric.yoy.direction }}" style="padding: 6px; text-align: right; font-size: 11px;">{{ metric.yoy.display }}</td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
                     {% endfor %}

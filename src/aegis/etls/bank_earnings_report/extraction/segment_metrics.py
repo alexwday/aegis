@@ -120,6 +120,15 @@ SEGMENT_METADATA = {
 }
 
 
+# Core metrics to always display for each segment (left column)
+# These are the standard financial performance metrics shown for every segment
+CORE_SEGMENT_METRICS = [
+    "Total Revenue",
+    "Net Income",
+    "Efficiency Ratio",
+]
+
+
 # Metrics that are less relevant for segment-level analysis
 # (These are enterprise-level or capital metrics better shown elsewhere)
 EXCLUDED_SEGMENT_METRICS = [
@@ -182,8 +191,10 @@ def format_segment_metrics_for_llm(
         format_delta_for_llm,
     )
 
-    # Build exclusion set
-    exclude_set = set(exclude_names or []) | set(EXCLUDED_SEGMENT_METRICS)
+    # Build exclusion set - exclude enterprise metrics AND core metrics (shown separately)
+    exclude_set = (
+        set(exclude_names or []) | set(EXCLUDED_SEGMENT_METRICS) | set(CORE_SEGMENT_METRICS)
+    )
 
     # Filter to relevant metrics
     filtered_metrics = [m for m in metrics if m["parameter"] not in exclude_set]
@@ -268,8 +279,8 @@ async def select_top_segment_metrics(
     segment_description = segment_info.get("description", "Business segment")
     key_focus_areas = segment_info.get("key_focus", [])
 
-    # Filter out excluded metrics
-    exclude_set = set(EXCLUDED_SEGMENT_METRICS)
+    # Filter out excluded metrics AND core metrics (shown separately)
+    exclude_set = set(EXCLUDED_SEGMENT_METRICS) | set(CORE_SEGMENT_METRICS)
     available_metrics = [m for m in metrics if m["parameter"] not in exclude_set]
 
     if len(available_metrics) <= num_metrics:
