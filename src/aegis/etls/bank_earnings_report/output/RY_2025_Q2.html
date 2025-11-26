@@ -599,9 +599,24 @@
 
                 <!-- Chart data embedded for JavaScript -->
                 <script id="trend-chart-data" type="application/json">
-                {"data_points": [], "metric_name": "N/A", "units": ""}
+                {"decimal_places": 0, "label": "N/A", "quarters": [], "unit": "", "values": []}
                 </script>
             </div>
+            </div>
+
+            <!-- -------- Subsection 1c: Dynamic Metrics (Slim Tiles) --------
+                 DATA SOURCE: 1_keymetrics_dynamic.json (metrics array - 5 LLM-selected)
+                 SOURCE: Supp Pack
+                 NOTE: Dynamic metrics selected by LLM, displayed directly below main tiles
+                 Width matches main tiles area (flex: 3 out of 5 total)
+            -->
+            <div style="display: flex; gap: 12px; margin-top: 12px;">
+                <!-- Slim tiles container - matches width of main tiles (flex: 3) -->
+                <div style="flex: 3; display: flex; gap: 12px;">
+                    
+                </div>
+                <!-- Empty spacer to match chart area width (flex: 2) -->
+                <div style="flex: 2;"></div>
             </div>
 
             <!-- -------- Subsection 1d: Items of Note --------
@@ -789,8 +804,54 @@
             const yMin = min - padding;
             const yMax = max + padding;
 
-            // Format number for display
-            const fmt = (v) => v.toFixed(decimal_places);
+            // Format value for display - matches Python format_metric_value logic
+            // unit: "$M" for millions, "%" for percentage
+            const formatValue = (v, forAxis = false) => {
+                if (unit === '%') {
+                    // Percentage: keep decimals, add % suffix
+                    return v.toFixed(decimal_places) + '%';
+                } else if (unit === '$M') {
+                    // Currency in millions
+                    if (Math.abs(v) >= 1000) {
+                        // Convert to billions: $X.X B
+                        return '$' + (v / 1000).toFixed(1) + ' B';
+                    } else if (Math.abs(v) >= 1) {
+                        // Keep as millions with commas: $X,XXX M
+                        // For axis labels, use shorter format
+                        if (forAxis) {
+                            return '$' + v.toLocaleString('en-US', {maximumFractionDigits: 0}) + ' M';
+                        }
+                        return '$' + v.toLocaleString('en-US', {maximumFractionDigits: 0}) + ' M';
+                    } else {
+                        // Small number (less than 1 million), keep decimals
+                        return '$' + v.toFixed(decimal_places) + ' M';
+                    }
+                } else {
+                    // Default: format with commas and decimals
+                    if (Math.abs(v) >= 1000) {
+                        return v.toLocaleString('en-US', {maximumFractionDigits: decimal_places});
+                    } else {
+                        return v.toFixed(decimal_places);
+                    }
+                }
+            };
+
+            // Compact format for chart data point labels (no unit suffix, just the number)
+            const formatChartLabel = (v) => {
+                if (unit === '%') {
+                    return v.toFixed(decimal_places);
+                } else if (unit === '$M') {
+                    if (Math.abs(v) >= 1000) {
+                        return (v / 1000).toFixed(1) + 'B';
+                    } else if (Math.abs(v) >= 1) {
+                        return v.toLocaleString('en-US', {maximumFractionDigits: 0}) + 'M';
+                    } else {
+                        return v.toFixed(decimal_places);
+                    }
+                } else {
+                    return v.toLocaleString('en-US', {maximumFractionDigits: decimal_places});
+                }
+            };
 
             // Calculate Y coordinate (inverted because SVG y=0 is top)
             const yCoord = (v) => 100 - ((v - yMin) / (yMax - yMin)) * 100;
@@ -822,24 +883,24 @@
             // Build value labels - positioned above the data points
             const valueLabels = values.map((v, i) => {
                 let color = '#64748b';
-                let fontSize = '10px';
+                let fontSize = '9px';
                 let fontWeight = 'normal';
-                if (i === minIdx) { color = '#dc2626'; fontSize = '12px'; fontWeight = '700'; }
-                if (i === maxIdx) { color = '#16a34a'; fontSize = '12px'; fontWeight = '700'; }
-                if (i === values.length - 1) { color = '#005587'; fontSize = '12px'; fontWeight = '700'; }
+                if (i === minIdx) { color = '#dc2626'; fontSize = '10px'; fontWeight = '700'; }
+                if (i === maxIdx) { color = '#16a34a'; fontSize = '10px'; fontWeight = '700'; }
+                if (i === values.length - 1) { color = '#005587'; fontSize = '10px'; fontWeight = '700'; }
                 const topPercent = yCoord(v) - 18; // Offset to position labels well above data points
-                return `<div style="position: absolute; left: ${xPercents[i]}%; top: ${topPercent}%; transform: translateX(-50%); font-size: ${fontSize}; color: ${color}; font-weight: ${fontWeight};">${fmt(v)}</div>`;
+                return `<div style="position: absolute; left: ${xPercents[i]}%; top: ${topPercent}%; transform: translateX(-50%); font-size: ${fontSize}; color: ${color}; font-weight: ${fontWeight}; white-space: nowrap;">${formatChartLabel(v)}</div>`;
             }).join('');
 
-            // Build quarter labels
+            // Build quarter labels - use white-space: nowrap to prevent wrapping
             const quarterLabels = quarters.map((q, i) =>
-                `<span style="position: absolute; left: ${xPercents[i]}%; transform: translateX(-50%); font-size: 9px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700;">${q}</span>`
+                `<span style="position: absolute; left: ${xPercents[i]}%; transform: translateX(-50%); font-size: 9px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.3px; font-weight: 700; white-space: nowrap;">${q}</span>`
             ).join('');
 
-            // Y-axis labels
-            const yAxisTop = fmt(yMax);
-            const yAxisMid = fmt((yMin + yMax) / 2);
-            const yAxisBottom = fmt(yMin);
+            // Y-axis labels with proper formatting
+            const yAxisTop = formatValue(yMax, true);
+            const yAxisMid = formatValue((yMin + yMax) / 2, true);
+            const yAxisBottom = formatValue(yMin, true);
 
             // Average line Y position
             const avgY = yCoord(avg);
@@ -851,9 +912,9 @@
 
                 <div style="position: relative; flex: 1; min-height: 80px;">
                     <!-- Y-axis labels -->
-                    <div style="position: absolute; left: -5px; top: 0; font-size: 9px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700;">${yAxisTop}${unit}</div>
-                    <div style="position: absolute; left: -5px; top: 45%; font-size: 9px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700;">${yAxisMid}${unit}</div>
-                    <div style="position: absolute; left: -5px; bottom: 0; font-size: 9px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700;">${yAxisBottom}${unit}</div>
+                    <div style="position: absolute; left: -5px; top: 0; font-size: 8px; color: #94a3b8; letter-spacing: 0.3px; font-weight: 600; white-space: nowrap;">${yAxisTop}</div>
+                    <div style="position: absolute; left: -5px; top: 45%; font-size: 8px; color: #94a3b8; letter-spacing: 0.3px; font-weight: 600; white-space: nowrap;">${yAxisMid}</div>
+                    <div style="position: absolute; left: -5px; bottom: 0; font-size: 8px; color: #94a3b8; letter-spacing: 0.3px; font-weight: 600; white-space: nowrap;">${yAxisBottom}</div>
 
                     <!-- Grid lines -->
                     <div style="position: absolute; width: 100%; height: 100%; left: 0; top: 0;">
@@ -882,28 +943,28 @@
                 </div>
 
                 <!-- X-axis labels -->
-                <div style="position: relative; margin: 5px 0; height: 12px;">
+                <div style="position: relative; margin: 5px 0; height: 14px; overflow: visible;">
                     ${quarterLabels}
                 </div>
 
                 <!-- Bottom summary stats -->
                 <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #f0f4f8;">
                     <div style="display: flex; justify-content: center; gap: 0;">
-                        <div style="text-align: center; padding: 0 24px; border-right: 1px solid #e2e8f0;">
+                        <div style="text-align: center; padding: 0 16px; border-right: 1px solid #e2e8f0;">
                             <span class="change-label">Low</span>
-                            <span class="delta neg">${fmt(min)}${unit}</span>
+                            <span class="delta neg" style="white-space: nowrap;">${formatValue(min)}</span>
                         </div>
-                        <div style="text-align: center; padding: 0 24px; border-right: 1px solid #e2e8f0;">
+                        <div style="text-align: center; padding: 0 16px; border-right: 1px solid #e2e8f0;">
                             <span class="change-label">Avg</span>
-                            <span class="delta" style="color: #f59e0b;">${fmt(avg)}${unit}</span>
+                            <span class="delta" style="color: #f59e0b; white-space: nowrap;">${formatValue(avg)}</span>
                         </div>
-                        <div style="text-align: center; padding: 0 24px; border-right: 1px solid #e2e8f0;">
+                        <div style="text-align: center; padding: 0 16px; border-right: 1px solid #e2e8f0;">
                             <span class="change-label">High</span>
-                            <span class="delta pos">${fmt(max)}${unit}</span>
+                            <span class="delta pos" style="white-space: nowrap;">${formatValue(max)}</span>
                         </div>
-                        <div style="text-align: center; padding: 0 24px;">
+                        <div style="text-align: center; padding: 0 16px;">
                             <span class="change-label">Current</span>
-                            <span class="delta" style="color: #005587;">${fmt(current)}${unit}</span>
+                            <span class="delta" style="color: #005587; white-space: nowrap;">${formatValue(current)}</span>
                         </div>
                     </div>
                 </div>

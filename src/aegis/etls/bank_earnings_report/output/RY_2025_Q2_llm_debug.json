@@ -1,5 +1,5 @@
 {
-  "execution_id": "2d1f546b-1ccd-4ee5-9668-edae3afd59fc",
+  "execution_id": "c7a1129f-aebd-4a21-af6d-0d5a9dbdeeb7",
   "bank": "Royal Bank of Canada",
   "period": "Q2 2025",
   "sections": {
@@ -8,7 +8,9 @@
       "chart_metric": "",
       "chart_reasoning": "No metrics available",
       "tile_metrics": [],
-      "tile_reasoning": "No metrics available"
+      "tile_reasoning": "No metrics available",
+      "dynamic_metrics": [],
+      "dynamic_reasoning": "No metrics available"
     }
   }
 }
