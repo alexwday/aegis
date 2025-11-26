@@ -1,10 +1,12 @@
 """
 LLM-based extraction for key metrics selection.
 
-Selects:
-1. One chart metric (chosen based on YoY/QoQ and 5-year trends for impactful visualization)
-2. Six tile metrics (core metrics excluding the chart metric) - Total: 7 key metrics
-3. Five dynamic metrics from REMAINING pool (complementary/noteworthy metrics)
+Process:
+1. FIXED 7 Key Metrics - These are mandatory and always displayed in the main tiles/chart
+   - The LLM must select ONE of these 7 to feature on the 8-quarter trend chart
+   - Selection is based on which metric has the most compelling trend story
+2. DYNAMIC 5 Additional Metrics - Selected from ALL remaining metrics (excluding the 7 key)
+   - LLM chooses based on analytical value and significant trends
 """
 
 import json
@@ -16,39 +18,55 @@ from aegis.utils.settings import config
 
 
 # =============================================================================
-# Chartable Metrics - Pre-approved for 8-quarter trend visualization
+# Fixed Key Metrics - These 7 metrics are ALWAYS shown in the Key Metrics section
 # =============================================================================
 
-# These metrics are appropriate for quarterly trend charts because they:
-# 1. Are consistently reported quarter-to-quarter
-# 2. Show meaningful trends over time
-# 3. Are key metrics analysts track for bank performance
-CHARTABLE_METRICS = [
-    "Net Income",
+# These are the core metrics that analysts expect to see for bank earnings.
+# The LLM does not choose these - they are mandatory.
+# The LLM only decides which ONE of these 7 to feature on the trend chart.
+KEY_METRICS = [
     "Total Revenue",
+    "Net Income",
     "Diluted EPS",
-    "Core Cash Diluted EPS",
     "Return on Equity",
-    "Net Interest Margin",
     "Efficiency Ratio",
+    "Net Interest Margin",
     "Pre-Provision Earnings",
-    "Non-Interest Income",
-    "Net Interest Income",
-    "Operating Leverage",
-    "Loan Growth",
-    "Deposit Growth",
 ]
 
 
-def format_metrics_for_llm(metrics: List[Dict[str, Any]]) -> str:
-    """
-    Format metrics list into a compact table for LLM analysis.
+# =============================================================================
+# Excluded Metrics - Capital/Risk metrics have their own section
+# =============================================================================
 
-    Only includes metric name, value, and change data - no descriptions.
-    LLM uses its own financial knowledge to evaluate importance.
+EXCLUDED_METRICS = [
+    "CET1 Ratio",
+    "CET1 Capital",
+    "Tier 1 Capital Ratio",
+    "Total Capital Ratio",
+    "Leverage Ratio",
+    "RWA",
+    "Risk-Weighted Assets",
+    "LCR",
+    "Liquidity Coverage Ratio",
+    "NSFR",
+    "PCL",
+    "Provision for Credit Losses",
+    "GIL",
+    "Gross Impaired Loans",
+    "Net Impaired Loans",
+    "ACL",
+    "Allowance for Credit Losses",
+]
+
+
+def format_key_metrics_for_llm(metrics: List[Dict[str, Any]], key_metric_names: List[str]) -> str:
+    """
+    Format the 7 fixed key metrics into a table for LLM chart selection.
 
     Args:
         metrics: List of metric dicts from retrieve_all_metrics()
+        key_metric_names: List of the 7 fixed key metric names
 
     Returns:
         Formatted table string for LLM prompt
@@ -70,13 +88,15 @@ def format_metrics_for_llm(metrics: List[Dict[str, Any]]) -> str:
         else:
             return f"{m['actual']:,.2f}"
 
-    # Build a compact table
+    # Filter to only key metrics that exist in the data
+    key_metrics = [m for m in metrics if m["parameter"] in key_metric_names]
+
     lines = [
         "| Metric | Value | QoQ | YoY | 2Y | 3Y | 5Y |",
         "|--------|-------|-----|-----|----|----|----| ",
     ]
 
-    for m in metrics:
+    for m in key_metrics:
         name = m["parameter"]
         val = fmt_val(m)
         qoq = fmt_pct(m["qoq"])
@@ -89,15 +109,15 @@ def format_metrics_for_llm(metrics: List[Dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
-def format_chartable_metrics_for_llm(
-    metrics: List[Dict[str, Any]], chartable_list: List[str]
+def format_remaining_metrics_for_llm(
+    metrics: List[Dict[str, Any]], exclude_names: List[str]
 ) -> str:
     """
-    Format only the chartable metrics into a table for LLM chart selection.
+    Format remaining metrics (excluding key metrics and capital/risk) for LLM selection.
 
     Args:
         metrics: List of metric dicts from retrieve_all_metrics()
-        chartable_list: List of metric names eligible for charting
+        exclude_names: List of metric names to exclude (key metrics + capital/risk)
 
     Returns:
         Formatted table string for LLM prompt
@@ -119,20 +139,27 @@ def format_chartable_metrics_for_llm(
         else:
             return f"{m['actual']:,.2f}"
 
-    # Filter to only chartable metrics that exist in the data
-    chartable_metrics = [m for m in metrics if m["parameter"] in chartable_list]
+    # Filter out excluded metrics
+    exclude_set = set(exclude_names)
+    remaining_metrics = [m for m in metrics if m["parameter"] not in exclude_set]
+
+    if not remaining_metrics:
+        return "No additional metrics available."
 
     lines = [
-        "| Metric | Value | QoQ | YoY |",
-        "|--------|-------|-----|-----|",
+        "| Metric | Value | QoQ | YoY | 2Y | 3Y | 5Y |",
+        "|--------|-------|-----|-----|----|----|----| ",
     ]
 
-    for m in chartable_metrics:
+    for m in remaining_metrics:
         name = m["parameter"]
         val = fmt_val(m)
         qoq = fmt_pct(m["qoq"])
         yoy = fmt_pct(m["yoy"])
-        lines.append(f"| {name} | {val} | {qoq} | {yoy} |")
+        y2 = fmt_pct(m.get("2y"))
+        y3 = fmt_pct(m.get("3y"))
+        y5 = fmt_pct(m.get("5y"))
+        lines.append(f"| {name} | {val} | {qoq} | {yoy} | {y2} | {y3} | {y5} |")
 
     return "\n".join(lines)
 
@@ -147,12 +174,12 @@ async def select_chart_and_tile_metrics(
     num_dynamic_metrics: int = 5,
 ) -> Dict[str, Any]:
     """
-    Use LLM to select metrics for chart, tiles, and dynamic slim tiles in a single call.
+    Use LLM to select chart metric and dynamic metrics for the earnings report.
 
-    Selection order:
-    1. First, select 1 chart metric based on trend analysis (YoY/QoQ and 5-year trends)
-    2. Then, select 6 tile metrics (excluding the chart metric) - Total: 7 key metrics
-    3. Finally, select 5 dynamic metrics from REMAINING metrics (not in the 7)
+    Process:
+    1. The 7 KEY_METRICS are fixed - they MUST all be displayed
+    2. LLM selects ONE of these 7 to feature on the 8-quarter trend chart
+    3. LLM selects 5 ADDITIONAL metrics from the remaining pool for slim tiles
 
     Args:
         metrics: List of metric dicts from retrieve_all_metrics()
@@ -160,14 +187,14 @@ async def select_chart_and_tile_metrics(
         quarter: Quarter (e.g., "Q3")
         fiscal_year: Fiscal year (e.g., 2024)
         context: Execution context with auth_config, ssl_config
-        num_tile_metrics: Number of tile metrics to select (default 6)
+        num_tile_metrics: Number of tile metrics (fixed at 6, plus 1 chart = 7)
         num_dynamic_metrics: Number of dynamic slim tile metrics to select (default 5)
 
     Returns:
         Dict with:
-            - chart_metric: The metric selected for the 8Q trend chart (based on trends)
-            - tile_metrics: List of 6 metrics for the key metrics tiles
-            - dynamic_metrics: List of 5 metrics for the slim tiles row
+            - chart_metric: The metric selected for the 8Q trend chart (from the 7 key metrics)
+            - tile_metrics: The other 6 key metrics (for tiles)
+            - dynamic_metrics: List of 5 additional metrics for slim tiles
             - reasoning: LLM's explanation for selections
             - available_metrics: Count of metrics available
     """
@@ -188,131 +215,120 @@ async def select_chart_and_tile_metrics(
             "prompt": "",
         }
 
-    # Find which chartable metrics exist in the data
+    # Find which key metrics exist in the data
     available_metric_names = {m["parameter"] for m in metrics}
-    available_chartable = [m for m in CHARTABLE_METRICS if m in available_metric_names]
+    available_key_metrics = [m for m in KEY_METRICS if m in available_metric_names]
 
-    if not available_chartable:
+    if not available_key_metrics:
         logger.warning(
-            "etl.bank_earnings_report.no_chartable_metrics",
+            "etl.bank_earnings_report.no_key_metrics_available",
             execution_id=execution_id,
         )
-        available_chartable = list(available_metric_names)[:5]  # Fallback
+        return _fallback_selection(metrics, [], num_tile_metrics, num_dynamic_metrics)
+
+    # Build exclusion list for dynamic metrics (key metrics + capital/risk)
+    exclusion_list = KEY_METRICS + EXCLUDED_METRICS
 
     # Format tables for LLM
-    chartable_table = format_chartable_metrics_for_llm(metrics, available_chartable)
-    all_metrics_table = format_metrics_for_llm(metrics)
+    key_metrics_table = format_key_metrics_for_llm(metrics, available_key_metrics)
+    remaining_metrics_table = format_remaining_metrics_for_llm(metrics, exclusion_list)
 
     # Build the system prompt
-    system_prompt = """You are a senior financial analyst selecting metrics for a bank earnings \
-report.
+    system_prompt = """You are a senior financial analyst preparing a bank quarterly earnings \
+report. Your task is to make two selections based on the data provided.
 
-Your task has THREE parts:
+## TASK 1: Select Chart Metric (from 7 Fixed Key Metrics)
 
-## Part 1: Chart Metric Selection (1 metric)
-Select ONE metric for an 8-quarter trend chart based on trend analysis.
-Analyze the QoQ, YoY, and multi-year trends (2Y, 3Y, 5Y) to identify the metric with:
-- The most compelling trend story (strong growth, notable recovery, significant shift)
-- Meaningful progression that investors should track
-- A visual that highlights a key performance narrative
+You will be given data for 7 KEY METRICS that are ALWAYS displayed in the report:
+- Total Revenue
+- Net Income
+- Diluted EPS
+- Return on Equity
+- Efficiency Ratio
+- Net Interest Margin
+- Pre-Provision Earnings
 
-The chart will show 8 quarters of data - pick the metric whose trend tells the best story.
+Your job is to select ONE of these 7 metrics to feature on an 8-quarter trend chart.
 
-## Part 2: Tile Metrics Selection (6 metrics)
-Select SIX metrics for the key metrics tiles display. These should:
-- Include core earnings metrics (revenue, net income, EPS, ROE)
-- Highlight metrics with notable QoQ or YoY changes
-- Provide a balanced view of the quarter's performance
-- NOT include the chart metric you already selected
+Selection criteria - choose the metric with:
+- The most compelling trend story based on QoQ, YoY, and multi-year (2Y-5Y) changes
+- A pattern that tells a meaningful narrative (strong growth, notable recovery, significant shift)
+- Data that would be most valuable to highlight visually for investors
 
-Together with the chart metric, these 7 metrics form the "Key Metrics" section.
+Analyze the trend data carefully. Look for:
+- Consistent directional movement (sustained growth or decline)
+- Inflection points (recovery after decline, acceleration of growth)
+- Magnitude of changes (large YoY or multi-year movements)
+- Divergence from historical patterns
 
-## Part 3: Dynamic Metrics Selection (5 metrics)
-Select FIVE additional metrics from the REMAINING pool (not from your 7 key metrics above).
-These "Additional Highlights" should:
-- Complement the key metrics with deeper context
-- Highlight noteworthy items that didn't make the top 7
-- Include metrics with significant QoQ/YoY changes worth calling out
-- Show balance sheet health, growth indicators, or operational metrics
+## TASK 2: Select 5 Additional Highlight Metrics (from Remaining Pool)
 
-IMPORTANT: Avoid capital/risk metrics (CET1, RWA, LCR, PCL, GIL) - those have their \
-own section.
+From ALL remaining metrics (excluding the 7 key metrics and capital/risk metrics), \
+select 5 metrics to display as "Additional Highlights" in slim tiles.
 
-Be dynamic in your selections - don't just pick the same metrics every time. Let the actual \
-data guide you to what's most noteworthy this quarter.
+Selection criteria:
+- Metrics that provide valuable context beyond the 7 key metrics
+- Metrics with significant or noteworthy QoQ/YoY trends
+- Metrics that signal important operational or balance sheet dynamics
+- Metrics a financial analyst would find insightful for this quarter
+
+IMPORTANT: Do NOT select any capital or risk metrics (CET1, RWA, LCR, PCL, GIL, etc.) - \
+these have their own dedicated section in the report.
 
 Return EXACTLY the metric names as shown in the tables - do not modify them."""
 
     # Build the user prompt
-    user_prompt = f"""Select metrics for {bank_name}'s {quarter} {fiscal_year} earnings report.
+    user_prompt = f"""Analyze {bank_name}'s {quarter} {fiscal_year} earnings data and make your \
+selections.
 
-## STEP 1: Choose ONE chart metric from these options (analyze trends):
+## THE 7 KEY METRICS (all will be displayed - you choose ONE for the trend chart):
 
-{chartable_table}
+{key_metrics_table}
 
-Analyze the QoQ, YoY columns and pick the metric with the most compelling trend story \
-for an 8-quarter chart.
+Review the QoQ, YoY, and multi-year trend columns. Select the ONE metric that has the most \
+compelling trend story to visualize on an 8-quarter chart.
 
-## STEP 2: Choose SIX tile metrics from the full list (excluding your chart choice):
+## REMAINING METRICS (select 5 for Additional Highlights):
 
-{all_metrics_table}
+{remaining_metrics_table}
 
-Select 6 core metrics that best summarize this quarter's performance.
-These 6 + your chart metric = 7 Key Metrics.
+From this pool, select 5 metrics that would provide valuable additional context for analysts. \
+Focus on metrics with notable trends or significant analytical value.
 
-## STEP 3: Choose FIVE additional dynamic metrics from the REMAINING metrics:
-
-From the metrics NOT selected in Steps 1-2, pick 5 additional noteworthy metrics \
-to highlight as "Additional Highlights" in slim tiles.
-
-Return exact metric names from the tables."""
+Return exact metric names from the tables above."""
 
     # Define the tool for structured output
     tool_definition = {
         "type": "function",
         "function": {
             "name": "select_metrics",
-            "description": "Select chart, tile, and dynamic metrics for the earnings report",
+            "description": "Select chart metric from key metrics and additional highlight metrics",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "chart_metric": {
                         "type": "string",
+                        "enum": available_key_metrics,
                         "description": (
-                            "The ONE metric selected for the 8-quarter trend chart. "
-                            "Chosen based on compelling QoQ/YoY/multi-year trends."
+                            "ONE of the 7 key metrics to feature on the 8-quarter trend chart. "
+                            "Choose based on the most compelling trend story in the data."
                         ),
                     },
                     "chart_reasoning": {
                         "type": "string",
                         "description": (
-                            "Why this metric was chosen for the chart - what trend story "
-                            "does the data show? Reference specific QoQ/YoY/5Y numbers."
-                        ),
-                    },
-                    "tile_metrics": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                        "description": (
-                            "List of 6 metrics for the key metrics tiles. "
-                            "Must NOT include the chart metric."
-                        ),
-                        "minItems": num_tile_metrics,
-                        "maxItems": num_tile_metrics,
-                    },
-                    "tile_reasoning": {
-                        "type": "string",
-                        "description": (
-                            "Why these 6 metrics were selected - what story do they tell "
-                            "about this quarter's performance?"
+                            "Explain why this metric was chosen for the chart. "
+                            "Reference specific trend data (e.g., 'YoY +15.2% with consistent "
+                            "growth across 2Y/3Y/5Y indicates sustained momentum')."
                         ),
                     },
                     "dynamic_metrics": {
                         "type": "array",
                         "items": {"type": "string"},
                         "description": (
-                            f"List of {num_dynamic_metrics} additional metrics from REMAINING "
-                            "pool (not chart or tile metrics) for the slim tiles row."
+                            f"List of exactly {num_dynamic_metrics} additional metrics from the "
+                            "remaining pool to highlight in slim tiles. Do NOT include any of "
+                            "the 7 key metrics or capital/risk metrics."
                         ),
                         "minItems": num_dynamic_metrics,
                         "maxItems": num_dynamic_metrics,
@@ -320,16 +336,14 @@ Return exact metric names from the tables."""
                     "dynamic_reasoning": {
                         "type": "string",
                         "description": (
-                            "Why these 5 additional metrics were selected as highlights - "
-                            "what noteworthy context do they add?"
+                            "Explain why these 5 metrics were selected. What insights or context "
+                            "do they provide? Reference specific trends where relevant."
                         ),
                     },
                 },
                 "required": [
                     "chart_metric",
                     "chart_reasoning",
-                    "tile_metrics",
-                    "tile_reasoning",
                     "dynamic_metrics",
                     "dynamic_reasoning",
                 ],
@@ -366,10 +380,21 @@ Return exact metric names from the tables."""
 
                 chart_metric = function_args.get("chart_metric", "")
                 chart_reasoning = function_args.get("chart_reasoning", "")
-                tile_metrics = function_args.get("tile_metrics", [])
-                tile_reasoning = function_args.get("tile_reasoning", "")
                 dynamic_metrics = function_args.get("dynamic_metrics", [])
                 dynamic_reasoning = function_args.get("dynamic_reasoning", "")
+
+                # Validate chart metric is one of the 7 key metrics
+                if chart_metric not in available_key_metrics:
+                    logger.warning(
+                        "etl.bank_earnings_report.invalid_chart_metric",
+                        execution_id=execution_id,
+                        chart_metric=chart_metric,
+                        valid_options=available_key_metrics,
+                    )
+                    chart_metric = available_key_metrics[0]
+
+                # Tile metrics are the other 6 key metrics (excluding chart metric)
+                tile_metrics = [m for m in available_key_metrics if m != chart_metric]
 
                 logger.info(
                     "etl.bank_earnings_report.metrics_selected",
@@ -379,36 +404,14 @@ Return exact metric names from the tables."""
                     dynamic_metrics=dynamic_metrics,
                 )
 
-                # Validate chart metric
-                if chart_metric not in available_metric_names:
-                    logger.warning(
-                        "etl.bank_earnings_report.invalid_chart_metric",
-                        execution_id=execution_id,
-                        chart_metric=chart_metric,
-                    )
-                    chart_metric = available_chartable[0] if available_chartable else None
+                # Build exclusion set for dynamic validation
+                exclusion_set = set(KEY_METRICS) | set(EXCLUDED_METRICS)
 
-                # Validate tile metrics
-                validated_tiles = [m for m in tile_metrics if m in available_metric_names]
-                # Remove chart metric from tiles if accidentally included
-                validated_tiles = [m for m in validated_tiles if m != chart_metric]
-
-                if len(validated_tiles) < len(tile_metrics):
-                    logger.warning(
-                        "etl.bank_earnings_report.invalid_tiles_filtered",
-                        execution_id=execution_id,
-                        original=tile_metrics,
-                        validated=validated_tiles,
-                    )
-
-                # Build set of key metrics (chart + tiles) for exclusion
-                key_metrics_set = {chart_metric} | set(validated_tiles)
-
-                # Validate dynamic metrics (must not be in key metrics)
+                # Validate dynamic metrics (must not be in key metrics or excluded)
                 validated_dynamic = [
                     m
                     for m in dynamic_metrics
-                    if m in available_metric_names and m not in key_metrics_set
+                    if m in available_metric_names and m not in exclusion_set
                 ]
 
                 if len(validated_dynamic) < len(dynamic_metrics):
@@ -422,12 +425,12 @@ Return exact metric names from the tables."""
                 return {
                     "chart_metric": chart_metric,
                     "chart_reasoning": chart_reasoning,
-                    "tile_metrics": validated_tiles[:num_tile_metrics],
-                    "tile_reasoning": tile_reasoning,
+                    "tile_metrics": tile_metrics[:num_tile_metrics],
+                    "tile_reasoning": "Fixed key metrics (excluding chart metric)",
                     "dynamic_metrics": validated_dynamic[:num_dynamic_metrics],
                     "dynamic_reasoning": dynamic_reasoning,
                     "available_metrics": len(metrics),
-                    "available_chartable": available_chartable,
+                    "available_key_metrics": available_key_metrics,
                     "prompt": user_prompt,
                     "all_metrics_summary": [
                         {
@@ -452,7 +455,7 @@ Return exact metric names from the tables."""
             execution_id=execution_id,
         )
         return _fallback_selection(
-            metrics, available_chartable, num_tile_metrics, num_dynamic_metrics
+            metrics, available_key_metrics, num_tile_metrics, num_dynamic_metrics
         )
 
     except Exception as e:
@@ -462,13 +465,13 @@ Return exact metric names from the tables."""
             error=str(e),
         )
         return _fallback_selection(
-            metrics, available_chartable, num_tile_metrics, num_dynamic_metrics
+            metrics, available_key_metrics, num_tile_metrics, num_dynamic_metrics
         )
 
 
 def _fallback_selection(
     metrics: List[Dict[str, Any]],
-    available_chartable: List[str],
+    available_key_metrics: List[str],
     num_tile_metrics: int,
     num_dynamic_metrics: int = 5,
 ) -> Dict[str, Any]:
@@ -477,66 +480,48 @@ def _fallback_selection(
 
     Args:
         metrics: List of metric dicts
-        available_chartable: List of chartable metric names available in data
-        num_tile_metrics: Number of tile metrics to select
+        available_key_metrics: List of key metric names available in data
+        num_tile_metrics: Number of tile metrics (will be 6)
         num_dynamic_metrics: Number of dynamic metrics to select
 
     Returns:
         Selection dict with chart_metric, tile_metrics, and dynamic_metrics
     """
-    # Default chart metric
-    chart_metric = available_chartable[0] if available_chartable else "Net Income"
+    # Default chart metric - first available key metric
+    chart_metric = available_key_metrics[0] if available_key_metrics else "Net Income"
 
-    # Priority metrics for tiles
-    priority_tiles = [
-        "Total Revenue",
-        "Net Income",
-        "Diluted EPS",
-        "Return on Equity",
-        "Efficiency Ratio",
-        "Non-Interest Income",
-        "Net Interest Income",
-        "Pre-Provision Earnings",
-    ]
+    # Tile metrics are the other key metrics
+    tile_metrics = [m for m in available_key_metrics if m != chart_metric][:num_tile_metrics]
 
     # Priority metrics for dynamic (additional highlights)
     priority_dynamic = [
         "Operating Leverage",
+        "Net Interest Income",
+        "Non-Interest Income",
+        "Non-Interest Expense",
         "Loan Growth",
         "Deposit Growth",
-        "Non-Interest Expense",
         "Book Value per Share",
         "Average Assets",
         "Average Loans",
         "Average Deposits",
     ]
 
-    # Select tiles (excluding chart metric)
-    tile_metrics = []
+    # Build exclusion set
+    exclusion_set = set(KEY_METRICS) | set(EXCLUDED_METRICS)
     metric_names = {m["parameter"] for m in metrics}
 
-    for priority in priority_tiles:
-        if len(tile_metrics) >= num_tile_metrics:
-            break
-        if priority in metric_names and priority != chart_metric:
-            tile_metrics.append(priority)
-
-    # Build key metrics set for exclusion from dynamic
-    key_metrics_set = {chart_metric} | set(tile_metrics)
-
-    # Select dynamic metrics (excluding key metrics)
+    # Select dynamic metrics (excluding key metrics and capital/risk)
     dynamic_metrics = []
     for priority in priority_dynamic:
         if len(dynamic_metrics) >= num_dynamic_metrics:
             break
-        if priority in metric_names and priority not in key_metrics_set:
+        if priority in metric_names and priority not in exclusion_set:
             dynamic_metrics.append(priority)
 
     # If we don't have enough, fill from remaining metrics
     if len(dynamic_metrics) < num_dynamic_metrics:
-        remaining = [
-            m for m in metric_names if m not in key_metrics_set and m not in dynamic_metrics
-        ]
+        remaining = [m for m in metric_names if m not in exclusion_set and m not in dynamic_metrics]
         for m in remaining[: num_dynamic_metrics - len(dynamic_metrics)]:
             dynamic_metrics.append(m)
 
@@ -544,11 +529,11 @@ def _fallback_selection(
         "chart_metric": chart_metric,
         "chart_reasoning": "Fallback selection - LLM unavailable",
         "tile_metrics": tile_metrics,
-        "tile_reasoning": "Fallback selection - LLM unavailable",
+        "tile_reasoning": "Fixed key metrics (excluding chart metric)",
         "dynamic_metrics": dynamic_metrics,
         "dynamic_reasoning": "Fallback selection - LLM unavailable",
         "available_metrics": len(metrics),
-        "available_chartable": available_chartable,
+        "available_key_metrics": available_key_metrics,
         "prompt": "",
     }
 
