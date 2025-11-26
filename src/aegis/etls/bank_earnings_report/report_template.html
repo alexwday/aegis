@@ -766,28 +766,36 @@
                             </div>
                             <div style="font-size: 12px; color: var(--text-main); line-height: 1.5;">{{ segment.description }}</div>
                         </div>
-                        <!-- Metrics row - 3 equal sections with vertical dividers -->
-                        <div style="display: flex; border-top: 1px solid #e2e8f0; padding-top: 10px;">
+                        <!-- Metrics row - 9-column grid (3 metrics x 3 values each) with dividers -->
+                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1px 1fr 1fr 1fr 1px 1fr 1fr 1fr; border-top: 1px solid #e2e8f0; padding-top: 10px; gap: 4px 8px;">
                             {% for metric in segment.metrics %}
-                            <div style="flex: 1; text-align: center;{% if not loop.first %} border-left: 1px solid #e2e8f0; padding-left: 16px;{% endif %}{% if not loop.last %} padding-right: 16px;{% endif %}">
-                                <!-- Metric name centered at top -->
-                                <div style="font-size: 10px; color: var(--accent); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700; margin-bottom: 8px;">{{ metric.label }}</div>
-                                <!-- 3 clustered columns for Current/QoQ/YoY -->
-                                <div style="display: flex; justify-content: center; gap: 12px;">
-                                    <div style="text-align: center;">
-                                        <div style="font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700; margin-bottom: 2px;">Current</div>
-                                        <div style="font-size: 12px; font-weight: 700; color: var(--text-main);">{{ metric.value }}</div>
-                                    </div>
-                                    <div style="text-align: center;">
-                                        <div style="font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700; margin-bottom: 2px;">QoQ</div>
-                                        <div class="delta {{ metric.qoq.direction }}" style="font-size: 11px;">{{ metric.qoq.display }}</div>
-                                    </div>
-                                    <div style="text-align: center;">
-                                        <div style="font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700; margin-bottom: 2px;">YoY</div>
-                                        <div class="delta {{ metric.yoy.direction }}" style="font-size: 11px;">{{ metric.yoy.display }}</div>
-                                    </div>
-                                </div>
-                            </div>
+                            <!-- Metric title spanning 3 columns -->
+                            <div style="grid-column: span 3; text-align: center; font-size: 10px; color: var(--accent); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700; margin-bottom: 4px;">{{ metric.label }}</div>
+                            {% if not loop.last %}
+                            <!-- Divider placeholder for title row -->
+                            <div></div>
+                            {% endif %}
+                            {% endfor %}
+
+                            {% for metric in segment.metrics %}
+                            <!-- Labels: Current, QoQ, YoY -->
+                            <div style="text-align: center; font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700;">Current</div>
+                            <div style="text-align: center; font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700;">QoQ</div>
+                            <div style="text-align: center; font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700;">YoY</div>
+                            {% if not loop.last %}
+                            <!-- Vertical divider -->
+                            <div style="background: #e2e8f0; grid-row: span 2;"></div>
+                            {% endif %}
+                            {% endfor %}
+
+                            {% for metric in segment.metrics %}
+                            <!-- Values -->
+                            <div style="text-align: center; font-size: 12px; font-weight: 700; color: var(--text-main);">{{ metric.value }}</div>
+                            <div class="delta {{ metric.qoq.direction }}" style="text-align: center; font-size: 11px;">{{ metric.qoq.display }}</div>
+                            <div class="delta {{ metric.yoy.direction }}" style="text-align: center; font-size: 11px;">{{ metric.yoy.display }}</div>
+                            {% if not loop.last %}
+                            <!-- Divider continues from above -->
+                            {% endif %}
                             {% endfor %}
                         </div>
                     </div>
