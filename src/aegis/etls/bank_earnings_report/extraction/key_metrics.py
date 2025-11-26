@@ -24,14 +24,23 @@ from aegis.utils.settings import config
 # These are the core metrics that analysts expect to see for bank earnings.
 # The LLM does not choose these - they are mandatory.
 # The LLM only decides which ONE of these 7 to feature on the trend chart.
+#
+# Selection rationale:
+# 1. Adjusted Diluted EPS - Headline metric in every earnings release, drives analyst models
+# 2. Adjusted ROE - Primary measure of return on shareholder capital (target 15-17%)
+# 3. Net Interest Margin - Core spread business health (~50% of bank revenue)
+# 4. Efficiency Ratio - Cost discipline benchmark (lower = better)
+# 5. Total Revenue - Top-line indicator, shows business momentum
+# 6. PPPT (Pre-Provision Pre-Tax) - Core earnings power before credit costs
+# 7. Operating Leverage - Revenue growth minus expense growth, key analyst focus
 KEY_METRICS = [
-    "Total Revenue",
-    "Net Income",
-    "Diluted EPS",
-    "Return on Equity",
-    "Efficiency Ratio",
+    "Adjusted Diluted EPS",
+    "Adjusted ROE",
     "Net Interest Margin",
-    "Pre-Provision Earnings",
+    "Efficiency Ratio",
+    "Total Revenue",
+    "PPPT",
+    "Operating Leverage",
 ]
 
 
@@ -240,13 +249,13 @@ report. Your task is to make two selections based on the data provided.
 ## TASK 1: Select Chart Metric (from 7 Fixed Key Metrics)
 
 You will be given data for 7 KEY METRICS that are ALWAYS displayed in the report:
-- Total Revenue
-- Net Income
-- Diluted EPS
-- Return on Equity
-- Efficiency Ratio
-- Net Interest Margin
-- Pre-Provision Earnings
+- Adjusted Diluted EPS (headline metric, drives analyst models)
+- Adjusted ROE (return on shareholder capital)
+- Net Interest Margin (core spread business health)
+- Efficiency Ratio (cost discipline benchmark)
+- Total Revenue (top-line growth indicator)
+- PPPT - Pre-Provision Pre-Tax Earnings (core earnings power)
+- Operating Leverage (revenue growth minus expense growth)
 
 Your job is to select ONE of these 7 metrics to feature on an 8-quarter trend chart.
 
