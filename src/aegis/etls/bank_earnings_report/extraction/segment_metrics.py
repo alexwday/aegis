@@ -166,6 +166,8 @@ def format_segment_metrics_for_llm(
     """
     Format segment metrics into a table for LLM selection.
 
+    Uses proper bps/% formatting so LLM understands the data correctly.
+
     Args:
         metrics: List of metric dicts from retrieve_segment_metrics()
         segment_name: Name of the segment for context
@@ -174,24 +176,11 @@ def format_segment_metrics_for_llm(
     Returns:
         Formatted table string for LLM prompt
     """
-
-    def fmt_pct(val):
-        if val is None:
-            return "—"
-        sign = "+" if val > 0 else ""
-        return f"{sign}{val:.1f}%"
-
-    def fmt_val(m):
-        if m["actual"] is None:
-            return "N/A"
-        if m["units"] == "%" or m.get("is_bps"):
-            return f"{m['actual']:.2f}%"
-        elif m["units"] == "millions":
-            if m["actual"] >= 1000:
-                return f"${m['actual'] / 1000:,.2f}B"
-            return f"${m['actual']:,.0f}M"
-        else:
-            return f"{m['actual']:,.2f}"
+    # Import shared formatting functions
+    from aegis.etls.bank_earnings_report.retrieval.supplementary import (
+        format_value_for_llm,
+        format_delta_for_llm,
+    )
 
     # Build exclusion set
     exclude_set = set(exclude_names or []) | set(EXCLUDED_SEGMENT_METRICS)
@@ -211,9 +200,12 @@ def format_segment_metrics_for_llm(
 
     for m in filtered_metrics:
         name = m["parameter"]
-        val = fmt_val(m)
-        qoq = fmt_pct(m["qoq"])
-        yoy = fmt_pct(m["yoy"])
+        units = m.get("units", "")
+        is_bps = m.get("is_bps", False)
+
+        val = format_value_for_llm(m)
+        qoq = format_delta_for_llm(m.get("qoq"), units, is_bps)
+        yoy = format_delta_for_llm(m.get("yoy"), units, is_bps)
         desc = (
             m.get("description", "")[:60] + "..."
             if len(m.get("description", "")) > 60

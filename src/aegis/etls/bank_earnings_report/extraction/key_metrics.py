@@ -73,6 +73,8 @@ def format_key_metrics_for_llm(metrics: List[Dict[str, Any]], key_metric_names: 
     """
     Format the 7 fixed key metrics into a table for LLM chart selection.
 
+    Uses proper bps/% formatting so LLM understands the data correctly.
+
     Args:
         metrics: List of metric dicts from retrieve_all_metrics()
         key_metric_names: List of the 7 fixed key metric names
@@ -80,22 +82,11 @@ def format_key_metrics_for_llm(metrics: List[Dict[str, Any]], key_metric_names: 
     Returns:
         Formatted table string for LLM prompt
     """
-
-    def fmt_pct(val):
-        if val is None:
-            return "—"
-        sign = "+" if val > 0 else ""
-        return f"{sign}{val:.1f}%"
-
-    def fmt_val(m):
-        if m["actual"] is None:
-            return "N/A"
-        if m["units"] == "%" or m.get("is_bps"):
-            return f"{m['actual']:.2f}%"
-        elif m["units"] == "millions":
-            return f"${m['actual']:,.0f}M"
-        else:
-            return f"{m['actual']:,.2f}"
+    # Import shared formatting functions
+    from aegis.etls.bank_earnings_report.retrieval.supplementary import (
+        format_value_for_llm,
+        format_delta_for_llm,
+    )
 
     # Filter to only key metrics that exist in the data
     key_metrics = [m for m in metrics if m["parameter"] in key_metric_names]
@@ -107,12 +98,15 @@ def format_key_metrics_for_llm(metrics: List[Dict[str, Any]], key_metric_names: 
 
     for m in key_metrics:
         name = m["parameter"]
-        val = fmt_val(m)
-        qoq = fmt_pct(m["qoq"])
-        yoy = fmt_pct(m["yoy"])
-        y2 = fmt_pct(m.get("2y"))
-        y3 = fmt_pct(m.get("3y"))
-        y5 = fmt_pct(m.get("5y"))
+        units = m.get("units", "")
+        is_bps = m.get("is_bps", False)
+
+        val = format_value_for_llm(m)
+        qoq = format_delta_for_llm(m.get("qoq"), units, is_bps)
+        yoy = format_delta_for_llm(m.get("yoy"), units, is_bps)
+        y2 = format_delta_for_llm(m.get("2y"), units, is_bps)
+        y3 = format_delta_for_llm(m.get("3y"), units, is_bps)
+        y5 = format_delta_for_llm(m.get("5y"), units, is_bps)
         lines.append(f"| {name} | {val} | {qoq} | {yoy} | {y2} | {y3} | {y5} |")
 
     return "\n".join(lines)
@@ -124,6 +118,8 @@ def format_remaining_metrics_for_llm(
     """
     Format remaining metrics (excluding key metrics and capital/risk) for LLM selection.
 
+    Uses proper bps/% formatting so LLM understands the data correctly.
+
     Args:
         metrics: List of metric dicts from retrieve_all_metrics()
         exclude_names: List of metric names to exclude (key metrics + capital/risk)
@@ -131,22 +127,11 @@ def format_remaining_metrics_for_llm(
     Returns:
         Formatted table string for LLM prompt
     """
-
-    def fmt_pct(val):
-        if val is None:
-            return "—"
-        sign = "+" if val > 0 else ""
-        return f"{sign}{val:.1f}%"
-
-    def fmt_val(m):
-        if m["actual"] is None:
-            return "N/A"
-        if m["units"] == "%" or m.get("is_bps"):
-            return f"{m['actual']:.2f}%"
-        elif m["units"] == "millions":
-            return f"${m['actual']:,.0f}M"
-        else:
-            return f"{m['actual']:,.2f}"
+    # Import shared formatting functions
+    from aegis.etls.bank_earnings_report.retrieval.supplementary import (
+        format_value_for_llm,
+        format_delta_for_llm,
+    )
 
     # Filter out excluded metrics
     exclude_set = set(exclude_names)
@@ -162,12 +147,15 @@ def format_remaining_metrics_for_llm(
 
     for m in remaining_metrics:
         name = m["parameter"]
-        val = fmt_val(m)
-        qoq = fmt_pct(m["qoq"])
-        yoy = fmt_pct(m["yoy"])
-        y2 = fmt_pct(m.get("2y"))
-        y3 = fmt_pct(m.get("3y"))
-        y5 = fmt_pct(m.get("5y"))
+        units = m.get("units", "")
+        is_bps = m.get("is_bps", False)
+
+        val = format_value_for_llm(m)
+        qoq = format_delta_for_llm(m.get("qoq"), units, is_bps)
+        yoy = format_delta_for_llm(m.get("yoy"), units, is_bps)
+        y2 = format_delta_for_llm(m.get("2y"), units, is_bps)
+        y3 = format_delta_for_llm(m.get("3y"), units, is_bps)
+        y5 = format_delta_for_llm(m.get("5y"), units, is_bps)
         lines.append(f"| {name} | {val} | {qoq} | {yoy} | {y2} | {y3} | {y5} |")
 
     return "\n".join(lines)

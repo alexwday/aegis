@@ -474,6 +474,70 @@ def format_delta(value: Optional[float], units: str, is_bps: bool = False) -> Di
     return {"value": abs_val, "direction": direction, "display": display}
 
 
+def format_delta_for_llm(value: Optional[float], units: str, is_bps: bool = False) -> str:
+    """
+    Format a QoQ/YoY delta value for LLM prompt (simple string, not dict).
+
+    Uses same bps/% logic as format_delta but returns plain string for LLM tables.
+
+    Args:
+        value: Delta value (percentage change or basis points)
+        units: Units from benchmarking_report
+        is_bps: Whether to display as basis points
+
+    Returns:
+        Formatted string like "+2.3%" or "+15bps" or "—"
+    """
+    if value is None:
+        return "—"
+
+    sign = "+" if value > 0 else ""
+
+    # Use BPS display if flagged or if units indicate basis points
+    if is_bps or units == "bps":
+        return f"{sign}{value:.0f}bps"
+    else:
+        return f"{sign}{value:.1f}%"
+
+
+def format_value_for_llm(metric: Dict[str, Any]) -> str:
+    """
+    Format a metric's current value for LLM prompt.
+
+    Uses same M/B and % logic as format_metric_value.
+
+    Args:
+        metric: Metric dict with 'actual', 'units', 'meta_unit', 'is_bps'
+
+    Returns:
+        Formatted string like "$9.2B", "13.8%", "52.3%"
+    """
+    actual = metric.get("actual")
+    if actual is None:
+        return "N/A"
+
+    units = metric.get("units", "")
+    meta_unit = metric.get("meta_unit", "")
+    is_bps = metric.get("is_bps", False)
+
+    # Handle percentage metrics (ratios like ROE, efficiency ratio, NIM)
+    if units == "%" or meta_unit in ("percentage", "percent", "%") or is_bps:
+        return f"{actual:.2f}%"
+
+    # Handle millions (default for dollar amounts)
+    if units == "millions" or meta_unit in ("millions", "currency"):
+        if actual >= 1000:
+            return f"${actual / 1000:,.2f}B"
+        return f"${actual:,.0f}M"
+
+    # Handle ratio metrics
+    if meta_unit == "ratio":
+        return f"{actual:.2f}x"
+
+    # Default formatting
+    return f"{actual:,.2f}"
+
+
 def format_key_metrics_json(metrics: List[Dict[str, Any]]) -> Dict[str, Any]:
     """
     Format selected metrics into the JSON structure for key metrics tiles.
