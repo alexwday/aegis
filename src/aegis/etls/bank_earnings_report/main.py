@@ -444,11 +444,11 @@ async def extract_all_sections(
         retrieve_segment_metrics,
         format_segment_json,
     )
-    from .extraction.key_metrics import select_chart_and_tile_metrics
+    from .extraction.key_metrics import select_chart_and_tile_metrics, KEY_METRICS
     from .extraction.segment_metrics import (
-        normalize_segment_name,
         select_top_segment_metrics,
-        MONITORED_SEGMENTS,
+        MONITORED_PLATFORMS,
+        SEGMENT_METADATA,
     )
 
     execution_id = context.get("execution_id")
@@ -487,6 +487,20 @@ async def extract_all_sections(
         "period": f"{quarter} {fiscal_year}",
         "sections": {},
     }
+
+    # Log key metrics availability (X of 7)
+    available_metric_names = {m["parameter"] for m in all_metrics} if all_metrics else set()
+    found_key_metrics = [m for m in KEY_METRICS if m in available_metric_names]
+    missing_key_metrics = [m for m in KEY_METRICS if m not in available_metric_names]
+
+    logger.info(
+        "etl.bank_earnings_report.key_metrics_availability",
+        execution_id=execution_id,
+        found=len(found_key_metrics),
+        total=len(KEY_METRICS),
+        found_metrics=found_key_metrics,
+        missing_metrics=missing_key_metrics,
+    )
 
     if all_metrics:
         # LLM selects 1 chart metric + 6 tile metrics + 5 dynamic metrics
@@ -650,89 +664,85 @@ async def extract_all_sections(
         db_symbol, fiscal_year, quarter, context
     )
 
-    # Match platforms to our monitored segments
+    # Log platform availability (X of 5) - exact matching only
+    found_platforms = [p for p in MONITORED_PLATFORMS if p in available_platforms]
+    missing_platforms = [p for p in MONITORED_PLATFORMS if p not in available_platforms]
+
+    logger.info(
+        "etl.bank_earnings_report.platform_availability",
+        execution_id=execution_id,
+        found=len(found_platforms),
+        total=len(MONITORED_PLATFORMS),
+        found_platforms=found_platforms,
+        missing_platforms=missing_platforms,
+    )
+
+    # Process only exact matches to monitored platforms
     segment_entries = []
     segment_debug = {
         "available_platforms": available_platforms,
-        "matched_segments": [],
+        "monitored_platforms": MONITORED_PLATFORMS,
+        "matched_platforms": found_platforms,
+        "missing_platforms": missing_platforms,
         "segment_selections": {},
     }
 
-    for platform in available_platforms:
-        # Normalize platform name to our standard segment names
-        segment_name = normalize_segment_name(platform)
+    for platform in found_platforms:
+        # Platform is already an exact match - use it directly
+        logger.info(
+            "etl.bank_earnings_report.segment_matched",
+            execution_id=execution_id,
+            platform=platform,
+        )
 
-        if segment_name:
+        # Retrieve all metrics for this segment
+        segment_metrics = await retrieve_segment_metrics(
+            db_symbol, fiscal_year, quarter, platform, context
+        )
+
+        if segment_metrics:
+            # Use LLM to select top 3 metrics for this segment
+            selection = await select_top_segment_metrics(
+                metrics=segment_metrics,
+                segment_name=platform,
+                bank_name=bank_info["bank_name"],
+                quarter=quarter,
+                fiscal_year=fiscal_year,
+                context=context,
+                num_metrics=3,
+            )
+
+            # Store debug info
+            segment_debug["segment_selections"][platform] = {
+                "available_metrics": len(segment_metrics),
+                "selected_metrics": selection.get("selected_metrics", []),
+                "reasoning": selection.get("reasoning", ""),
+            }
+
+            # Get segment description from our config (placeholder for now)
+            # TODO: In future, this description will come from RTS driver narrative
+            segment_info = SEGMENT_METADATA.get(platform, {})
+            description = segment_info.get(
+                "description", f"Performance metrics for {platform} segment."
+            )
+
+            # Format the segment entry
+            segment_entry = format_segment_json(
+                segment_name=platform,
+                description=description,
+                selected_metrics=selection.get("metrics_data", []),
+            )
+            segment_entries.append(segment_entry)
+
             logger.info(
-                "etl.bank_earnings_report.segment_matched",
+                "etl.bank_earnings_report.segment_complete",
                 execution_id=execution_id,
-                platform=platform,
-                segment=segment_name,
+                segment=platform,
+                metrics_selected=len(selection.get("metrics_data", [])),
             )
-
-            segment_debug["matched_segments"].append(
-                {
-                    "platform": platform,
-                    "normalized_to": segment_name,
-                }
-            )
-
-            # Retrieve all metrics for this segment
-            segment_metrics = await retrieve_segment_metrics(
-                db_symbol, fiscal_year, quarter, platform, context
-            )
-
-            if segment_metrics:
-                # Use LLM to select top 3 metrics for this segment
-                selection = await select_top_segment_metrics(
-                    metrics=segment_metrics,
-                    segment_name=segment_name,
-                    bank_name=bank_info["bank_name"],
-                    quarter=quarter,
-                    fiscal_year=fiscal_year,
-                    context=context,
-                    num_metrics=3,
-                )
-
-                # Store debug info
-                segment_debug["segment_selections"][segment_name] = {
-                    "platform": platform,
-                    "available_metrics": len(segment_metrics),
-                    "selected_metrics": selection.get("selected_metrics", []),
-                    "reasoning": selection.get("reasoning", ""),
-                }
-
-                # Get segment description from our config (placeholder for now)
-                # TODO: In future, this description will come from RTS driver narrative
-                segment_info = MONITORED_SEGMENTS.get(segment_name, {})
-                description = segment_info.get(
-                    "description", f"Performance metrics for {segment_name} segment."
-                )
-
-                # Format the segment entry
-                segment_entry = format_segment_json(
-                    segment_name=segment_name,
-                    description=description,
-                    selected_metrics=selection.get("metrics_data", []),
-                )
-                segment_entries.append(segment_entry)
-
-                logger.info(
-                    "etl.bank_earnings_report.segment_complete",
-                    execution_id=execution_id,
-                    segment=segment_name,
-                    metrics_selected=len(selection.get("metrics_data", [])),
-                )
-            else:
-                logger.warning(
-                    "etl.bank_earnings_report.segment_no_metrics",
-                    execution_id=execution_id,
-                    segment=segment_name,
-                    platform=platform,
-                )
         else:
-            logger.debug(
-                "etl.bank_earnings_report.platform_not_monitored",
+            logger.warning(
+                "etl.bank_earnings_report.segment_no_metrics",
                 execution_id=execution_id,
                 platform=platform,
             )

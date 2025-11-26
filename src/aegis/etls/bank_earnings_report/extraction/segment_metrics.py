@@ -23,19 +23,20 @@ from aegis.utils.settings import config
 # =============================================================================
 
 # Standard business segment names used by Canadian Big 6 banks
-# These are the platform names as they appear in the benchmarking_report table
-# The keys here match the exact Platform values from the database
+# These are the EXACT platform names as they appear in the benchmarking_report table
+# Only exact matches will be processed - no fuzzy matching
 
-MONITORED_SEGMENTS = {
+MONITORED_PLATFORMS = [
+    "U.S. & International Banking",
+    "Wealth Management",
+    "Insurance",
+    "Corporate Support",
+    "Capital Markets",
+]
+
+# Segment metadata for LLM context and descriptions
+SEGMENT_METADATA = {
     "U.S. & International Banking": {
-        "aliases": [
-            "U.S. Personal & Commercial Banking",
-            "U.S. Banking",
-            "US Retail",
-            "U.S. P&C",
-            "U.S. Retail",
-            "International Banking",
-        ],
         "description": (
             "U.S. and international retail banking operations including personal banking, "
             "commercial lending, and cross-border services"
@@ -49,14 +50,6 @@ MONITORED_SEGMENTS = {
         ],
     },
     "Wealth Management": {
-        "aliases": [
-            "Wealth & Asset Management",
-            "Global Wealth Management",
-            "Wealth",
-            "Asset Management",
-            "Private Banking",
-            "Global Asset Management",
-        ],
         "description": (
             "Wealth management including private banking, asset management, "
             "brokerage, and investment services"
@@ -64,14 +57,6 @@ MONITORED_SEGMENTS = {
         "key_focus": ["AUM growth", "fee income", "net flows", "client acquisition", "margins"],
     },
     "Capital Markets": {
-        "aliases": [
-            "Wholesale Banking",
-            "Investment Banking",
-            "Corporate & Investment Banking",
-            "Global Markets",
-            "CIB",
-            "Markets",
-        ],
         "description": "Investment banking, trading, advisory, and corporate banking services",
         "key_focus": [
             "trading revenue",
@@ -82,11 +67,6 @@ MONITORED_SEGMENTS = {
         ],
     },
     "Insurance": {
-        "aliases": [
-            "Insurance Services",
-            "Global Insurance",
-            "Canadian Insurance",
-        ],
         "description": "Insurance products including life, health, property, and reinsurance",
         "key_focus": [
             "premium growth",
@@ -96,12 +76,6 @@ MONITORED_SEGMENTS = {
         ],
     },
     "Corporate Support": {
-        "aliases": [
-            "Corporate & Other",
-            "Corporate",
-            "Other",
-            "Corporate Functions",
-        ],
         "description": "Corporate treasury, technology, and other enterprise functions",
         "key_focus": ["funding costs", "technology investment", "operational efficiency"],
     },
@@ -129,48 +103,21 @@ EXCLUDED_SEGMENT_METRICS = [
 ]
 
 
-def normalize_segment_name(platform_name: str) -> Optional[str]:
+def is_monitored_platform(platform_name: str) -> bool:
     """
-    Normalize a platform name from the database to our standard segment names.
+    Check if a platform name exactly matches one of our monitored platforms.
 
     Args:
         platform_name: The Platform value from benchmarking_report
 
     Returns:
-        Normalized segment name if matched, None otherwise
+        True if exact match found, False otherwise
     """
     if not platform_name:
-        return None
+        return False
 
-    # Skip Enterprise - that's the overall bank, not a segment
-    if platform_name.lower() == "enterprise":
-        return None
-
-    # First, check for exact match
-    if platform_name in MONITORED_SEGMENTS:
-        return platform_name
-
-    # Then check aliases (case-insensitive)
-    platform_lower = platform_name.lower()
-    for segment_name, segment_info in MONITORED_SEGMENTS.items():
-        if platform_lower == segment_name.lower():
-            return segment_name
-        for alias in segment_info["aliases"]:
-            if platform_lower == alias.lower():
-                return segment_name
-
-    # Finally, try partial matching for common patterns
-    for segment_name, segment_info in MONITORED_SEGMENTS.items():
-        # Check if any key words match
-        segment_words = segment_name.lower().split()
-        platform_words = platform_lower.split()
-
-        # If at least 2 words match, consider it a match
-        matching_words = sum(1 for w in segment_words if w in platform_words)
-        if matching_words >= 2 or (len(segment_words) == 1 and segment_words[0] in platform_lower):
-            return segment_name
-
-    return None
+    # Exact match only - no fuzzy matching
+    return platform_name in MONITORED_PLATFORMS
 
 
 def format_segment_metrics_for_llm(
@@ -287,7 +234,7 @@ async def select_top_segment_metrics(
         }
 
     # Get segment info for context
-    segment_info = MONITORED_SEGMENTS.get(segment_name, {})
+    segment_info = SEGMENT_METADATA.get(segment_name, {})
     segment_description = segment_info.get("description", "Business segment")
     key_focus_areas = segment_info.get("key_focus", [])
 
