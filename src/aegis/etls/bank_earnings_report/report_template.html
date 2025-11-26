@@ -770,23 +770,22 @@
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; border-top: 1px solid #e2e8f0; padding-top: 12px;">
                             <!-- Left column: Core Metrics -->
                             <div style="background: #f8fafc; border-radius: 6px; padding: 10px;">
-                                <div style="font-size: 11px; font-weight: 600; color: #475569; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid #e2e8f0;">Core Metrics</div>
-                                <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+                                <table style="width: 100%; border-collapse: collapse; font-size: 12px; table-layout: fixed;">
                                     <thead>
                                         <tr>
                                             <th style="text-align: left; font-weight: 500; color: #64748b; padding: 4px 6px; border-bottom: 1px solid #e2e8f0;">Metric</th>
-                                            <th style="text-align: right; font-weight: 500; color: #64748b; padding: 4px 6px; border-bottom: 1px solid #e2e8f0; width: 65px;">Current</th>
-                                            <th style="text-align: right; font-weight: 500; color: #64748b; padding: 4px 6px; border-bottom: 1px solid #e2e8f0; width: 55px;">QoQ</th>
-                                            <th style="text-align: right; font-weight: 500; color: #64748b; padding: 4px 6px; border-bottom: 1px solid #e2e8f0; width: 55px;">YoY</th>
+                                            <th style="text-align: right; font-weight: 500; color: #64748b; padding: 4px 6px; border-bottom: 1px solid #e2e8f0; width: 70px; white-space: nowrap;">Current</th>
+                                            <th style="text-align: right; font-weight: 500; color: #64748b; padding: 4px 6px; border-bottom: 1px solid #e2e8f0; width: 65px; white-space: nowrap;">QoQ</th>
+                                            <th style="text-align: right; font-weight: 500; color: #64748b; padding: 4px 6px; border-bottom: 1px solid #e2e8f0; width: 65px; white-space: nowrap;">YoY</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {% for metric in segment.core_metrics %}
                                         <tr>
                                             <td style="padding: 6px; color: #334155;">{{ metric.label }}</td>
-                                            <td style="padding: 6px; text-align: right; font-family: 'Consolas', monospace; font-size: 11px;">{{ metric.value }}</td>
-                                            <td class="delta {{ metric.qoq.direction }}" style="padding: 6px; text-align: right; font-size: 11px;">{{ metric.qoq.display }}</td>
-                                            <td class="delta {{ metric.yoy.direction }}" style="padding: 6px; text-align: right; font-size: 11px;">{{ metric.yoy.display }}</td>
+                                            <td style="padding: 6px; text-align: right; font-family: 'Consolas', monospace; font-size: 11px; white-space: nowrap;">{{ metric.value }}</td>
+                                            <td class="delta {{ metric.qoq.direction }}" style="padding: 6px; text-align: right; font-size: 11px; white-space: nowrap;">{{ metric.qoq.display }}</td>
+                                            <td class="delta {{ metric.yoy.direction }}" style="padding: 6px; text-align: right; font-size: 11px; white-space: nowrap;">{{ metric.yoy.display }}</td>
                                         </tr>
                                         {% endfor %}
                                     </tbody>
@@ -794,23 +793,22 @@
                             </div>
                             <!-- Right column: Highlighted Metrics -->
                             <div style="background: #f8fafc; border-radius: 6px; padding: 10px;">
-                                <div style="font-size: 11px; font-weight: 600; color: #475569; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid #e2e8f0;">Highlighted Metrics</div>
-                                <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+                                <table style="width: 100%; border-collapse: collapse; font-size: 12px; table-layout: fixed;">
                                     <thead>
                                         <tr>
                                             <th style="text-align: left; font-weight: 500; color: #64748b; padding: 4px 6px; border-bottom: 1px solid #e2e8f0;">Metric</th>
-                                            <th style="text-align: right; font-weight: 500; color: #64748b; padding: 4px 6px; border-bottom: 1px solid #e2e8f0; width: 65px;">Current</th>
-                                            <th style="text-align: right; font-weight: 500; color: #64748b; padding: 4px 6px; border-bottom: 1px solid #e2e8f0; width: 55px;">QoQ</th>
-                                            <th style="text-align: right; font-weight: 500; color: #64748b; padding: 4px 6px; border-bottom: 1px solid #e2e8f0; width: 55px;">YoY</th>
+                                            <th style="text-align: right; font-weight: 500; color: #64748b; padding: 4px 6px; border-bottom: 1px solid #e2e8f0; width: 70px; white-space: nowrap;">Current</th>
+                                            <th style="text-align: right; font-weight: 500; color: #64748b; padding: 4px 6px; border-bottom: 1px solid #e2e8f0; width: 65px; white-space: nowrap;">QoQ</th>
+                                            <th style="text-align: right; font-weight: 500; color: #64748b; padding: 4px 6px; border-bottom: 1px solid #e2e8f0; width: 65px; white-space: nowrap;">YoY</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {% for metric in segment.highlighted_metrics %}
                                         <tr>
                                             <td style="padding: 6px; color: #334155;">{{ metric.label }}</td>
-                                            <td style="padding: 6px; text-align: right; font-family: 'Consolas', monospace; font-size: 11px;">{{ metric.value }}</td>
-                                            <td class="delta {{ metric.qoq.direction }}" style="padding: 6px; text-align: right; font-size: 11px;">{{ metric.qoq.display }}</td>
-                                            <td class="delta {{ metric.yoy.direction }}" style="padding: 6px; text-align: right; font-size: 11px;">{{ metric.yoy.display }}</td>
+                                            <td style="padding: 6px; text-align: right; font-family: 'Consolas', monospace; font-size: 11px; white-space: nowrap;">{{ metric.value }}</td>
+                                            <td class="delta {{ metric.qoq.direction }}" style="padding: 6px; text-align: right; font-size: 11px; white-space: nowrap;">{{ metric.qoq.display }}</td>
+                                            <td class="delta {{ metric.yoy.direction }}" style="padding: 6px; text-align: right; font-size: 11px; white-space: nowrap;">{{ metric.yoy.display }}</td>
                                         </tr>
                                         {% endfor %}
                                     </tbody>
