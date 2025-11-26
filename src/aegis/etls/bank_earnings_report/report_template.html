@@ -627,6 +627,7 @@
                  DATA SOURCE: 1_keymetrics_dynamic.json (metrics array - 5 LLM-selected)
                  SOURCE: Supp Pack
                  NOTE: Dynamic metrics selected by LLM, spans full width below main tiles and chart
+                 LAYOUT: Full width row matching the 5-column grid (3 tiles + 2 chart = 5 units)
             -->
             <div style="display: flex; gap: 12px; margin-top: 12px;">
                 {% for metric in _1_keymetrics_dynamic.metrics %}
@@ -641,8 +642,8 @@
                         <span style="font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700; text-align: center;">YoY</span>
                         <!-- Value row -->
                         <span style="font-size: 14px; font-weight: 700; color: var(--text-main); text-align: center;">{{ metric.value }}</span>
-                        <span class="delta-{{ metric.qoq.direction }}" style="font-size: 10px; font-weight: 600; text-align: center;">{{ metric.qoq.display }}</span>
-                        <span class="delta-{{ metric.yoy.direction }}" style="font-size: 10px; font-weight: 600; text-align: center;">{{ metric.yoy.display }}</span>
+                        <span class="delta {{ metric.qoq.direction }}" style="font-size: 10px; font-weight: 600; text-align: center;">{{ metric.qoq.display }}</span>
+                        <span class="delta {{ metric.yoy.direction }}" style="font-size: 10px; font-weight: 600; text-align: center;">{{ metric.yoy.display }}</span>
                     </div>
                 </div>
                 {% endfor %}
