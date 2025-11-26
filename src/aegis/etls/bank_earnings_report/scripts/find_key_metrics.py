@@ -50,10 +50,10 @@ async def get_enterprise_parameters() -> List[Dict[str, Any]]:
                         "QoQ" as qoq,
                         "YoY" as yoy
                     FROM benchmarking_report
-                    WHERE "Bank Symbol" = 'RY'
-                      AND "Fiscal Year" = 2025
-                      AND "Quarter" = 'Q3'
-                      AND "Segment" = 'Enterprise'
+                    WHERE "bank_symbol" = 'RY'
+                      AND "fiscal_year" = 2025
+                      AND "quarter" = 'Q3'
+                      AND "Platform" = 'Enterprise'
                     ORDER BY "Parameter"
                     """
                 )
@@ -62,13 +62,12 @@ async def get_enterprise_parameters() -> List[Dict[str, Any]]:
             return [dict(row._mapping) for row in rows]
     except Exception as e:
         if "does not exist" in str(e):
-            print("\n❌ ERROR: The 'benchmarking_report' table does not exist.")
-            print("   This table needs to be created and populated with bank metrics data.")
-            print("\n   The table should have columns:")
-            print("   - Bank Symbol (e.g., 'RY' for Royal Bank)")
-            print("   - Fiscal Year (e.g., 2025)")
-            print("   - Quarter (e.g., 'Q3')")
-            print("   - Segment (e.g., 'Enterprise')")
+            print(f"\n❌ ERROR: {e}")
+            print("\n   The benchmarking_report table should have columns:")
+            print("   - bank_symbol (e.g., 'RY' for Royal Bank)")
+            print("   - fiscal_year (e.g., 2025)")
+            print("   - quarter (e.g., 'Q3')")
+            print("   - Platform (e.g., 'Enterprise')")
             print("   - Parameter (metric name)")
             print("   - Actual (current value)")
             print("   - Units (e.g., 'millions', '%')")
