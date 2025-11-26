@@ -26,21 +26,21 @@ from aegis.utils.settings import config
 # The LLM only decides which ONE of these 7 to feature on the trend chart.
 #
 # Selection rationale:
-# 1. EPS Diluted Adjusted - Headline metric in every earnings release, drives analyst models
-# 2. Return on Equity Adjusted - Primary measure of return on shareholder capital (target 15-17%)
+# 1. Core Cash Diluted EPS - Headline metric in every earnings release, drives analyst models
+# 2. Return on Equity - Primary measure of return on shareholder capital (target 15-17%)
 # 3. NIM (AIEA) - Net Interest Margin, core spread business health (~50% of bank revenue)
 # 4. Efficiency Ratio - Cost discipline benchmark (lower = better)
 # 5. Total Revenue - Top-line indicator, shows business momentum
 # 6. Pre Provision Profit - Core earnings power before credit costs
-# 7. Provision for Credit Losses - Credit quality indicator, complements separate PCL section
+# 7. Provisions for Credit Losses - Credit quality indicator
 KEY_METRICS = [
-    "EPS Diluted Adjusted",
-    "Return on Equity Adjusted",
+    "Core Cash Diluted EPS",
+    "Return on Equity",
     "NIM (AIEA)",
     "Efficiency Ratio",
     "Total Revenue",
     "Pre Provision Profit",
-    "Provision for Credit Losses",
+    "Provisions for Credit Losses",
 ]
 
 
@@ -249,13 +249,13 @@ report. Your task is to make two selections based on the data provided.
 ## TASK 1: Select Chart Metric (from 7 Fixed Key Metrics)
 
 You will be given data for 7 KEY METRICS that are ALWAYS displayed in the report:
-- EPS Diluted Adjusted (headline metric, drives analyst models)
-- Return on Equity Adjusted (return on shareholder capital)
+- Core Cash Diluted EPS (headline metric, drives analyst models)
+- Return on Equity (return on shareholder capital)
 - NIM (AIEA) - Net Interest Margin (core spread business health)
 - Efficiency Ratio (cost discipline benchmark)
 - Total Revenue (top-line growth indicator)
 - Pre Provision Profit (core earnings power before credit costs)
-- Provision for Credit Losses (credit quality indicator)
+- Provisions for Credit Losses (credit quality indicator)
 
 Your job is to select ONE of these 7 metrics to feature on an 8-quarter trend chart.
 
