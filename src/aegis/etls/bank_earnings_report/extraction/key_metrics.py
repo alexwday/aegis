@@ -2,8 +2,9 @@
 LLM-based extraction for key metrics selection.
 
 Selects:
-1. One chart metric from a curated list (for 8-quarter trend visualization)
-2. Six tile metrics (excluding the chart metric) for key metrics display
+1. One chart metric (chosen based on YoY/QoQ and 5-year trends for impactful visualization)
+2. Six tile metrics (core metrics excluding the chart metric) - Total: 7 key metrics
+3. Five dynamic metrics from REMAINING pool (complementary/noteworthy metrics)
 """
 
 import json
@@ -143,13 +144,15 @@ async def select_chart_and_tile_metrics(
     fiscal_year: int,
     context: Dict[str, Any],
     num_tile_metrics: int = 6,
+    num_dynamic_metrics: int = 5,
 ) -> Dict[str, Any]:
     """
-    Use LLM to select metrics for chart and tiles in a single call.
+    Use LLM to select metrics for chart, tiles, and dynamic slim tiles in a single call.
 
     Selection order:
-    1. First, select 1 chart metric from the chartable metrics list
-    2. Then, select 6 tile metrics (excluding the chart metric)
+    1. First, select 1 chart metric based on trend analysis (YoY/QoQ and 5-year trends)
+    2. Then, select 6 tile metrics (excluding the chart metric) - Total: 7 key metrics
+    3. Finally, select 5 dynamic metrics from REMAINING metrics (not in the 7)
 
     Args:
         metrics: List of metric dicts from retrieve_all_metrics()
@@ -158,11 +161,13 @@ async def select_chart_and_tile_metrics(
         fiscal_year: Fiscal year (e.g., 2024)
         context: Execution context with auth_config, ssl_config
         num_tile_metrics: Number of tile metrics to select (default 6)
+        num_dynamic_metrics: Number of dynamic slim tile metrics to select (default 5)
 
     Returns:
         Dict with:
-            - chart_metric: The metric selected for the 8Q trend chart
+            - chart_metric: The metric selected for the 8Q trend chart (based on trends)
             - tile_metrics: List of 6 metrics for the key metrics tiles
+            - dynamic_metrics: List of 5 metrics for the slim tiles row
             - reasoning: LLM's explanation for selections
             - available_metrics: Count of metrics available
     """
@@ -177,6 +182,7 @@ async def select_chart_and_tile_metrics(
         return {
             "chart_metric": None,
             "tile_metrics": [],
+            "dynamic_metrics": [],
             "reasoning": "No metrics available for selection",
             "available_metrics": 0,
             "prompt": "",
@@ -201,22 +207,33 @@ async def select_chart_and_tile_metrics(
     system_prompt = """You are a senior financial analyst selecting metrics for a bank earnings \
 report.
 
-Your task has TWO parts:
+Your task has THREE parts:
 
-## Part 1: Chart Metric Selection
-Select ONE metric for an 8-quarter trend chart. This chart will show the metric's progression \
-over the past 2 years.
-Choose a metric that:
-- Shows an interesting trend or story (growth, decline, recovery, volatility)
-- Is meaningful to track over time for investors
-- Will make an impactful visual
+## Part 1: Chart Metric Selection (1 metric)
+Select ONE metric for an 8-quarter trend chart based on trend analysis.
+Analyze the QoQ, YoY, and multi-year trends (2Y, 3Y, 5Y) to identify the metric with:
+- The most compelling trend story (strong growth, notable recovery, significant shift)
+- Meaningful progression that investors should track
+- A visual that highlights a key performance narrative
 
-## Part 2: Tile Metrics Selection
+The chart will show 8 quarters of data - pick the metric whose trend tells the best story.
+
+## Part 2: Tile Metrics Selection (6 metrics)
 Select SIX metrics for the key metrics tiles display. These should:
 - Include core earnings metrics (revenue, net income, EPS, ROE)
 - Highlight metrics with notable QoQ or YoY changes
 - Provide a balanced view of the quarter's performance
-- NOT duplicate the chart metric you already selected
+- NOT include the chart metric you already selected
+
+Together with the chart metric, these 7 metrics form the "Key Metrics" section.
+
+## Part 3: Dynamic Metrics Selection (5 metrics)
+Select FIVE additional metrics from the REMAINING pool (not from your 7 key metrics above).
+These "Additional Highlights" should:
+- Complement the key metrics with deeper context
+- Highlight noteworthy items that didn't make the top 7
+- Include metrics with significant QoQ/YoY changes worth calling out
+- Show balance sheet health, growth indicators, or operational metrics
 
 IMPORTANT: Avoid capital/risk metrics (CET1, RWA, LCR, PCL, GIL) - those have their \
 own section.
@@ -229,17 +246,24 @@ Return EXACTLY the metric names as shown in the tables - do not modify them."""
     # Build the user prompt
     user_prompt = f"""Select metrics for {bank_name}'s {quarter} {fiscal_year} earnings report.
 
-## STEP 1: Choose ONE chart metric from these options:
+## STEP 1: Choose ONE chart metric from these options (analyze trends):
 
 {chartable_table}
 
-Pick the metric that would make the most compelling 8-quarter trend visualization.
+Analyze the QoQ, YoY columns and pick the metric with the most compelling trend story \
+for an 8-quarter chart.
 
 ## STEP 2: Choose SIX tile metrics from the full list (excluding your chart choice):
 
 {all_metrics_table}
 
-Select 6 metrics that best summarize this quarter's performance.
+Select 6 core metrics that best summarize this quarter's performance.
+These 6 + your chart metric = 7 Key Metrics.
+
+## STEP 3: Choose FIVE additional dynamic metrics from the REMAINING metrics:
+
+From the metrics NOT selected in Steps 1-2, pick 5 additional noteworthy metrics \
+to highlight as "Additional Highlights" in slim tiles.
 
 Return exact metric names from the tables."""
 
@@ -248,7 +272,7 @@ Return exact metric names from the tables."""
         "type": "function",
         "function": {
             "name": "select_metrics",
-            "description": "Select chart metric and tile metrics for the earnings report",
+            "description": "Select chart, tile, and dynamic metrics for the earnings report",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -256,14 +280,14 @@ Return exact metric names from the tables."""
                         "type": "string",
                         "description": (
                             "The ONE metric selected for the 8-quarter trend chart. "
-                            "Must be from the chartable metrics list."
+                            "Chosen based on compelling QoQ/YoY/multi-year trends."
                         ),
                     },
                     "chart_reasoning": {
                         "type": "string",
                         "description": (
-                            "Why this metric was chosen for the chart - what trend or story "
-                            "will it show over 8 quarters?"
+                            "Why this metric was chosen for the chart - what trend story "
+                            "does the data show? Reference specific QoQ/YoY/5Y numbers."
                         ),
                     },
                     "tile_metrics": {
@@ -283,12 +307,31 @@ Return exact metric names from the tables."""
                             "about this quarter's performance?"
                         ),
                     },
+                    "dynamic_metrics": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": (
+                            f"List of {num_dynamic_metrics} additional metrics from REMAINING "
+                            "pool (not chart or tile metrics) for the slim tiles row."
+                        ),
+                        "minItems": num_dynamic_metrics,
+                        "maxItems": num_dynamic_metrics,
+                    },
+                    "dynamic_reasoning": {
+                        "type": "string",
+                        "description": (
+                            "Why these 5 additional metrics were selected as highlights - "
+                            "what noteworthy context do they add?"
+                        ),
+                    },
                 },
                 "required": [
                     "chart_metric",
                     "chart_reasoning",
                     "tile_metrics",
                     "tile_reasoning",
+                    "dynamic_metrics",
+                    "dynamic_reasoning",
                 ],
             },
         },
@@ -325,12 +368,15 @@ Return exact metric names from the tables."""
                 chart_reasoning = function_args.get("chart_reasoning", "")
                 tile_metrics = function_args.get("tile_metrics", [])
                 tile_reasoning = function_args.get("tile_reasoning", "")
+                dynamic_metrics = function_args.get("dynamic_metrics", [])
+                dynamic_reasoning = function_args.get("dynamic_reasoning", "")
 
                 logger.info(
                     "etl.bank_earnings_report.metrics_selected",
                     execution_id=execution_id,
                     chart_metric=chart_metric,
                     tile_metrics=tile_metrics,
+                    dynamic_metrics=dynamic_metrics,
                 )
 
                 # Validate chart metric
@@ -355,11 +401,31 @@ Return exact metric names from the tables."""
                         validated=validated_tiles,
                     )
 
+                # Build set of key metrics (chart + tiles) for exclusion
+                key_metrics_set = {chart_metric} | set(validated_tiles)
+
+                # Validate dynamic metrics (must not be in key metrics)
+                validated_dynamic = [
+                    m
+                    for m in dynamic_metrics
+                    if m in available_metric_names and m not in key_metrics_set
+                ]
+
+                if len(validated_dynamic) < len(dynamic_metrics):
+                    logger.warning(
+                        "etl.bank_earnings_report.invalid_dynamic_filtered",
+                        execution_id=execution_id,
+                        original=dynamic_metrics,
+                        validated=validated_dynamic,
+                    )
+
                 return {
                     "chart_metric": chart_metric,
                     "chart_reasoning": chart_reasoning,
                     "tile_metrics": validated_tiles[:num_tile_metrics],
                     "tile_reasoning": tile_reasoning,
+                    "dynamic_metrics": validated_dynamic[:num_dynamic_metrics],
+                    "dynamic_reasoning": dynamic_reasoning,
                     "available_metrics": len(metrics),
                     "available_chartable": available_chartable,
                     "prompt": user_prompt,
@@ -385,7 +451,9 @@ Return exact metric names from the tables."""
             "etl.bank_earnings_report.no_tool_call_response",
             execution_id=execution_id,
         )
-        return _fallback_selection(metrics, available_chartable, num_tile_metrics)
+        return _fallback_selection(
+            metrics, available_chartable, num_tile_metrics, num_dynamic_metrics
+        )
 
     except Exception as e:
         logger.error(
@@ -393,13 +461,16 @@ Return exact metric names from the tables."""
             execution_id=execution_id,
             error=str(e),
         )
-        return _fallback_selection(metrics, available_chartable, num_tile_metrics)
+        return _fallback_selection(
+            metrics, available_chartable, num_tile_metrics, num_dynamic_metrics
+        )
 
 
 def _fallback_selection(
     metrics: List[Dict[str, Any]],
     available_chartable: List[str],
     num_tile_metrics: int,
+    num_dynamic_metrics: int = 5,
 ) -> Dict[str, Any]:
     """
     Fallback metric selection when LLM fails.
@@ -408,9 +479,10 @@ def _fallback_selection(
         metrics: List of metric dicts
         available_chartable: List of chartable metric names available in data
         num_tile_metrics: Number of tile metrics to select
+        num_dynamic_metrics: Number of dynamic metrics to select
 
     Returns:
-        Selection dict with chart_metric and tile_metrics
+        Selection dict with chart_metric, tile_metrics, and dynamic_metrics
     """
     # Default chart metric
     chart_metric = available_chartable[0] if available_chartable else "Net Income"
@@ -427,6 +499,18 @@ def _fallback_selection(
         "Pre-Provision Earnings",
     ]
 
+    # Priority metrics for dynamic (additional highlights)
+    priority_dynamic = [
+        "Operating Leverage",
+        "Loan Growth",
+        "Deposit Growth",
+        "Non-Interest Expense",
+        "Book Value per Share",
+        "Average Assets",
+        "Average Loans",
+        "Average Deposits",
+    ]
+
     # Select tiles (excluding chart metric)
     tile_metrics = []
     metric_names = {m["parameter"] for m in metrics}
@@ -437,11 +521,32 @@ def _fallback_selection(
         if priority in metric_names and priority != chart_metric:
             tile_metrics.append(priority)
 
+    # Build key metrics set for exclusion from dynamic
+    key_metrics_set = {chart_metric} | set(tile_metrics)
+
+    # Select dynamic metrics (excluding key metrics)
+    dynamic_metrics = []
+    for priority in priority_dynamic:
+        if len(dynamic_metrics) >= num_dynamic_metrics:
+            break
+        if priority in metric_names and priority not in key_metrics_set:
+            dynamic_metrics.append(priority)
+
+    # If we don't have enough, fill from remaining metrics
+    if len(dynamic_metrics) < num_dynamic_metrics:
+        remaining = [
+            m for m in metric_names if m not in key_metrics_set and m not in dynamic_metrics
+        ]
+        for m in remaining[: num_dynamic_metrics - len(dynamic_metrics)]:
+            dynamic_metrics.append(m)
+
     return {
         "chart_metric": chart_metric,
         "chart_reasoning": "Fallback selection - LLM unavailable",
         "tile_metrics": tile_metrics,
         "tile_reasoning": "Fallback selection - LLM unavailable",
+        "dynamic_metrics": dynamic_metrics,
+        "dynamic_reasoning": "Fallback selection - LLM unavailable",
         "available_metrics": len(metrics),
         "available_chartable": available_chartable,
         "prompt": "",

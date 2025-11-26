@@ -481,7 +481,7 @@ async def extract_all_sections(
     }
 
     if all_metrics:
-        # LLM selects 1 chart metric + 6 tile metrics
+        # LLM selects 1 chart metric + 6 tile metrics + 5 dynamic metrics
         selection_result = await select_chart_and_tile_metrics(
             metrics=all_metrics,
             bank_name=bank_info["bank_name"],
@@ -489,9 +489,10 @@ async def extract_all_sections(
             fiscal_year=fiscal_year,
             context=context,
             num_tile_metrics=6,
+            num_dynamic_metrics=5,
         )
 
-        # Store debug info for chart and tiles
+        # Store debug info for chart, tiles, and dynamic metrics
         llm_debug_log["sections"]["1_keymetrics_selection"] = {
             "available_metrics": selection_result.get("available_metrics", 0),
             "available_chartable": selection_result.get("available_chartable", []),
@@ -499,6 +500,8 @@ async def extract_all_sections(
             "chart_reasoning": selection_result.get("chart_reasoning", ""),
             "tile_metrics": selection_result.get("tile_metrics", []),
             "tile_reasoning": selection_result.get("tile_reasoning", ""),
+            "dynamic_metrics": selection_result.get("dynamic_metrics", []),
+            "dynamic_reasoning": selection_result.get("dynamic_reasoning", ""),
             "all_metrics_summary": selection_result.get("all_metrics_summary", []),
         }
 
@@ -516,6 +519,29 @@ async def extract_all_sections(
             "retrieved_count": len(tile_metrics),
             "formatted_metrics": tiles_json.get("metrics", []),
         }
+
+        # Retrieve the selected dynamic metrics (for slim tiles row)
+        dynamic_names = selection_result.get("dynamic_metrics", [])
+        if dynamic_names:
+            dynamic_metrics = await retrieve_metrics_by_names(
+                db_symbol, fiscal_year, quarter, dynamic_names, context
+            )
+            dynamic_json = format_key_metrics_json(dynamic_metrics)
+            sections["1_keymetrics_dynamic"] = dynamic_json
+
+            # Add dynamic metrics data to debug log
+            llm_debug_log["sections"]["1_keymetrics_dynamic"] = {
+                "requested_metrics": dynamic_names,
+                "retrieved_count": len(dynamic_metrics),
+                "formatted_metrics": dynamic_json.get("metrics", []),
+            }
+        else:
+            sections["1_keymetrics_dynamic"] = {"source": "Supp Pack", "metrics": []}
+            llm_debug_log["sections"]["1_keymetrics_dynamic"] = {
+                "requested_metrics": [],
+                "retrieved_count": 0,
+                "formatted_metrics": [],
+            }
 
         # Retrieve historical data for the chart metric
         chart_metric_name = selection_result.get("chart_metric")
@@ -563,6 +589,7 @@ async def extract_all_sections(
             }
     else:
         sections["1_keymetrics_tiles"] = {"source": "Supp Pack", "metrics": []}
+        sections["1_keymetrics_dynamic"] = {"source": "Supp Pack", "metrics": []}
         sections["1_keymetrics_chart"] = {
             "label": "N/A",
             "unit": "",
@@ -576,6 +603,8 @@ async def extract_all_sections(
             "chart_reasoning": "No metrics available",
             "tile_metrics": [],
             "tile_reasoning": "No metrics available",
+            "dynamic_metrics": [],
+            "dynamic_reasoning": "No metrics available",
         }
 
     # Store debug log in context for later saving

@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Slim Tile Mockup - Key Metrics Extension</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --accent: #005587;
+            --text-main: #1e293b;
+            --text-muted: #64748b;
+            --border: #e2e8f0;
+            --bg-card: #ffffff;
+            --positive: #16a34a;
+            --negative: #dc2626;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #f1f5f9;
+            padding: 40px;
+            margin: 0;
+        }
+
+        h2 {
+            color: var(--text-main);
+            margin-bottom: 20px;
+        }
+
+        .card {
+            background: var(--bg-card);
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            margin-bottom: 40px;
+        }
+
+        /* Existing metric tile style (for reference) */
+        .metric-tile {
+            background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 12px;
+            min-width: 140px;
+        }
+
+        .metric-label {
+            font-size: 11px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 600;
+            margin-bottom: 6px;
+        }
+
+        .metric-value {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--text-main);
+            margin-bottom: 8px;
+        }
+
+        .metric-deltas {
+            display: flex;
+            gap: 12px;
+            font-size: 11px;
+        }
+
+        .delta-positive { color: var(--positive); font-weight: 600; }
+        .delta-negative { color: var(--negative); font-weight: 600; }
+        .delta-neutral { color: var(--text-muted); }
+
+        /* NEW: Slim tile styles */
+        .slim-tiles-row {
+            display: flex;
+            gap: 12px;
+            margin-top: 16px;
+        }
+
+        .slim-tile {
+            flex: 1;
+            background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 10px 12px;
+            min-width: 0;
+        }
+
+        .slim-tile-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 6px;
+        }
+
+        .slim-tile-label {
+            font-size: 10px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 600;
+            flex: 1;
+        }
+
+        .slim-tile-deltas-header {
+            display: flex;
+            gap: 8px;
+        }
+
+        .slim-tile-deltas-header span {
+            font-size: 9px;
+            color: #94a3b8;
+            text-transform: uppercase;
+            font-weight: 700;
+            width: 50px;
+            text-align: right;
+        }
+
+        .slim-tile-values {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .slim-tile-value {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--text-main);
+            flex: 1;
+        }
+
+        .slim-tile-deltas {
+            display: flex;
+            gap: 8px;
+        }
+
+        .slim-tile-deltas span {
+            font-size: 11px;
+            font-weight: 600;
+            width: 50px;
+            text-align: right;
+        }
+
+        /* Layout demo */
+        .main-tiles-area {
+            display: flex;
+            gap: 12px;
+        }
+
+        .tiles-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            flex: 1;
+        }
+
+        .chart-area {
+            flex: 2;
+            background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 14px 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-muted);
+            font-size: 12px;
+        }
+
+        .section-label {
+            font-size: 14px;
+            color: var(--text-muted);
+            margin: 0 0 12px 0;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .divider {
+            border-top: 1px solid var(--border);
+            margin: 16px 0;
+            padding-top: 16px;
+        }
+    </style>
+</head>
+<body>
+    <h2>Slim Tile Mockup - Dynamic Metrics Row</h2>
+
+    <div class="card">
+        <h3 class="section-label">Key Metrics</h3>
+
+        <!-- Existing layout: 2x3 tiles + chart -->
+        <div class="main-tiles-area">
+            <div class="tiles-grid">
+                <!-- 6 fixed metric tiles -->
+                <div class="metric-tile">
+                    <div class="metric-label">Total Revenue</div>
+                    <div class="metric-value">$14.2 B</div>
+                    <div class="metric-deltas">
+                        <span>QoQ <span class="delta-positive">▲ 2.3%</span></span>
+                        <span>YoY <span class="delta-positive">▲ 6.8%</span></span>
+                    </div>
+                </div>
+                <div class="metric-tile">
+                    <div class="metric-label">Net Income</div>
+                    <div class="metric-value">$4.2 B</div>
+                    <div class="metric-deltas">
+                        <span>QoQ <span class="delta-positive">▲ 1.8%</span></span>
+                        <span>YoY <span class="delta-positive">▲ 8.2%</span></span>
+                    </div>
+                </div>
+                <div class="metric-tile">
+                    <div class="metric-label">Diluted EPS</div>
+                    <div class="metric-value">$2.98</div>
+                    <div class="metric-deltas">
+                        <span>QoQ <span class="delta-positive">▲ 2.1%</span></span>
+                        <span>YoY <span class="delta-positive">▲ 9.1%</span></span>
+                    </div>
+                </div>
+                <div class="metric-tile">
+                    <div class="metric-label">Return on Equity</div>
+                    <div class="metric-value">14.2%</div>
+                    <div class="metric-deltas">
+                        <span>QoQ <span class="delta-positive">▲ 15bps</span></span>
+                        <span>YoY <span class="delta-positive">▲ 45bps</span></span>
+                    </div>
+                </div>
+                <div class="metric-tile">
+                    <div class="metric-label">Efficiency Ratio</div>
+                    <div class="metric-value">52.1%</div>
+                    <div class="metric-deltas">
+                        <span>QoQ <span class="delta-positive">▼ 80bps</span></span>
+                        <span>YoY <span class="delta-positive">▼ 120bps</span></span>
+                    </div>
+                </div>
+                <div class="metric-tile">
+                    <div class="metric-label">Net Interest Margin</div>
+                    <div class="metric-value">1.58%</div>
+                    <div class="metric-deltas">
+                        <span>QoQ <span class="delta-negative">▼ 3bps</span></span>
+                        <span>YoY <span class="delta-negative">▼ 12bps</span></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chart (7th metric visualized) -->
+            <div class="chart-area">
+                [8-Quarter Trend Chart]<br>
+                Net Income / ROE / etc.
+            </div>
+        </div>
+
+        <!-- NEW: Slim tiles row for dynamic metrics -->
+        <div class="divider">
+            <h3 class="section-label" style="margin-bottom: 12px;">Additional Highlights</h3>
+            <div class="slim-tiles-row">
+                <div class="slim-tile">
+                    <div class="slim-tile-header">
+                        <span class="slim-tile-label">Operating Leverage</span>
+                        <div class="slim-tile-deltas-header">
+                            <span>QoQ</span>
+                            <span>YoY</span>
+                        </div>
+                    </div>
+                    <div class="slim-tile-values">
+                        <span class="slim-tile-value">3.2%</span>
+                        <div class="slim-tile-deltas">
+                            <span class="delta-positive">▲ 1.1%</span>
+                            <span class="delta-positive">▲ 2.8%</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="slim-tile">
+                    <div class="slim-tile-header">
+                        <span class="slim-tile-label">Pre-Provision Earnings</span>
+                        <div class="slim-tile-deltas-header">
+                            <span>QoQ</span>
+                            <span>YoY</span>
+                        </div>
+                    </div>
+                    <div class="slim-tile-values">
+                        <span class="slim-tile-value">$6.8 B</span>
+                        <div class="slim-tile-deltas">
+                            <span class="delta-positive">▲ 3.2%</span>
+                            <span class="delta-positive">▲ 11.5%</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="slim-tile">
+                    <div class="slim-tile-header">
+                        <span class="slim-tile-label">Non-Interest Income</span>
+                        <div class="slim-tile-deltas-header">
+                            <span>QoQ</span>
+                            <span>YoY</span>
+                        </div>
+                    </div>
+                    <div class="slim-tile-values">
+                        <span class="slim-tile-value">$5.9 B</span>
+                        <div class="slim-tile-deltas">
+                            <span class="delta-positive">▲ 4.1%</span>
+                            <span class="delta-positive">▲ 8.7%</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="slim-tile">
+                    <div class="slim-tile-header">
+                        <span class="slim-tile-label">Loan Growth</span>
+                        <div class="slim-tile-deltas-header">
+                            <span>QoQ</span>
+                            <span>YoY</span>
+                        </div>
+                    </div>
+                    <div class="slim-tile-values">
+                        <span class="slim-tile-value">$892 B</span>
+                        <div class="slim-tile-deltas">
+                            <span class="delta-positive">▲ 1.8%</span>
+                            <span class="delta-positive">▲ 5.2%</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="slim-tile">
+                    <div class="slim-tile-header">
+                        <span class="slim-tile-label">Deposit Growth</span>
+                        <div class="slim-tile-deltas-header">
+                            <span>QoQ</span>
+                            <span>YoY</span>
+                        </div>
+                    </div>
+                    <div class="slim-tile-values">
+                        <span class="slim-tile-value">$1.1 T</span>
+                        <div class="slim-tile-deltas">
+                            <span class="delta-positive">▲ 2.1%</span>
+                            <span class="delta-positive">▲ 6.8%</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <h2>Summary of Changes</h2>
+    <div class="card">
+        <ul style="line-height: 1.8; color: var(--text-main);">
+            <li><strong>Main Section (7 fixed metrics):</strong>
+                <ul>
+                    <li>6 standard tiles in 2x3 grid (Total Revenue, Net Income, EPS, ROE, Efficiency, NIM)</li>
+                    <li>1 chart showing 8-quarter trend of LLM-selected metric from the 7</li>
+                </ul>
+            </li>
+            <li><strong>New Slim Row (5 dynamic metrics):</strong>
+                <ul>
+                    <li>1x5 horizontal row of slim tiles below the main section</li>
+                    <li>Compact design: metric name + QoQ/YoY headers on top, value + deltas below</li>
+                    <li>LLM selects 5 additional noteworthy metrics based on significance</li>
+                    <li>Shows context metrics, growth indicators, or significant changes</li>
+                </ul>
+            </li>
+            <li><strong>Total: 12 metrics displayed</strong> (7 fixed + 5 dynamic)</li>
+        </ul>
+    </div>
+</body>
+</html>
