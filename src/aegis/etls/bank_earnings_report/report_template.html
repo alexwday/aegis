@@ -582,56 +582,48 @@
                 </div>
             </div>
 
-            <div style="display: flex; gap: 12px;">
-                <!-- Left side: metric tiles in 3-column rows -->
-                <div style="flex: 3; display: flex; flex-direction: column; gap: 12px;">
-                    {% for row in _1_keymetrics_tiles.metrics|batch(3) %}
-                    <div style="display: flex; gap: 12px;">
-                        {% for metric in row %}
-                        <div class="metric-box" style="flex: 1;">
-                            <span class="metric-label">{{ metric.label }}</span>
-                            <span class="metric-val">{{ metric.value }}</span>
-                            <div class="metric-changes-container">
-                                <div class="metric-change-item">
-                                    <span class="change-label">QoQ</span>
-                                    <span class="delta {{ metric.qoq.direction }}">{{ metric.qoq.display }}</span>
-                                </div>
-                                <div class="metric-change-item">
-                                    <span class="change-label">YoY</span>
-                                    <span class="delta {{ metric.yoy.direction }}">{{ metric.yoy.display }}</span>
-                                </div>
-                            </div>
+            <!-- Unified 5-column grid for main tiles, chart, and slim tiles
+                 Row 1: Main tile 1, Main tile 2, Main tile 3, Chart (spans 2 cols, 2 rows)
+                 Row 2: Main tile 4, Main tile 5, Main tile 6, (chart continues)
+                 Row 3: Slim tile 1, Slim tile 2, Slim tile 3, Slim tile 4, Slim tile 5
+            -->
+            <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px;">
+                <!-- Main tiles (6 tiles in positions 1-3 of rows 1-2) -->
+                {% for metric in _1_keymetrics_tiles.metrics %}
+                <div class="metric-box">
+                    <span class="metric-label">{{ metric.label }}</span>
+                    <span class="metric-val">{{ metric.value }}</span>
+                    <div class="metric-changes-container">
+                        <div class="metric-change-item">
+                            <span class="change-label">QoQ</span>
+                            <span class="delta {{ metric.qoq.direction }}">{{ metric.qoq.display }}</span>
                         </div>
-                        {% endfor %}
+                        <div class="metric-change-item">
+                            <span class="change-label">YoY</span>
+                            <span class="delta {{ metric.yoy.direction }}">{{ metric.yoy.display }}</span>
+                        </div>
                     </div>
-                    {% endfor %}
                 </div>
-                
-                <!-- -------- Subsection 1c: Trend Chart --------
+                {% if loop.index == 3 %}
+                <!-- -------- Trend Chart (after 3rd main tile) --------
                      DATA SOURCE: 1_keymetrics_chart.json (label, quarters, values)
                      SOURCE: Supp Pack
-                     NOTE: This chart is rendered dynamically via JavaScript
+                     NOTE: Chart spans columns 4-5 and rows 1-2
                 -->
-                <div id="trend-chart-container" style="flex: 2; background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%); border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.04); display: flex; flex-direction: column;">
+                <div id="trend-chart-container" style="grid-column: span 2; grid-row: span 2; background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%); border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.04); display: flex; flex-direction: column;">
                     <!-- Chart will be rendered here by JavaScript -->
                 </div>
+                {% endif %}
+                {% endfor %}
 
                 <!-- Chart data embedded for JavaScript -->
                 <script id="trend-chart-data" type="application/json">
                 {{ _1_keymetrics_chart | tojson }}
                 </script>
-            </div>
-            </div>
 
-            <!-- -------- Subsection 1c: Dynamic Metrics (Slim Tiles) --------
-                 DATA SOURCE: 1_keymetrics_dynamic.json (metrics array - 5 LLM-selected)
-                 SOURCE: Supp Pack
-                 NOTE: Dynamic metrics selected by LLM, spans full width below main tiles and chart
-                 LAYOUT: Full width row matching the 5-column grid (3 tiles + 2 chart = 5 units)
-            -->
-            <div style="display: flex; gap: 12px; margin-top: 12px;">
+                <!-- Slim tiles (5 tiles spanning full row 3) -->
                 {% for metric in _1_keymetrics_dynamic.metrics %}
-                <div style="flex: 1; min-width: 0; background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%); border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.04);">
+                <div style="background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%); border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.04);">
                     <!-- Metric name centered, matching main tile label style -->
                     <div style="font-size: 10px; color: var(--accent); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700; text-align: center; margin-bottom: 6px;">{{ metric.label }}</div>
                     <!-- Grid layout: 3 columns for Current/QoQ/YoY -->
@@ -647,6 +639,7 @@
                     </div>
                 </div>
                 {% endfor %}
+            </div>
             </div>
 
             <!-- -------- Subsection 1d: Items of Note --------
