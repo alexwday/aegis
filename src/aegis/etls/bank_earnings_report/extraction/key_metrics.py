@@ -69,11 +69,53 @@ EXCLUDED_METRICS = [
 ]
 
 
+def compute_trend_score(metric: Dict[str, Any]) -> float:
+    """
+    Compute a trend score indicating how suitable a metric is for charting.
+
+    Higher scores indicate more interesting/varied trends that would make
+    a compelling chart. Low scores indicate flat/stable metrics.
+
+    The score considers:
+    - Magnitude of QoQ, YoY, and multi-year changes
+    - Consistency of direction (sustained trends score higher)
+    - Recent momentum (QoQ weighted more than 5Y)
+
+    Args:
+        metric: Metric dict with qoq, yoy, 2y, 3y, 5y fields
+
+    Returns:
+        Float score (higher = better for charting)
+    """
+    qoq = abs(metric.get("qoq") or 0)
+    yoy = abs(metric.get("yoy") or 0)
+    y2 = abs(metric.get("2y") or 0)
+    y3 = abs(metric.get("3y") or 0)
+    y5 = abs(metric.get("5y") or 0)
+
+    # Weight recent changes more heavily
+    # QoQ and YoY tell the current story, multi-year shows trajectory
+    score = (qoq * 3.0) + (yoy * 2.5) + (y2 * 1.5) + (y3 * 1.0) + (y5 * 0.5)
+
+    # Bonus for directional consistency (sustained trends are more compelling)
+    changes = [metric.get("qoq"), metric.get("yoy"), metric.get("2y")]
+    non_null = [c for c in changes if c is not None]
+    if len(non_null) >= 2:
+        # All same direction = bonus
+        all_positive = all(c > 0 for c in non_null)
+        all_negative = all(c < 0 for c in non_null)
+        if all_positive or all_negative:
+            score *= 1.3  # 30% bonus for consistent direction
+
+    return round(score, 1)
+
+
 def format_key_metrics_for_llm(metrics: List[Dict[str, Any]], key_metric_names: List[str]) -> str:
     """
     Format the 7 fixed key metrics into a table for LLM chart selection.
 
     Uses proper bps/% formatting so LLM understands the data correctly.
+    Includes a trend score to help identify metrics suitable for charting.
 
     Args:
         metrics: List of metric dicts from retrieve_all_metrics()
@@ -92,8 +134,8 @@ def format_key_metrics_for_llm(metrics: List[Dict[str, Any]], key_metric_names: 
     key_metrics = [m for m in metrics if m["parameter"] in key_metric_names]
 
     lines = [
-        "| Metric | Value | QoQ | YoY | 2Y | 3Y | 5Y |",
-        "|--------|-------|-----|-----|----|----|----| ",
+        "| Metric | Value | QoQ | YoY | 2Y | Trend Score | Chart Suitable? |",
+        "|--------|-------|-----|-----|----| -----------|-----------------|",
     ]
 
     for m in key_metrics:
@@ -105,9 +147,21 @@ def format_key_metrics_for_llm(metrics: List[Dict[str, Any]], key_metric_names: 
         qoq = format_delta_for_llm(m.get("qoq"), units, is_bps)
         yoy = format_delta_for_llm(m.get("yoy"), units, is_bps)
         y2 = format_delta_for_llm(m.get("2y"), units, is_bps)
-        y3 = format_delta_for_llm(m.get("3y"), units, is_bps)
-        y5 = format_delta_for_llm(m.get("5y"), units, is_bps)
-        lines.append(f"| {name} | {val} | {qoq} | {yoy} | {y2} | {y3} | {y5} |")
+
+        # Compute trend score
+        trend_score = compute_trend_score(m)
+
+        # Determine chart suitability
+        if trend_score >= 15:
+            suitability = "EXCELLENT"
+        elif trend_score >= 8:
+            suitability = "Good"
+        elif trend_score >= 4:
+            suitability = "Fair"
+        else:
+            suitability = "Poor (flat)"
+
+        lines.append(f"| {name} | {val} | {qoq} | {yoy} | {y2} | {trend_score} | {suitability} |")
 
     return "\n".join(lines)
 
@@ -247,16 +301,23 @@ You will be given data for 7 KEY METRICS that are ALWAYS displayed in the report
 
 Your job is to select ONE of these 7 metrics to feature on an 8-quarter trend chart.
 
-Selection criteria - choose the metric with:
-- The most compelling trend story based on QoQ, YoY, and multi-year (2Y-5Y) changes
-- A pattern that tells a meaningful narrative (strong growth, notable recovery, significant shift)
-- Data that would be most valuable to highlight visually for investors
+CRITICAL: The chart needs to show meaningful visual variation over 8 quarters.
+A flat line with minimal change makes a POOR chart choice.
 
-Analyze the trend data carefully. Look for:
-- Consistent directional movement (sustained growth or decline)
-- Inflection points (recovery after decline, acceleration of growth)
-- Magnitude of changes (large YoY or multi-year movements)
-- Divergence from historical patterns
+The table includes:
+- "Trend Score": Higher = more variation/movement in the data
+- "Chart Suitable?": EXCELLENT/Good/Fair/Poor(flat) rating
+
+STRONGLY PREFER metrics rated "EXCELLENT" or "Good" for the chart.
+AVOID metrics rated "Poor (flat)" - they will produce uninteresting charts.
+
+Selection criteria - choose the metric with:
+- The HIGHEST trend score (most movement/variation)
+- A meaningful narrative (sustained growth, recovery, significant shift)
+- Significant QoQ, YoY, and 2Y changes that will be visually apparent
+
+DO NOT choose a metric just because it's important if it has low variation.
+A flat EPS line at $3M for 6 quarters is NOT a good chart - pick something with movement.
 
 ## TASK 2: Select 5 Additional Highlight Metrics (from Remaining Pool)
 
@@ -282,8 +343,9 @@ selections.
 
 {key_metrics_table}
 
-Review the QoQ, YoY, and multi-year trend columns. Select the ONE metric that has the most \
-compelling trend story to visualize on an 8-quarter chart.
+For the CHART selection: Look at the "Trend Score" and "Chart Suitable?" columns.
+Pick the metric with the HIGHEST trend score that is rated "EXCELLENT" or "Good".
+The chart must show meaningful visual variation - avoid flat/stable metrics.
 
 ## REMAINING METRICS (select 5 for Additional Highlights):
 
