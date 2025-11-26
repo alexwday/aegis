@@ -27,15 +27,43 @@ from aegis.utils.settings import config
 # Only exact matches will be processed - no fuzzy matching
 
 MONITORED_PLATFORMS = [
+    "Canadian Banking",
+    "Canadian Wealth & Insurance",
     "U.S. & International Banking",
-    "Wealth Management",
-    "Insurance",
-    "Corporate Support",
+    "Personal Banking",
+    "Commercial Banking",
     "Capital Markets",
+    "Corporate Support",
 ]
 
 # Segment metadata for LLM context and descriptions
 SEGMENT_METADATA = {
+    "Canadian Banking": {
+        "description": (
+            "Canadian retail and commercial banking including personal banking, mortgages, "
+            "deposits, business lending, and credit cards"
+        ),
+        "key_focus": [
+            "loan growth",
+            "deposit growth",
+            "net interest margin",
+            "credit quality",
+            "efficiency",
+        ],
+    },
+    "Canadian Wealth & Insurance": {
+        "description": (
+            "Canadian wealth management and insurance operations including private banking, "
+            "asset management, and insurance products"
+        ),
+        "key_focus": [
+            "AUM growth",
+            "fee income",
+            "net flows",
+            "premium revenue",
+            "client acquisition",
+        ],
+    },
     "U.S. & International Banking": {
         "description": (
             "U.S. and international retail banking operations including personal banking, "
@@ -49,12 +77,31 @@ SEGMENT_METADATA = {
             "cross-border synergies",
         ],
     },
-    "Wealth Management": {
+    "Personal Banking": {
         "description": (
-            "Wealth management including private banking, asset management, "
-            "brokerage, and investment services"
+            "Personal banking services including deposits, mortgages, credit cards, "
+            "and consumer lending"
         ),
-        "key_focus": ["AUM growth", "fee income", "net flows", "client acquisition", "margins"],
+        "key_focus": [
+            "deposit growth",
+            "mortgage volumes",
+            "credit card balances",
+            "customer acquisition",
+            "digital adoption",
+        ],
+    },
+    "Commercial Banking": {
+        "description": (
+            "Commercial banking services including business lending, treasury management, "
+            "and merchant services"
+        ),
+        "key_focus": [
+            "loan growth",
+            "deposit growth",
+            "fee income",
+            "credit quality",
+            "client retention",
+        ],
     },
     "Capital Markets": {
         "description": "Investment banking, trading, advisory, and corporate banking services",
@@ -64,15 +111,6 @@ SEGMENT_METADATA = {
             "underwriting",
             "market share",
             "ROE",
-        ],
-    },
-    "Insurance": {
-        "description": "Insurance products including life, health, property, and reinsurance",
-        "key_focus": [
-            "premium growth",
-            "claims ratio",
-            "underwriting income",
-            "investment income",
         ],
     },
     "Corporate Support": {
