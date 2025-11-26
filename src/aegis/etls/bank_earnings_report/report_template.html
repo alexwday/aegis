@@ -767,7 +767,7 @@
                             <div style="font-size: 12px; color: var(--text-main); line-height: 1.5;">{{ segment.description }}</div>
                         </div>
                         <!-- Metrics row - 9-column grid (3 metrics x 3 values each) with dividers -->
-                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1px 1fr 1fr 1fr 1px 1fr 1fr 1fr; border-top: 1px solid #e2e8f0; padding-top: 10px; gap: 4px 8px;">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 20px 1fr 1fr 1fr 20px 1fr 1fr 1fr; border-top: 1px solid #e2e8f0; padding-top: 10px; gap: 4px 4px;">
                             {% for metric in segment.metrics %}
                             <!-- Metric title spanning 3 columns -->
                             <div style="grid-column: span 3; text-align: center; font-size: 10px; color: var(--accent); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700; margin-bottom: 4px;">{{ metric.label }}</div>
@@ -784,7 +784,7 @@
                             <div style="text-align: center; font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700;">YoY</div>
                             {% if not loop.last %}
                             <!-- Vertical divider -->
-                            <div style="background: #e2e8f0; grid-row: span 2;"></div>
+                            <div style="border-left: 1px solid #e2e8f0; grid-row: span 2; justify-self: center;"></div>
                             {% endif %}
                             {% endfor %}
 
