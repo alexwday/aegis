@@ -14,8 +14,10 @@ import json
 import uuid
 from typing import Any, Dict, List
 
+from sqlalchemy import text
+
 from aegis.connections.llm_connector import complete_with_tools
-from aegis.connections.postgres_connector import fetch_all
+from aegis.connections.postgres_connector import get_connection
 from aegis.utils.settings import config
 from aegis.utils.ssl import setup_ssl
 from aegis.connections.oauth_connector import setup_authentication
@@ -33,41 +35,45 @@ TARGET_METRICS = [
 ]
 
 
-async def get_enterprise_parameters(execution_id: str) -> List[Dict[str, Any]]:
+async def get_enterprise_parameters() -> List[Dict[str, Any]]:
     """Fetch all Enterprise segment parameters for RBC Q3 2025."""
 
-    query = """
-        SELECT DISTINCT
-            parameter,
-            units,
-            actual,
-            qoq,
-            yoy
-        FROM benchmarking_report
-        WHERE bank_symbol = 'RY'
-          AND fiscal_year = 2025
-          AND quarter = 'Q3'
-          AND segment = 'Enterprise'
-        ORDER BY parameter
-    """
-
     try:
-        results = await fetch_all(query, execution_id=str(execution_id))
-        return [dict(row) for row in results]
+        async with get_connection() as conn:
+            result = await conn.execute(
+                text(
+                    """
+                    SELECT DISTINCT
+                        "Parameter" as parameter,
+                        "Units" as units,
+                        "Actual" as actual,
+                        "QoQ" as qoq,
+                        "YoY" as yoy
+                    FROM benchmarking_report
+                    WHERE "Bank Symbol" = 'RY'
+                      AND "Fiscal Year" = 2025
+                      AND "Quarter" = 'Q3'
+                      AND "Segment" = 'Enterprise'
+                    ORDER BY "Parameter"
+                    """
+                )
+            )
+            rows = result.fetchall()
+            return [dict(row._mapping) for row in rows]
     except Exception as e:
         if "does not exist" in str(e):
             print("\n❌ ERROR: The 'benchmarking_report' table does not exist.")
             print("   This table needs to be created and populated with bank metrics data.")
             print("\n   The table should have columns:")
-            print("   - bank_symbol (e.g., 'RY' for Royal Bank)")
-            print("   - fiscal_year (e.g., 2025)")
-            print("   - quarter (e.g., 'Q3')")
-            print("   - segment (e.g., 'Enterprise')")
-            print("   - parameter (metric name)")
-            print("   - actual (current value)")
-            print("   - units (e.g., 'millions', '%')")
-            print("   - qoq (quarter-over-quarter change)")
-            print("   - yoy (year-over-year change)")
+            print("   - Bank Symbol (e.g., 'RY' for Royal Bank)")
+            print("   - Fiscal Year (e.g., 2025)")
+            print("   - Quarter (e.g., 'Q3')")
+            print("   - Segment (e.g., 'Enterprise')")
+            print("   - Parameter (metric name)")
+            print("   - Actual (current value)")
+            print("   - Units (e.g., 'millions', '%')")
+            print("   - QoQ (quarter-over-quarter change)")
+            print("   - YoY (year-over-year change)")
             return []
         raise
 
@@ -220,7 +226,7 @@ async def main():
 
     # Get available parameters
     print("\n📊 Fetching Enterprise parameters from database...")
-    params = await get_enterprise_parameters(execution_id)
+    params = await get_enterprise_parameters()
 
     if not params:
         print("\n⚠️  No parameters found. Cannot proceed with metric matching.")
