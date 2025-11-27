@@ -202,16 +202,17 @@ async def extract_transcript_items_of_note(
     max_items: int = 10,
 ) -> Dict[str, Any]:
     """
-    Extract notable items/highlights from the Management Discussion section.
+    Extract significant impact items from the Management Discussion section.
 
-    Identifies 8-12 specific, actionable items that management highlighted:
-    - Key achievements or milestones
-    - Notable developments or changes
-    - Concerns or challenges acknowledged
-    - Strategic initiatives mentioned
-    - Forward guidance themes
+    Items of Note are SPECIFIC EVENTS with quantifiable $ impact:
+    - Acquisitions, divestitures, major deals
+    - Fines, settlements, regulatory resolutions
+    - Litigation reserves, legal outcomes
+    - Restructuring charges, impairments
+    - One-time gains or losses
+    - Major contract wins/losses
 
-    These will later be combined with RTS items and deduplicated.
+    NOT general themes, observations, or qualitative commentary.
 
     Args:
         bank_info: Bank information dict with bank_id, bank_name, bank_symbol
@@ -223,7 +224,7 @@ async def extract_transcript_items_of_note(
     Returns:
         Dict with:
             - source: "Transcript"
-            - items: List of notable item strings
+            - items: List of item dicts with description, impact, segment, timing
     """
     logger = get_logger()
     execution_id = context.get("execution_id")
@@ -262,74 +263,124 @@ async def extract_transcript_items_of_note(
         return {"source": "Transcript", "items": []}
 
     # Build prompts
-    system_prompt = f"""You are a senior financial analyst identifying key items of note from \
-bank earnings call transcripts.
+    system_prompt = """You are a senior financial analyst extracting significant impact items \
+from bank earnings call transcripts.
 
-## YOUR TASK
+## WHAT "ITEMS OF NOTE" MEANS
 
-Extract {max_items} notable items that management highlighted in their prepared remarks. \
-These are the "headlines" - specific developments, achievements, or concerns worth noting.
+Items of Note are SPECIFIC EVENTS that have a quantifiable dollar impact on the business. \
+These are high-profile items that affect financial results.
 
-## WHAT MAKES A GOOD ITEM OF NOTE
+## TYPES OF ITEMS TO EXTRACT
 
-- Specific and actionable (not generic)
-- Something management emphasized or called attention to
-- A notable development, achievement, milestone, or concern
-- Forward-looking themes or strategic priorities
-- Changes from prior quarters or expectations
+- **Acquisitions/Divestitures**: Deals, purchases, sales of businesses
+- **Regulatory**: Fines, settlements, consent orders, remediation costs
+- **Legal**: Litigation reserves, lawsuit settlements, legal judgments
+- **Restructuring**: Branch closures, severance, integration costs
+- **Impairments**: Goodwill writedowns, asset impairments
+- **One-time items**: Gains on sales, insurance recoveries, tax adjustments
+- **Major contracts**: Significant wins or losses with $ impact
+
+## WHAT TO EXTRACT FOR EACH ITEM
+
+1. **Description**: What specifically happened (the event, not commentary about it)
+2. **Impact**: Dollar amount (stated or estimated). Use format like "+$150M" or "-$45M"
+3. **Segment**: Which business segment affected (e.g., "Canadian Banking", "Capital Markets", \
+"All", or "N/A")
+4. **Timing**: Is it recurring or one-time? Expected resolution date if applicable
+
+## IMPORTANT RULES
+
+- Only extract SPECIFIC EVENTS with $ impact - not themes or observations
+- The event must be STATED, not assumed or implied
+- If no $ amount is given, estimate based on context or use "TBD"
+- If the transcript doesn't mention specific impact items, return fewer items or none
+- Do NOT fabricate items - only extract what is actually mentioned
 
 ## EXAMPLES OF GOOD ITEMS
 
-- "M&A pipeline at highest level since 2021, signaling strong deal activity"
-- "Credit normalization proceeding as expected with no surprises"
-- "Deposit competition has stabilized, easing margin pressure"
-- "Digital banking adoption accelerating with record mobile engagement"
-- "Commercial real estate exposure being actively managed down"
+| Description | Impact | Segment | Timing |
+|-------------|--------|---------|--------|
+| HSBC Canada integration costs | -$150M | Canadian Banking | One-time, through 2025 |
+| Settlement of OSFI regulatory matter | -$45M | All | Resolved Q2 |
+| Sale of insurance subsidiary | +$200M | Wealth & Insurance | Expected Q3 |
+| Litigation reserve for class action | -$80M | Capital Markets | Resolution 2026 |
 
-## EXAMPLES OF BAD ITEMS
+## EXAMPLES OF BAD ITEMS (DO NOT EXTRACT)
 
-- "Revenue increased this quarter" - too vague, just a metric
-- "We delivered strong results" - generic boilerplate
-- "NIM was 2.45%" - just a number, no insight
+- "M&A pipeline at highest level since 2021" - not a specific $ event
+- "Credit quality remains strong" - qualitative observation
+- "We expect continued growth" - forward guidance, not an event
+- "Trading performed well" - performance commentary, not an event"""
 
-## FORMAT
-
-- Each item should be 1 sentence (15-25 words)
-- Start with the key point, not "Management said..." or "The bank reported..."
-- Be specific about what's notable
-- Include context that makes it meaningful"""
-
-    user_prompt = f"""Extract the {max_items} most notable items from \
-{bank_info['bank_name']}'s {quarter} {fiscal_year} earnings call management discussion.
+    user_prompt = f"""Extract significant impact items from {bank_info['bank_name']}'s \
+{quarter} {fiscal_year} earnings call.
 
 {md_content}
 
-Identify the key highlights, developments, and concerns management emphasized."""
+Identify SPECIFIC EVENTS with dollar impact. Only extract items that are explicitly mentioned \
+with clear financial implications. If the transcript doesn't contain specific impact items, \
+return an empty list - do not fabricate items."""
 
-    # Tool definition
+    # Tool definition with structured output
     tool_definition = {
         "type": "function",
         "function": {
             "name": "extract_items_of_note",
-            "description": f"Extract {max_items} notable items from management remarks",
+            "description": "Extract specific $ impact events from earnings call",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "items": {
                         "type": "array",
                         "items": {
-                            "type": "string",
-                            "description": (
-                                "Notable item (15-25 words). Specific highlight, "
-                                "development, or concern. Not generic or metric-only."
-                            ),
+                            "type": "object",
+                            "properties": {
+                                "description": {
+                                    "type": "string",
+                                    "description": (
+                                        "Brief description of the specific event (10-20 words). "
+                                        "What happened, not commentary about it."
+                                    ),
+                                },
+                                "impact": {
+                                    "type": "string",
+                                    "description": (
+                                        "Dollar impact with sign. Examples: '+$150M', '-$45M', "
+                                        "'~$100M', 'TBD'. Use M for millions, B for billions."
+                                    ),
+                                },
+                                "segment": {
+                                    "type": "string",
+                                    "description": (
+                                        "Affected segment: 'Canadian Banking', 'Capital Markets', "
+                                        "'Wealth & Insurance', 'U.S. Banking', 'All', or 'N/A'"
+                                    ),
+                                },
+                                "timing": {
+                                    "type": "string",
+                                    "description": (
+                                        "Timing info: 'One-time', 'Recurring', 'Q3 2025', "
+                                        "'Through 2025', 'Resolution 2026', etc."
+                                    ),
+                                },
+                            },
+                            "required": ["description", "impact", "segment", "timing"],
                         },
-                        "description": f"List of {max_items} notable items from the call",
-                        "minItems": 1,
+                        "description": (
+                            "List of significant impact items (may be empty if none found)"
+                        ),
                         "maxItems": max_items,
                     },
+                    "extraction_notes": {
+                        "type": "string",
+                        "description": (
+                            "Brief note on extraction: how many items found, "
+                            "or why none were found if list is empty."
+                        ),
+                    },
                 },
-                "required": ["items"],
+                "required": ["items", "extraction_notes"],
             },
         },
     }
@@ -348,8 +399,8 @@ Identify the key highlights, developments, and concerns management emphasized.""
             context=context,
             llm_params={
                 "model": model,
-                "temperature": 0.3,
-                "max_tokens": 2000,
+                "temperature": 0.2,  # Lower temperature for factual extraction
+                "max_tokens": 3000,
             },
         )
 
@@ -359,14 +410,16 @@ Identify the key highlights, developments, and concerns management emphasized.""
                 tool_call = message["tool_calls"][0]
                 function_args = json.loads(tool_call["function"]["arguments"])
                 items = function_args.get("items", [])
+                notes = function_args.get("extraction_notes", "")
 
                 logger.info(
                     "etl.bank_earnings_report.transcript_items_complete",
                     execution_id=execution_id,
                     items_count=len(items),
+                    extraction_notes=notes,
                 )
 
-                return {"source": "Transcript", "items": items}
+                return {"source": "Transcript", "items": items, "notes": notes}
 
         logger.warning(
             "etl.bank_earnings_report.transcript_items_no_result",

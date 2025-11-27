@@ -82,7 +82,7 @@ async def explore_table_data() -> None:
             )
             rows = result.fetchall()
             if rows:
-                print(f"\n   RBC data available:")
+                print("\n   RBC data available:")
                 for row in rows:
                     print(f"      {row[0]} | {row[1]} {row[2]} | {row[3]}")
     except Exception as e:

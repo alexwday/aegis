@@ -693,6 +693,7 @@ async def extract_all_sections(
         "source": "Transcript",
         "items_count": len(transcript_items.get("items", [])),
         "items": transcript_items.get("items", []),
+        "extraction_notes": transcript_items.get("notes", ""),
     }
 
     logger.info(
