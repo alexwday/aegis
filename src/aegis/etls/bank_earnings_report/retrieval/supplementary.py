@@ -1322,6 +1322,10 @@ async def retrieve_all_metrics_with_history(
                         "Actual",
                         "QoQ",
                         "YoY",
+                        "2Y",
+                        "3Y",
+                        "4Y",
+                        "5Y",
                         "Units",
                         "BPS"
                     FROM benchmarking_report
@@ -1344,8 +1348,12 @@ async def retrieve_all_metrics_with_history(
                 actual = float(row[3]) if row[3] is not None else None
                 qoq = float(row[4]) if row[4] is not None else None
                 yoy = float(row[5]) if row[5] is not None else None
-                units = row[6] if row[6] else ""
-                bps_raw = row[7]
+                delta_2y = float(row[6]) if row[6] is not None else None
+                delta_3y = float(row[7]) if row[7] is not None else None
+                delta_4y = float(row[8]) if row[8] is not None else None
+                delta_5y = float(row[9]) if row[9] is not None else None
+                units = row[10] if row[10] else ""
+                bps_raw = row[11]
                 is_bps = bps_raw in ("Yes", "yes", True, 1) if bps_raw else False
 
                 if param_name not in metrics_data:
@@ -1356,6 +1364,10 @@ async def retrieve_all_metrics_with_history(
                         "current": None,
                         "qoq": None,
                         "yoy": None,
+                        "2y": None,
+                        "3y": None,
+                        "4y": None,
+                        "5y": None,
                         "history_lookup": {},
                     }
 
@@ -1367,6 +1379,10 @@ async def retrieve_all_metrics_with_history(
                     metrics_data[param_name]["current"] = actual
                     metrics_data[param_name]["qoq"] = qoq
                     metrics_data[param_name]["yoy"] = yoy
+                    metrics_data[param_name]["2y"] = delta_2y
+                    metrics_data[param_name]["3y"] = delta_3y
+                    metrics_data[param_name]["4y"] = delta_4y
+                    metrics_data[param_name]["5y"] = delta_5y
 
             # Build final output with history in chronological order
             output = []
@@ -1388,6 +1404,10 @@ async def retrieve_all_metrics_with_history(
                         "current": metric["current"],
                         "qoq": metric["qoq"],
                         "yoy": metric["yoy"],
+                        "2y": metric["2y"],
+                        "3y": metric["3y"],
+                        "4y": metric["4y"],
+                        "5y": metric["5y"],
                         "history": history,
                     }
                 )
@@ -1465,10 +1485,6 @@ def format_raw_metrics_table(
         # Determine display type: % only if is_bps, otherwise $M
         display_type = "%" if is_bps else "$M"
 
-        # Get historical values for multi-year delta calculations
-        history_values = [h["value"] for h in metric["history"]]
-        current_val = history_values[-1] if history_values else None
-
         # Format historical values for display
         formatted_values = []
         raw_values = []
@@ -1519,29 +1535,17 @@ def format_raw_metrics_table(
                 yoy_display = f"{yoy_val:+.1f}%"
                 yoy_raw = f"{yoy_val:.1f}"
 
-        # Calculate multi-year deltas (2Y, 3Y, 4Y, 5Y) for TSV only
-        # History is 8 quarters: [Q-7, Q-6, Q-5, Q-4, Q-3, Q-2, Q-1, Current]
-        # 2Y = compare current to Q-7 (index 0), 8 quarters back
-        # 3Y = would need 12 quarters, 4Y = 16, 5Y = 20 - not available with 8Q
-        # With 8 quarters, we can only calculate up to ~2Y reliably
-        # For now, calculate based on available data positions
+        # Format multi-year deltas (2Y, 3Y, 4Y, 5Y) from database for TSV only
         multi_year_deltas = []
-        for years_back, quarters_back in [(2, 8), (3, 12), (4, 16), (5, 20)]:
-            # Index into history (0 = oldest, -1 = current)
-            idx = len(history_values) - quarters_back
-            if idx >= 0 and current_val is not None and history_values[idx] is not None:
-                old_val = history_values[idx]
-                if old_val != 0:
-                    if is_bps:
-                        delta = current_val - old_val
-                        multi_year_deltas.append(f"{delta:.0f}")
-                    else:
-                        delta_pct = ((current_val - old_val) / abs(old_val)) * 100
-                        multi_year_deltas.append(f"{delta_pct:.1f}")
-                else:
-                    multi_year_deltas.append("")
-            else:
+        for delta_key in ["2y", "3y", "4y", "5y"]:
+            delta_val = metric.get(delta_key)
+            if delta_val is None:
                 multi_year_deltas.append("")
+            else:
+                if is_bps:
+                    multi_year_deltas.append(f"{delta_val:.0f}")
+                else:
+                    multi_year_deltas.append(f"{delta_val:.1f}")
 
         rows.append(
             {
