@@ -510,13 +510,20 @@ def format_delta(value: Optional[float], units: str, is_bps: bool = False) -> Di
         if abs_val >= BPS_TO_PERCENT_THRESHOLD:
             # Convert bps to percentage: divide by 100
             pct_val = abs_val / 100
-            display = f"{arrow} {pct_val:.1f}%" if value != 0 else "—"
+            # Use comma separator for large percentages (>= 1000)
+            if pct_val >= 1000:
+                display = f"{arrow} {pct_val:,.1f}%" if value != 0 else "—"
+            else:
+                display = f"{arrow} {pct_val:.1f}%" if value != 0 else "—"
         else:
             # Display as basis points - value is already in bps
             display = f"{arrow} {abs_val:.0f}bps" if value != 0 else "—"
     else:
-        # Display as percentage
-        display = f"{arrow} {abs_val:.1f}%" if value != 0 else "—"
+        # Display as percentage - use comma separator for large values (>= 1000)
+        if abs_val >= 1000:
+            display = f"{arrow} {abs_val:,.1f}%" if value != 0 else "—"
+        else:
+            display = f"{arrow} {abs_val:.1f}%" if value != 0 else "—"
 
     return {"value": abs_val, "direction": direction, "display": display}
 
@@ -551,10 +558,16 @@ def format_delta_for_llm(value: Optional[float], units: str, is_bps: bool = Fals
         if abs_val >= BPS_TO_PERCENT_THRESHOLD:
             # Convert bps to percentage: divide by 100
             pct_val = value / 100
+            # Use comma separator for large percentages (>= 1000)
+            if abs(pct_val) >= 1000:
+                return f"{sign}{pct_val:,.1f}%"
             return f"{sign}{pct_val:.1f}%"
         else:
             return f"{sign}{value:.0f}bps"
     else:
+        # Use comma separator for large percentages (>= 1000)
+        if abs_val >= 1000:
+            return f"{sign}{value:,.1f}%"
         return f"{sign}{value:.1f}%"
 
 
