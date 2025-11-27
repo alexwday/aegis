@@ -1568,3 +1568,317 @@ def format_raw_metrics_table(
         "rows": rows,
         "tsv": "\n".join(tsv_lines),
     }
+
+
+# =============================================================================
+# Raw Segment Metrics Table (All segment metrics with 8Q history)
+# =============================================================================
+
+
+async def retrieve_segment_metrics_with_history(
+    bank_symbol: str,
+    fiscal_year: int,
+    quarter: str,
+    platform: str,
+    context: Dict[str, Any],
+    num_quarters: int = 8,
+) -> List[Dict[str, Any]]:
+    """
+    Retrieve ALL metrics for a specific segment/platform with 8-quarter historical data.
+
+    Similar to retrieve_all_metrics_with_history but filtered by a specific Platform
+    instead of 'Enterprise'.
+
+    Args:
+        bank_symbol: Bank symbol with suffix (e.g., 'RY-CA')
+        fiscal_year: Current fiscal year
+        quarter: Current quarter
+        platform: Platform name (e.g., 'Canadian Banking')
+        context: Execution context with execution_id
+        num_quarters: Number of quarters to retrieve (default 8)
+
+    Returns:
+        List of metric dicts with history, same structure as retrieve_all_metrics_with_history
+    """
+    logger = get_logger()
+    execution_id = context.get("execution_id")
+
+    # Get list of quarters to query
+    quarters_to_query = get_previous_quarters(fiscal_year, quarter, num_quarters)
+
+    logger.info(
+        "etl.bank_earnings_report.retrieve_segment_metrics_history",
+        execution_id=execution_id,
+        bank_symbol=bank_symbol,
+        platform=platform,
+        quarters=len(quarters_to_query),
+    )
+
+    try:
+        async with get_connection() as conn:
+            # Build WHERE clause for quarter filtering
+            quarter_conditions = []
+            params = {"bank_symbol": bank_symbol, "platform": platform}
+
+            for i, (year, q) in enumerate(quarters_to_query):
+                quarter_conditions.append(
+                    f'("fiscal_year" = :year_{i} AND "quarter" = :quarter_{i})'
+                )
+                params[f"year_{i}"] = year
+                params[f"quarter_{i}"] = q
+
+            quarter_filter = " OR ".join(quarter_conditions)
+
+            # Query all metrics for this platform across all quarters
+            result = await conn.execute(
+                text(
+                    f"""
+                    SELECT
+                        "Parameter",
+                        "fiscal_year",
+                        "quarter",
+                        "Actual",
+                        "QoQ",
+                        "YoY",
+                        "2Y",
+                        "3Y",
+                        "4Y",
+                        "5Y",
+                        "Units",
+                        "BPS"
+                    FROM benchmarking_report
+                    WHERE "bank_symbol" = :bank_symbol
+                      AND "Platform" = :platform
+                      AND ({quarter_filter})
+                    ORDER BY "Parameter", "fiscal_year", "quarter"
+                """
+                ),
+                params,
+            )
+
+            # Group results by parameter
+            metrics_data: Dict[str, Dict[str, Any]] = {}
+
+            for row in result:
+                param_name = row[0]
+                year = row[1]
+                q = row[2]
+                actual = float(row[3]) if row[3] is not None else None
+                qoq = float(row[4]) if row[4] is not None else None
+                yoy = float(row[5]) if row[5] is not None else None
+                delta_2y = float(row[6]) if row[6] is not None else None
+                delta_3y = float(row[7]) if row[7] is not None else None
+                delta_4y = float(row[8]) if row[8] is not None else None
+                delta_5y = float(row[9]) if row[9] is not None else None
+                units = row[10] if row[10] else ""
+                bps_raw = row[11]
+                is_bps = bps_raw in ("Yes", "yes", True, 1) if bps_raw else False
+
+                if param_name not in metrics_data:
+                    metrics_data[param_name] = {
+                        "parameter": param_name,
+                        "units": units,
+                        "is_bps": is_bps,
+                        "current": None,
+                        "qoq": None,
+                        "yoy": None,
+                        "2y": None,
+                        "3y": None,
+                        "4y": None,
+                        "5y": None,
+                        "history_lookup": {},
+                    }
+
+                # Store value in lookup
+                metrics_data[param_name]["history_lookup"][(year, q)] = actual
+
+                # If this is the current quarter, capture current value and deltas
+                if year == fiscal_year and q == quarter:
+                    metrics_data[param_name]["current"] = actual
+                    metrics_data[param_name]["qoq"] = qoq
+                    metrics_data[param_name]["yoy"] = yoy
+                    metrics_data[param_name]["2y"] = delta_2y
+                    metrics_data[param_name]["3y"] = delta_3y
+                    metrics_data[param_name]["4y"] = delta_4y
+                    metrics_data[param_name]["5y"] = delta_5y
+
+            # Build final output with history in chronological order
+            output = []
+            for param_name in sorted(metrics_data.keys()):
+                metric = metrics_data[param_name]
+                history = []
+
+                for year, q in quarters_to_query:
+                    value = metric["history_lookup"].get((year, q))
+                    # Format period as "Q1 24" style
+                    period_label = f"{q} {str(year)[2:]}"
+                    history.append({"period": period_label, "value": value})
+
+                output.append(
+                    {
+                        "parameter": metric["parameter"],
+                        "units": metric["units"],
+                        "is_bps": metric["is_bps"],
+                        "current": metric["current"],
+                        "qoq": metric["qoq"],
+                        "yoy": metric["yoy"],
+                        "2y": metric["2y"],
+                        "3y": metric["3y"],
+                        "4y": metric["4y"],
+                        "5y": metric["5y"],
+                        "history": history,
+                    }
+                )
+
+            logger.info(
+                "etl.bank_earnings_report.segment_metrics_history_retrieved",
+                execution_id=execution_id,
+                platform=platform,
+                metric_count=len(output),
+                quarters=num_quarters,
+            )
+
+            return output
+
+    except Exception as e:
+        logger.error(
+            "etl.bank_earnings_report.segment_metrics_history_error",
+            execution_id=execution_id,
+            platform=platform,
+            error=str(e),
+        )
+        return []
+
+
+def format_segment_raw_table(
+    metrics_with_history: List[Dict[str, Any]],
+    display_quarters: int = 4,
+) -> Dict[str, Any]:
+    """
+    Format segment metrics into a raw data table for expandable display.
+
+    Creates a table structure with:
+    - HTML display: Last N quarters (default 4) + Type + QoQ + YoY
+    - TSV copy: Full 8 quarters + Type + all deltas (QoQ, YoY, 2Y, 3Y, 4Y, 5Y)
+
+    Args:
+        metrics_with_history: List from retrieve_segment_metrics_with_history()
+        display_quarters: Number of quarters to show in HTML (default 4)
+
+    Returns:
+        Dict with table structure:
+        {
+            "headers": ["Metric", "Q2 24", "Q3 24", "Q4 24", "Q1 25", "Type", "QoQ", "YoY"],
+            "rows": [...],
+            "tsv": "Full 8Q data with all deltas..."
+        }
+    """
+    if not metrics_with_history:
+        return {"headers": [], "rows": [], "tsv": ""}
+
+    # Get all quarter headers from first metric
+    all_quarter_headers = [h["period"] for h in metrics_with_history[0]["history"]]
+
+    # HTML: Only show last N quarters
+    display_quarter_headers = all_quarter_headers[-display_quarters:]
+    headers = ["Metric"] + display_quarter_headers + ["Type", "QoQ", "YoY"]
+
+    # TSV: All 8 quarters + all deltas
+    tsv_headers = ["Metric"] + all_quarter_headers + ["Type", "QoQ", "YoY", "2Y", "3Y", "4Y", "5Y"]
+
+    rows = []
+    tsv_lines = ["\t".join(tsv_headers)]
+
+    for metric in metrics_with_history:
+        param = metric["parameter"]
+        is_bps = metric["is_bps"]
+
+        # Determine display type: % only if is_bps, otherwise $M
+        display_type = "%" if is_bps else "$M"
+
+        # Format ALL historical values (for TSV)
+        all_formatted_values = []
+        all_raw_values = []
+        for h in metric["history"]:
+            val = h["value"]
+            if val is None:
+                all_formatted_values.append("—")
+                all_raw_values.append("")
+            else:
+                if display_type == "%":
+                    all_formatted_values.append(f"{val:.2f}")
+                    all_raw_values.append(f"{val:.2f}")
+                else:  # $M
+                    if abs(val) >= 1000:
+                        all_formatted_values.append(f"{val:,.0f}")
+                        all_raw_values.append(f"{val:.0f}")
+                    else:
+                        all_formatted_values.append(f"{val:,.1f}")
+                        all_raw_values.append(f"{val:.1f}")
+
+        # HTML display: only last N quarters
+        display_formatted_values = all_formatted_values[-display_quarters:]
+
+        # Format QoQ and YoY deltas
+        qoq_val = metric["qoq"]
+        yoy_val = metric["yoy"]
+
+        if qoq_val is None:
+            qoq_display = "—"
+            qoq_direction = "neutral"
+            qoq_raw = ""
+        else:
+            qoq_direction = "positive" if qoq_val > 0 else "negative" if qoq_val < 0 else "neutral"
+            if is_bps:
+                qoq_display = f"{qoq_val:+.0f}bps"
+                qoq_raw = f"{qoq_val:.0f}"
+            else:
+                qoq_display = f"{qoq_val:+.1f}%"
+                qoq_raw = f"{qoq_val:.1f}"
+
+        if yoy_val is None:
+            yoy_display = "—"
+            yoy_direction = "neutral"
+            yoy_raw = ""
+        else:
+            yoy_direction = "positive" if yoy_val > 0 else "negative" if yoy_val < 0 else "neutral"
+            if is_bps:
+                yoy_display = f"{yoy_val:+.0f}bps"
+                yoy_raw = f"{yoy_val:.0f}"
+            else:
+                yoy_display = f"{yoy_val:+.1f}%"
+                yoy_raw = f"{yoy_val:.1f}"
+
+        # Format multi-year deltas for TSV only
+        multi_year_deltas = []
+        for delta_key in ["2y", "3y", "4y", "5y"]:
+            delta_val = metric.get(delta_key)
+            if delta_val is None:
+                multi_year_deltas.append("")
+            else:
+                if is_bps:
+                    multi_year_deltas.append(f"{delta_val:.0f}")
+                else:
+                    multi_year_deltas.append(f"{delta_val:.1f}")
+
+        rows.append(
+            {
+                "metric": param,
+                "values": display_formatted_values,
+                "type": display_type,
+                "qoq": qoq_display,
+                "yoy": yoy_display,
+                "qoq_direction": qoq_direction,
+                "yoy_direction": yoy_direction,
+            }
+        )
+
+        # Build TSV row with ALL 8 quarters and all deltas
+        tsv_row = [param] + all_raw_values + [display_type, qoq_raw, yoy_raw] + multi_year_deltas
+        tsv_lines.append("\t".join(tsv_row))
+
+    return {
+        "headers": headers,
+        "rows": rows,
+        "tsv": "\n".join(tsv_lines),
+    }

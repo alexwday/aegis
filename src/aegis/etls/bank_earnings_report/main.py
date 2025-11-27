@@ -379,6 +379,8 @@ async def extract_all_sections(
         format_segment_json,
         retrieve_all_metrics_with_history,
         format_raw_metrics_table,
+        retrieve_segment_metrics_with_history,
+        format_segment_raw_table,
     )
     from .extraction.key_metrics import select_chart_and_tile_metrics, KEY_METRICS
     from .extraction.segment_metrics import (
@@ -736,6 +738,23 @@ async def extract_all_sections(
                 core_metrics=core_metrics_data,
                 highlighted_metrics=selection.get("metrics_data", []),
             )
+
+            # Retrieve 8Q historical data for raw table (displays 4Q, copies 8Q)
+            segment_metrics_history = await retrieve_segment_metrics_with_history(
+                bank_symbol=db_symbol,
+                fiscal_year=fiscal_year,
+                quarter=quarter,
+                platform=platform,
+                context=context,
+                num_quarters=8,
+            )
+            if segment_metrics_history:
+                segment_entry["raw_table"] = format_segment_raw_table(
+                    segment_metrics_history, display_quarters=4
+                )
+            else:
+                segment_entry["raw_table"] = {"headers": [], "rows": [], "tsv": ""}
+
             segment_entries.append(segment_entry)
 
             logger.info(
@@ -744,6 +763,7 @@ async def extract_all_sections(
                 segment=platform,
                 core_metrics=len(core_metrics_data),
                 highlighted_metrics=len(selection.get("metrics_data", [])),
+                raw_table_rows=len(segment_entry["raw_table"].get("rows", [])),
             )
         else:
             logger.warning(

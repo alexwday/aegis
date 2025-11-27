@@ -932,6 +932,53 @@
                                 </table>
                             </div>
                         </div>
+
+                        <!-- Expandable Raw Metrics Table for this segment -->
+                        {% if segment.raw_table.rows %}
+                        <div style="margin-top: 8px; text-align: center;">
+                            <button id="segment-toggle-{{ loop.index }}" onclick="toggleSegmentRaw({{ loop.index }})" style="background: none; border: 1px solid #e2e8f0; border-radius: 6px; padding: 4px 10px; cursor: pointer; font-size: 8px; color: #64748b; transition: all 0.2s;">
+                                <span id="segment-icon-{{ loop.index }}">▶</span> View All {{ segment.name }} Metrics ({{ segment.raw_table.rows|length }} metrics)
+                            </button>
+                        </div>
+
+                        <div id="segment-container-{{ loop.index }}" style="display: none; margin-top: 8px; border: 1px solid #e2e8f0; border-radius: 6px; overflow: hidden; max-width: 100%;">
+                            <!-- Copy button bar -->
+                            <div style="background: #f8fafc; padding: 4px 8px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: flex-end; align-items: center;">
+                                <button onclick="copySegmentRaw({{ loop.index }})" style="background: #005587; color: white; border: none; border-radius: 4px; padding: 3px 8px; cursor: pointer; font-size: 8px; font-weight: 600;">
+                                    Copy to Clipboard
+                                </button>
+                            </div>
+
+                            <!-- Scrollable table container -->
+                            <div style="max-height: 250px; overflow: auto;">
+                                <table style="border-collapse: collapse; font-size: 8px; font-family: 'Consolas', 'Monaco', monospace; min-width: 100%;">
+                                    <thead style="position: sticky; top: 0; background: #f1f5f9; z-index: 10;">
+                                        <tr>
+                                            {% for header in segment.raw_table.headers %}
+                                            <th style="padding: 4px 5px; text-align: {% if loop.index == 1 %}left{% else %}right{% endif %}; border-bottom: 1px solid #e2e8f0; font-weight: 700; color: #64748b; white-space: nowrap; font-size: 7px; text-transform: uppercase;">{{ header }}</th>
+                                            {% endfor %}
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for row in segment.raw_table.rows %}
+                                        <tr style="background: {% if loop.index is odd %}#ffffff{% else %}#f8fafc{% endif %};">
+                                            <td style="padding: 3px 5px; border-bottom: 1px solid #f0f4f8; font-weight: 600; color: #1e293b; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ row.metric }}">{{ row.metric }}</td>
+                                            {% for val in row['values'] %}
+                                            <td style="padding: 3px 5px; border-bottom: 1px solid #f0f4f8; text-align: right; color: #334155;">{{ val }}</td>
+                                            {% endfor %}
+                                            <td style="padding: 3px 5px; border-bottom: 1px solid #f0f4f8; color: #94a3b8; text-align: center;">{{ row.type }}</td>
+                                            <td style="padding: 3px 5px; border-bottom: 1px solid #f0f4f8; text-align: right;" class="{{ row.qoq_direction }}">{{ row.qoq }}</td>
+                                            <td style="padding: 3px 5px; border-bottom: 1px solid #f0f4f8; text-align: right;" class="{{ row.yoy_direction }}">{{ row.yoy }}</td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Hidden textarea for TSV copy -->
+                        <textarea id="segment-tsv-{{ loop.index }}" style="position: absolute; left: -9999px;">{{ segment.raw_table.tsv }}</textarea>
+                        {% endif %}
                     </div>
                     {% endfor %}
                 </div>
@@ -1346,6 +1393,50 @@
     // Copy TSV data to clipboard
     function copyRawMetrics() {
         const textarea = document.getElementById('raw-metrics-tsv');
+        const button = event.target;
+        const originalText = button.textContent;
+
+        // Copy to clipboard
+        textarea.select();
+        document.execCommand('copy');
+
+        // Also try modern clipboard API
+        if (navigator.clipboard) {
+            navigator.clipboard.writeText(textarea.value);
+        }
+
+        // Visual feedback
+        button.textContent = 'Copied!';
+        button.style.background = '#16a34a';
+
+        setTimeout(() => {
+            button.textContent = originalText;
+            button.style.background = '#005587';
+        }, 2000);
+    }
+
+    // Toggle segment raw metrics table visibility
+    function toggleSegmentRaw(segmentIndex) {
+        const container = document.getElementById('segment-container-' + segmentIndex);
+        const icon = document.getElementById('segment-icon-' + segmentIndex);
+        const button = document.getElementById('segment-toggle-' + segmentIndex);
+
+        if (container.style.display === 'none') {
+            container.style.display = 'block';
+            icon.textContent = '▼';
+            button.style.background = '#f1f5f9';
+            button.style.borderColor = '#cbd5e1';
+        } else {
+            container.style.display = 'none';
+            icon.textContent = '▶';
+            button.style.background = 'none';
+            button.style.borderColor = '#e2e8f0';
+        }
+    }
+
+    // Copy segment TSV data to clipboard
+    function copySegmentRaw(segmentIndex) {
+        const textarea = document.getElementById('segment-tsv-' + segmentIndex);
         const button = event.target;
         const originalText = button.textContent;
 
