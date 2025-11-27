@@ -18,9 +18,10 @@ from sqlalchemy import text
 
 from aegis.connections.llm_connector import complete_with_tools
 from aegis.connections.postgres_connector import get_connection
+from aegis.connections.oauth_connector import setup_authentication
+from aegis.etls.bank_earnings_report.retrieval.supplementary import format_delta_for_llm
 from aegis.utils.settings import config
 from aegis.utils.ssl import setup_ssl
-from aegis.connections.oauth_connector import setup_authentication
 
 
 # The 7 recommended key metrics we're looking for
@@ -50,34 +51,34 @@ async def explore_table_data() -> None:
 
             # Check distinct fiscal years
             result = await conn.execute(
-                text('SELECT DISTINCT "fiscal_year" FROM benchmarking_report ORDER BY 1 DESC LIMIT 5')
+                text(
+                    'SELECT DISTINCT "fiscal_year" FROM benchmarking_report ORDER BY 1 DESC LIMIT 5'
+                )
             )
             years = [row[0] for row in result.fetchall()]
             print(f"   Fiscal years: {years}")
 
             # Check distinct quarters
-            result = await conn.execute(
-                text('SELECT DISTINCT "quarter" FROM benchmarking_report')
-            )
+            result = await conn.execute(text('SELECT DISTINCT "quarter" FROM benchmarking_report'))
             quarters = [row[0] for row in result.fetchall()]
             print(f"   Quarters: {quarters}")
 
             # Check distinct platforms
-            result = await conn.execute(
-                text('SELECT DISTINCT "Platform" FROM benchmarking_report')
-            )
+            result = await conn.execute(text('SELECT DISTINCT "Platform" FROM benchmarking_report'))
             platforms = [row[0] for row in result.fetchall()]
             print(f"   Platforms: {platforms}")
 
             # Check latest data for RY
             result = await conn.execute(
-                text("""
+                text(
+                    """
                     SELECT DISTINCT "bank_symbol", "fiscal_year", "quarter", "Platform"
                     FROM benchmarking_report
                     WHERE "bank_symbol" LIKE '%RY%' OR "bank_symbol" LIKE '%Royal%'
                     ORDER BY "fiscal_year" DESC, "quarter" DESC
                     LIMIT 10
-                """)
+                """
+                )
             )
             rows = result.fetchall()
             if rows:
@@ -92,7 +93,7 @@ async def get_enterprise_parameters(
     bank_symbol: str = "RY",
     fiscal_year: int = 2025,
     quarter: str = "Q2",
-    platform: str = "Enterprise"
+    platform: str = "Enterprise",
 ) -> List[Dict[str, Any]]:
     """Fetch all Enterprise segment parameters for specified bank/period."""
 
@@ -142,16 +143,17 @@ async def get_enterprise_parameters(
 
 
 async def match_metrics_with_llm(
-    available_params: List[Dict[str, Any]],
-    context: Dict[str, Any]
+    available_params: List[Dict[str, Any]], context: Dict[str, Any]
 ) -> Dict[str, Any]:
     """Use LLM to match available parameters to target metrics."""
 
     # Format parameters for LLM
-    param_list = "\n".join([
-        f"- {p['parameter']} (units: {p['units']}, value: {p['actual']})"
-        for p in available_params
-    ])
+    param_list = "\n".join(
+        [
+            f"- {p['parameter']} (units: {p['units']}, value: {p['actual']})"
+            for p in available_params
+        ]
+    )
 
     system_prompt = """You are a financial data analyst helping to map database field names
 to standard bank metrics.
@@ -197,36 +199,36 @@ Return exact parameter names as they appear in the database."""
                 "properties": {
                     "adjusted_diluted_eps": {
                         "type": ["string", "null"],
-                        "description": "Database parameter matching Adjusted Diluted EPS"
+                        "description": "Database parameter matching Adjusted Diluted EPS",
                     },
                     "adjusted_roe": {
                         "type": ["string", "null"],
-                        "description": "Database parameter matching Adjusted ROE"
+                        "description": "Database parameter matching Adjusted ROE",
                     },
                     "net_interest_margin": {
                         "type": ["string", "null"],
-                        "description": "Database parameter matching Net Interest Margin"
+                        "description": "Database parameter matching Net Interest Margin",
                     },
                     "efficiency_ratio": {
                         "type": ["string", "null"],
-                        "description": "Database parameter matching Efficiency Ratio"
+                        "description": "Database parameter matching Efficiency Ratio",
                     },
                     "total_revenue": {
                         "type": ["string", "null"],
-                        "description": "Database parameter matching Total Revenue"
+                        "description": "Database parameter matching Total Revenue",
                     },
                     "pppt": {
                         "type": ["string", "null"],
-                        "description": "Database parameter matching PPPT/Pre-Provision Pre-Tax"
+                        "description": "Database parameter matching PPPT/Pre-Provision Pre-Tax",
                     },
                     "operating_leverage": {
                         "type": ["string", "null"],
-                        "description": "Database parameter matching Operating Leverage"
+                        "description": "Database parameter matching Operating Leverage",
                     },
                     "reasoning": {
                         "type": "string",
-                        "description": "Explanation of the mappings and any issues found"
-                    }
+                        "description": "Explanation of the mappings and any issues found",
+                    },
                 },
                 "required": [
                     "adjusted_diluted_eps",
@@ -236,10 +238,10 @@ Return exact parameter names as they appear in the database."""
                     "total_revenue",
                     "pppt",
                     "operating_leverage",
-                    "reasoning"
-                ]
-            }
-        }
+                    "reasoning",
+                ],
+            },
+        },
     }
 
     messages = [
@@ -307,9 +309,11 @@ async def main():
     print(f"\n✅ Found {len(params)} parameters:\n")
     print("-" * 80)
     for p in params:
-        value_str = f"{p['actual']}" if p['actual'] is not None else "N/A"
-        qoq_str = f"{p['qoq']:+.1f}%" if p['qoq'] is not None else "—"
-        yoy_str = f"{p['yoy']:+.1f}%" if p['yoy'] is not None else "—"
+        value_str = f"{p['actual']}" if p["actual"] is not None else "N/A"
+        is_bps = p.get("is_bps", False)
+        units = p.get("units", "")
+        qoq_str = format_delta_for_llm(p["qoq"], units, is_bps)
+        yoy_str = format_delta_for_llm(p["yoy"], units, is_bps)
         print(f"  {p['parameter']:<40} | {value_str:>12} | QoQ: {qoq_str:>8} | YoY: {yoy_str:>8}")
     print("-" * 80)
 
@@ -338,7 +342,7 @@ async def main():
         if db_param:
             print(f'    "{db_param}",  # {label}')
         else:
-            print(f'    # MISSING: {label} - no match found')
+            print(f"    # MISSING: {label} - no match found")
     print("]")
 
     print("\n📝 LLM Reasoning:")
