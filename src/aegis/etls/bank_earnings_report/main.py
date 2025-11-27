@@ -450,6 +450,7 @@ async def extract_all_sections(
         MONITORED_PLATFORMS,
         SEGMENT_METADATA,
         CORE_SEGMENT_METRICS,
+        DEFAULT_CORE_METRICS,
     )
 
     execution_id = context.get("execution_id")
@@ -705,9 +706,10 @@ async def extract_all_sections(
             # Build lookup for core metrics
             metrics_by_name = {m["parameter"]: m for m in segment_metrics}
 
-            # Get core metrics (Revenue, Net Income, Efficiency Ratio)
+            # Get core metrics for this specific segment
+            segment_core_metrics = CORE_SEGMENT_METRICS.get(platform, DEFAULT_CORE_METRICS)
             core_metrics_data = []
-            for core_name in CORE_SEGMENT_METRICS:
+            for core_name in segment_core_metrics:
                 if core_name in metrics_by_name:
                     core_metrics_data.append(metrics_by_name[core_name])
 

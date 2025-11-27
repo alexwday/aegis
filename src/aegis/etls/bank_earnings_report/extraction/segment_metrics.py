@@ -26,13 +26,12 @@ from aegis.utils.settings import config
 # These are the EXACT platform names as they appear in the benchmarking_report table
 # Only exact matches will be processed - no fuzzy matching
 
+# Monitored platforms in standard reporting order
 MONITORED_PLATFORMS = [
     "Canadian Banking",
     "Canadian Wealth & Insurance",
-    "U.S. & International Banking",
-    "Personal Banking",
-    "Commercial Banking",
     "Capital Markets",
+    "U.S. & International Banking",
     "Corporate Support",
 ]
 
@@ -64,6 +63,16 @@ SEGMENT_METADATA = {
             "client acquisition",
         ],
     },
+    "Capital Markets": {
+        "description": "Investment banking, trading, advisory, and corporate banking services",
+        "key_focus": [
+            "trading revenue",
+            "advisory fees",
+            "underwriting",
+            "market share",
+            "ROE",
+        ],
+    },
     "U.S. & International Banking": {
         "description": (
             "U.S. and international retail banking operations including personal banking, "
@@ -77,42 +86,6 @@ SEGMENT_METADATA = {
             "cross-border synergies",
         ],
     },
-    "Personal Banking": {
-        "description": (
-            "Personal banking services including deposits, mortgages, credit cards, "
-            "and consumer lending"
-        ),
-        "key_focus": [
-            "deposit growth",
-            "mortgage volumes",
-            "credit card balances",
-            "customer acquisition",
-            "digital adoption",
-        ],
-    },
-    "Commercial Banking": {
-        "description": (
-            "Commercial banking services including business lending, treasury management, "
-            "and merchant services"
-        ),
-        "key_focus": [
-            "loan growth",
-            "deposit growth",
-            "fee income",
-            "credit quality",
-            "client retention",
-        ],
-    },
-    "Capital Markets": {
-        "description": "Investment banking, trading, advisory, and corporate banking services",
-        "key_focus": [
-            "trading revenue",
-            "advisory fees",
-            "underwriting",
-            "market share",
-            "ROE",
-        ],
-    },
     "Corporate Support": {
         "description": "Corporate treasury, technology, and other enterprise functions",
         "key_focus": ["funding costs", "technology investment", "operational efficiency"],
@@ -120,9 +93,39 @@ SEGMENT_METADATA = {
 }
 
 
-# Core metrics to always display for each segment (left column)
-# These are the standard financial performance metrics shown for every segment
-CORE_SEGMENT_METRICS = [
+# Core metrics per segment (left column of segment performance tiles)
+# These are the standard financial performance metrics shown for each segment
+# Selected by large LLM model based on cross-bank metric availability
+CORE_SEGMENT_METRICS = {
+    "Canadian Banking": [
+        "Net Income",
+        "NIM",
+        "Total Revenue",
+    ],
+    "Canadian Wealth & Insurance": [
+        "Total Revenue",
+        "Net Income",
+        "Non Interest Income",
+    ],
+    "Capital Markets": [
+        "Net Revenue",
+        "Non Interest Income",
+        "Net Income",
+    ],
+    "U.S. & International Banking": [
+        "Net Income",
+        "Net Interest Income (TEB)",
+        "Average Loans",
+    ],
+    "Corporate Support": [
+        "Net Revenue",
+        "Non Interest Expenses",
+        "Net Income",
+    ],
+}
+
+# Legacy: Generic core metrics (kept for backwards compatibility)
+DEFAULT_CORE_METRICS = [
     "Total Revenue",
     "Net Income",
     "Efficiency Ratio",
@@ -192,8 +195,10 @@ def format_segment_metrics_for_llm(
     )
 
     # Build exclusion set - exclude enterprise metrics AND core metrics (shown separately)
+    # Get core metrics for this specific segment, or use default
+    segment_core_metrics = CORE_SEGMENT_METRICS.get(segment_name, DEFAULT_CORE_METRICS)
     exclude_set = (
-        set(exclude_names or []) | set(EXCLUDED_SEGMENT_METRICS) | set(CORE_SEGMENT_METRICS)
+        set(exclude_names or []) | set(EXCLUDED_SEGMENT_METRICS) | set(segment_core_metrics)
     )
 
     # Filter to relevant metrics
@@ -280,7 +285,9 @@ async def select_top_segment_metrics(
     key_focus_areas = segment_info.get("key_focus", [])
 
     # Filter out excluded metrics AND core metrics (shown separately)
-    exclude_set = set(EXCLUDED_SEGMENT_METRICS) | set(CORE_SEGMENT_METRICS)
+    # Get core metrics for this specific segment, or use default
+    segment_core_metrics = CORE_SEGMENT_METRICS.get(segment_name, DEFAULT_CORE_METRICS)
+    exclude_set = set(EXCLUDED_SEGMENT_METRICS) | set(segment_core_metrics)
     available_metrics = [m for m in metrics if m["parameter"] not in exclude_set]
 
     if len(available_metrics) <= num_metrics:
