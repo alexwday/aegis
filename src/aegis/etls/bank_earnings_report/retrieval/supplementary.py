@@ -440,18 +440,27 @@ def format_metric_value(actual: Optional[float], units: str, meta_unit: str) -> 
         return f"{actual:.2f}"
 
 
+# Threshold for converting bps to percentage (100 bps = 1%)
+# Industry convention: use bps for small changes, % for larger changes
+BPS_TO_PERCENT_THRESHOLD = 100
+
+
 def format_delta(value: Optional[float], units: str, is_bps: bool = False) -> Dict[str, Any]:
     """
     Format a QoQ or YoY delta value.
 
     Args:
-        value: Delta value (percentage change)
+        value: Delta value (percentage change or basis points)
         units: Units from benchmarking_report (e.g., "millions", "%", "bps")
         is_bps: Whether to display as basis points (from BPS column)
 
     Returns:
         Dict with value, direction, and display string
         - direction is simply "positive" for increase, "negative" for decrease
+
+    Note:
+        For bps values >= 100 (1%), automatically converts to percentage display
+        for better readability. This follows industry convention.
     """
     if value is None:
         return {"value": 0, "direction": "neutral", "display": "—"}
@@ -465,8 +474,14 @@ def format_delta(value: Optional[float], units: str, is_bps: bool = False) -> Di
 
     # Use BPS display if flagged or if units indicate basis points
     if is_bps or units == "bps":
-        # Display as basis points - value is already in bps, don't multiply
-        display = f"{arrow} {abs_val:.0f}bps" if value != 0 else "—"
+        # If bps value is large (>= threshold), convert to percentage for readability
+        if abs_val >= BPS_TO_PERCENT_THRESHOLD:
+            # Convert bps to percentage: divide by 100
+            pct_val = abs_val / 100
+            display = f"{arrow} {pct_val:.1f}%" if value != 0 else "—"
+        else:
+            # Display as basis points - value is already in bps
+            display = f"{arrow} {abs_val:.0f}bps" if value != 0 else "—"
     else:
         # Display as percentage
         display = f"{arrow} {abs_val:.1f}%" if value != 0 else "—"
@@ -487,15 +502,26 @@ def format_delta_for_llm(value: Optional[float], units: str, is_bps: bool = Fals
 
     Returns:
         Formatted string like "+2.3%" or "+15bps" or "—"
+
+    Note:
+        For bps values >= 100 (1%), automatically converts to percentage display
+        for better readability. This follows industry convention.
     """
     if value is None:
         return "—"
 
     sign = "+" if value > 0 else ""
+    abs_val = abs(value)
 
     # Use BPS display if flagged or if units indicate basis points
     if is_bps or units == "bps":
-        return f"{sign}{value:.0f}bps"
+        # If bps value is large (>= threshold), convert to percentage for readability
+        if abs_val >= BPS_TO_PERCENT_THRESHOLD:
+            # Convert bps to percentage: divide by 100
+            pct_val = value / 100
+            return f"{sign}{pct_val:.1f}%"
+        else:
+            return f"{sign}{value:.0f}bps"
     else:
         return f"{sign}{value:.1f}%"
 
