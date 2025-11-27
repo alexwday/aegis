@@ -289,7 +289,7 @@
             border-right: 1px solid #e2e8f0;
         }
         .change-label {
-            font-size: 9px;
+            font-size: 8px;
             color: #94a3b8;
             text-transform: uppercase;
             letter-spacing: 0.5px;
@@ -311,7 +311,6 @@
         .unit {
             font-weight: 600;
             color: #64748b;
-            font-size: 0.85em;
         }
         /* Legacy delta classes (for any hardcoded content) */
         .pos { color: var(--pos); }
@@ -549,12 +548,12 @@
                 </div>
                 <div style="display: flex; flex-direction: column; gap: 2px; padding-left: 14px; border-left: 1px solid rgba(255,255,255,0.1);">
                     <div style="display: flex; align-items: center; gap: 6px;">
-                        <span style="font-size: 9px; color: #808080; text-transform: uppercase; width: 24px;">QoQ</span>
-                        <span style="font-size: 12px; font-weight: 600;" class="delta-neutral">—</span>
+                        <span style="font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700; width: 24px;">QoQ</span>
+                        <span style="font-size: 12px; font-weight: 700;" class="delta-neutral">—</span>
                     </div>
                     <div style="display: flex; align-items: center; gap: 6px;">
-                        <span style="font-size: 9px; color: #808080; text-transform: uppercase; width: 24px;">YoY</span>
-                        <span style="font-size: 12px; font-weight: 600;" class="delta-neutral">—</span>
+                        <span style="font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700; width: 24px;">YoY</span>
+                        <span style="font-size: 12px; font-weight: 700;" class="delta-neutral">—</span>
                     </div>
                 </div>
             </div>
@@ -600,17 +599,82 @@
                  Row 3: Slim tile 1, Slim tile 2, Slim tile 3, Slim tile 4, Slim tile 5
             -->
             <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px;">
-                <!-- Main tiles (6 tiles in positions 1-3 of rows 1-2) -->
+                <!-- Main tiles row 1 (positions 1-3) -->
+                
+                
+                <div class="metric-box" style="opacity: 0.4;">
+                    <span class="metric-label">No Data</span>
+                    <span class="metric-val">—</span>
+                </div>
+                
+                <div class="metric-box" style="opacity: 0.4;">
+                    <span class="metric-label">No Data</span>
+                    <span class="metric-val">—</span>
+                </div>
+                
+                <div class="metric-box" style="opacity: 0.4;">
+                    <span class="metric-label">No Data</span>
+                    <span class="metric-val">—</span>
+                </div>
+                
+
+                <!-- -------- Trend Chart (always rendered, spans 2 cols, 2 rows) --------
+                     DATA SOURCE: 1_keymetrics_chart.json (metrics array with initial_index)
+                     SOURCE: Supp Pack
+                -->
+                <div id="trend-chart-container" style="grid-column: span 2; grid-row: span 2; background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%); border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.04); display: flex; flex-direction: column;">
+                    <!-- Navigation header with arrows and clickable title -->
+                    <div id="chart-nav" style="display: flex; align-items: center; justify-content: center; margin-bottom: 8px; position: relative;">
+                        <button id="chart-prev" style="background: none; border: none; cursor: pointer; padding: 4px 8px; font-size: 16px; color: #94a3b8; transition: color 0.2s;" title="Previous metric">◀</button>
+                        <div style="position: relative; flex: 1; text-align: center;">
+                            <span id="chart-title" class="metric-label" style="cursor: pointer; padding: 4px 8px; border-radius: 4px; transition: background 0.2s;" title="Click to select metric"></span>
+                            <!-- Dropdown menu (hidden by default) -->
+                            <div id="chart-dropdown" style="display: none; position: absolute; top: 100%; left: 50%; transform: translateX(-50%); background: white; border: 1px solid #e2e8f0; border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 100; min-width: 200px; max-height: 240px; overflow-y: auto; margin-top: 4px;">
+                                <!-- Dropdown items populated by JavaScript -->
+                            </div>
+                        </div>
+                        <button id="chart-next" style="background: none; border: none; cursor: pointer; padding: 4px 8px; font-size: 16px; color: #94a3b8; transition: color 0.2s;" title="Next metric">▶</button>
+                    </div>
+                    <!-- Chart content area -->
+                    <div id="chart-content" style="flex: 1; display: flex; flex-direction: column;">
+                        <!-- Chart will be rendered here by JavaScript -->
+                    </div>
+                </div>
+
+                <!-- Main tiles row 2 (positions 4-6) -->
+                
+                
+                <div class="metric-box" style="opacity: 0.4;">
+                    <span class="metric-label">No Data</span>
+                    <span class="metric-val">—</span>
+                </div>
+                
+                <div class="metric-box" style="opacity: 0.4;">
+                    <span class="metric-label">No Data</span>
+                    <span class="metric-val">—</span>
+                </div>
+                
+                <div class="metric-box" style="opacity: 0.4;">
+                    <span class="metric-label">No Data</span>
+                    <span class="metric-val">—</span>
+                </div>
                 
 
                 <!-- Chart data embedded for JavaScript -->
                 <script id="trend-chart-data" type="application/json">
-                {"decimal_places": 0, "label": "N/A", "quarters": [], "unit": "", "values": []}
+                {"initial_index": 0, "metrics": []}
                 </script>
 
                 <!-- Slim tiles (5 tiles spanning full row 3) -->
                 
             </div>
+
+            <!-- -------- Expandable Raw Metrics Table --------
+                 DATA SOURCE: 1_keymetrics_raw (headers, rows, tsv)
+                 SOURCE: Supp Pack
+                 NOTE: All enterprise metrics with 8Q history, copy-paste friendly
+            -->
+            
             </div>
 
             <!-- -------- Subsection 1d: Items of Note --------
@@ -662,8 +726,10 @@
 
             <!-- ============================================
                  SECTION 3: Analyst Focus
-                 DATA SOURCE: 3_analyst_focus.json (entries array with theme, question, answer)
-                 NOTE: Variable-length Q&A list from earnings call transcripts
+                 DATA SOURCE: 3_analyst_focus.json
+                   - featured: Top 4 Q&A entries selected by LLM
+                   - entries: All extracted Q&A entries
+                 NOTE: Featured entries shown by default, expand to see all
                  ============================================ -->
             <div class="card">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
@@ -673,6 +739,80 @@
                     </div>
                 </div>
 
+                <!-- Featured Q&A entries (top 4 selected by LLM) -->
+                
+                <div class="qa-item">
+                    <div style="margin-bottom: 8px;">
+                        <span style="font-size: 11px; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;">NIM Outlook</span>
+                    </div>
+                    <div style="font-size: 11px; color: #475569; font-style: italic; margin-bottom: 6px; padding-left: 8px; border-left: 2px solid #e2e8f0;">
+                        What is the NII outlook for the rest of the year and how will potential rate cuts impact NIM compression?
+                    </div>
+                    <div style="font-size: 12px; color: var(--text-main); line-height: 1.5;">
+                        CFO expects relatively stable NII in Canadian Banking despite modest NIM compression from potential rate cuts, supported by 6% mortgage loan growth and 28% non-interest bearing deposits. Fixed-rate mortgage repricing added 15 bps to NIM this quarter, with benefits continuing, while Capital Markets NII remains healthy from trading and financing growth; positive operating leverage is expected even with 25-50 bps rate cuts.
+                    </div>
+                </div>
+                
+                <div class="qa-item">
+                    <div style="margin-bottom: 8px;">
+                        <span style="font-size: 11px; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;">Capital Allocation</span>
+                    </div>
+                    <div style="font-size: 11px; color: #475569; font-style: italic; margin-bottom: 6px; padding-left: 8px; border-left: 2px solid #e2e8f0;">
+                        How should we think about the pace of share buybacks for the rest of the year and any updated thoughts on M&A?
+                    </div>
+                    <div style="font-size: 12px; color: var(--text-main); line-height: 1.5;">
+                        CEO McKay said the CET1 ratio ended at 13.1%, 160 bps above target, with $3.5 billion remaining on the NCIB for buybacks, which will be opportunistic amid market volatility. They generated 40 bps of CET1 organically this quarter and expect similar going forward; M&A focus remains on accretive deals enhancing digital, specialty lending, and wealth platforms, with patience amid US regional bank dislocation.
+                    </div>
+                </div>
+                
+                <div class="qa-item">
+                    <div style="margin-bottom: 8px;">
+                        <span style="font-size: 11px; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;">Credit Quality</span>
+                    </div>
+                    <div style="font-size: 11px; color: #475569; font-style: italic; margin-bottom: 6px; padding-left: 8px; border-left: 2px solid #e2e8f0;">
+                        What are the current credit quality trends in Canadian Banking and Capital Markets?
+                    </div>
+                    <div style="font-size: 12px; color: var(--text-main); line-height: 1.5;">
+                        CEO Dave McKay reports strong credit quality with Canadian Banking's PCL ratio at 23 bps, within the 25-30 bps through-the-cycle range. Mortgage delinquencies are low at 0.15%, commercial provisions rose slightly due to isolated real estate credits, and Capital Markets provisions relate to specific distressed credits; overall ACL coverage is a healthy 47 bps.
+                    </div>
+                </div>
+                
+                <div class="qa-item">
+                    <div style="margin-bottom: 8px;">
+                        <span style="font-size: 11px; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;">Efficiency Ratio</span>
+                    </div>
+                    <div style="font-size: 11px; color: #475569; font-style: italic; margin-bottom: 6px; padding-left: 8px; border-left: 2px solid #e2e8f0;">
+                        How much of the 53.2% efficiency ratio improvement is sustainable and what investments might pressure it going forward?
+                    </div>
+                    <div style="font-size: 12px; color: var(--text-main); line-height: 1.5;">
+                        CFO Hepworth says the 53.2% efficiency ratio reflects about 100 basis points of sustainable year-over-year improvement, driven mainly by core banking revenue growth and productivity gains. The bank is investing $4.5 billion in technology this year, including cloud and AI, plus talent and branch renovations, but expects positive operating leverage of 200-300 basis points and aims to reduce the ratio below 50% in the next few years.
+                    </div>
+                </div>
+                
+
+                <!-- Expandable section for remaining Q&A entries (not featured) -->
+                
+                <div style="margin-top: 12px; text-align: center;">
+                    <button id="analyst-focus-toggle" onclick="toggleAnalystFocus()" style="background: none; border: 1px solid #e2e8f0; border-radius: 6px; padding: 6px 12px; cursor: pointer; font-size: 9px; color: #64748b; transition: all 0.2s;">
+                        <span id="analyst-focus-icon">▶</span> Show 1 More Q&A
+                    </button>
+                </div>
+
+                <div id="analyst-focus-container" style="display: none; margin-top: 12px; padding-top: 12px; border-top: 1px solid #e2e8f0;">
+                    
+                    <div class="qa-item" style="background: #fafbfc;">
+                        <div style="margin-bottom: 8px;">
+                            <span style="font-size: 10px; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;">Wealth Management Growth</span>
+                        </div>
+                        <div style="font-size: 10px; color: #475569; font-style: italic; margin-bottom: 6px; padding-left: 8px; border-left: 2px solid #e2e8f0;">
+                            What drove AUM and AUA growth in wealth management and how do you view competition from robo-advisors?
+                        </div>
+                        <div style="font-size: 11px; color: var(--text-main); line-height: 1.5;">
+                            Group Head Personal & Commercial Banking reported total client assets of $1.8 trillion, up 12% YoY, driven by $5.2 billion in net sales and market appreciation. The InvestEase digital platform has $2.5 billion AUM with 65,000 clients, serving as a complementary acquisition channel to full-service advising, while insurance premiums rose 8%, benefiting from cross-selling to banking clients.
+                        </div>
+                    </div>
+                    
+                </div>
                 
             </div>
         </div>
@@ -756,10 +896,10 @@
                     <div style="display: flex; flex-direction: column; gap: 6px;">
                         <!-- Header row -->
                         <div style="display: flex; align-items: center; padding-bottom: 4px; border-bottom: 1px solid #e2e8f0;">
-                            <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 600; width: 65px;">Metric</span>
-                            <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 700; flex: 1; text-align: center;">Value</span>
-                            <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 700; flex: 1; text-align: center;">QoQ</span>
-                            <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 700; flex: 1; text-align: center;">YoY</span>
+                            <span style="font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700; width: 65px;">Metric</span>
+                            <span style="font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700; flex: 1; text-align: center;">Value</span>
+                            <span style="font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700; flex: 1; text-align: center;">QoQ</span>
+                            <span style="font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700; flex: 1; text-align: center;">YoY</span>
                         </div>
                         
                     </div>
@@ -775,14 +915,115 @@
          ============================================ -->
     <script>
     (function() {
-        // Render trend chart from embedded JSON data
-        function renderTrendChart() {
-            const dataEl = document.getElementById('trend-chart-data');
-            const container = document.getElementById('trend-chart-container');
-            if (!dataEl || !container) return;
+        // Global state for multi-metric chart
+        let chartData = null;
+        let currentMetricIndex = 0;
 
-            const data = JSON.parse(dataEl.textContent);
-            const { label, unit, decimal_places, quarters, values } = data;
+        // Initialize chart system
+        function initChart() {
+            const dataEl = document.getElementById('trend-chart-data');
+            if (!dataEl) return;
+
+            chartData = JSON.parse(dataEl.textContent);
+            if (!chartData.metrics || chartData.metrics.length === 0) {
+                document.getElementById('chart-content').innerHTML =
+                    '<div style="display: flex; align-items: center; justify-content: center; height: 100%; color: #94a3b8;">No chart data available</div>';
+                return;
+            }
+
+            currentMetricIndex = chartData.initial_index || 0;
+
+            // Setup event handlers
+            setupNavigation();
+            setupDropdown();
+
+            // Render initial chart
+            renderChart(currentMetricIndex);
+        }
+
+        // Setup navigation arrow buttons
+        function setupNavigation() {
+            const prevBtn = document.getElementById('chart-prev');
+            const nextBtn = document.getElementById('chart-next');
+
+            prevBtn.addEventListener('click', () => {
+                currentMetricIndex = (currentMetricIndex - 1 + chartData.metrics.length) % chartData.metrics.length;
+                renderChart(currentMetricIndex);
+                closeDropdown();
+            });
+
+            nextBtn.addEventListener('click', () => {
+                currentMetricIndex = (currentMetricIndex + 1) % chartData.metrics.length;
+                renderChart(currentMetricIndex);
+                closeDropdown();
+            });
+
+            // Hover effects
+            [prevBtn, nextBtn].forEach(btn => {
+                btn.addEventListener('mouseenter', () => btn.style.color = '#005587');
+                btn.addEventListener('mouseleave', () => btn.style.color = '#94a3b8');
+            });
+        }
+
+        // Setup dropdown menu
+        function setupDropdown() {
+            const title = document.getElementById('chart-title');
+            const dropdown = document.getElementById('chart-dropdown');
+
+            // Populate dropdown items
+            dropdown.innerHTML = chartData.metrics.map((m, i) => `
+                <div class="dropdown-item" data-index="${i}" style="padding: 8px 12px; cursor: pointer; font-size: 11px; color: #334155; transition: background 0.2s; border-bottom: 1px solid #f0f4f8;">
+                    ${m.name}
+                </div>
+            `).join('');
+
+            // Title click toggles dropdown
+            title.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const isVisible = dropdown.style.display === 'block';
+                dropdown.style.display = isVisible ? 'none' : 'block';
+                if (!isVisible) highlightCurrentItem();
+            });
+
+            // Dropdown item clicks
+            dropdown.querySelectorAll('.dropdown-item').forEach(item => {
+                item.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    currentMetricIndex = parseInt(item.dataset.index);
+                    renderChart(currentMetricIndex);
+                    closeDropdown();
+                });
+                item.addEventListener('mouseenter', () => item.style.background = '#f1f5f9');
+                item.addEventListener('mouseleave', () => item.style.background = 'white');
+            });
+
+            // Close dropdown when clicking outside
+            document.addEventListener('click', closeDropdown);
+
+            // Title hover effect
+            title.addEventListener('mouseenter', () => title.style.background = '#f1f5f9');
+            title.addEventListener('mouseleave', () => title.style.background = 'transparent');
+        }
+
+        function closeDropdown() {
+            document.getElementById('chart-dropdown').style.display = 'none';
+        }
+
+        function highlightCurrentItem() {
+            const dropdown = document.getElementById('chart-dropdown');
+            dropdown.querySelectorAll('.dropdown-item').forEach((item, i) => {
+                item.style.background = (i === currentMetricIndex) ? '#e0f2fe' : 'white';
+                item.style.fontWeight = (i === currentMetricIndex) ? '600' : 'normal';
+            });
+        }
+
+        // Render chart for a specific metric index
+        function renderChart(index) {
+            const metric = chartData.metrics[index];
+            const { label, unit, decimal_places, quarters, values } = metric;
+
+            // Update title
+            document.getElementById('chart-title').textContent = label;
 
             // Calculate stats
             const min = Math.min(...values);
@@ -793,31 +1034,24 @@
             const maxIdx = values.indexOf(max);
 
             // Calculate Y-axis range with padding
-            const range = max - min;
+            const range = max - min || 1; // Avoid division by zero
             const padding = range * 0.15;
             const yMin = min - padding;
             const yMax = max + padding;
 
-            // Format value for display - matches Python format_metric_value logic
-            // unit: "$M" for millions, "%" for percentage
-            // Uses up to 2 decimal places, strips trailing zeros
+            // Format value for display
             const stripTrailingZeros = (s) => s.replace(/\.?0+$/, '');
 
-            const formatValue = (v, forAxis = false) => {
+            const formatValue = (v) => {
                 if (unit === '%') {
-                    // Percentage: keep decimals, add % suffix
                     return v.toFixed(decimal_places) + '%';
                 } else if (unit === '$M') {
-                    // Currency in millions - up to 2 decimal places, strip trailing zeros
                     if (Math.abs(v) >= 1000) {
-                        // Convert to billions: $X.XX B (strip .00)
                         return '$' + stripTrailingZeros((v / 1000).toFixed(2)) + ' B';
                     } else {
-                        // Keep as millions: $X.XX M (strip .00)
                         return '$' + stripTrailingZeros(v.toFixed(2)) + ' M';
                     }
                 } else {
-                    // Default: format with commas and decimals
                     if (Math.abs(v) >= 1000) {
                         return v.toLocaleString('en-US', {maximumFractionDigits: decimal_places});
                     } else {
@@ -826,12 +1060,10 @@
                 }
             };
 
-            // Compact format for chart data point labels (no $ prefix for cleaner display)
             const formatChartLabel = (v) => {
                 if (unit === '%') {
                     return v.toFixed(decimal_places);
                 } else if (unit === '$M') {
-                    // Currency - up to 2 decimal places, strip trailing zeros
                     if (Math.abs(v) >= 1000) {
                         return stripTrailingZeros((v / 1000).toFixed(2)) + 'B';
                     } else {
@@ -845,20 +1077,18 @@
             // Calculate Y coordinate (inverted because SVG y=0 is top)
             const yCoord = (v) => 100 - ((v - yMin) / (yMax - yMin)) * 100;
 
-            // X positions for 8 points (SVG viewBox 0-320)
-            const xPositions = [30, 70, 110, 150, 190, 230, 270, 310];
+            // X positions for data points (up to 8 points)
+            const xPositions = [30, 70, 110, 150, 190, 230, 270, 310].slice(0, values.length);
             const xPercents = xPositions.map(x => (x / 320) * 100);
 
-            // Build SVG points
+            // Build SVG elements
             const points = values.map((v, i) => `${xPositions[i]},${yCoord(v)}`).join(' ');
             const polygonPoints = points + ` ${xPositions[xPositions.length-1]},100 ${xPositions[0]},100`;
 
-            // Build vertical guide lines
             const guideLines = values.map((v, i) =>
                 `<line x1="${xPositions[i]}" y1="100" x2="${xPositions[i]}" y2="${yCoord(v)}" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,2" />`
             ).join('');
 
-            // Build data point circles (color-coded for min/max/current)
             const circles = values.map((v, i) => {
                 let fill = '#005587';
                 let r = 3;
@@ -869,7 +1099,6 @@
                 return `<circle cx="${xPositions[i]}" cy="${yCoord(v)}" r="${r}" fill="${fill}" stroke="white" stroke-width="${strokeWidth}" />`;
             }).join('');
 
-            // Build value labels - positioned above the data points
             const valueLabels = values.map((v, i) => {
                 let color = '#64748b';
                 let fontSize = '9px';
@@ -877,28 +1106,20 @@
                 if (i === minIdx) { color = '#dc2626'; fontSize = '10px'; fontWeight = '700'; }
                 if (i === maxIdx) { color = '#16a34a'; fontSize = '10px'; fontWeight = '700'; }
                 if (i === values.length - 1) { color = '#005587'; fontSize = '10px'; fontWeight = '700'; }
-                const topPercent = yCoord(v) - 18; // Offset to position labels well above data points
+                const topPercent = yCoord(v) - 18;
                 return `<div style="position: absolute; left: ${xPercents[i]}%; top: ${topPercent}%; transform: translateX(-50%); font-size: ${fontSize}; color: ${color}; font-weight: ${fontWeight}; white-space: nowrap;">${formatChartLabel(v)}</div>`;
             }).join('');
 
-            // Build quarter labels - use white-space: nowrap to prevent wrapping
             const quarterLabels = quarters.map((q, i) =>
                 `<span style="position: absolute; left: ${xPercents[i]}%; transform: translateX(-50%); font-size: 9px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.3px; font-weight: 700; white-space: nowrap;">${q}</span>`
             ).join('');
 
-            // Y-axis labels with proper formatting
-            const yAxisTop = formatValue(yMax, true);
-            const yAxisMid = formatValue((yMin + yMax) / 2, true);
-            const yAxisBottom = formatValue(yMin, true);
-
-            // Average line Y position
+            const yAxisTop = formatValue(yMax);
+            const yAxisMid = formatValue((yMin + yMax) / 2);
+            const yAxisBottom = formatValue(yMin);
             const avgY = yCoord(avg);
 
-            container.innerHTML = `
-                <div style="margin-bottom: 10px;">
-                    <span class="metric-label">${label}</span>
-                </div>
-
+            document.getElementById('chart-content').innerHTML = `
                 <div style="position: relative; flex: 1; min-height: 80px;">
                     <!-- Y-axis labels -->
                     <div style="position: absolute; left: -5px; top: 0; font-size: 8px; color: #94a3b8; letter-spacing: 0.3px; font-weight: 600; white-space: nowrap;">${yAxisTop}</div>
@@ -962,11 +1183,123 @@
 
         // Run on DOM ready
         if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', renderTrendChart);
+            document.addEventListener('DOMContentLoaded', initChart);
         } else {
-            renderTrendChart();
+            initChart();
         }
     })();
+    </script>
+
+    <!-- ============================================
+         JavaScript for Raw Metrics Table
+         ============================================ -->
+    <script>
+    // Toggle raw metrics table visibility
+    function toggleRawMetrics() {
+        const container = document.getElementById('raw-metrics-container');
+        const icon = document.getElementById('toggle-icon');
+        const button = document.getElementById('raw-metrics-toggle');
+
+        if (container.style.display === 'none') {
+            container.style.display = 'block';
+            icon.textContent = '▼';
+            button.style.background = '#f1f5f9';
+            button.style.borderColor = '#cbd5e1';
+        } else {
+            container.style.display = 'none';
+            icon.textContent = '▶';
+            button.style.background = 'none';
+            button.style.borderColor = '#e2e8f0';
+        }
+    }
+
+    // Toggle analyst focus Q&A section visibility
+    function toggleAnalystFocus() {
+        const container = document.getElementById('analyst-focus-container');
+        const icon = document.getElementById('analyst-focus-icon');
+        const button = document.getElementById('analyst-focus-toggle');
+
+        if (container.style.display === 'none') {
+            container.style.display = 'block';
+            icon.textContent = '▼';
+            button.style.background = '#f1f5f9';
+            button.style.borderColor = '#cbd5e1';
+        } else {
+            container.style.display = 'none';
+            icon.textContent = '▶';
+            button.style.background = 'none';
+            button.style.borderColor = '#e2e8f0';
+        }
+    }
+
+    // Copy TSV data to clipboard
+    function copyRawMetrics() {
+        const textarea = document.getElementById('raw-metrics-tsv');
+        const button = event.target;
+        const originalText = button.textContent;
+
+        // Copy to clipboard
+        textarea.select();
+        document.execCommand('copy');
+
+        // Also try modern clipboard API
+        if (navigator.clipboard) {
+            navigator.clipboard.writeText(textarea.value);
+        }
+
+        // Visual feedback
+        button.textContent = 'Copied!';
+        button.style.background = '#16a34a';
+
+        setTimeout(() => {
+            button.textContent = originalText;
+            button.style.background = '#005587';
+        }, 2000);
+    }
+
+    // Toggle segment raw metrics table visibility
+    function toggleSegmentRaw(segmentIndex) {
+        const container = document.getElementById('segment-container-' + segmentIndex);
+        const icon = document.getElementById('segment-icon-' + segmentIndex);
+        const button = document.getElementById('segment-toggle-' + segmentIndex);
+
+        if (container.style.display === 'none') {
+            container.style.display = 'block';
+            icon.textContent = '▼';
+            button.style.background = '#f1f5f9';
+            button.style.borderColor = '#cbd5e1';
+        } else {
+            container.style.display = 'none';
+            icon.textContent = '▶';
+            button.style.background = 'none';
+            button.style.borderColor = '#e2e8f0';
+        }
+    }
+
+    // Copy segment TSV data to clipboard
+    function copySegmentRaw(segmentIndex) {
+        const textarea = document.getElementById('segment-tsv-' + segmentIndex);
+        const button = event.target;
+        const originalText = button.textContent;
+
+        // Copy to clipboard
+        textarea.select();
+        document.execCommand('copy');
+
+        // Also try modern clipboard API
+        if (navigator.clipboard) {
+            navigator.clipboard.writeText(textarea.value);
+        }
+
+        // Visual feedback
+        button.textContent = 'Copied!';
+        button.style.background = '#16a34a';
+
+        setTimeout(() => {
+            button.textContent = originalText;
+            button.style.background = '#005587';
+        }, 2000);
+    }
     </script>
 
 </body>

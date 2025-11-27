@@ -1,5 +1,5 @@
 {
-  "execution_id": "a20c3a1b-38f7-4599-8ce8-190c22b5313a",
+  "execution_id": "9b8ab953-f400-4d96-a4f5-be378dbec88d",
   "bank": "Royal Bank of Canada",
   "period": "Q2 2025",
   "sections": {
@@ -11,6 +11,21 @@
       "tile_reasoning": "No metrics available",
       "dynamic_metrics": [],
       "dynamic_reasoning": "No metrics available"
+    },
+    "1_keymetrics_raw": {
+      "metric_count": 0,
+      "reason": "No metrics with history available"
+    },
+    "3_analyst_focus": {
+      "total_entries": 5,
+      "featured_entries": 4,
+      "themes": [
+        "Credit Quality",
+        "NIM Outlook",
+        "Wealth Management Growth",
+        "Capital Allocation",
+        "Efficiency Ratio"
+      ]
     },
     "4_segments": {
       "available_platforms": [],

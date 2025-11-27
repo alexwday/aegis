@@ -106,16 +106,16 @@ Loan Growth, Deposit Trends, Fee Income, Trading Revenue, U.S. Strategy, Digital
 M&A Strategy, Regulatory Capital, Dividend Policy
 
 **For Question:**
-- Capture the core inquiry from the analyst
-- Include any specific context they mention
-- Keep to 1-2 sentences
+- ONE sentence only (15-25 words)
+- Be direct: "What's your outlook on X?" or "How will Y impact Z?"
+- Cut preamble and pleasantries
 
 **For Answer:**
-- Summarize management's key points
-- Preserve specific numbers, percentages, and guidance
-- Include forward-looking statements if present
-- Identify the speaker role if clear (CEO, CFO, CRO, etc.)
-- Keep to 2-4 sentences
+- TWO sentences max (40-60 words total)
+- Lead with the key takeaway or number
+- Include specific figures (percentages, dollar amounts, basis points)
+- Identify speaker role briefly (CFO, CEO, CRO)
+- Cut generic commentary - keep only actionable insights
 
 ## IMPORTANT
 
@@ -160,16 +160,18 @@ financial content, indicate it should be skipped."""
                     "question": {
                         "type": "string",
                         "description": (
-                            "Concise summary of the analyst's question (1-2 sentences). "
-                            "Capture the core inquiry and any specific context mentioned."
+                            "One sentence (15-25 words) capturing the analyst's core question. "
+                            "Be direct and specific. Example: 'What's your NIM outlook given "
+                            "expected rate cuts in H2?'"
                         ),
                     },
                     "answer": {
                         "type": "string",
                         "description": (
-                            "Summary of management's response (2-4 sentences). "
-                            "Preserve specific numbers, percentages, and guidance. "
-                            "Include speaker role if clear (e.g., 'CFO noted that...')."
+                            "Two sentences max (40-60 words) with key takeaway and figures. "
+                            "Lead with the main point. Preserve specific numbers/guidance. "
+                            "Example: 'CFO expects NIM to stabilize at 2.45% through Q4. "
+                            "Deposit repricing largely complete; asset repricing provides offset.'"
                         ),
                     },
                 },
@@ -544,8 +546,15 @@ async def extract_analyst_focus(
         for e in entries
     ]
 
+    # Featured entries (top N selected by ranking)
     featured_entries = [
         formatted_entries[i] for i in featured_indices if i < len(formatted_entries)
+    ]
+
+    # Remaining entries (not featured) - for expandable section
+    featured_set = set(featured_indices)
+    remaining_entries = [
+        formatted_entries[i] for i in range(len(formatted_entries)) if i not in featured_set
     ]
 
     logger.info(
@@ -553,11 +562,13 @@ async def extract_analyst_focus(
         execution_id=execution_id,
         total_entries=len(formatted_entries),
         featured_count=len(featured_entries),
+        remaining_count=len(remaining_entries),
         featured_themes=[e["theme"] for e in featured_entries],
     )
 
     return {
         "source": "Transcript",
         "featured": featured_entries,
-        "entries": formatted_entries,
+        "remaining": remaining_entries,
+        "entries": formatted_entries,  # Keep for backwards compatibility
     }

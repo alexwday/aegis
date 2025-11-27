@@ -846,16 +846,16 @@
                 </div>
                 {% endfor %}
 
-                <!-- Expandable section for all Q&A entries -->
-                {% if _3_analyst_focus.entries|length > _3_analyst_focus.featured|length %}
+                <!-- Expandable section for remaining Q&A entries (not featured) -->
+                {% if _3_analyst_focus.remaining|length > 0 %}
                 <div style="margin-top: 12px; text-align: center;">
                     <button id="analyst-focus-toggle" onclick="toggleAnalystFocus()" style="background: none; border: 1px solid #e2e8f0; border-radius: 6px; padding: 6px 12px; cursor: pointer; font-size: 9px; color: #64748b; transition: all 0.2s;">
-                        <span id="analyst-focus-icon">▶</span> View All Q&A ({{ _3_analyst_focus.entries|length }} exchanges)
+                        <span id="analyst-focus-icon">▶</span> Show {{ _3_analyst_focus.remaining|length }} More Q&A
                     </button>
                 </div>
 
                 <div id="analyst-focus-container" style="display: none; margin-top: 12px; padding-top: 12px; border-top: 1px solid #e2e8f0;">
-                    {% for qa in _3_analyst_focus.entries %}
+                    {% for qa in _3_analyst_focus.remaining %}
                     <div class="qa-item" style="background: #fafbfc;">
                         <div style="margin-bottom: 8px;">
                             <span style="font-size: 10px; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;">{{ qa.theme }}</span>
