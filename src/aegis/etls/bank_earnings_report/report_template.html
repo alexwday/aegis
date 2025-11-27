@@ -289,7 +289,7 @@
             border-right: 1px solid #e2e8f0;
         }
         .change-label {
-            font-size: 9px;
+            font-size: 8px;
             color: #94a3b8;
             text-transform: uppercase;
             letter-spacing: 0.5px;
@@ -548,12 +548,12 @@
                 </div>
                 <div style="display: flex; flex-direction: column; gap: 2px; padding-left: 14px; border-left: 1px solid rgba(255,255,255,0.1);">
                     <div style="display: flex; align-items: center; gap: 6px;">
-                        <span style="font-size: 9px; color: #808080; text-transform: uppercase; width: 24px;">QoQ</span>
-                        <span style="font-size: 12px; font-weight: 600;" class="delta-{{ _0_header_dividend.dividend.qoq.direction }}">{{ _0_header_dividend.dividend.qoq.display }}</span>
+                        <span style="font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700; width: 24px;">QoQ</span>
+                        <span style="font-size: 12px; font-weight: 700;" class="delta-{{ _0_header_dividend.dividend.qoq.direction }}">{{ _0_header_dividend.dividend.qoq.display }}</span>
                     </div>
                     <div style="display: flex; align-items: center; gap: 6px;">
-                        <span style="font-size: 9px; color: #808080; text-transform: uppercase; width: 24px;">YoY</span>
-                        <span style="font-size: 12px; font-weight: 600;" class="delta-{{ _0_header_dividend.dividend.yoy.direction }}">{{ _0_header_dividend.dividend.yoy.display }}</span>
+                        <span style="font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700; width: 24px;">YoY</span>
+                        <span style="font-size: 12px; font-weight: 700;" class="delta-{{ _0_header_dividend.dividend.yoy.direction }}">{{ _0_header_dividend.dividend.yoy.display }}</span>
                     </div>
                 </div>
             </div>
@@ -877,11 +877,11 @@
                             </div>
                             <div style="display: flex; border-top: 1px solid #e2e8f0; padding-top: 6px;">
                                 <div style="flex: 1; text-align: center; border-right: 1px solid #e2e8f0;">
-                                    <div style="font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 600; margin-bottom: 2px;">QoQ</div>
+                                    <div style="font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700; margin-bottom: 2px;">QoQ</div>
                                     <span class="delta {{ ratio.qoq.direction }}" style="font-size: 10px;">{{ ratio.qoq.display }}</span>
                                 </div>
                                 <div style="flex: 1; text-align: center;">
-                                    <div style="font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 600; margin-bottom: 2px;">YoY</div>
+                                    <div style="font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700; margin-bottom: 2px;">YoY</div>
                                     <span class="delta {{ ratio.yoy.direction }}" style="font-size: 10px;">{{ ratio.yoy.display }}</span>
                                 </div>
                             </div>
@@ -904,7 +904,7 @@
                             <div style="flex: 1; height: 6px; background: #e2e8f0; border-radius: 3px; overflow: hidden;">
                                 <div style="width: {{ component.percentage }}%; height: 100%; background: {{ component.color }}; border-radius: 3px;"></div>
                             </div>
-                            <span style="font-size: 11px; font-weight: 600; color: var(--text-main); width: 50px; text-align: right;">{{ component.value|safe }}</span>
+                            <span style="font-size: 11px; font-weight: 700; color: var(--text-main); width: 50px; text-align: right;">{{ component.value|safe }}</span>
                         </div>
                         {% endfor %}
                         <div style="display: flex; align-items: center; gap: 8px; padding-top: 6px; border-top: 1px solid #e2e8f0; margin-top: 2px;">
@@ -925,17 +925,17 @@
                     <div style="display: flex; flex-direction: column; gap: 6px;">
                         <!-- Header row -->
                         <div style="display: flex; align-items: center; padding-bottom: 4px; border-bottom: 1px solid #e2e8f0;">
-                            <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 600; width: 65px;">Metric</span>
-                            <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 700; flex: 1; text-align: center;">Value</span>
-                            <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 700; flex: 1; text-align: center;">QoQ</span>
-                            <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 700; flex: 1; text-align: center;">YoY</span>
+                            <span style="font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700; width: 65px;">Metric</span>
+                            <span style="font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700; flex: 1; text-align: center;">Value</span>
+                            <span style="font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700; flex: 1; text-align: center;">QoQ</span>
+                            <span style="font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700; flex: 1; text-align: center;">YoY</span>
                         </div>
                         {% for metric in _5_capital_risk.liquidity_credit %}
                         <div style="display: flex; align-items: center;">
                             <span style="font-size: 10px; color: #64748b; font-weight: 600; width: 65px;">{{ metric.label }}</span>
                             <span style="font-size: 11px; font-weight: 700; color: var(--text-main); flex: 1; text-align: center;">{{ metric.value|safe }}</span>
-                            <span class="delta {{ metric.qoq.direction }}" style="font-size: 11px; flex: 1; text-align: center;">{{ metric.qoq.display }}</span>
-                            <span class="delta {{ metric.yoy.direction }}" style="font-size: 11px; flex: 1; text-align: center;">{{ metric.yoy.display }}</span>
+                            <span class="delta {{ metric.qoq.direction }}" style="font-size: 10px; flex: 1; text-align: center;">{{ metric.qoq.display }}</span>
+                            <span class="delta {{ metric.yoy.direction }}" style="font-size: 10px; flex: 1; text-align: center;">{{ metric.yoy.display }}</span>
                         </div>
                         {% endfor %}
                     </div>
