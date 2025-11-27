@@ -399,45 +399,72 @@ def format_metric_value(actual: Optional[float], units: str, meta_unit: str) -> 
     """
     Format a metric value with appropriate units.
 
+    Uses standard financial formatting conventions:
+    - Negative values in parentheses: ($157M) not $-157M
+    - No space before M/B: $16.2B not $16.2 B
+    - Billions with 1 decimal, millions as whole numbers
+
     Args:
         actual: Raw numeric value
         units: Units from benchmarking_report (e.g., "millions", "%")
         meta_unit: Unit type from kpi_metadata
 
     Returns:
-        Formatted string (e.g., "$9,200 M", "13.8%", "+1.2%")
+        Formatted string (e.g., "$9,200M", "13.8%", "($157M)")
     """
     if actual is None:
         return "N/A"
 
     # Handle percentage metrics
     if units == "%" or meta_unit in ("percentage", "percent", "%"):
+        if actual < 0:
+            return f"({abs(actual):.1f}%)"
         return f"{actual:.1f}%"
 
     # Handle basis points
     if meta_unit in ("bps", "basis_points"):
-        return f"{actual:.0f} bps"
+        if actual < 0:
+            return f"({abs(actual):.0f}bps)"
+        return f"{actual:.0f}bps"
 
     # Handle millions (default for dollar amounts)
-    # Use up to 2 decimal places, but strip trailing zeros
+    # Industry standard: billions 1 decimal, millions whole or 1 decimal
+    # Negative values in parentheses
     if units == "millions" or meta_unit in ("millions", "currency"):
-        if actual >= 1000:
-            formatted = f"{actual / 1000:,.2f}".rstrip("0").rstrip(".")
-            return f"${formatted} B"
-        formatted = f"{actual:,.2f}".rstrip("0").rstrip(".")
-        return f"${formatted} M"
+        abs_val = abs(actual)
+        is_negative = actual < 0
+
+        if abs_val >= 1000:
+            # Billions: 1 decimal place
+            formatted = f"${abs_val / 1000:,.1f}B"
+        else:
+            # Millions: whole number for clean display
+            formatted = f"${abs_val:,.0f}M"
+
+        if is_negative:
+            return f"({formatted})"
+        return formatted
 
     # Handle ratio metrics
     if meta_unit == "ratio":
+        if actual < 0:
+            return f"({abs(actual):.2f}x)"
         return f"{actual:.2f}x"
 
     # Default: just format the number
-    if abs(actual) >= 1000000:
-        return f"{actual / 1000000:,.1f} M"
-    elif abs(actual) >= 1000:
-        return f"{actual:,.0f}"
+    abs_val = abs(actual)
+    is_negative = actual < 0
+
+    if abs_val >= 1000000:
+        formatted = f"{abs_val / 1000000:,.1f}M"
+    elif abs_val >= 1000:
+        formatted = f"{abs_val:,.0f}"
     else:
-        return f"{actual:.2f}"
+        formatted = f"{abs_val:.2f}"
+
+    if is_negative:
+        return f"({formatted})"
+    return formatted
 
 
 # Threshold for converting bps to percentage (100 bps = 1%)
@@ -530,13 +557,16 @@ def format_value_for_llm(metric: Dict[str, Any]) -> str:
     """
     Format a metric's current value for LLM prompt.
 
-    Uses same M/B and % logic as format_metric_value.
+    Uses same formatting conventions as format_metric_value:
+    - Negative values in parentheses
+    - No space before M/B
+    - Billions with 1 decimal, millions as whole numbers
 
     Args:
         metric: Metric dict with 'actual', 'units', 'meta_unit', 'is_bps'
 
     Returns:
-        Formatted string like "$9.2B", "13.8%", "52.3%"
+        Formatted string like "$9.2B", "13.8%", "($157M)"
     """
     actual = metric.get("actual")
     if actual is None:
@@ -548,16 +578,28 @@ def format_value_for_llm(metric: Dict[str, Any]) -> str:
 
     # Handle percentage metrics (ratios like ROE, efficiency ratio, NIM)
     if units == "%" or meta_unit in ("percentage", "percent", "%") or is_bps:
+        if actual < 0:
+            return f"({abs(actual):.2f}%)"
         return f"{actual:.2f}%"
 
     # Handle millions (default for dollar amounts)
     if units == "millions" or meta_unit in ("millions", "currency"):
-        if actual >= 1000:
-            return f"${actual / 1000:,.2f}B"
-        return f"${actual:,.0f}M"
+        abs_val = abs(actual)
+        is_negative = actual < 0
+
+        if abs_val >= 1000:
+            formatted = f"${abs_val / 1000:,.1f}B"
+        else:
+            formatted = f"${abs_val:,.0f}M"
+
+        if is_negative:
+            return f"({formatted})"
+        return formatted
 
     # Handle ratio metrics
     if meta_unit == "ratio":
+        if actual < 0:
+            return f"({abs(actual):.2f}x)"
         return f"{actual:.2f}x"
 
     # Default formatting
