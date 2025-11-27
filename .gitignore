@@ -95,4 +95,4 @@ CLAUDE*.md
 # ETL prompt folders (migrated to database, kept locally for reference)
 src/aegis/etls/call_summary/prompts/
 src/aegis/etls/key_themes/prompts/
-src/aegis/etls/cm_readthrough/prompts/
+src/aegis/etls/cm_readthrough/prompts/src/aegis/etls/bank_earnings_report/output/
