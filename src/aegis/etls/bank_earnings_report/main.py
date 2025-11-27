@@ -373,7 +373,7 @@ async def extract_all_sections(
         retrieve_metrics_by_names,
         format_key_metrics_json,
         retrieve_metric_history,
-        format_chart_json,
+        format_multi_chart_json,
         retrieve_available_platforms,
         retrieve_segment_metrics,
         format_segment_json,
@@ -501,59 +501,84 @@ async def extract_all_sections(
                 "formatted_metrics": [],
             }
 
-        # Retrieve historical data for the chart metric
-        chart_metric_name = selection_result.get("chart_metric")
-        if chart_metric_name:
-            chart_history = await retrieve_metric_history(
+        # Retrieve historical data for ALL metrics (tiles + dynamic + chart)
+        # Combine all metric names, deduplicated, preserving order
+        chart_metric_name = selection_result.get("chart_metric", "")
+        all_chart_metrics = []
+        seen_metrics = set()
+
+        # Add chart metric first (will be initial display)
+        if chart_metric_name and chart_metric_name not in seen_metrics:
+            all_chart_metrics.append(chart_metric_name)
+            seen_metrics.add(chart_metric_name)
+
+        # Add tile metrics
+        for name in tile_names:
+            if name not in seen_metrics:
+                all_chart_metrics.append(name)
+                seen_metrics.add(name)
+
+        # Add dynamic metrics
+        for name in dynamic_names:
+            if name not in seen_metrics:
+                all_chart_metrics.append(name)
+                seen_metrics.add(name)
+
+        # Build metrics_with_history for all metrics
+        metrics_with_history = []
+        metrics_by_param = {m["parameter"]: m for m in all_metrics}
+
+        for metric_name in all_chart_metrics:
+            metric_data = metrics_by_param.get(metric_name)
+            if not metric_data:
+                continue
+
+            # Retrieve 8Q history for this metric
+            history = await retrieve_metric_history(
                 bank_symbol=db_symbol,
-                metric_name=chart_metric_name,
+                metric_name=metric_name,
                 fiscal_year=fiscal_year,
                 quarter=quarter,
                 context=context,
                 num_quarters=8,
             )
 
-            # Get is_bps flag for the chart metric
-            chart_metric_data = next(
-                (m for m in all_metrics if m["parameter"] == chart_metric_name), None
-            )
-            chart_is_bps = chart_metric_data.get("is_bps", False) if chart_metric_data else False
+            if history:
+                metrics_with_history.append(
+                    {
+                        "name": metric_name,
+                        "history": history,
+                        "is_bps": metric_data.get("is_bps", False),
+                    }
+                )
 
-            chart_json = format_chart_json(chart_metric_name, chart_history, chart_is_bps)
+        if metrics_with_history:
+            chart_json = format_multi_chart_json(metrics_with_history, chart_metric_name)
             sections["1_keymetrics_chart"] = chart_json
 
             # Add chart data to debug log
             llm_debug_log["sections"]["1_keymetrics_chart"] = {
-                "metric_name": chart_metric_name,
-                "is_bps": chart_is_bps,
-                "unit_label": chart_json.get("unit", ""),
-                "raw_history": chart_history,
-                "formatted_quarters": chart_json.get("quarters", []),
-                "formatted_values": chart_json.get("values", []),
-                "data_points_count": len(chart_json.get("values", [])),
+                "initial_metric": chart_metric_name,
+                "total_metrics": len(metrics_with_history),
+                "metric_names": [m["name"] for m in metrics_with_history],
+                "initial_index": chart_json.get("initial_index", 0),
             }
         else:
             sections["1_keymetrics_chart"] = {
-                "label": "N/A",
-                "unit": "",
-                "decimal_places": 0,
-                "quarters": [],
-                "values": [],
+                "initial_index": 0,
+                "metrics": [],
             }
             llm_debug_log["sections"]["1_keymetrics_chart"] = {
-                "metric_name": "N/A",
-                "reason": "No chart metric selected",
-                "data_points_count": 0,
+                "initial_metric": "N/A",
+                "reason": "No metrics with history available",
+                "total_metrics": 0,
             }
     else:
         sections["1_keymetrics_tiles"] = {"source": "Supp Pack", "metrics": []}
         sections["1_keymetrics_dynamic"] = {"source": "Supp Pack", "metrics": []}
         sections["1_keymetrics_chart"] = {
-            "label": "N/A",
-            "unit": "",
-            "decimal_places": 0,
-            "quarters": [],
-            "values": [],
+            "initial_index": 0,
+            "metrics": [],
         }
         llm_debug_log["sections"]["1_keymetrics_selection"] = {
             "available_metrics": 0,

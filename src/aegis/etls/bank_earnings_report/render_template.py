@@ -13,6 +13,7 @@ import json
 from pathlib import Path
 from jinja2 import Environment, FileSystemLoader
 
+
 def load_json_files(data_dir: Path) -> dict:
     """Load all JSON files from the sample_data directory.
 
@@ -26,10 +27,11 @@ def load_json_files(data_dir: Path) -> dict:
         # Prefix with underscore if starts with a number (for valid variable name)
         if key[0].isdigit():
             key = f"_{key}"
-        with open(json_file, 'r') as f:
+        with open(json_file, "r") as f:
             data[key] = json.load(f)
         print(f"  Loaded: {json_file.name} -> {key}")
     return data
+
 
 def render_template(template_path: Path, data: dict, output_path: Path):
     """Render the Jinja2 template with the provided data."""
@@ -38,10 +40,11 @@ def render_template(template_path: Path, data: dict, output_path: Path):
 
     rendered = template.render(**data)
 
-    with open(output_path, 'w') as f:
+    with open(output_path, "w") as f:
         f.write(rendered)
 
     print(f"\nRendered to: {output_path}")
+
 
 def main():
     base_dir = Path(__file__).parent
@@ -56,6 +59,7 @@ def main():
     render_template(template_path, data, output_path)
 
     print(f"\nOpen in browser: file://{output_path.absolute()}")
+
 
 if __name__ == "__main__":
     main()

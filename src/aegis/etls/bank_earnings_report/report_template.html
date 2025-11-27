@@ -599,8 +599,8 @@
                  Row 3: Slim tile 1, Slim tile 2, Slim tile 3, Slim tile 4, Slim tile 5
             -->
             <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px;">
-                <!-- Main tiles (6 tiles in positions 1-3 of rows 1-2) -->
-                {% for metric in _1_keymetrics_tiles.metrics %}
+                <!-- Main tiles row 1 (positions 1-3) -->
+                {% for metric in _1_keymetrics_tiles.metrics[:3] %}
                 <div class="metric-box">
                     <span class="metric-label">{{ metric.label }}</span>
                     <span class="metric-val">{{ metric.value|safe }}</span>
@@ -615,16 +615,59 @@
                         </div>
                     </div>
                 </div>
-                {% if loop.index == 3 %}
-                <!-- -------- Trend Chart (after 3rd main tile) --------
-                     DATA SOURCE: 1_keymetrics_chart.json (label, quarters, values)
+                {% endfor %}
+                {% for _ in range(_1_keymetrics_tiles.metrics[:3]|length, 3) %}
+                <div class="metric-box" style="opacity: 0.4;">
+                    <span class="metric-label">No Data</span>
+                    <span class="metric-val">—</span>
+                </div>
+                {% endfor %}
+
+                <!-- -------- Trend Chart (always rendered, spans 2 cols, 2 rows) --------
+                     DATA SOURCE: 1_keymetrics_chart.json (metrics array with initial_index)
                      SOURCE: Supp Pack
-                     NOTE: Chart spans columns 4-5 and rows 1-2
                 -->
                 <div id="trend-chart-container" style="grid-column: span 2; grid-row: span 2; background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%); border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.04); display: flex; flex-direction: column;">
-                    <!-- Chart will be rendered here by JavaScript -->
+                    <!-- Navigation header with arrows and clickable title -->
+                    <div id="chart-nav" style="display: flex; align-items: center; justify-content: center; margin-bottom: 8px; position: relative;">
+                        <button id="chart-prev" style="background: none; border: none; cursor: pointer; padding: 4px 8px; font-size: 16px; color: #94a3b8; transition: color 0.2s;" title="Previous metric">◀</button>
+                        <div style="position: relative; flex: 1; text-align: center;">
+                            <span id="chart-title" class="metric-label" style="cursor: pointer; padding: 4px 8px; border-radius: 4px; transition: background 0.2s;" title="Click to select metric"></span>
+                            <!-- Dropdown menu (hidden by default) -->
+                            <div id="chart-dropdown" style="display: none; position: absolute; top: 100%; left: 50%; transform: translateX(-50%); background: white; border: 1px solid #e2e8f0; border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 100; min-width: 200px; max-height: 240px; overflow-y: auto; margin-top: 4px;">
+                                <!-- Dropdown items populated by JavaScript -->
+                            </div>
+                        </div>
+                        <button id="chart-next" style="background: none; border: none; cursor: pointer; padding: 4px 8px; font-size: 16px; color: #94a3b8; transition: color 0.2s;" title="Next metric">▶</button>
+                    </div>
+                    <!-- Chart content area -->
+                    <div id="chart-content" style="flex: 1; display: flex; flex-direction: column;">
+                        <!-- Chart will be rendered here by JavaScript -->
+                    </div>
                 </div>
-                {% endif %}
+
+                <!-- Main tiles row 2 (positions 4-6) -->
+                {% for metric in _1_keymetrics_tiles.metrics[3:6] %}
+                <div class="metric-box">
+                    <span class="metric-label">{{ metric.label }}</span>
+                    <span class="metric-val">{{ metric.value|safe }}</span>
+                    <div class="metric-changes-container">
+                        <div class="metric-change-item">
+                            <span class="change-label">QoQ</span>
+                            <span class="delta {{ metric.qoq.direction }}">{{ metric.qoq.display }}</span>
+                        </div>
+                        <div class="metric-change-item">
+                            <span class="change-label">YoY</span>
+                            <span class="delta {{ metric.yoy.direction }}">{{ metric.yoy.display }}</span>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+                {% for _ in range(_1_keymetrics_tiles.metrics[3:6]|length, 3) %}
+                <div class="metric-box" style="opacity: 0.4;">
+                    <span class="metric-label">No Data</span>
+                    <span class="metric-val">—</span>
+                </div>
                 {% endfor %}
 
                 <!-- Chart data embedded for JavaScript -->
@@ -951,14 +994,115 @@
          ============================================ -->
     <script>
     (function() {
-        // Render trend chart from embedded JSON data
-        function renderTrendChart() {
-            const dataEl = document.getElementById('trend-chart-data');
-            const container = document.getElementById('trend-chart-container');
-            if (!dataEl || !container) return;
+        // Global state for multi-metric chart
+        let chartData = null;
+        let currentMetricIndex = 0;
 
-            const data = JSON.parse(dataEl.textContent);
-            const { label, unit, decimal_places, quarters, values } = data;
+        // Initialize chart system
+        function initChart() {
+            const dataEl = document.getElementById('trend-chart-data');
+            if (!dataEl) return;
+
+            chartData = JSON.parse(dataEl.textContent);
+            if (!chartData.metrics || chartData.metrics.length === 0) {
+                document.getElementById('chart-content').innerHTML =
+                    '<div style="display: flex; align-items: center; justify-content: center; height: 100%; color: #94a3b8;">No chart data available</div>';
+                return;
+            }
+
+            currentMetricIndex = chartData.initial_index || 0;
+
+            // Setup event handlers
+            setupNavigation();
+            setupDropdown();
+
+            // Render initial chart
+            renderChart(currentMetricIndex);
+        }
+
+        // Setup navigation arrow buttons
+        function setupNavigation() {
+            const prevBtn = document.getElementById('chart-prev');
+            const nextBtn = document.getElementById('chart-next');
+
+            prevBtn.addEventListener('click', () => {
+                currentMetricIndex = (currentMetricIndex - 1 + chartData.metrics.length) % chartData.metrics.length;
+                renderChart(currentMetricIndex);
+                closeDropdown();
+            });
+
+            nextBtn.addEventListener('click', () => {
+                currentMetricIndex = (currentMetricIndex + 1) % chartData.metrics.length;
+                renderChart(currentMetricIndex);
+                closeDropdown();
+            });
+
+            // Hover effects
+            [prevBtn, nextBtn].forEach(btn => {
+                btn.addEventListener('mouseenter', () => btn.style.color = '#005587');
+                btn.addEventListener('mouseleave', () => btn.style.color = '#94a3b8');
+            });
+        }
+
+        // Setup dropdown menu
+        function setupDropdown() {
+            const title = document.getElementById('chart-title');
+            const dropdown = document.getElementById('chart-dropdown');
+
+            // Populate dropdown items
+            dropdown.innerHTML = chartData.metrics.map((m, i) => `
+                <div class="dropdown-item" data-index="${i}" style="padding: 8px 12px; cursor: pointer; font-size: 11px; color: #334155; transition: background 0.2s; border-bottom: 1px solid #f0f4f8;">
+                    ${m.name}
+                </div>
+            `).join('');
+
+            // Title click toggles dropdown
+            title.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const isVisible = dropdown.style.display === 'block';
+                dropdown.style.display = isVisible ? 'none' : 'block';
+                if (!isVisible) highlightCurrentItem();
+            });
+
+            // Dropdown item clicks
+            dropdown.querySelectorAll('.dropdown-item').forEach(item => {
+                item.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    currentMetricIndex = parseInt(item.dataset.index);
+                    renderChart(currentMetricIndex);
+                    closeDropdown();
+                });
+                item.addEventListener('mouseenter', () => item.style.background = '#f1f5f9');
+                item.addEventListener('mouseleave', () => item.style.background = 'white');
+            });
+
+            // Close dropdown when clicking outside
+            document.addEventListener('click', closeDropdown);
+
+            // Title hover effect
+            title.addEventListener('mouseenter', () => title.style.background = '#f1f5f9');
+            title.addEventListener('mouseleave', () => title.style.background = 'transparent');
+        }
+
+        function closeDropdown() {
+            document.getElementById('chart-dropdown').style.display = 'none';
+        }
+
+        function highlightCurrentItem() {
+            const dropdown = document.getElementById('chart-dropdown');
+            dropdown.querySelectorAll('.dropdown-item').forEach((item, i) => {
+                item.style.background = (i === currentMetricIndex) ? '#e0f2fe' : 'white';
+                item.style.fontWeight = (i === currentMetricIndex) ? '600' : 'normal';
+            });
+        }
+
+        // Render chart for a specific metric index
+        function renderChart(index) {
+            const metric = chartData.metrics[index];
+            const { label, unit, decimal_places, quarters, values } = metric;
+
+            // Update title
+            document.getElementById('chart-title').textContent = label;
 
             // Calculate stats
             const min = Math.min(...values);
@@ -969,31 +1113,24 @@
             const maxIdx = values.indexOf(max);
 
             // Calculate Y-axis range with padding
-            const range = max - min;
+            const range = max - min || 1; // Avoid division by zero
             const padding = range * 0.15;
             const yMin = min - padding;
             const yMax = max + padding;
 
-            // Format value for display - matches Python format_metric_value logic
-            // unit: "$M" for millions, "%" for percentage
-            // Uses up to 2 decimal places, strips trailing zeros
+            // Format value for display
             const stripTrailingZeros = (s) => s.replace(/\.?0+$/, '');
 
-            const formatValue = (v, forAxis = false) => {
+            const formatValue = (v) => {
                 if (unit === '%') {
-                    // Percentage: keep decimals, add % suffix
                     return v.toFixed(decimal_places) + '%';
                 } else if (unit === '$M') {
-                    // Currency in millions - up to 2 decimal places, strip trailing zeros
                     if (Math.abs(v) >= 1000) {
-                        // Convert to billions: $X.XX B (strip .00)
                         return '$' + stripTrailingZeros((v / 1000).toFixed(2)) + ' B';
                     } else {
-                        // Keep as millions: $X.XX M (strip .00)
                         return '$' + stripTrailingZeros(v.toFixed(2)) + ' M';
                     }
                 } else {
-                    // Default: format with commas and decimals
                     if (Math.abs(v) >= 1000) {
                         return v.toLocaleString('en-US', {maximumFractionDigits: decimal_places});
                     } else {
@@ -1002,12 +1139,10 @@
                 }
             };
 
-            // Compact format for chart data point labels (no $ prefix for cleaner display)
             const formatChartLabel = (v) => {
                 if (unit === '%') {
                     return v.toFixed(decimal_places);
                 } else if (unit === '$M') {
-                    // Currency - up to 2 decimal places, strip trailing zeros
                     if (Math.abs(v) >= 1000) {
                         return stripTrailingZeros((v / 1000).toFixed(2)) + 'B';
                     } else {
@@ -1021,20 +1156,18 @@
             // Calculate Y coordinate (inverted because SVG y=0 is top)
             const yCoord = (v) => 100 - ((v - yMin) / (yMax - yMin)) * 100;
 
-            // X positions for 8 points (SVG viewBox 0-320)
-            const xPositions = [30, 70, 110, 150, 190, 230, 270, 310];
+            // X positions for data points (up to 8 points)
+            const xPositions = [30, 70, 110, 150, 190, 230, 270, 310].slice(0, values.length);
             const xPercents = xPositions.map(x => (x / 320) * 100);
 
-            // Build SVG points
+            // Build SVG elements
             const points = values.map((v, i) => `${xPositions[i]},${yCoord(v)}`).join(' ');
             const polygonPoints = points + ` ${xPositions[xPositions.length-1]},100 ${xPositions[0]},100`;
 
-            // Build vertical guide lines
             const guideLines = values.map((v, i) =>
                 `<line x1="${xPositions[i]}" y1="100" x2="${xPositions[i]}" y2="${yCoord(v)}" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,2" />`
             ).join('');
 
-            // Build data point circles (color-coded for min/max/current)
             const circles = values.map((v, i) => {
                 let fill = '#005587';
                 let r = 3;
@@ -1045,7 +1178,6 @@
                 return `<circle cx="${xPositions[i]}" cy="${yCoord(v)}" r="${r}" fill="${fill}" stroke="white" stroke-width="${strokeWidth}" />`;
             }).join('');
 
-            // Build value labels - positioned above the data points
             const valueLabels = values.map((v, i) => {
                 let color = '#64748b';
                 let fontSize = '9px';
@@ -1053,28 +1185,20 @@
                 if (i === minIdx) { color = '#dc2626'; fontSize = '10px'; fontWeight = '700'; }
                 if (i === maxIdx) { color = '#16a34a'; fontSize = '10px'; fontWeight = '700'; }
                 if (i === values.length - 1) { color = '#005587'; fontSize = '10px'; fontWeight = '700'; }
-                const topPercent = yCoord(v) - 18; // Offset to position labels well above data points
+                const topPercent = yCoord(v) - 18;
                 return `<div style="position: absolute; left: ${xPercents[i]}%; top: ${topPercent}%; transform: translateX(-50%); font-size: ${fontSize}; color: ${color}; font-weight: ${fontWeight}; white-space: nowrap;">${formatChartLabel(v)}</div>`;
             }).join('');
 
-            // Build quarter labels - use white-space: nowrap to prevent wrapping
             const quarterLabels = quarters.map((q, i) =>
                 `<span style="position: absolute; left: ${xPercents[i]}%; transform: translateX(-50%); font-size: 9px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.3px; font-weight: 700; white-space: nowrap;">${q}</span>`
             ).join('');
 
-            // Y-axis labels with proper formatting
-            const yAxisTop = formatValue(yMax, true);
-            const yAxisMid = formatValue((yMin + yMax) / 2, true);
-            const yAxisBottom = formatValue(yMin, true);
-
-            // Average line Y position
+            const yAxisTop = formatValue(yMax);
+            const yAxisMid = formatValue((yMin + yMax) / 2);
+            const yAxisBottom = formatValue(yMin);
             const avgY = yCoord(avg);
 
-            container.innerHTML = `
-                <div style="margin-bottom: 10px;">
-                    <span class="metric-label">${label}</span>
-                </div>
-
+            document.getElementById('chart-content').innerHTML = `
                 <div style="position: relative; flex: 1; min-height: 80px;">
                     <!-- Y-axis labels -->
                     <div style="position: absolute; left: -5px; top: 0; font-size: 8px; color: #94a3b8; letter-spacing: 0.3px; font-weight: 600; white-space: nowrap;">${yAxisTop}</div>
@@ -1138,9 +1262,9 @@
 
         // Run on DOM ready
         if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', renderTrendChart);
+            document.addEventListener('DOMContentLoaded', initChart);
         } else {
-            renderTrendChart();
+            initChart();
         }
     })();
     </script>

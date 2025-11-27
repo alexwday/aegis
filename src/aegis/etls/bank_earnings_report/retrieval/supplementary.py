@@ -871,6 +871,95 @@ def format_chart_json(
     }
 
 
+def format_multi_chart_json(
+    metrics_with_history: List[Dict[str, Any]], initial_metric_name: str
+) -> Dict[str, Any]:
+    """
+    Format multiple metrics with their histories for interactive chart display.
+
+    Args:
+        metrics_with_history: List of dicts, each containing:
+            - name: Metric name
+            - history: List of historical data points from retrieve_metric_history()
+            - is_bps: Whether the metric is a percentage/ratio
+        initial_metric_name: Name of the metric to display initially (LLM selected)
+
+    Returns:
+        Formatted JSON structure for interactive chart:
+        {
+            "initial_index": 0,
+            "metrics": [
+                {
+                    "name": "Core Cash Diluted EPS",
+                    "label": "Core Cash Diluted EPS - 8Q Trend",
+                    "unit": "$M",
+                    "decimal_places": 0,
+                    "quarters": ["Q4 23", "Q1 24", ...],
+                    "values": [3.45, 3.52, ...]
+                },
+                ...
+            ]
+        }
+    """
+    formatted_metrics = []
+    initial_index = 0
+
+    for i, metric in enumerate(metrics_with_history):
+        name = metric["name"]
+        history = metric["history"]
+        is_bps = metric.get("is_bps", False)
+
+        # Track initial metric index
+        if name == initial_metric_name:
+            initial_index = i
+
+        # Determine unit label and decimal places
+        if is_bps:
+            unit_label = "%"
+            decimal_places = 2
+        else:
+            unit_label = "$M"
+            decimal_places = 0
+
+        quarters = []
+        values = []
+
+        for h in history:
+            if h["value"] is not None:
+                # Format quarter label as "Q3 23" style
+                q_label = h["quarter"]  # e.g., "Q3 2023"
+                parts = q_label.split()
+                if len(parts) == 2:
+                    q_label = f"{parts[0]} {parts[1][2:]}"  # "Q3 2023" -> "Q3 23"
+                quarters.append(q_label)
+                values.append(round(h["value"], decimal_places))
+
+        # Only include metrics that have data
+        if values:
+            formatted_metrics.append(
+                {
+                    "name": name,
+                    "label": f"{name} - 8Q Trend",
+                    "unit": unit_label,
+                    "decimal_places": decimal_places,
+                    "quarters": quarters,
+                    "values": values,
+                }
+            )
+
+    # Recalculate initial_index after filtering (in case some metrics had no data)
+    initial_index = 0
+    for i, m in enumerate(formatted_metrics):
+        if m["name"] == initial_metric_name:
+            initial_index = i
+            break
+
+    return {
+        "initial_index": initial_index,
+        "metrics": formatted_metrics,
+    }
+
+
 # =============================================================================
 # Segment Performance Retrieval
 # =============================================================================
