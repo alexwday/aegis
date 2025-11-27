@@ -43,15 +43,13 @@ logger = get_logger()
 # Monitored platforms in standard reporting order
 # This order follows typical bank earnings report structure:
 # 1. Core domestic retail/commercial banking
-# 2. Wealth management (fee-based)
-# 3. Insurance (fee-based)
-# 4. Capital markets (trading/advisory)
-# 5. International operations
-# 6. Corporate/other (residual)
+# 2. Wealth & insurance (fee-based)
+# 3. Capital markets (trading/advisory)
+# 4. International operations
+# 5. Corporate/other (residual)
 MONITORED_PLATFORMS = [
     "Canadian Banking",
-    "Wealth Management",
-    "Insurance",
+    "Canadian Wealth & Insurance",
     "Capital Markets",
     "U.S. & International Banking",
     "Corporate Support",
