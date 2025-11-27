@@ -40,13 +40,20 @@ logger = get_logger()
 # Configuration - Same as segment_metrics.py
 # =============================================================================
 
+# Monitored platforms in standard reporting order
+# This order follows typical bank earnings report structure:
+# 1. Core domestic retail/commercial banking
+# 2. Wealth management (fee-based)
+# 3. Insurance (fee-based)
+# 4. Capital markets (trading/advisory)
+# 5. International operations
+# 6. Corporate/other (residual)
 MONITORED_PLATFORMS = [
     "Canadian Banking",
-    "Canadian Wealth & Insurance",
-    "U.S. & International Banking",
-    "Personal Banking",
-    "Commercial Banking",
+    "Wealth Management",
+    "Insurance",
     "Capital Markets",
+    "U.S. & International Banking",
     "Corporate Support",
 ]
 
