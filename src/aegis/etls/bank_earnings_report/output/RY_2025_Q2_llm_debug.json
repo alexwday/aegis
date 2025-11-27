@@ -1,5 +1,5 @@
 {
-  "execution_id": "e0adeb36-7878-44ba-8904-1e8efe9bfdb4",
+  "execution_id": "42204e68-234b-4f24-8f4d-2ecfaf7489ce",
   "bank": "Royal Bank of Canada",
   "period": "Q2 2025",
   "sections": {
@@ -15,6 +15,26 @@
     "1_keymetrics_raw": {
       "metric_count": 0,
       "reason": "No metrics with history available"
+    },
+    "1_keymetrics_overview": {
+      "source": "Transcript",
+      "narrative_length": 722
+    },
+    "1_keymetrics_items": {
+      "source": "Transcript",
+      "items_count": 10,
+      "items": [
+        "M&A pipeline at highest level since 2021, signaling strong deal activity and investment banking momentum.",
+        "Backlog increased for the fourth consecutive quarter, indicating sustained client demand and business growth.",
+        "Client dialogues remain elevated, reflecting strong engagement despite macroeconomic uncertainty.",
+        "Some clients adopting a wait-and-see approach due to ongoing macro environment uncertainty, impacting near-term decision-making.",
+        "Trading revenue strong across both fixed income and equities, driven by increased client activity and market volatility.",
+        "Trading desk benefited from client repositioning amid volatile markets, enhancing revenue opportunities.",
+        "Expect significant M&A activity for the remainder of the year as companies pursue growth opportunities.",
+        "Investment banking activity continues to strengthen, supporting overall revenue growth.",
+        "Macro environment uncertainty remains a concern but has not dampened overall client engagement and pipeline strength.",
+        "Sustained elevated client engagement and backlog growth demonstrate resilience in business operations despite external challenges."
+      ]
     },
     "2_narrative": {
       "transcript_quotes": 5,

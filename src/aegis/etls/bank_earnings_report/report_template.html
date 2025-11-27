@@ -748,38 +748,52 @@
             </div>
 
             <!-- -------- Subsection 1d: Items of Note --------
-                 DATA SOURCE: 1_keymetrics_items.json (items array)
-                 SOURCE: RTS
-                 NOTE: Variable-length list - loops through all items in JSON
+                 DATA SOURCE: 1_keymetrics_items.json (entries array - strings for now)
+                 SOURCE: Transcript (will later combine with RTS)
+                 NOTE: Shows top 5 items, expandable for more
             -->
             <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--border);">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
                     <h3 style="font-size: 14px; color: var(--text-muted); margin: 0;">ITEMS OF NOTE</h3>
                     <div style="display: flex; gap: 8px;">
                         <span class="pill-soft">Source: {{ _1_keymetrics_items.source }}</span>
-                        <span class="pill-soft">Currency: {{ _0_header_params.currency }}</span>
                     </div>
                 </div>
-                <table class="items-table">
-                    <thead>
-                        <tr>
-                            <th style="width: 50%;">Description</th>
-                            <th style="width: 18%; text-align: right;">Impact</th>
-                            <th style="width: 16%; text-align: center;">Segment</th>
-                            <th style="width: 16%; text-align: center;">Timing</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for item in _1_keymetrics_items.entries %}
-                        <tr>
-                            <td class="item-description">{{ item.description }}</td>
-                            <td class="impact-value"><span class="delta {{ item.impact.direction }}">{{ item.impact.display }}</span></td>
-                            <td style="text-align: center; font-size: 12px;">{{ item.segment }}</td>
-                            <td style="text-align: center; font-size: 12px;">{{ item.timing }}</td>
-                        </tr>
+
+                <!-- Items of Note list -->
+                <div style="display: flex; flex-direction: column; gap: 8px;">
+                    {% for item in _1_keymetrics_items.entries[:5] %}
+                    <div style="display: flex; align-items: flex-start; gap: 8px; padding: 8px 12px; background: #f8fafc; border-radius: 6px;">
+                        <span style="color: var(--accent); font-weight: 700; font-size: 11px; min-width: 16px;">•</span>
+                        <span style="font-size: 12px; color: var(--text-main); line-height: 1.4;">{{ item }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+
+                <!-- Expandable section for additional items -->
+                {% if _1_keymetrics_items.entries|length > 5 %}
+                <div style="margin-top: 12px; text-align: center;">
+                    <button id="items-toggle" onclick="toggleItems()" style="background: none; border: 1px solid #e2e8f0; border-radius: 6px; padding: 6px 12px; cursor: pointer; font-size: 9px; color: #64748b; transition: all 0.2s;">
+                        <span id="items-icon">▶</span> Show {{ _1_keymetrics_items.entries|length - 5 }} More Items
+                    </button>
+                </div>
+
+                <div id="items-container" style="display: none; margin-top: 12px; padding-top: 12px; border-top: 1px solid #e2e8f0;">
+                    <div style="display: flex; flex-direction: column; gap: 8px;">
+                        {% for item in _1_keymetrics_items.entries[5:] %}
+                        <div style="display: flex; align-items: flex-start; gap: 8px; padding: 8px 12px; background: #fafbfc; border-radius: 6px;">
+                            <span style="color: #94a3b8; font-weight: 700; font-size: 11px; min-width: 16px;">•</span>
+                            <span style="font-size: 11px; color: var(--text-main); line-height: 1.4;">{{ item }}</span>
+                        </div>
                         {% endfor %}
-                    </tbody>
-                </table>
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Disclaimer -->
+                <div style="margin-top: 12px; padding-top: 8px; border-top: 1px solid #e2e8f0;">
+                    <div style="font-size: 9px; color: #94a3b8; font-style: italic;">Items extracted from earnings call transcript.</div>
+                </div>
             </div>
         </div>
 
@@ -1440,6 +1454,25 @@
         const container = document.getElementById('analyst-focus-container');
         const icon = document.getElementById('analyst-focus-icon');
         const button = document.getElementById('analyst-focus-toggle');
+
+        if (container.style.display === 'none') {
+            container.style.display = 'block';
+            icon.textContent = '▼';
+            button.style.background = '#f1f5f9';
+            button.style.borderColor = '#cbd5e1';
+        } else {
+            container.style.display = 'none';
+            icon.textContent = '▶';
+            button.style.background = 'none';
+            button.style.borderColor = '#e2e8f0';
+        }
+    }
+
+    // Toggle items of note section visibility
+    function toggleItems() {
+        const container = document.getElementById('items-container');
+        const icon = document.getElementById('items-icon');
+        const button = document.getElementById('items-toggle');
 
         if (container.style.display === 'none') {
             container.style.display = 'block';

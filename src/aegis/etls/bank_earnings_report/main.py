@@ -392,6 +392,10 @@ async def extract_all_sections(
     )
     from .extraction.analyst_focus import extract_analyst_focus
     from .extraction.management_narrative import extract_transcript_quotes
+    from .extraction.transcript_insights import (
+        extract_transcript_overview,
+        extract_transcript_items_of_note,
+    )
 
     execution_id = context.get("execution_id")
     db_symbol = f"{bank_info['bank_symbol']}-CA"
@@ -631,14 +635,71 @@ async def extract_all_sections(
     logger.info("etl.bank_earnings_report.section_complete", section="1_keymetrics_raw")
 
     # =========================================================================
-    # Placeholder sections (not yet implemented)
+    # Section 1b: Key Metrics Overview (from transcripts)
+    # Future: Will combine with RTS overview for final summary
     # =========================================================================
+    logger.info(
+        "etl.bank_earnings_report.transcript_overview_start",
+        execution_id=execution_id,
+    )
 
-    # Key Metrics Overview - placeholder (template uses .narrative)
-    sections["1_keymetrics_overview"] = {"narrative": "Overview content not yet implemented."}
+    transcript_overview = await extract_transcript_overview(
+        bank_info=bank_info,
+        fiscal_year=fiscal_year,
+        quarter=quarter,
+        context=context,
+    )
 
-    # Key Metrics Items of Note - placeholder (template uses .source and .entries)
-    sections["1_keymetrics_items"] = {"source": "Supp Pack", "entries": []}
+    sections["1_keymetrics_overview"] = {
+        "narrative": transcript_overview.get("narrative", ""),
+    }
+
+    # Add to debug log
+    llm_debug_log["sections"]["1_keymetrics_overview"] = {
+        "source": "Transcript",
+        "narrative_length": len(transcript_overview.get("narrative", "")),
+    }
+
+    logger.info(
+        "etl.bank_earnings_report.section_complete",
+        section="1_keymetrics_overview",
+        narrative_length=len(transcript_overview.get("narrative", "")),
+    )
+
+    # =========================================================================
+    # Section 1c: Key Metrics Items of Note (from transcripts)
+    # Future: Will combine with RTS items, dedupe, and select top 5
+    # =========================================================================
+    logger.info(
+        "etl.bank_earnings_report.transcript_items_start",
+        execution_id=execution_id,
+    )
+
+    transcript_items = await extract_transcript_items_of_note(
+        bank_info=bank_info,
+        fiscal_year=fiscal_year,
+        quarter=quarter,
+        context=context,
+        max_items=10,
+    )
+
+    sections["1_keymetrics_items"] = {
+        "source": "Transcript",
+        "entries": transcript_items.get("items", []),
+    }
+
+    # Add to debug log
+    llm_debug_log["sections"]["1_keymetrics_items"] = {
+        "source": "Transcript",
+        "items_count": len(transcript_items.get("items", [])),
+        "items": transcript_items.get("items", []),
+    }
+
+    logger.info(
+        "etl.bank_earnings_report.section_complete",
+        section="1_keymetrics_items",
+        items_count=len(transcript_items.get("items", [])),
+    )
 
     # =========================================================================
     # Section 2: Management Narrative (transcript quotes)

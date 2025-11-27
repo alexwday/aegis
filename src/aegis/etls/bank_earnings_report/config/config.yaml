@@ -20,6 +20,14 @@ models:
   management_narrative_extraction:
     tier: medium
 
+  # Transcript overview summary extraction
+  transcript_overview_extraction:
+    tier: medium
+
+  # Transcript items of note extraction
+  transcript_items_extraction:
+    tier: medium
+
 # LLM Parameters (applied to all calls)
 llm:
   temperature: 0.1  # Low temperature for factual extraction

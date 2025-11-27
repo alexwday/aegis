@@ -575,7 +575,7 @@
             <div style="margin-bottom: 20px;">
                 <h3 style="font-size: 14px; color: var(--text-muted); margin: 0 0 10px 0;">OVERVIEW</h3>
                 <p style="font-size: 12px; color: var(--text-main); line-height: 1.5; margin: 0;">
-                    Overview content not yet implemented.
+                    Management expressed a cautiously optimistic tone for Q2 2025, highlighting sustained client engagement and a robust backlog that has grown for four consecutive quarters. Investment banking activity, particularly in M&A pipelines, reached levels not seen since 2021, signaling strong momentum despite some client hesitancy amid macroeconomic uncertainties. Trading revenue benefited from market volatility, supporting active client repositioning across fixed income and equities. Looking ahead, the bank anticipates continued significant M&A activity as corporates and investors pursue growth opportunities, underscoring a strategic focus on leveraging market dynamics and client relationships to drive future performance.
                 </p>
             </div>
 
@@ -678,31 +678,92 @@
             </div>
 
             <!-- -------- Subsection 1d: Items of Note --------
-                 DATA SOURCE: 1_keymetrics_items.json (items array)
-                 SOURCE: RTS
-                 NOTE: Variable-length list - loops through all items in JSON
+                 DATA SOURCE: 1_keymetrics_items.json (entries array - strings for now)
+                 SOURCE: Transcript (will later combine with RTS)
+                 NOTE: Shows top 5 items, expandable for more
             -->
             <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--border);">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
                     <h3 style="font-size: 14px; color: var(--text-muted); margin: 0;">ITEMS OF NOTE</h3>
                     <div style="display: flex; gap: 8px;">
-                        <span class="pill-soft">Source: Supp Pack</span>
-                        <span class="pill-soft">Currency: CAD</span>
+                        <span class="pill-soft">Source: Transcript</span>
                     </div>
                 </div>
-                <table class="items-table">
-                    <thead>
-                        <tr>
-                            <th style="width: 50%;">Description</th>
-                            <th style="width: 18%; text-align: right;">Impact</th>
-                            <th style="width: 16%; text-align: center;">Segment</th>
-                            <th style="width: 16%; text-align: center;">Timing</th>
-                        </tr>
-                    </thead>
-                    <tbody>
+
+                <!-- Items of Note list -->
+                <div style="display: flex; flex-direction: column; gap: 8px;">
+                    
+                    <div style="display: flex; align-items: flex-start; gap: 8px; padding: 8px 12px; background: #f8fafc; border-radius: 6px;">
+                        <span style="color: var(--accent); font-weight: 700; font-size: 11px; min-width: 16px;">•</span>
+                        <span style="font-size: 12px; color: var(--text-main); line-height: 1.4;">M&A pipeline at highest level since 2021, signaling strong deal activity and investment banking momentum.</span>
+                    </div>
+                    
+                    <div style="display: flex; align-items: flex-start; gap: 8px; padding: 8px 12px; background: #f8fafc; border-radius: 6px;">
+                        <span style="color: var(--accent); font-weight: 700; font-size: 11px; min-width: 16px;">•</span>
+                        <span style="font-size: 12px; color: var(--text-main); line-height: 1.4;">Backlog increased for the fourth consecutive quarter, indicating sustained client demand and business growth.</span>
+                    </div>
+                    
+                    <div style="display: flex; align-items: flex-start; gap: 8px; padding: 8px 12px; background: #f8fafc; border-radius: 6px;">
+                        <span style="color: var(--accent); font-weight: 700; font-size: 11px; min-width: 16px;">•</span>
+                        <span style="font-size: 12px; color: var(--text-main); line-height: 1.4;">Client dialogues remain elevated, reflecting strong engagement despite macroeconomic uncertainty.</span>
+                    </div>
+                    
+                    <div style="display: flex; align-items: flex-start; gap: 8px; padding: 8px 12px; background: #f8fafc; border-radius: 6px;">
+                        <span style="color: var(--accent); font-weight: 700; font-size: 11px; min-width: 16px;">•</span>
+                        <span style="font-size: 12px; color: var(--text-main); line-height: 1.4;">Some clients adopting a wait-and-see approach due to ongoing macro environment uncertainty, impacting near-term decision-making.</span>
+                    </div>
+                    
+                    <div style="display: flex; align-items: flex-start; gap: 8px; padding: 8px 12px; background: #f8fafc; border-radius: 6px;">
+                        <span style="color: var(--accent); font-weight: 700; font-size: 11px; min-width: 16px;">•</span>
+                        <span style="font-size: 12px; color: var(--text-main); line-height: 1.4;">Trading revenue strong across both fixed income and equities, driven by increased client activity and market volatility.</span>
+                    </div>
+                    
+                </div>
+
+                <!-- Expandable section for additional items -->
+                
+                <div style="margin-top: 12px; text-align: center;">
+                    <button id="items-toggle" onclick="toggleItems()" style="background: none; border: 1px solid #e2e8f0; border-radius: 6px; padding: 6px 12px; cursor: pointer; font-size: 9px; color: #64748b; transition: all 0.2s;">
+                        <span id="items-icon">▶</span> Show 5 More Items
+                    </button>
+                </div>
+
+                <div id="items-container" style="display: none; margin-top: 12px; padding-top: 12px; border-top: 1px solid #e2e8f0;">
+                    <div style="display: flex; flex-direction: column; gap: 8px;">
                         
-                    </tbody>
-                </table>
+                        <div style="display: flex; align-items: flex-start; gap: 8px; padding: 8px 12px; background: #fafbfc; border-radius: 6px;">
+                            <span style="color: #94a3b8; font-weight: 700; font-size: 11px; min-width: 16px;">•</span>
+                            <span style="font-size: 11px; color: var(--text-main); line-height: 1.4;">Trading desk benefited from client repositioning amid volatile markets, enhancing revenue opportunities.</span>
+                        </div>
+                        
+                        <div style="display: flex; align-items: flex-start; gap: 8px; padding: 8px 12px; background: #fafbfc; border-radius: 6px;">
+                            <span style="color: #94a3b8; font-weight: 700; font-size: 11px; min-width: 16px;">•</span>
+                            <span style="font-size: 11px; color: var(--text-main); line-height: 1.4;">Expect significant M&A activity for the remainder of the year as companies pursue growth opportunities.</span>
+                        </div>
+                        
+                        <div style="display: flex; align-items: flex-start; gap: 8px; padding: 8px 12px; background: #fafbfc; border-radius: 6px;">
+                            <span style="color: #94a3b8; font-weight: 700; font-size: 11px; min-width: 16px;">•</span>
+                            <span style="font-size: 11px; color: var(--text-main); line-height: 1.4;">Investment banking activity continues to strengthen, supporting overall revenue growth.</span>
+                        </div>
+                        
+                        <div style="display: flex; align-items: flex-start; gap: 8px; padding: 8px 12px; background: #fafbfc; border-radius: 6px;">
+                            <span style="color: #94a3b8; font-weight: 700; font-size: 11px; min-width: 16px;">•</span>
+                            <span style="font-size: 11px; color: var(--text-main); line-height: 1.4;">Macro environment uncertainty remains a concern but has not dampened overall client engagement and pipeline strength.</span>
+                        </div>
+                        
+                        <div style="display: flex; align-items: flex-start; gap: 8px; padding: 8px 12px; background: #fafbfc; border-radius: 6px;">
+                            <span style="color: #94a3b8; font-weight: 700; font-size: 11px; min-width: 16px;">•</span>
+                            <span style="font-size: 11px; color: var(--text-main); line-height: 1.4;">Sustained elevated client engagement and backlog growth demonstrate resilience in business operations despite external challenges.</span>
+                        </div>
+                        
+                    </div>
+                </div>
+                
+
+                <!-- Disclaimer -->
+                <div style="margin-top: 12px; padding-top: 8px; border-top: 1px solid #e2e8f0;">
+                    <div style="font-size: 9px; color: #94a3b8; font-style: italic;">Items extracted from earnings call transcript.</div>
+                </div>
             </div>
         </div>
 
@@ -808,7 +869,7 @@
                         <span style="position: absolute; bottom: -8px; right: 4px; font-size: 20px; color: #cbd5e1; font-family: Georgia, serif; line-height: 1;">"</span>
                     </div>
                     <div style="font-size: 12px; color: var(--text-main); line-height: 1.5;">
-                        CFO expects relatively stable NII in Canadian Banking despite modest NIM compression from potential rate cuts, supported by 6% mortgage loan growth and 28% non-interest bearing deposits. Fixed-rate mortgage repricing added 15 bps to NIM this quarter, with benefits continuing, while Capital Markets NII remains healthy from trading and financing growth; positive operating leverage expected even with 25-50 bps rate cuts.
+                        CFO expects relatively stable NII in Canadian Banking despite modest NIM compression from potential rate cuts, supported by 6% YoY mortgage growth and 28% non-interest bearing deposits. About 30% of the mortgage book repriced this quarter, adding 15 bps to NIM, with Capital Markets NII also healthy, enabling positive operating leverage even with 25-50 bps rate cuts.
                     </div>
                 </div>
                 
@@ -818,11 +879,11 @@
                     </div>
                     <div style="position: relative; margin-bottom: 6px; padding-left: 16px; padding-right: 12px;">
                         <span style="position: absolute; top: -4px; left: 0; font-size: 20px; color: #cbd5e1; font-family: Georgia, serif; line-height: 1;">"</span>
-                        <div style="font-size: 11px; color: #475569; font-style: italic;">How should we think about the pace of share buybacks and any updated M&A strategy for the rest of the year?</div>
+                        <div style="font-size: 11px; color: #475569; font-style: italic;">How should we think about the pace of share buybacks for the rest of the year and any updated thoughts on M&A?</div>
                         <span style="position: absolute; bottom: -8px; right: 4px; font-size: 20px; color: #cbd5e1; font-family: Georgia, serif; line-height: 1;">"</span>
                     </div>
                     <div style="font-size: 12px; color: var(--text-main); line-height: 1.5;">
-                        CEO McKay said the CET1 ratio ended at 13.1%, 160 bps above target, with $3.5 billion remaining in buyback authorization and plans to be opportunistic amid market volatility. M&A focus remains on digital, specialty lending, and wealth/capital markets, with discipline on pricing and strategic fit, especially given US regional banking dislocation opportunities.
+                        CEO McKay said the CET1 ratio ended at 13.1%, 160 bps above target, with $3.5 billion remaining in buyback authorization and plans to be opportunistic amid market volatility. On M&A, RBC seeks accretive deals aligned with strategic priorities, focusing on digital, specialty lending, and wealth platforms, while being patient given US regional bank dislocations.
                     </div>
                 </div>
                 
@@ -836,7 +897,7 @@
                         <span style="position: absolute; bottom: -8px; right: 4px; font-size: 20px; color: #cbd5e1; font-family: Georgia, serif; line-height: 1;">"</span>
                     </div>
                     <div style="font-size: 12px; color: var(--text-main); line-height: 1.5;">
-                        CEO Dave McKay reports strong credit quality with a Canadian Banking PCL ratio of 23 bps, within the 25-30 bps through-the-cycle range. Mortgage delinquencies are low at 0.15%, and auto loans remain stable. Commercial provisions rose slightly due to specific real estate credits, but overall CRE exposure is well managed. Capital Markets saw some distressed credits, with performing ACL coverage at 47 bps, providing a solid cushion.
+                        CEO Dave McKay reports strong credit quality with Canadian Banking's PCL ratio at 23 bps, within the 25-30 bps through-the-cycle range. Mortgage delinquencies are low at 0.15%, and commercial provisions rose modestly due to specific real estate credits; Capital Markets had some distressed credits but overall ACL coverage is healthy at 47 bps.
                     </div>
                 </div>
                 
@@ -857,11 +918,11 @@
                         </div>
                         <div style="position: relative; margin-bottom: 6px; padding-left: 14px; padding-right: 10px;">
                             <span style="position: absolute; top: -3px; left: 0; font-size: 16px; color: #cbd5e1; font-family: Georgia, serif; line-height: 1;">"</span>
-                            <div style="font-size: 10px; color: #475569; font-style: italic;">What are the drivers of AUM and AUA growth in wealth management and how do you view competition from robo-advisors?</div>
+                            <div style="font-size: 10px; color: #475569; font-style: italic;">What are the drivers of AUM and AUA growth and how do you view competition from robo-advisors?</div>
                             <span style="position: absolute; bottom: -6px; right: 2px; font-size: 16px; color: #cbd5e1; font-family: Georgia, serif; line-height: 1;">"</span>
                         </div>
                         <div style="font-size: 11px; color: var(--text-main); line-height: 1.5;">
-                            Group Head Personal & Commercial Banking reported total client assets of $1.8 trillion, up 12% YoY, driven by $5.2 billion in net sales and market appreciation. The InvestEase digital platform has $2.5 billion AUM with 65,000 clients, complementing full-service offerings as many clients transition to advised relationships; insurance premiums rose 8%, with 40% of new insurance clients from banking.
+                            Group Head Personal & Commercial Banking reports total client assets grew 12% YoY to $1.8 trillion, driven by $5.2 billion net sales and market appreciation. The InvestEase robo-advisor platform has $2.5 billion AUM with 65,000 clients, serving as a complementary acquisition channel, while high-net-worth client relationships and insurance premiums also showed strong growth.
                         </div>
                     </div>
                     
@@ -875,7 +936,7 @@
                             <span style="position: absolute; bottom: -6px; right: 2px; font-size: 16px; color: #cbd5e1; font-family: Georgia, serif; line-height: 1;">"</span>
                         </div>
                         <div style="font-size: 11px; color: var(--text-main); line-height: 1.5;">
-                            CFO Hepworth says the 53.2% efficiency ratio improved 100 bps YoY, mostly sustainable from core banking revenue growth and productivity gains. RBC is investing $4.5 billion in technology (+8% YoY) and talent, but expects 200-300 bps positive operating leverage this year and aims to reduce efficiency ratio below 50% in a few years.
+                            CFO Hepworth says the 53.2% efficiency ratio reflects about 100 bps year-over-year improvement, mostly sustainable from core banking revenue growth and productivity gains. RBC is investing $4.5 billion in technology (+8% YoY) and talent, but expects 200-300 bps positive operating leverage this year and aims to reduce efficiency ratio below 50% in the next few years.
                         </div>
                     </div>
                     
@@ -1290,6 +1351,25 @@
         const container = document.getElementById('analyst-focus-container');
         const icon = document.getElementById('analyst-focus-icon');
         const button = document.getElementById('analyst-focus-toggle');
+
+        if (container.style.display === 'none') {
+            container.style.display = 'block';
+            icon.textContent = '▼';
+            button.style.background = '#f1f5f9';
+            button.style.borderColor = '#cbd5e1';
+        } else {
+            container.style.display = 'none';
+            icon.textContent = '▶';
+            button.style.background = 'none';
+            button.style.borderColor = '#e2e8f0';
+        }
+    }
+
+    // Toggle items of note section visibility
+    function toggleItems() {
+        const container = document.getElementById('items-container');
+        const icon = document.getElementById('items-icon');
+        const button = document.getElementById('items-toggle');
 
         if (container.style.display === 'none') {
             container.style.display = 'block';
