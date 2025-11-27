@@ -97,45 +97,55 @@ async def extract_transcript_quotes(
         return []
 
     # Step 3: Build prompts for LLM
-    system_prompt = f"""You are a senior financial analyst extracting key management quotes from \
-bank earnings call transcripts for an executive summary report.
+    system_prompt = f"""You are a senior financial analyst extracting impactful management quotes \
+from bank earnings call transcripts.
 
-## YOUR TASK
+## CONTEXT
 
-Extract the {num_quotes} most impactful quotes or paraphrases from management's prepared remarks. \
-These will appear in the "Management Narrative" section of a quarterly earnings report.
+These quotes appear in the "Management Narrative" section alongside RTS summaries. The RTS content \
+provides factual context and metrics. Your quotes provide something different: EXECUTIVE VOICE.
 
-## QUOTE SELECTION CRITERIA
+## WHAT THESE QUOTES ARE FOR
 
-Prioritize statements about:
-1. **Quarter Performance**: Overall results, key achievements, record metrics
-2. **Forward Guidance**: Outlook on NIM, credit, growth, expenses
-3. **Strategic Priorities**: Business initiatives, market positioning, investments
-4. **Risk Commentary**: Credit quality, provisions, economic outlook
-5. **Capital & Shareholder Returns**: Dividends, buybacks, capital ratios
+- **Qualitative insight** - The "why" behind the numbers, not the numbers themselves
+- **Executive conviction** - Confidence, caution, or concern on key issues
+- **Forward-looking sentiment** - Where management sees things heading
+- **Strategic color** - Priorities, focus areas, how leadership is thinking
+- **Tone and mood** - What's the sentiment in the C-suite?
 
-## QUOTE EXTRACTION GUIDELINES
+## WHAT THESE QUOTES ARE NOT FOR
 
-**For Content:**
-- Extract verbatim quotes when the exact wording is impactful
-- Paraphrase when needed to capture the key point concisely
-- Each quote should be 1-3 sentences (30-75 words)
-- Preserve specific figures, percentages, and metrics
-- Focus on forward-looking and material statements
+❌ Specific metrics (NIM expanded 5 bps, revenue grew 8%)
+❌ Quantitative guidance (targeting $500M cost saves)
+❌ Data points that belong in metrics sections
+❌ Generic boilerplate ("We delivered strong results")
 
-**For Speaker Attribution:**
-- Extract the full name exactly as it appears (e.g., "Dave McKay", "Nadine Ahn")
-- Extract the title/role (e.g., "President & CEO", "CFO", "Chief Risk Officer")
-- If title is combined with name (e.g., "Dave McKay - President & CEO"), separate them
+## GOOD QUOTE EXAMPLES
 
-## VARIETY
+- "We're managing through this credit normalization cycle from a position of strength"
+- "Client engagement remains elevated and the dialogue with corporates has never been better"
+- "We're being disciplined on expenses given the uncertain macro backdrop"
+- "The competitive environment for deposits has stabilized meaningfully"
+- "We see significant opportunity as markets normalize and activity picks up"
 
-Select quotes from different executives when possible (CEO, CFO, CRO, business heads) to provide \
-a well-rounded narrative of the quarter.
+## BAD QUOTE EXAMPLES
+
+- "NIM came in at 2.45%, up 5 basis points" - too metric-focused
+- "We delivered another strong quarter" - too generic, no insight
+- "Revenue grew 8% year-over-year" - belongs in metrics section
+
+## EXTRACTION GUIDELINES
+
+- **Always paraphrase** to make quotes concise and punchy
+- Keep each quote to 1-2 sentences (20-40 words max)
+- Distill the core message - cut filler words and preamble
+- Capture the executive's perspective and conviction
+- Focus on qualitative statements that provide insight
+- Select quotes from different speakers when possible (CEO, CFO, CRO)
 
 ## OUTPUT
 
-Return exactly {num_quotes} quotes, ordered by importance (most impactful first)."""
+Return exactly {num_quotes} paraphrased quotes that add executive voice and qualitative insight."""
 
     user_prompt = f"""Extract the {num_quotes} most impactful management quotes from \
 {bank_info['bank_name']}'s {quarter} {fiscal_year} earnings call.
@@ -161,8 +171,8 @@ Select {num_quotes} quotes that best capture management's key messages for this 
                                 "content": {
                                     "type": "string",
                                     "description": (
-                                        "The verbatim quote or concise paraphrase (30-75 words). "
-                                        "Include specific figures and metrics."
+                                        "Paraphrased quote (20-40 words). Concise and punchy. "
+                                        "Focus on qualitative insight, not metrics."
                                     ),
                                 },
                                 "speaker": {

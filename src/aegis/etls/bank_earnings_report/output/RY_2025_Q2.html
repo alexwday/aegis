@@ -1,0 +1,1363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bank Quarterly Earnings Report</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #f0f2f5;
+            --card: #ffffff;
+            --text-main: #1a202c;
+            --text-muted: #64748b;
+            --border: #e2e8f0;
+            --accent: #005587; /* Generic Bank Blue */
+            --accent-2: #0ea5e9;
+            --pos: #16a34a; /* Green */
+            --neg: #dc2626; /* Red */
+            --warning: #f59e0b;
+            --shadow: 0 12px 30px rgba(0, 40, 80, 0.08);
+        }
+        body { 
+            font-family: 'Manrope', 'Segoe UI', sans-serif; 
+            background: radial-gradient(120% 120% at 20% 20%, #f1f6ff 0%, #eef2f7 35%, #e7edf4 100%); 
+            color: var(--text-main); 
+            margin: 24px; 
+        }
+        .page-shell {
+            position: relative;
+            z-index: 1;
+        }
+        .page-shell::after {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background: radial-gradient(600px at 10% 10%, rgba(14, 165, 233, 0.08), transparent 45%),
+                        radial-gradient(500px at 90% 20%, rgba(0, 85, 135, 0.08), transparent 45%);
+            z-index: -1;
+            pointer-events: none;
+        }
+        
+        /* Hero - V5 Dark Elegant with Gradient Mesh */
+        .hero {
+            display: grid;
+            grid-template-columns: 2fr 1.05fr;
+            gap: 20px;
+            align-items: center;
+            background: #0a0a0c;
+            color: #f8fafc;
+            padding: 6px 40px;
+            border-radius: 4px;
+            box-shadow:
+                0 1px 0 rgba(255,255,255,0.03),
+                0 20px 50px rgba(0, 0, 0, 0.5);
+            position: relative;
+            overflow: hidden;
+            border: 1px solid #2a2a2a;
+        }
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background:
+                radial-gradient(circle at 0% 0%, rgba(59, 130, 246, 0.35) 0%, transparent 45%),
+                radial-gradient(circle at 100% 100%, rgba(139, 92, 246, 0.3) 0%, transparent 45%),
+                radial-gradient(circle at 80% 20%, rgba(14, 165, 233, 0.25) 0%, transparent 40%),
+                radial-gradient(circle at 20% 80%, rgba(16, 185, 129, 0.2) 0%, transparent 40%);
+            pointer-events: none;
+        }
+        .hero::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background:
+                radial-gradient(ellipse 60% 40% at 50% -10%, rgba(255,255,255,0.04) 0%, transparent 60%),
+                linear-gradient(180deg, rgba(255,255,255,0.02) 0%, transparent 30%);
+            pointer-events: none;
+        }
+        .hero h1 {
+            color: #ffffff;
+            font-size: 38px;
+            margin: 6px 0 6px 0;
+            font-weight: 500;
+            letter-spacing: 0.5px;
+        }
+        .hero .sub-header {
+            color: #a0a0a0;
+            margin-bottom: 12px;
+            letter-spacing: 0.3px;
+            font-size: 16px;
+        }
+        .pill-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 6px;
+        }
+        .pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 10px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.12);
+            color: #f8fafc;
+            font-size: 11px;
+            letter-spacing: 0.2px;
+        }
+        .pill-muted {
+            background: rgba(255, 255, 255, 0.08);
+            color: #dce5f2;
+        }
+        .hero-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
+        }
+        .hero-stat {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 10px;
+            padding: 10px 12px;
+        }
+        .hero-stat-label {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #d7e3f2;
+            margin-bottom: 4px;
+            font-weight: 600;
+        }
+        .hero-stat-value {
+            font-size: 18px;
+            font-weight: 700;
+            color: #ffffff;
+            margin-bottom: 4px;
+        }
+        .hero-stat-delta {
+            font-size: 12px;
+            font-weight: 600;
+            color: #d7e3f2;
+        }
+        .hero-right {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid #2a2a2a;
+            border-radius: 4px;
+            padding: 18px 20px;
+        }
+        .hero-label {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: #808080;
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+        .hero-footnote {
+            font-size: 11px;
+            color: #d7e3f2;
+            margin-top: 8px;
+            display: block;
+        }
+        .hero .dividend-amount {
+            color: #ffffff;
+            font-weight: 500;
+        }
+        .hero .dividend-change span {
+            color: #808080;
+        }
+        .hero .dividend-change .pos {
+            color: #4ade80;
+        }
+        
+        /* Grid Layout */
+        .grid-container {
+            display: grid;
+            gap: 20px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        .full-row { grid-column: 1 / -1; }
+        .half-half { 
+            display: grid; 
+            grid-template-columns: 1fr 1fr; 
+            gap: 20px; 
+        }
+
+        /* Cards */
+        .card { 
+            background: var(--card); 
+            padding: 20px; 
+            border-radius: 10px; 
+            border: 1px solid #dce2ec; 
+            box-shadow: 0 6px 20px rgba(15, 41, 76, 0.07); 
+        }
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 12px;
+            margin-bottom: 10px;
+        }
+        .section-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+        .pill-soft {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 10px;
+            border-radius: 8px;
+            background: #f1f5f9;
+            color: #334155;
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.2px;
+        }
+        .pill-soft.accent {
+            background: rgba(0, 85, 135, 0.12);
+            color: #004a7f;
+            border: 1px solid rgba(0, 85, 135, 0.2);
+        }
+        
+        /* Typography */
+        h1 { font-size: 24px; margin: 0 0 5px 0; color: var(--accent); }
+        h2 { font-size: 16px; text-transform: uppercase; color: var(--text-muted); margin-top: 0; border-bottom: 1px solid var(--border); padding-bottom: 10px; letter-spacing: 0.5px; }
+        .sub-header { font-size: 14px; color: var(--text-muted); margin-bottom: 20px; }
+        
+        /* Enhanced Metric Badges */
+        .metric-box { 
+            flex: 1; 
+            background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%); 
+            padding: 14px 12px;
+            border-radius: 8px; 
+            text-align: center; 
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.04);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        .metric-box:hover { 
+            transform: translateY(-2px); 
+            box-shadow: 0 4px 8px rgba(0,0,0,0.08);
+            background: linear-gradient(135deg, #ffffff 0%, #ffffff 100%);
+        }
+        .metric-label { 
+            display: block; 
+            font-size: 11px; 
+            color: var(--accent);
+            margin-bottom: 6px; 
+            text-transform: uppercase; 
+            letter-spacing: 0.8px;
+            font-weight: 700;
+        }
+        .metric-val { 
+            font-size: 20px; 
+            font-weight: 700; 
+            color: #1a202c;
+            margin-bottom: 6px;
+            display: block;
+        }
+        .metric-changes-container {
+            display: flex; 
+            justify-content: center; 
+            gap: 0; 
+            margin-top: 6px;
+            padding-top: 6px;
+            border-top: 1px solid #f0f4f8;
+        }
+        .metric-change-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 0 22px;
+        }
+        .metric-change-item:first-child {
+            border-right: 1px solid #e2e8f0;
+        }
+        .change-label {
+            font-size: 8px;
+            color: #94a3b8;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 2px;
+            font-weight: 700;
+        }
+        .delta {
+            font-size: 12px;
+            font-weight: 700;
+        }
+        /* Value class - matches delta style but in black */
+        .value {
+            font-size: 12px;
+            font-weight: 700;
+            color: #1e293b;
+            font-family: 'Consolas', monospace;
+        }
+        /* Unit suffix styling (M, B, %) - distinguishes from numbers */
+        .unit {
+            font-weight: 600;
+            color: #64748b;
+        }
+        /* Legacy delta classes (for any hardcoded content) */
+        .pos { color: var(--pos); }
+        .neg { color: var(--neg); }
+        .neutral { color: var(--text-muted); }
+
+        /* Dynamic delta classes for template rendering - use direction from JSON */
+        .positive { color: var(--pos); }
+        .negative { color: var(--neg); }
+        .delta-positive { color: #4ade80; }
+        .delta-negative { color: #f87171; }
+        .delta-neutral { color: #808080; }
+
+        /* Dividend Section */
+        .dividend-display {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        .dividend-amount {
+            font-size: 22px;
+            font-weight: bold;
+            color: var(--accent);
+        }
+        .dividend-change {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 14px;
+        }
+
+        /* Items of Note Table */
+        .items-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+            background: #fafbfc;
+            border-radius: 6px;
+            overflow: hidden;
+        }
+        .items-table th {
+            text-align: left;
+            color: var(--text-muted);
+            font-weight: 600;
+            padding: 10px;
+            background: #f1f5f9;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .items-table td {
+            padding: 10px;
+            border-bottom: 1px solid var(--border);
+        }
+        .items-table tr:last-child td {
+            border-bottom: none;
+        }
+        .item-description {
+            font-weight: 500;
+            color: var(--text-main);
+        }
+        .impact-value {
+            text-align: right;
+            font-size: 12px;
+            font-weight: 700;
+        }
+        .change-col {
+            text-align: right;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        /* Tables */
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th { text-align: left; color: var(--text-muted); font-weight: 600; padding: 8px; border-bottom: 2px solid var(--border); font-size: 11px; }
+        td { padding: 8px; border-bottom: 1px solid var(--border); }
+        .num { text-align: right; font-family: 'Consolas', monospace; }
+
+        /* Quotes Section */
+        .quote-box { 
+            background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); 
+            border-left: 3px solid var(--accent); 
+            padding: 12px 15px; 
+            margin-bottom: 12px; 
+            border-radius: 0 6px 6px 0;
+            font-size: 13px;
+        }
+        .quote-source { 
+            font-size: 10px; 
+            color: var(--accent); 
+            text-transform: uppercase; 
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+            font-weight: 600;
+        }
+        .quote-text {
+            color: #2d3748;
+            line-height: 1.5;
+        }
+
+        /* Q&A Section */
+        .qa-item {
+            background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+            border-radius: 8px;
+            padding: 14px 12px;
+            margin-bottom: 10px;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.04);
+            transition: all 0.3s ease;
+        }
+        .qa-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.08);
+            background: linear-gradient(135deg, #ffffff 0%, #ffffff 100%);
+        }
+        .qa-theme {
+            font-weight: 600;
+            font-size: 12px;
+            color: var(--accent);
+            text-transform: uppercase;
+            margin-bottom: 6px;
+            letter-spacing: 0.3px;
+        }
+        .qa-content {
+            font-size: 12px;
+            color: #4a5568;
+            line-height: 1.5;
+        }
+
+        /* Source Tag */
+        .source-tag { 
+            font-size: 9px; 
+            color: #66798d; 
+            display: inline-flex; 
+            align-items: center;
+            gap: 4px;
+            text-transform: uppercase; 
+            letter-spacing: 0.5px;
+            background: #eef2f7;
+            padding: 3px 8px;
+            border-radius: 6px;
+            border: 1px solid #dce2ec;
+        }
+
+        /* Risk Metrics */
+        .risk-category {
+            margin-bottom: 20px;
+            background: #fafbfc;
+            padding: 15px;
+            border-radius: 6px;
+        }
+        .risk-category-title {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--accent);
+            text-transform: uppercase;
+            margin-bottom: 12px;
+            letter-spacing: 0.5px;
+        }
+        .risk-metric {
+            display: flex;
+            justify-content: space-between;
+            padding: 6px 0;
+            border-bottom: 1px solid #f0f0f0;
+            font-size: 12px;
+        }
+        .risk-metric:last-child {
+            border-bottom: none;
+        }
+        .risk-label {
+            color: var(--text-muted);
+        }
+        .risk-value {
+            font-weight: 600;
+            font-family: 'Consolas', monospace;
+        }
+
+        /* Progress Bars */
+        .progress-bar {
+            height: 10px;
+            background: #e0e0e0;
+            border-radius: 5px;
+            overflow: hidden;
+            margin: 8px 0;
+        }
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(to right, var(--accent), #0080d5);
+            position: relative;
+            transition: width 0.3s;
+        }
+        .progress-marker {
+            position: absolute;
+            right: -1px;
+            top: 0;
+            width: 2px;
+            height: 100%;
+            background: white;
+        }
+
+        /* Enhanced Segment Table */
+        .segment-table th {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .segment-table td {
+            font-size: 12px;
+        }
+        .segment-name {
+            font-weight: 500;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="page-shell">
+    <div class="grid-container">
+        
+        <!-- ============================================
+             SECTION 0: Header/Hero
+             DATA SOURCES:
+               - 0_header_params.json (bank_name, fiscal_quarter, fiscal_year, period_ending)
+               - 0_header_dividend.json (dividend.amount, dividend.qoq, dividend.yoy)
+             ============================================ -->
+        <div class="hero full-row">
+            <div>
+                <h1 style="font-size: 36px; font-family: 'Inter', sans-serif; font-weight: 600;">Royal Bank of Canada</h1>
+                <div class="sub-header">Fiscal Q2 2025 Report • Period Ending April 30, 2025</div>
+            </div>
+            <div class="hero-right" style="display: flex; align-items: center; gap: 16px; width: fit-content; margin-left: auto; padding: 8px 16px;">
+                <div>
+                    <div class="hero-label" style="font-size: 10px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 2px;">Quarterly Dividend</div>
+                    <span class="dividend-amount" style="font-size: 24px; font-family: 'Inter', sans-serif; font-weight: 600;">N/A</span>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 2px; padding-left: 14px; border-left: 1px solid rgba(255,255,255,0.1);">
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                        <span style="font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700; width: 24px;">QoQ</span>
+                        <span style="font-size: 12px; font-weight: 700;" class="delta-neutral">—</span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                        <span style="font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700; width: 24px;">YoY</span>
+                        <span style="font-size: 12px; font-weight: 700;" class="delta-neutral">—</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============================================
+             SECTION 1: Key Financial Metrics
+             SUBSECTIONS:
+               - 1a: Overview (1_keymetrics_overview.json)
+               - 1b: Metric Tiles (1_keymetrics_tiles.json)
+               - 1c: NIM Trend Chart (1_keymetrics_chart.json)
+               - 1d: Items of Note (1_keymetrics_items.json)
+             ============================================ -->
+        <div class="card full-row">
+            <!-- -------- Subsection 1a: Overview --------
+                 DATA SOURCE: 1_keymetrics_overview.json (narrative)
+                 SOURCE: RTS
+            -->
+            <div style="margin-bottom: 20px;">
+                <h3 style="font-size: 14px; color: var(--text-muted); margin: 0 0 10px 0;">OVERVIEW</h3>
+                <p style="font-size: 12px; color: var(--text-main); line-height: 1.5; margin: 0;">
+                    Overview content not yet implemented.
+                </p>
+            </div>
+
+            <!-- -------- Subsection 1b: Key Metric Tiles --------
+                 DATA SOURCE: 1_keymetrics_tiles.json (metrics array)
+                 SOURCE: Supp Pack
+            -->
+            <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--border);">
+            <div class="section-header" style="align-items: center;">
+                <h3 style="font-size: 14px; color: var(--text-muted); margin: 0;">KEY METRICS</h3>
+                <div class="section-actions" style="align-items: center;">
+                    <span class="pill-soft">Source: Supp Pack</span>
+                    <span class="pill-soft">Adjusted figures</span>
+                    <span class="pill-soft">Currency: CAD</span>
+                </div>
+            </div>
+
+            <!-- Unified 5-column grid for main tiles, chart, and slim tiles
+                 Row 1: Main tile 1, Main tile 2, Main tile 3, Chart (spans 2 cols, 2 rows)
+                 Row 2: Main tile 4, Main tile 5, Main tile 6, (chart continues)
+                 Row 3: Slim tile 1, Slim tile 2, Slim tile 3, Slim tile 4, Slim tile 5
+            -->
+            <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px;">
+                <!-- Main tiles row 1 (positions 1-3) -->
+                
+                
+                <div class="metric-box" style="opacity: 0.4;">
+                    <span class="metric-label">No Data</span>
+                    <span class="metric-val">—</span>
+                </div>
+                
+                <div class="metric-box" style="opacity: 0.4;">
+                    <span class="metric-label">No Data</span>
+                    <span class="metric-val">—</span>
+                </div>
+                
+                <div class="metric-box" style="opacity: 0.4;">
+                    <span class="metric-label">No Data</span>
+                    <span class="metric-val">—</span>
+                </div>
+                
+
+                <!-- -------- Trend Chart (always rendered, spans 2 cols, 2 rows) --------
+                     DATA SOURCE: 1_keymetrics_chart.json (metrics array with initial_index)
+                     SOURCE: Supp Pack
+                -->
+                <div id="trend-chart-container" style="grid-column: span 2; grid-row: span 2; background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%); border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.04); display: flex; flex-direction: column;">
+                    <!-- Navigation header with arrows and clickable title -->
+                    <div id="chart-nav" style="display: flex; align-items: center; justify-content: center; margin-bottom: 8px; position: relative;">
+                        <button id="chart-prev" style="background: none; border: none; cursor: pointer; padding: 4px 8px; font-size: 16px; color: #94a3b8; transition: color 0.2s;" title="Previous metric">◀</button>
+                        <div style="position: relative; flex: 1; text-align: center;">
+                            <span id="chart-title" class="metric-label" style="cursor: pointer; padding: 4px 8px; border-radius: 4px; transition: background 0.2s;" title="Click to select metric"></span>
+                            <!-- Dropdown menu (hidden by default) -->
+                            <div id="chart-dropdown" style="display: none; position: absolute; top: 100%; left: 50%; transform: translateX(-50%); background: white; border: 1px solid #e2e8f0; border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 100; min-width: 200px; max-height: 240px; overflow-y: auto; margin-top: 4px;">
+                                <!-- Dropdown items populated by JavaScript -->
+                            </div>
+                        </div>
+                        <button id="chart-next" style="background: none; border: none; cursor: pointer; padding: 4px 8px; font-size: 16px; color: #94a3b8; transition: color 0.2s;" title="Next metric">▶</button>
+                    </div>
+                    <!-- Chart content area -->
+                    <div id="chart-content" style="flex: 1; display: flex; flex-direction: column;">
+                        <!-- Chart will be rendered here by JavaScript -->
+                    </div>
+                </div>
+
+                <!-- Main tiles row 2 (positions 4-6) -->
+                
+                
+                <div class="metric-box" style="opacity: 0.4;">
+                    <span class="metric-label">No Data</span>
+                    <span class="metric-val">—</span>
+                </div>
+                
+                <div class="metric-box" style="opacity: 0.4;">
+                    <span class="metric-label">No Data</span>
+                    <span class="metric-val">—</span>
+                </div>
+                
+                <div class="metric-box" style="opacity: 0.4;">
+                    <span class="metric-label">No Data</span>
+                    <span class="metric-val">—</span>
+                </div>
+                
+
+                <!-- Chart data embedded for JavaScript -->
+                <script id="trend-chart-data" type="application/json">
+                {"initial_index": 0, "metrics": []}
+                </script>
+
+                <!-- Slim tiles (5 tiles spanning full row 3) -->
+                
+            </div>
+
+            <!-- -------- Expandable Raw Metrics Table --------
+                 DATA SOURCE: 1_keymetrics_raw (headers, rows, tsv)
+                 SOURCE: Supp Pack
+                 NOTE: All enterprise metrics with 8Q history, copy-paste friendly
+            -->
+            
+            </div>
+
+            <!-- -------- Subsection 1d: Items of Note --------
+                 DATA SOURCE: 1_keymetrics_items.json (items array)
+                 SOURCE: RTS
+                 NOTE: Variable-length list - loops through all items in JSON
+            -->
+            <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--border);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <h3 style="font-size: 14px; color: var(--text-muted); margin: 0;">ITEMS OF NOTE</h3>
+                    <div style="display: flex; gap: 8px;">
+                        <span class="pill-soft">Source: Supp Pack</span>
+                        <span class="pill-soft">Currency: CAD</span>
+                    </div>
+                </div>
+                <table class="items-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 50%;">Description</th>
+                            <th style="width: 18%; text-align: right;">Impact</th>
+                            <th style="width: 16%; text-align: center;">Segment</th>
+                            <th style="width: 16%; text-align: center;">Timing</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ============================================
+             SECTION 2: Management Narrative
+             DATA SOURCE: 2_narrative.json (entries array with type: rts|transcript)
+             NOTE: Variable-length, ordered list. RTS = plain text, Transcript = quoted style
+             ============================================ -->
+        <div class="half-half">
+            <div class="card">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <h2 style="margin: 0; border-bottom: none; padding-bottom: 0;">Management Narrative</h2>
+                    <div style="display: flex; gap: 8px;">
+                        <span class="pill-soft">Source: Transcripts</span>
+                        <span class="pill-soft">Source: RTS</span>
+                    </div>
+                </div>
+
+                
+                
+                <!-- Transcript quote -->
+                <div style="padding: 8px 0 20px 0; margin: 0 24px; position: relative;">
+                    <span style="position: absolute; top: 0; left: -8px; font-size: 36px; color: #cbd5e1; font-family: Georgia, serif; line-height: 1;">"</span>
+                    <div style="font-size: 12px; color: var(--text-main); line-height: 1.5; font-style: italic; padding-left: 16px; padding-right: 16px;">Client engagement remains robust with our backlog growing for the fourth straight quarter, reflecting sustained momentum despite macro uncertainties.</div>
+                    <span style="position: absolute; bottom: 28px; right: -4px; font-size: 36px; color: #cbd5e1; font-family: Georgia, serif; line-height: 1;">"</span>
+                    <div style="font-size: 10px; color: var(--text-muted); margin-top: 6px; font-weight: 600; text-align: right; padding-right: 16px;">— CEO, Chief Executive Officer*</div>
+                </div>
+                
+                
+                
+                <!-- Transcript quote -->
+                <div style="padding: 8px 0 20px 0; margin: 0 24px; position: relative;">
+                    <span style="position: absolute; top: 0; left: -8px; font-size: 36px; color: #cbd5e1; font-family: Georgia, serif; line-height: 1;">"</span>
+                    <div style="font-size: 12px; color: var(--text-main); line-height: 1.5; font-style: italic; padding-left: 16px; padding-right: 16px;">Investment banking is gaining strength, with M&A pipelines at their highest since 2021, signaling strong deal flow ahead.</div>
+                    <span style="position: absolute; bottom: 28px; right: -4px; font-size: 36px; color: #cbd5e1; font-family: Georgia, serif; line-height: 1;">"</span>
+                    <div style="font-size: 10px; color: var(--text-muted); margin-top: 6px; font-weight: 600; text-align: right; padding-right: 16px;">— CEO, Chief Executive Officer*</div>
+                </div>
+                
+                
+                
+                <!-- Transcript quote -->
+                <div style="padding: 8px 0 20px 0; margin: 0 24px; position: relative;">
+                    <span style="position: absolute; top: 0; left: -8px; font-size: 36px; color: #cbd5e1; font-family: Georgia, serif; line-height: 1;">"</span>
+                    <div style="font-size: 12px; color: var(--text-main); line-height: 1.5; font-style: italic; padding-left: 16px; padding-right: 16px;">While client activity is high, some are cautiously adopting a wait-and-see stance due to the uncertain macroeconomic environment.</div>
+                    <span style="position: absolute; bottom: 28px; right: -4px; font-size: 36px; color: #cbd5e1; font-family: Georgia, serif; line-height: 1;">"</span>
+                    <div style="font-size: 10px; color: var(--text-muted); margin-top: 6px; font-weight: 600; text-align: right; padding-right: 16px;">— CEO, Chief Executive Officer*</div>
+                </div>
+                
+                
+                
+                <!-- Transcript quote -->
+                <div style="padding: 8px 0 20px 0; margin: 0 24px; position: relative;">
+                    <span style="position: absolute; top: 0; left: -8px; font-size: 36px; color: #cbd5e1; font-family: Georgia, serif; line-height: 1;">"</span>
+                    <div style="font-size: 12px; color: var(--text-main); line-height: 1.5; font-style: italic; padding-left: 16px; padding-right: 16px;">Trading revenue benefited from heightened market volatility and client repositioning, driving strong activity across fixed income and equities.</div>
+                    <span style="position: absolute; bottom: 28px; right: -4px; font-size: 36px; color: #cbd5e1; font-family: Georgia, serif; line-height: 1;">"</span>
+                    <div style="font-size: 10px; color: var(--text-muted); margin-top: 6px; font-weight: 600; text-align: right; padding-right: 16px;">— CFO, Chief Financial Officer*</div>
+                </div>
+                
+                
+                
+                <!-- Transcript quote -->
+                <div style="padding: 8px 0 20px 0; margin: 0 24px; position: relative;">
+                    <span style="position: absolute; top: 0; left: -8px; font-size: 36px; color: #cbd5e1; font-family: Georgia, serif; line-height: 1;">"</span>
+                    <div style="font-size: 12px; color: var(--text-main); line-height: 1.5; font-style: italic; padding-left: 16px; padding-right: 16px;">We anticipate continued robust M&A activity as companies and investors seek growth opportunities throughout the year.</div>
+                    <span style="position: absolute; bottom: 28px; right: -4px; font-size: 36px; color: #cbd5e1; font-family: Georgia, serif; line-height: 1;">"</span>
+                    <div style="font-size: 10px; color: var(--text-muted); margin-top: 6px; font-weight: 600; text-align: right; padding-right: 16px;">— CFO, Chief Financial Officer*</div>
+                </div>
+                
+                
+
+                <!-- Disclaimer for AI-summarized quotes -->
+                
+                <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #e2e8f0;">
+                    <div style="font-size: 9px; color: #94a3b8; font-style: italic;">* Quotes may be paraphrased or summarized from earnings call transcript.</div>
+                </div>
+                
+            </div>
+
+            <!-- ============================================
+                 SECTION 3: Analyst Focus
+                 DATA SOURCE: 3_analyst_focus.json
+                   - featured: Top 4 Q&A entries selected by LLM
+                   - entries: All extracted Q&A entries
+                 NOTE: Featured entries shown by default, expand to see all
+                 ============================================ -->
+            <div class="card">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <h2 style="margin: 0; border-bottom: none; padding-bottom: 0;">Analyst Focus</h2>
+                    <div style="display: flex; gap: 8px;">
+                        <span class="pill-soft">Source: Transcript</span>
+                    </div>
+                </div>
+
+                <!-- Featured Q&A entries (top 4 selected by LLM) -->
+                
+                <div class="qa-item">
+                    <div style="margin-bottom: 8px;">
+                        <span style="font-size: 11px; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;">NIM Outlook</span>
+                    </div>
+                    <div style="font-size: 11px; color: #475569; font-style: italic; margin-bottom: 6px; padding-left: 8px; border-left: 2px solid #e2e8f0;">
+                        What is the NII outlook for the rest of the year and how will potential rate cuts impact NIM compression?
+                    </div>
+                    <div style="font-size: 12px; color: var(--text-main); line-height: 1.5;">
+                        CFO expects relatively stable NII in Canadian Banking despite modest NIM compression from potential rate cuts, supported by 6% mortgage loan growth and 28% non-interest bearing deposits. Fixed-rate mortgage repricing added 15 bps to NIM this quarter, with benefits continuing, while Capital Markets NII remains healthy from trading and financing growth, enabling positive operating leverage even with 25-50 bps rate cuts.
+                    </div>
+                </div>
+                
+                <div class="qa-item">
+                    <div style="margin-bottom: 8px;">
+                        <span style="font-size: 11px; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;">Capital Allocation</span>
+                    </div>
+                    <div style="font-size: 11px; color: #475569; font-style: italic; margin-bottom: 6px; padding-left: 8px; border-left: 2px solid #e2e8f0;">
+                        How should we think about the pace of share buybacks and M&A activity for the rest of the year amid market volatility?
+                    </div>
+                    <div style="font-size: 12px; color: var(--text-main); line-height: 1.5;">
+                        CEO McKay said the CET1 ratio is strong at 13.1%, 160 bps above target, with $3.5 billion remaining in buyback authorization and plans to be opportunistic amid volatility. Capital generation is about 40 bps CET1 quarterly, with disciplined M&A focused on digital, specialty lending, and wealth platforms, seeking accretive deals aligned with strategy.
+                    </div>
+                </div>
+                
+                <div class="qa-item">
+                    <div style="margin-bottom: 8px;">
+                        <span style="font-size: 11px; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;">Credit Quality</span>
+                    </div>
+                    <div style="font-size: 11px; color: #475569; font-style: italic; margin-bottom: 6px; padding-left: 8px; border-left: 2px solid #e2e8f0;">
+                        What are the current credit quality trends in Canadian Banking and Capital Markets?
+                    </div>
+                    <div style="font-size: 12px; color: var(--text-main); line-height: 1.5;">
+                        CEO Dave McKay reports strong credit quality with Canadian Banking's PCL ratio at 23 bps, within the 25-30 bps through-the-cycle range. Mortgage delinquencies are low at 0.15%, and commercial provisions rose modestly due to isolated real estate credits. Capital Markets saw some specific provisions but maintain a healthy ACL coverage of 47 bps.
+                    </div>
+                </div>
+                
+
+                <!-- Expandable section for remaining Q&A entries (not featured) -->
+                
+                <div style="margin-top: 12px; text-align: center;">
+                    <button id="analyst-focus-toggle" onclick="toggleAnalystFocus()" style="background: none; border: 1px solid #e2e8f0; border-radius: 6px; padding: 6px 12px; cursor: pointer; font-size: 9px; color: #64748b; transition: all 0.2s;">
+                        <span id="analyst-focus-icon">▶</span> Show 2 More Q&A
+                    </button>
+                </div>
+
+                <div id="analyst-focus-container" style="display: none; margin-top: 12px; padding-top: 12px; border-top: 1px solid #e2e8f0;">
+                    
+                    <div class="qa-item" style="background: #fafbfc;">
+                        <div style="margin-bottom: 8px;">
+                            <span style="font-size: 10px; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;">Wealth Management Growth</span>
+                        </div>
+                        <div style="font-size: 10px; color: #475569; font-style: italic; margin-bottom: 6px; padding-left: 8px; border-left: 2px solid #e2e8f0;">
+                            What are the drivers of AUM and AUA growth and how do you view competition from robo-advisors in wealth management?
+                        </div>
+                        <div style="font-size: 11px; color: var(--text-main); line-height: 1.5;">
+                            Group Head Personal & Commercial Banking reports total client assets grew 12% YoY to $1.8 trillion, driven by $5.2 billion in net sales and market appreciation. InvestEase platform has $2.5 billion AUM with 65,000 clients, viewed as complementary to full-service offerings, with many clients transitioning to advised relationships as wealth grows.
+                        </div>
+                    </div>
+                    
+                    <div class="qa-item" style="background: #fafbfc;">
+                        <div style="margin-bottom: 8px;">
+                            <span style="font-size: 10px; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;">Efficiency Ratio</span>
+                        </div>
+                        <div style="font-size: 10px; color: #475569; font-style: italic; margin-bottom: 6px; padding-left: 8px; border-left: 2px solid #e2e8f0;">
+                            How much of the 53.2% efficiency ratio improvement is sustainable and what investments might pressure it going forward?
+                        </div>
+                        <div style="font-size: 11px; color: var(--text-main); line-height: 1.5;">
+                            CFO Hepworth says the 53.2% efficiency ratio reflects about 100 bps year-over-year improvement, mostly sustainable from core banking revenue growth and productivity gains. They automated 200+ processes saving 1.2 million hours annually, while investing $4.5 billion in technology and talent, expecting 200-300 bps positive operating leverage and targeting sub-50% efficiency ratio within two years.
+                        </div>
+                    </div>
+                    
+                </div>
+                
+            </div>
+        </div>
+
+        <!-- ============================================
+             SECTION 4: Segment Performance
+             DATA SOURCE: 4_segments.json (entries array with name, description, core_metrics, highlighted_metrics)
+             NOTE: Variable-length list of business segments with two metric columns
+             ============================================ -->
+        <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px;">
+            <div class="card">
+                <div class="section-header" style="align-items: center;">
+                    <h2 style="margin: 0; border-bottom: none; padding-bottom: 0;">Segment Performance</h2>
+                    <div class="section-actions" style="align-items: center;">
+                        <span class="pill-soft">Source: RTS</span>
+                        <span class="pill-soft">Source: Supp Pack</span>
+                        <span class="pill-soft">Adjusted figures</span>
+                        <span class="pill-soft">Currency: CAD</span>
+                    </div>
+                </div>
+
+                <div style="display: flex; flex-direction: column; margin-top: 10px;">
+                    
+                </div>
+            </div>
+
+            <!-- ============================================
+                 SECTION 5: Capital & Risk Metrics
+                 DATA SOURCE: 5_capital_risk.json
+                 SUBSECTIONS:
+                   - regulatory_capital (4 ratio tiles)
+                   - rwa (composition bars + total)
+                   - liquidity_credit (4 metrics table)
+                 ============================================ -->
+            <div class="card">
+                <div class="section-header" style="align-items: center;">
+                    <h2 style="margin: 0; border-bottom: none; padding-bottom: 0;">Capital & Risk Metrics</h2>
+                    <div class="section-actions" style="align-items: center;">
+                        <span class="pill-soft">Source: Pillar 3</span>
+                    </div>
+                </div>
+
+                <!-- Regulatory Capital Ratios -->
+                <div class="qa-item">
+                    <div style="margin-bottom: 8px;">
+                        <div style="margin-bottom: 4px;">
+                            <span style="font-size: 11px; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;">Regulatory Capital</span>
+                        </div>
+                    </div>
+
+                    <!-- Capital Ratios 2x2 Grid -->
+                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;">
+                        
+                    </div>
+                </div>
+
+                <!-- RWA Breakdown -->
+                <div class="qa-item">
+                    <div style="margin-bottom: 8px;">
+                        <div style="margin-bottom: 4px;">
+                            <span style="font-size: 11px; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;">RWA Composition</span>
+                        </div>
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 6px;">
+                        
+                        <div style="display: flex; align-items: center; gap: 8px; padding-top: 6px; border-top: 1px solid #e2e8f0; margin-top: 2px;">
+                            <span style="font-size: 10px; color: var(--text-main); font-weight: 600; width: 65px;">Total RWA</span>
+                            <div style="flex: 1;"></div>
+                            <span style="font-size: 12px; font-weight: 700; color: var(--text-main); width: 50px; text-align: right;"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Liquidity & Credit Quality -->
+                <div class="qa-item">
+                    <div style="margin-bottom: 8px;">
+                        <div style="margin-bottom: 4px;">
+                            <span style="font-size: 11px; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;">Liquidity & Credit Quality</span>
+                        </div>
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 6px;">
+                        <!-- Header row -->
+                        <div style="display: flex; align-items: center; padding-bottom: 4px; border-bottom: 1px solid #e2e8f0;">
+                            <span style="font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700; width: 65px;">Metric</span>
+                            <span style="font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700; flex: 1; text-align: center;">Value</span>
+                            <span style="font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700; flex: 1; text-align: center;">QoQ</span>
+                            <span style="font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700; flex: 1; text-align: center;">YoY</span>
+                        </div>
+                        
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+    </div>
+
+    <!-- ============================================
+         JavaScript for Dynamic Chart Rendering
+         ============================================ -->
+    <script>
+    (function() {
+        // Global state for multi-metric chart
+        let chartData = null;
+        let currentMetricIndex = 0;
+
+        // Initialize chart system
+        function initChart() {
+            const dataEl = document.getElementById('trend-chart-data');
+            if (!dataEl) return;
+
+            chartData = JSON.parse(dataEl.textContent);
+            if (!chartData.metrics || chartData.metrics.length === 0) {
+                document.getElementById('chart-content').innerHTML =
+                    '<div style="display: flex; align-items: center; justify-content: center; height: 100%; color: #94a3b8;">No chart data available</div>';
+                return;
+            }
+
+            currentMetricIndex = chartData.initial_index || 0;
+
+            // Setup event handlers
+            setupNavigation();
+            setupDropdown();
+
+            // Render initial chart
+            renderChart(currentMetricIndex);
+        }
+
+        // Setup navigation arrow buttons
+        function setupNavigation() {
+            const prevBtn = document.getElementById('chart-prev');
+            const nextBtn = document.getElementById('chart-next');
+
+            prevBtn.addEventListener('click', () => {
+                currentMetricIndex = (currentMetricIndex - 1 + chartData.metrics.length) % chartData.metrics.length;
+                renderChart(currentMetricIndex);
+                closeDropdown();
+            });
+
+            nextBtn.addEventListener('click', () => {
+                currentMetricIndex = (currentMetricIndex + 1) % chartData.metrics.length;
+                renderChart(currentMetricIndex);
+                closeDropdown();
+            });
+
+            // Hover effects
+            [prevBtn, nextBtn].forEach(btn => {
+                btn.addEventListener('mouseenter', () => btn.style.color = '#005587');
+                btn.addEventListener('mouseleave', () => btn.style.color = '#94a3b8');
+            });
+        }
+
+        // Setup dropdown menu
+        function setupDropdown() {
+            const title = document.getElementById('chart-title');
+            const dropdown = document.getElementById('chart-dropdown');
+
+            // Populate dropdown items
+            dropdown.innerHTML = chartData.metrics.map((m, i) => `
+                <div class="dropdown-item" data-index="${i}" style="padding: 8px 12px; cursor: pointer; font-size: 11px; color: #334155; transition: background 0.2s; border-bottom: 1px solid #f0f4f8;">
+                    ${m.name}
+                </div>
+            `).join('');
+
+            // Title click toggles dropdown
+            title.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const isVisible = dropdown.style.display === 'block';
+                dropdown.style.display = isVisible ? 'none' : 'block';
+                if (!isVisible) highlightCurrentItem();
+            });
+
+            // Dropdown item clicks
+            dropdown.querySelectorAll('.dropdown-item').forEach(item => {
+                item.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    currentMetricIndex = parseInt(item.dataset.index);
+                    renderChart(currentMetricIndex);
+                    closeDropdown();
+                });
+                item.addEventListener('mouseenter', () => item.style.background = '#f1f5f9');
+                item.addEventListener('mouseleave', () => item.style.background = 'white');
+            });
+
+            // Close dropdown when clicking outside
+            document.addEventListener('click', closeDropdown);
+
+            // Title hover effect
+            title.addEventListener('mouseenter', () => title.style.background = '#f1f5f9');
+            title.addEventListener('mouseleave', () => title.style.background = 'transparent');
+        }
+
+        function closeDropdown() {
+            document.getElementById('chart-dropdown').style.display = 'none';
+        }
+
+        function highlightCurrentItem() {
+            const dropdown = document.getElementById('chart-dropdown');
+            dropdown.querySelectorAll('.dropdown-item').forEach((item, i) => {
+                item.style.background = (i === currentMetricIndex) ? '#e0f2fe' : 'white';
+                item.style.fontWeight = (i === currentMetricIndex) ? '600' : 'normal';
+            });
+        }
+
+        // Render chart for a specific metric index
+        function renderChart(index) {
+            const metric = chartData.metrics[index];
+            const { label, unit, decimal_places, quarters, values } = metric;
+
+            // Update title
+            document.getElementById('chart-title').textContent = label;
+
+            // Calculate stats
+            const min = Math.min(...values);
+            const max = Math.max(...values);
+            const avg = values.reduce((a, b) => a + b, 0) / values.length;
+            const current = values[values.length - 1];
+            const minIdx = values.indexOf(min);
+            const maxIdx = values.indexOf(max);
+
+            // Calculate Y-axis range with padding
+            const range = max - min || 1; // Avoid division by zero
+            const padding = range * 0.15;
+            const yMin = min - padding;
+            const yMax = max + padding;
+
+            // Format value for display
+            const stripTrailingZeros = (s) => s.replace(/\.?0+$/, '');
+
+            const formatValue = (v) => {
+                if (unit === '%') {
+                    return v.toFixed(decimal_places) + '%';
+                } else if (unit === '$M') {
+                    if (Math.abs(v) >= 1000) {
+                        return '$' + stripTrailingZeros((v / 1000).toFixed(2)) + ' B';
+                    } else {
+                        return '$' + stripTrailingZeros(v.toFixed(2)) + ' M';
+                    }
+                } else {
+                    if (Math.abs(v) >= 1000) {
+                        return v.toLocaleString('en-US', {maximumFractionDigits: decimal_places});
+                    } else {
+                        return v.toFixed(decimal_places);
+                    }
+                }
+            };
+
+            const formatChartLabel = (v) => {
+                if (unit === '%') {
+                    return v.toFixed(decimal_places);
+                } else if (unit === '$M') {
+                    if (Math.abs(v) >= 1000) {
+                        return stripTrailingZeros((v / 1000).toFixed(2)) + 'B';
+                    } else {
+                        return stripTrailingZeros(v.toFixed(2)) + 'M';
+                    }
+                } else {
+                    return v.toLocaleString('en-US', {maximumFractionDigits: decimal_places});
+                }
+            };
+
+            // Calculate Y coordinate (inverted because SVG y=0 is top)
+            const yCoord = (v) => 100 - ((v - yMin) / (yMax - yMin)) * 100;
+
+            // X positions for data points (up to 8 points)
+            const xPositions = [30, 70, 110, 150, 190, 230, 270, 310].slice(0, values.length);
+            const xPercents = xPositions.map(x => (x / 320) * 100);
+
+            // Build SVG elements
+            const points = values.map((v, i) => `${xPositions[i]},${yCoord(v)}`).join(' ');
+            const polygonPoints = points + ` ${xPositions[xPositions.length-1]},100 ${xPositions[0]},100`;
+
+            const guideLines = values.map((v, i) =>
+                `<line x1="${xPositions[i]}" y1="100" x2="${xPositions[i]}" y2="${yCoord(v)}" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,2" />`
+            ).join('');
+
+            const circles = values.map((v, i) => {
+                let fill = '#005587';
+                let r = 3;
+                let strokeWidth = 1.5;
+                if (i === minIdx) fill = '#dc2626';
+                if (i === maxIdx) fill = '#16a34a';
+                if (i === values.length - 1) { r = 4; strokeWidth = 2; }
+                return `<circle cx="${xPositions[i]}" cy="${yCoord(v)}" r="${r}" fill="${fill}" stroke="white" stroke-width="${strokeWidth}" />`;
+            }).join('');
+
+            const valueLabels = values.map((v, i) => {
+                let color = '#64748b';
+                let fontSize = '9px';
+                let fontWeight = 'normal';
+                if (i === minIdx) { color = '#dc2626'; fontSize = '10px'; fontWeight = '700'; }
+                if (i === maxIdx) { color = '#16a34a'; fontSize = '10px'; fontWeight = '700'; }
+                if (i === values.length - 1) { color = '#005587'; fontSize = '10px'; fontWeight = '700'; }
+                const topPercent = yCoord(v) - 18;
+                return `<div style="position: absolute; left: ${xPercents[i]}%; top: ${topPercent}%; transform: translateX(-50%); font-size: ${fontSize}; color: ${color}; font-weight: ${fontWeight}; white-space: nowrap;">${formatChartLabel(v)}</div>`;
+            }).join('');
+
+            const quarterLabels = quarters.map((q, i) =>
+                `<span style="position: absolute; left: ${xPercents[i]}%; transform: translateX(-50%); font-size: 9px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.3px; font-weight: 700; white-space: nowrap;">${q}</span>`
+            ).join('');
+
+            const yAxisTop = formatValue(yMax);
+            const yAxisMid = formatValue((yMin + yMax) / 2);
+            const yAxisBottom = formatValue(yMin);
+            const avgY = yCoord(avg);
+
+            document.getElementById('chart-content').innerHTML = `
+                <div style="position: relative; flex: 1; min-height: 80px;">
+                    <!-- Y-axis labels -->
+                    <div style="position: absolute; left: -5px; top: 0; font-size: 8px; color: #94a3b8; letter-spacing: 0.3px; font-weight: 600; white-space: nowrap;">${yAxisTop}</div>
+                    <div style="position: absolute; left: -5px; top: 45%; font-size: 8px; color: #94a3b8; letter-spacing: 0.3px; font-weight: 600; white-space: nowrap;">${yAxisMid}</div>
+                    <div style="position: absolute; left: -5px; bottom: 0; font-size: 8px; color: #94a3b8; letter-spacing: 0.3px; font-weight: 600; white-space: nowrap;">${yAxisBottom}</div>
+
+                    <!-- Grid lines -->
+                    <div style="position: absolute; width: 100%; height: 100%; left: 0; top: 0;">
+                        <div style="position: absolute; width: 100%; height: 1px; background: #f0f4f8; top: 0;"></div>
+                        <div style="position: absolute; width: 100%; height: 1px; background: #f0f4f8; top: 50%;"></div>
+                        <div style="position: absolute; width: 100%; height: 1px; background: #f0f4f8; bottom: 0;"></div>
+                    </div>
+
+                    <!-- Chart SVG -->
+                    <svg style="position: absolute; width: 100%; height: 100%; left: 0; top: 0;" viewBox="0 0 320 100" preserveAspectRatio="none">
+                        <defs>
+                            <linearGradient id="chartGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                                <stop offset="0%" style="stop-color:#005587;stop-opacity:0.2" />
+                                <stop offset="100%" style="stop-color:#005587;stop-opacity:0.02" />
+                            </linearGradient>
+                        </defs>
+                        ${guideLines}
+                        <polygon points="${polygonPoints}" fill="url(#chartGradient)" />
+                        <line x1="20" y1="${avgY}" x2="320" y2="${avgY}" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="4,3" />
+                        <polyline points="${points}" fill="none" stroke="#005587" stroke-width="2.5" />
+                        ${circles}
+                    </svg>
+
+                    <!-- Value labels -->
+                    ${valueLabels}
+                </div>
+
+                <!-- X-axis labels -->
+                <div style="position: relative; margin: 5px 0; height: 14px; overflow: visible;">
+                    ${quarterLabels}
+                </div>
+
+                <!-- Bottom summary stats -->
+                <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #f0f4f8;">
+                    <div style="display: flex; justify-content: center; gap: 0;">
+                        <div style="text-align: center; padding: 0 16px; border-right: 1px solid #e2e8f0;">
+                            <span class="change-label">Low</span>
+                            <span class="delta neg" style="white-space: nowrap;">${formatValue(min)}</span>
+                        </div>
+                        <div style="text-align: center; padding: 0 16px; border-right: 1px solid #e2e8f0;">
+                            <span class="change-label">Avg</span>
+                            <span class="delta" style="color: #f59e0b; white-space: nowrap;">${formatValue(avg)}</span>
+                        </div>
+                        <div style="text-align: center; padding: 0 16px; border-right: 1px solid #e2e8f0;">
+                            <span class="change-label">High</span>
+                            <span class="delta pos" style="white-space: nowrap;">${formatValue(max)}</span>
+                        </div>
+                        <div style="text-align: center; padding: 0 16px;">
+                            <span class="change-label">Current</span>
+                            <span class="delta" style="color: #005587; white-space: nowrap;">${formatValue(current)}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Run on DOM ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initChart);
+        } else {
+            initChart();
+        }
+    })();
+    </script>
+
+    <!-- ============================================
+         JavaScript for Raw Metrics Table
+         ============================================ -->
+    <script>
+    // Toggle raw metrics table visibility
+    function toggleRawMetrics() {
+        const container = document.getElementById('raw-metrics-container');
+        const icon = document.getElementById('toggle-icon');
+        const button = document.getElementById('raw-metrics-toggle');
+
+        if (container.style.display === 'none') {
+            container.style.display = 'block';
+            icon.textContent = '▼';
+            button.style.background = '#f1f5f9';
+            button.style.borderColor = '#cbd5e1';
+        } else {
+            container.style.display = 'none';
+            icon.textContent = '▶';
+            button.style.background = 'none';
+            button.style.borderColor = '#e2e8f0';
+        }
+    }
+
+    // Toggle analyst focus Q&A section visibility
+    function toggleAnalystFocus() {
+        const container = document.getElementById('analyst-focus-container');
+        const icon = document.getElementById('analyst-focus-icon');
+        const button = document.getElementById('analyst-focus-toggle');
+
+        if (container.style.display === 'none') {
+            container.style.display = 'block';
+            icon.textContent = '▼';
+            button.style.background = '#f1f5f9';
+            button.style.borderColor = '#cbd5e1';
+        } else {
+            container.style.display = 'none';
+            icon.textContent = '▶';
+            button.style.background = 'none';
+            button.style.borderColor = '#e2e8f0';
+        }
+    }
+
+    // Copy TSV data to clipboard
+    function copyRawMetrics() {
+        const textarea = document.getElementById('raw-metrics-tsv');
+        const button = event.target;
+        const originalText = button.textContent;
+
+        // Copy to clipboard
+        textarea.select();
+        document.execCommand('copy');
+
+        // Also try modern clipboard API
+        if (navigator.clipboard) {
+            navigator.clipboard.writeText(textarea.value);
+        }
+
+        // Visual feedback
+        button.textContent = 'Copied!';
+        button.style.background = '#16a34a';
+
+        setTimeout(() => {
+            button.textContent = originalText;
+            button.style.background = '#005587';
+        }, 2000);
+    }
+
+    // Toggle segment raw metrics table visibility
+    function toggleSegmentRaw(segmentIndex) {
+        const container = document.getElementById('segment-container-' + segmentIndex);
+        const icon = document.getElementById('segment-icon-' + segmentIndex);
+        const button = document.getElementById('segment-toggle-' + segmentIndex);
+
+        if (container.style.display === 'none') {
+            container.style.display = 'block';
+            icon.textContent = '▼';
+            button.style.background = '#f1f5f9';
+            button.style.borderColor = '#cbd5e1';
+        } else {
+            container.style.display = 'none';
+            icon.textContent = '▶';
+            button.style.background = 'none';
+            button.style.borderColor = '#e2e8f0';
+        }
+    }
+
+    // Copy segment TSV data to clipboard
+    function copySegmentRaw(segmentIndex) {
+        const textarea = document.getElementById('segment-tsv-' + segmentIndex);
+        const button = event.target;
+        const originalText = button.textContent;
+
+        // Copy to clipboard
+        textarea.select();
+        document.execCommand('copy');
+
+        // Also try modern clipboard API
+        if (navigator.clipboard) {
+            navigator.clipboard.writeText(textarea.value);
+        }
+
+        // Visual feedback
+        button.textContent = 'Copied!';
+        button.style.background = '#16a34a';
+
+        setTimeout(() => {
+            button.textContent = originalText;
+            button.style.background = '#005587';
+        }, 2000);
+    }
+    </script>
+
+</body>
+</html> 
