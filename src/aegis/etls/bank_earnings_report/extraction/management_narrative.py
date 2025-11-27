@@ -136,16 +136,26 @@ provides factual context and metrics. Your quotes provide something different: E
 
 ## EXTRACTION GUIDELINES
 
-- **Always paraphrase** to make quotes concise and punchy
+- **Use verbatim text** from the transcript - do not rephrase or reword
+- **Use ellipsis (...)** to trim unnecessary words and condense lengthy quotes
 - Keep each quote to 1-2 sentences (20-40 words max)
-- Distill the core message - cut filler words and preamble
+- Cut filler words, preamble, and tangents while preserving the speaker's actual words
 - Capture the executive's perspective and conviction
 - Focus on qualitative statements that provide insight
 - Select quotes from different speakers when possible (CEO, CFO, CRO)
 
+## EXAMPLE
+
+Original: "I think what we're seeing is that client engagement remains very strong and robust, \
+and you know, our backlog has been growing now for four consecutive quarters which is really \
+encouraging to see."
+
+Condensed: "Client engagement remains very strong and robust... our backlog has been growing \
+for four consecutive quarters."
+
 ## OUTPUT
 
-Return exactly {num_quotes} paraphrased quotes that add executive voice and qualitative insight."""
+Return exactly {num_quotes} verbatim quotes (condensed with ellipsis as needed)."""
 
     user_prompt = f"""Extract the {num_quotes} most impactful management quotes from \
 {bank_info['bank_name']}'s {quarter} {fiscal_year} earnings call.
@@ -171,8 +181,8 @@ Select {num_quotes} quotes that best capture management's key messages for this 
                                 "content": {
                                     "type": "string",
                                     "description": (
-                                        "Paraphrased quote (20-40 words). Concise and punchy. "
-                                        "Focus on qualitative insight, not metrics."
+                                        "Verbatim quote from transcript (20-40 words). "
+                                        "Use ellipsis (...) to condense. No rephrasing."
                                     ),
                                 },
                                 "speaker": {
