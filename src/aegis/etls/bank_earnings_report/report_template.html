@@ -708,9 +708,8 @@
             </div>
 
             <div id="raw-metrics-container" style="display: none; margin-top: 12px; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; max-width: 100%;">
-                <!-- Copy button -->
-                <div style="background: #f8fafc; padding: 6px 10px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center;">
-                    <span style="font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700;">Select table data and copy, or use button</span>
+                <!-- Copy button bar -->
+                <div style="background: #f8fafc; padding: 6px 10px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: flex-end; align-items: center;">
                     <button onclick="copyRawMetrics()" style="background: #005587; color: white; border: none; border-radius: 4px; padding: 4px 10px; cursor: pointer; font-size: 9px; font-weight: 600;">
                         Copy to Clipboard
                     </button>
@@ -722,7 +721,7 @@
                         <thead style="position: sticky; top: 0; background: #f1f5f9; z-index: 10;">
                             <tr>
                                 {% for header in _1_keymetrics_raw.headers %}
-                                <th style="padding: 5px 6px; text-align: {% if loop.index <= 2 %}left{% else %}right{% endif %}; border-bottom: 1px solid #e2e8f0; font-weight: 700; color: #64748b; white-space: nowrap; font-size: 8px; text-transform: uppercase;">{{ header }}</th>
+                                <th style="padding: 5px 6px; text-align: {% if loop.index == 1 %}left{% else %}right{% endif %}; border-bottom: 1px solid #e2e8f0; font-weight: 700; color: #64748b; white-space: nowrap; font-size: 8px; text-transform: uppercase;">{{ header }}</th>
                                 {% endfor %}
                             </tr>
                         </thead>
