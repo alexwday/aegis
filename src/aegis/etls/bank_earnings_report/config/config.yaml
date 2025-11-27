@@ -12,6 +12,10 @@ models:
   segment_metrics_selection:
     tier: medium
 
+  # Analyst focus Q&A extraction - one call per Q&A exchange
+  analyst_focus_extraction:
+    tier: medium
+
 # LLM Parameters (applied to all calls)
 llm:
   temperature: 0.1  # Low temperature for factual extraction

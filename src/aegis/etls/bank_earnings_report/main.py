@@ -390,6 +390,7 @@ async def extract_all_sections(
         CORE_SEGMENT_METRICS,
         DEFAULT_CORE_METRICS,
     )
+    from .extraction.analyst_focus import extract_analyst_focus
 
     execution_id = context.get("execution_id")
     db_symbol = f"{bank_info['bank_symbol']}-CA"
@@ -641,8 +642,36 @@ async def extract_all_sections(
     # Narrative - placeholder (template uses .entries)
     sections["2_narrative"] = {"entries": []}
 
-    # Analyst Focus - placeholder (template uses .source and .entries)
-    sections["3_analyst_focus"] = {"source": "Transcript", "entries": []}
+    # =========================================================================
+    # Section 3: Analyst Focus (from transcripts + LLM extraction)
+    # =========================================================================
+    logger.info(
+        "etl.bank_earnings_report.analyst_focus_start",
+        execution_id=execution_id,
+    )
+
+    analyst_focus_result = await extract_analyst_focus(
+        bank_info=bank_info,
+        fiscal_year=fiscal_year,
+        quarter=quarter,
+        context=context,
+        max_entries=12,  # Extract more, then rank top 4
+    )
+
+    sections["3_analyst_focus"] = analyst_focus_result
+
+    # Add to debug log
+    llm_debug_log["sections"]["3_analyst_focus"] = {
+        "total_entries": len(analyst_focus_result.get("entries", [])),
+        "featured_entries": len(analyst_focus_result.get("featured", [])),
+        "themes": [e.get("theme", "") for e in analyst_focus_result.get("entries", [])],
+    }
+
+    logger.info(
+        "etl.bank_earnings_report.section_complete",
+        section="3_analyst_focus",
+        entries=len(analyst_focus_result.get("entries", [])),
+    )
 
     # =========================================================================
     # Section 4: Segment Performance (from supplementary + LLM selection)

@@ -1,25 +1,67 @@
 {
-  "source": "Transcripts",
-  "entries": [
+  "source": "Transcript",
+  "featured": [
     {
       "theme": "NIM Outlook",
-      "question": "Given deposit cost pressures, what's your NIM trajectory for H2?",
-      "answer": "CFO expects NIM to stabilize at current levels through Q4, with modest expansion in 2026 as rate cuts flow through. Deposit betas have peaked at 45% and are expected to decline as promotional high-interest savings account campaigns roll off. Asset repricing tailwinds from the fixed-rate mortgage book should provide a 5-8bp benefit over the next four quarters."
+      "question": "Given deposit cost pressures and potential rate cuts, what's your expectation for NIM trajectory in the second half?",
+      "answer": "CFO expects NIM to stabilize at current levels through Q4, with modest compression of 2-3 bps if the Fed cuts rates. Deposit repricing benefits are largely captured, but asset repricing on variable-rate loans provides some offset."
     },
     {
       "theme": "CRE Exposure",
-      "question": "Office portfolio concerns given recent market stress?",
-      "answer": "CRO noted office exposure is 2.8% of total loans with 58% average LTV. Reserved for 15% cumulative losses, seeing limited new formations. Portfolio is concentrated in Class A properties in major metros with strong tenant credit profiles. Management actively monitoring $450M of loans with near-term maturities for potential extensions or modifications."
+      "question": "Can you provide an update on your office portfolio given recent market stress and valuation concerns?",
+      "answer": "CRO noted office exposure represents 2.8% of total loans, down from 3.2% last year through managed runoff. Stage 2 loans in office are $1.2B with 5% coverage. No material losses expected but monitoring closely."
     },
     {
       "theme": "Capital Allocation",
-      "question": "Buyback pace given strong CET1 ratio?",
-      "answer": "CEO prioritizing organic growth first, maintaining dividend trajectory. Will accelerate buybacks if CET1 exceeds 13.5% persistently."
+      "question": "With CET1 at 13.2%, how are you thinking about capital deployment between buybacks and organic growth?",
+      "answer": "CEO indicated preference for organic growth in current environment. Buyback program continues at measured pace ($500M completed this quarter). M&A remains opportunistic with focus on wealth management bolt-ons."
     },
     {
       "theme": "U.S. Strategy",
-      "question": "Path to profitability improvement in U.S. retail?",
-      "answer": "Management targeting breakeven by Q2 2026 through expense rationalization and selective market exits. Focus on wealth management integration."
+      "question": "What's the path to improving profitability in your U.S. banking segment given the efficiency challenges?",
+      "answer": "Management targeting efficiency ratio improvement to 60% by end of fiscal 2025 through branch optimization and technology investments. Current quarter showed 150 bps improvement QoQ."
+    }
+  ],
+  "entries": [
+    {
+      "theme": "NIM Outlook",
+      "question": "Given deposit cost pressures and potential rate cuts, what's your expectation for NIM trajectory in the second half?",
+      "answer": "CFO expects NIM to stabilize at current levels through Q4, with modest compression of 2-3 bps if the Fed cuts rates. Deposit repricing benefits are largely captured, but asset repricing on variable-rate loans provides some offset."
+    },
+    {
+      "theme": "CRE Exposure",
+      "question": "Can you provide an update on your office portfolio given recent market stress and valuation concerns?",
+      "answer": "CRO noted office exposure represents 2.8% of total loans, down from 3.2% last year through managed runoff. Stage 2 loans in office are $1.2B with 5% coverage. No material losses expected but monitoring closely."
+    },
+    {
+      "theme": "Capital Allocation",
+      "question": "With CET1 at 13.2%, how are you thinking about capital deployment between buybacks and organic growth?",
+      "answer": "CEO indicated preference for organic growth in current environment. Buyback program continues at measured pace ($500M completed this quarter). M&A remains opportunistic with focus on wealth management bolt-ons."
+    },
+    {
+      "theme": "U.S. Strategy",
+      "question": "What's the path to improving profitability in your U.S. banking segment given the efficiency challenges?",
+      "answer": "Management targeting efficiency ratio improvement to 60% by end of fiscal 2025 through branch optimization and technology investments. Current quarter showed 150 bps improvement QoQ."
+    },
+    {
+      "theme": "Credit Quality",
+      "question": "Are you seeing any early warning signs in your consumer loan portfolio or credit card delinquencies?",
+      "answer": "CRO acknowledged modest uptick in early-stage delinquencies (30-day) of 15 bps QoQ but within historical norms. Charge-off rate stable at 2.8%. Tightened underwriting standards 6 months ago showing results."
+    },
+    {
+      "theme": "Mortgage Growth",
+      "question": "How do you expect the residential mortgage market to evolve given current rate environment?",
+      "answer": "Head of Canadian Banking sees originations picking up in Q4 as rates stabilize. Market share maintained at 23%. Uninsured portfolio growing faster than insured. Average LTV remains conservative at 55%."
+    },
+    {
+      "theme": "Digital Transformation",
+      "question": "What's the adoption rate for your digital banking platform and impact on branch strategy?",
+      "answer": "Digital adoption reached 82% of active customers, up 5 pts YoY. Mobile transactions up 35% YoY. Plan to consolidate 25 more branches in fiscal 2025. Investment in AI-powered customer service ongoing."
+    },
+    {
+      "theme": "Trading Revenue",
+      "question": "Capital Markets had a strong quarter. How sustainable is this trading revenue performance?",
+      "answer": "Head of Capital Markets attributes strength to elevated client activity and favorable volatility. Fixed income up 28% YoY, equities up 12%. Pipeline remains healthy but Q3 typically seasonally weaker."
     }
   ]
 }

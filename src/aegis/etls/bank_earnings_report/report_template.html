@@ -818,8 +818,10 @@
 
             <!-- ============================================
                  SECTION 3: Analyst Focus
-                 DATA SOURCE: 3_analyst_focus.json (entries array with theme, question, answer)
-                 NOTE: Variable-length Q&A list from earnings call transcripts
+                 DATA SOURCE: 3_analyst_focus.json
+                   - featured: Top 4 Q&A entries selected by LLM
+                   - entries: All extracted Q&A entries
+                 NOTE: Featured entries shown by default, expand to see all
                  ============================================ -->
             <div class="card">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
@@ -829,18 +831,45 @@
                     </div>
                 </div>
 
-                {% for qa in _3_analyst_focus.entries %}
+                <!-- Featured Q&A entries (top 4 selected by LLM) -->
+                {% for qa in _3_analyst_focus.featured %}
                 <div class="qa-item">
                     <div style="margin-bottom: 8px;">
                         <span style="font-size: 11px; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;">{{ qa.theme }}</span>
-                        <span style="font-size: 11px; color: #94a3b8; margin: 0 6px;">—</span>
-                        <span style="font-size: 11px; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;">{{ qa.question }}</span>
+                    </div>
+                    <div style="font-size: 11px; color: #475569; font-style: italic; margin-bottom: 6px; padding-left: 8px; border-left: 2px solid #e2e8f0;">
+                        {{ qa.question }}
                     </div>
                     <div style="font-size: 12px; color: var(--text-main); line-height: 1.5;">
                         {{ qa.answer }}
                     </div>
                 </div>
                 {% endfor %}
+
+                <!-- Expandable section for all Q&A entries -->
+                {% if _3_analyst_focus.entries|length > _3_analyst_focus.featured|length %}
+                <div style="margin-top: 12px; text-align: center;">
+                    <button id="analyst-focus-toggle" onclick="toggleAnalystFocus()" style="background: none; border: 1px solid #e2e8f0; border-radius: 6px; padding: 6px 12px; cursor: pointer; font-size: 9px; color: #64748b; transition: all 0.2s;">
+                        <span id="analyst-focus-icon">▶</span> View All Q&A ({{ _3_analyst_focus.entries|length }} exchanges)
+                    </button>
+                </div>
+
+                <div id="analyst-focus-container" style="display: none; margin-top: 12px; padding-top: 12px; border-top: 1px solid #e2e8f0;">
+                    {% for qa in _3_analyst_focus.entries %}
+                    <div class="qa-item" style="background: #fafbfc;">
+                        <div style="margin-bottom: 8px;">
+                            <span style="font-size: 10px; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;">{{ qa.theme }}</span>
+                        </div>
+                        <div style="font-size: 10px; color: #475569; font-style: italic; margin-bottom: 6px; padding-left: 8px; border-left: 2px solid #e2e8f0;">
+                            {{ qa.question }}
+                        </div>
+                        <div style="font-size: 11px; color: var(--text-main); line-height: 1.5;">
+                            {{ qa.answer }}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
             </div>
         </div>
 
@@ -1376,6 +1405,25 @@
         const container = document.getElementById('raw-metrics-container');
         const icon = document.getElementById('toggle-icon');
         const button = document.getElementById('raw-metrics-toggle');
+
+        if (container.style.display === 'none') {
+            container.style.display = 'block';
+            icon.textContent = '▼';
+            button.style.background = '#f1f5f9';
+            button.style.borderColor = '#cbd5e1';
+        } else {
+            container.style.display = 'none';
+            icon.textContent = '▶';
+            button.style.background = 'none';
+            button.style.borderColor = '#e2e8f0';
+        }
+    }
+
+    // Toggle analyst focus Q&A section visibility
+    function toggleAnalystFocus() {
+        const container = document.getElementById('analyst-focus-container');
+        const icon = document.getElementById('analyst-focus-icon');
+        const button = document.getElementById('analyst-focus-toggle');
 
         if (container.style.display === 'none') {
             container.style.display = 'block';
