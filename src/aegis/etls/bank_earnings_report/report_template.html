@@ -731,7 +731,7 @@
                             <tr style="background: {% if loop.index is odd %}#ffffff{% else %}#f8fafc{% endif %};">
                                 <td style="padding: 6px 10px; border-bottom: 1px solid #f0f4f8; font-weight: 600; color: #1e293b; white-space: nowrap;">{{ row.metric }}</td>
                                 <td style="padding: 6px 10px; border-bottom: 1px solid #f0f4f8; color: #64748b;">{{ row.units }}</td>
-                                {% for val in row.values %}
+                                {% for val in row['values'] %}
                                 <td style="padding: 6px 10px; border-bottom: 1px solid #f0f4f8; text-align: right; color: #334155;">{{ val }}</td>
                                 {% endfor %}
                                 <td style="padding: 6px 10px; border-bottom: 1px solid #f0f4f8; text-align: right;" class="delta {{ row.qoq_direction }}">{{ row.qoq }}</td>
