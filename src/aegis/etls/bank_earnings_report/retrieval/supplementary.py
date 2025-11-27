@@ -1239,3 +1239,307 @@ def format_segment_json(
         "core_metrics": formatted_core,
         "highlighted_metrics": formatted_highlighted,
     }
+
+
+# =============================================================================
+# Raw Enterprise Metrics Table (All metrics with 8Q history)
+# =============================================================================
+
+
+async def retrieve_all_metrics_with_history(
+    bank_symbol: str,
+    fiscal_year: int,
+    quarter: str,
+    context: Dict[str, Any],
+    num_quarters: int = 8,
+) -> List[Dict[str, Any]]:
+    """
+    Retrieve ALL enterprise metrics with 8-quarter historical data.
+
+    This is a bulk retrieval function that gets historical values for every
+    enterprise metric in a single efficient query, rather than calling
+    retrieve_metric_history() for each metric individually.
+
+    Args:
+        bank_symbol: Bank symbol with suffix (e.g., 'RY-CA')
+        fiscal_year: Current fiscal year
+        quarter: Current quarter
+        context: Execution context with execution_id
+        num_quarters: Number of quarters to retrieve (default 8)
+
+    Returns:
+        List of metric dicts, each containing:
+        {
+            "parameter": "Net Income",
+            "units": "millions",
+            "is_bps": False,
+            "current": 4200.0,
+            "qoq": 2.5,
+            "yoy": 8.3,
+            "history": [
+                {"period": "Q1 24", "value": 3900.0},
+                {"period": "Q2 24", "value": 4100.0},
+                ...
+            ]
+        }
+    """
+    logger = get_logger()
+    execution_id = context.get("execution_id")
+
+    # Get list of quarters to query
+    quarters_to_query = get_previous_quarters(fiscal_year, quarter, num_quarters)
+
+    logger.info(
+        "etl.bank_earnings_report.retrieve_all_metrics_history",
+        execution_id=execution_id,
+        bank_symbol=bank_symbol,
+        quarters=len(quarters_to_query),
+    )
+
+    try:
+        async with get_connection() as conn:
+            # Build WHERE clause for quarter filtering
+            quarter_conditions = []
+            params = {"bank_symbol": bank_symbol}
+
+            for i, (year, q) in enumerate(quarters_to_query):
+                quarter_conditions.append(
+                    f'("fiscal_year" = :year_{i} AND "quarter" = :quarter_{i})'
+                )
+                params[f"year_{i}"] = year
+                params[f"quarter_{i}"] = q
+
+            quarter_filter = " OR ".join(quarter_conditions)
+
+            # Query all metrics for all quarters in one go
+            result = await conn.execute(
+                text(
+                    f"""
+                    SELECT
+                        "Parameter",
+                        "fiscal_year",
+                        "quarter",
+                        "Actual",
+                        "QoQ",
+                        "YoY",
+                        "Units",
+                        "BPS"
+                    FROM benchmarking_report
+                    WHERE "bank_symbol" = :bank_symbol
+                      AND "Platform" = 'Enterprise'
+                      AND ({quarter_filter})
+                    ORDER BY "Parameter", "fiscal_year", "quarter"
+                """
+                ),
+                params,
+            )
+
+            # Group results by parameter
+            metrics_data: Dict[str, Dict[str, Any]] = {}
+
+            for row in result:
+                param_name = row[0]
+                year = row[1]
+                q = row[2]
+                actual = float(row[3]) if row[3] is not None else None
+                qoq = float(row[4]) if row[4] is not None else None
+                yoy = float(row[5]) if row[5] is not None else None
+                units = row[6] if row[6] else ""
+                bps_raw = row[7]
+                is_bps = bps_raw in ("Yes", "yes", True, 1) if bps_raw else False
+
+                if param_name not in metrics_data:
+                    metrics_data[param_name] = {
+                        "parameter": param_name,
+                        "units": units,
+                        "is_bps": is_bps,
+                        "current": None,
+                        "qoq": None,
+                        "yoy": None,
+                        "history_lookup": {},
+                    }
+
+                # Store value in lookup
+                metrics_data[param_name]["history_lookup"][(year, q)] = actual
+
+                # If this is the current quarter, capture current value and deltas
+                if year == fiscal_year and q == quarter:
+                    metrics_data[param_name]["current"] = actual
+                    metrics_data[param_name]["qoq"] = qoq
+                    metrics_data[param_name]["yoy"] = yoy
+
+            # Build final output with history in chronological order
+            output = []
+            for param_name in sorted(metrics_data.keys()):
+                metric = metrics_data[param_name]
+                history = []
+
+                for year, q in quarters_to_query:
+                    value = metric["history_lookup"].get((year, q))
+                    # Format period as "Q1 24" style
+                    period_label = f"{q} {str(year)[2:]}"
+                    history.append({"period": period_label, "value": value})
+
+                output.append(
+                    {
+                        "parameter": metric["parameter"],
+                        "units": metric["units"],
+                        "is_bps": metric["is_bps"],
+                        "current": metric["current"],
+                        "qoq": metric["qoq"],
+                        "yoy": metric["yoy"],
+                        "history": history,
+                    }
+                )
+
+            logger.info(
+                "etl.bank_earnings_report.all_metrics_history_retrieved",
+                execution_id=execution_id,
+                metric_count=len(output),
+                quarters=num_quarters,
+            )
+
+            return output
+
+    except Exception as e:
+        logger.error(
+            "etl.bank_earnings_report.all_metrics_history_error",
+            execution_id=execution_id,
+            error=str(e),
+        )
+        return []
+
+
+def format_raw_metrics_table(
+    metrics_with_history: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """
+    Format all enterprise metrics into a raw data table for Excel-like display.
+
+    Creates a table structure with:
+    - Rows: Each metric (alphabetically sorted)
+    - Columns: Metric name, Units, 8 quarters of history, QoQ delta, YoY delta
+
+    The output is designed for easy copy/paste into Excel with tab-separated values.
+
+    Args:
+        metrics_with_history: List from retrieve_all_metrics_with_history()
+
+    Returns:
+        Dict with table structure:
+        {
+            "headers": ["Metric", "Units", "Q1 24", "Q2 24", ..., "QoQ", "YoY"],
+            "rows": [
+                {
+                    "metric": "Net Income",
+                    "units": "$M",
+                    "values": [3900, 4100, 4200, ...],
+                    "qoq": "+2.4%",
+                    "yoy": "+8.3%",
+                    "qoq_direction": "positive",
+                    "yoy_direction": "positive"
+                },
+                ...
+            ],
+            "tsv": "Metric\\tUnits\\tQ1 24\\t...\\nNet Income\\t$M\\t3900\\t..."
+        }
+    """
+    if not metrics_with_history:
+        return {"headers": [], "rows": [], "tsv": ""}
+
+    # Build headers from first metric's history
+    quarter_headers = [h["period"] for h in metrics_with_history[0]["history"]]
+    headers = ["Metric", "Units"] + quarter_headers + ["QoQ", "YoY"]
+
+    rows = []
+    tsv_lines = ["\t".join(headers)]
+
+    for metric in metrics_with_history:
+        param = metric["parameter"]
+        units = metric["units"]
+        is_bps = metric["is_bps"]
+
+        # Determine display units
+        if is_bps or units == "bps":
+            display_units = "bps"
+        elif units == "%":
+            display_units = "%"
+        elif units == "millions":
+            display_units = "$M"
+        else:
+            display_units = units or ""
+
+        # Format historical values for display
+        formatted_values = []
+        raw_values = []
+        for h in metric["history"]:
+            val = h["value"]
+            if val is None:
+                formatted_values.append("—")
+                raw_values.append("")
+            else:
+                if display_units == "%" or display_units == "bps":
+                    formatted_values.append(f"{val:.2f}")
+                    raw_values.append(f"{val:.2f}")
+                elif display_units == "$M":
+                    if abs(val) >= 1000:
+                        formatted_values.append(f"{val:,.0f}")
+                        raw_values.append(f"{val:.0f}")
+                    else:
+                        formatted_values.append(f"{val:,.1f}")
+                        raw_values.append(f"{val:.1f}")
+                else:
+                    formatted_values.append(f"{val:,.2f}")
+                    raw_values.append(f"{val:.2f}")
+
+        # Format deltas
+        qoq_val = metric["qoq"]
+        yoy_val = metric["yoy"]
+
+        if qoq_val is None:
+            qoq_display = "—"
+            qoq_direction = "neutral"
+            qoq_raw = ""
+        else:
+            qoq_direction = "positive" if qoq_val > 0 else "negative" if qoq_val < 0 else "neutral"
+            if is_bps:
+                qoq_display = f"{qoq_val:+.0f}bps"
+                qoq_raw = f"{qoq_val:.0f}"
+            else:
+                qoq_display = f"{qoq_val:+.1f}%"
+                qoq_raw = f"{qoq_val:.1f}"
+
+        if yoy_val is None:
+            yoy_display = "—"
+            yoy_direction = "neutral"
+            yoy_raw = ""
+        else:
+            yoy_direction = "positive" if yoy_val > 0 else "negative" if yoy_val < 0 else "neutral"
+            if is_bps:
+                yoy_display = f"{yoy_val:+.0f}bps"
+                yoy_raw = f"{yoy_val:.0f}"
+            else:
+                yoy_display = f"{yoy_val:+.1f}%"
+                yoy_raw = f"{yoy_val:.1f}"
+
+        rows.append(
+            {
+                "metric": param,
+                "units": display_units,
+                "values": formatted_values,
+                "qoq": qoq_display,
+                "yoy": yoy_display,
+                "qoq_direction": qoq_direction,
+                "yoy_direction": yoy_direction,
+            }
+        )
+
+        # Build TSV row for copy/paste
+        tsv_row = [param, display_units] + raw_values + [qoq_raw, yoy_raw]
+        tsv_lines.append("\t".join(tsv_row))
+
+    return {
+        "headers": headers,
+        "rows": rows,
+        "tsv": "\n".join(tsv_lines),
+    }

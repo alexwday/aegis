@@ -377,6 +377,8 @@ async def extract_all_sections(
         retrieve_available_platforms,
         retrieve_segment_metrics,
         format_segment_json,
+        retrieve_all_metrics_with_history,
+        format_raw_metrics_table,
     )
     from .extraction.key_metrics import select_chart_and_tile_metrics, KEY_METRICS
     from .extraction.segment_metrics import (
@@ -595,6 +597,34 @@ async def extract_all_sections(
 
     logger.info("etl.bank_earnings_report.section_complete", section="1_keymetrics_tiles")
     logger.info("etl.bank_earnings_report.section_complete", section="1_keymetrics_chart")
+
+    # =========================================================================
+    # Raw Enterprise Metrics Table (expandable section with all metrics + 8Q history)
+    # =========================================================================
+
+    raw_metrics_with_history = await retrieve_all_metrics_with_history(
+        bank_symbol=db_symbol,
+        fiscal_year=fiscal_year,
+        quarter=quarter,
+        context=context,
+        num_quarters=8,
+    )
+
+    if raw_metrics_with_history:
+        raw_table = format_raw_metrics_table(raw_metrics_with_history)
+        sections["1_keymetrics_raw"] = raw_table
+        llm_debug_log["sections"]["1_keymetrics_raw"] = {
+            "metric_count": len(raw_metrics_with_history),
+            "quarters": 8,
+        }
+    else:
+        sections["1_keymetrics_raw"] = {"headers": [], "rows": [], "tsv": ""}
+        llm_debug_log["sections"]["1_keymetrics_raw"] = {
+            "metric_count": 0,
+            "reason": "No metrics with history available",
+        }
+
+    logger.info("etl.bank_earnings_report.section_complete", section="1_keymetrics_raw")
 
     # =========================================================================
     # Placeholder sections (not yet implemented)
