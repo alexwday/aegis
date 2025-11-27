@@ -547,7 +547,7 @@ These will be the standard core metrics shown in the left column of the segment 
             tools=[tool_definition],
             context=context,
             llm_params={
-                "model": config.llm.medium.model,
+                "model": config.llm.large.model,
                 "temperature": 0.3,
                 "max_tokens": 1000,
             },
@@ -564,7 +564,7 @@ These will be the standard core metrics shown in the left column of the segment 
                     "selected_metrics": function_args.get("selected_metrics", []),
                     "reasoning": function_args.get("reasoning", ""),
                     "method": "llm",
-                    "model": config.llm.medium.model,
+                    "model": config.llm.large.model,
                 }
 
         # Fallback
