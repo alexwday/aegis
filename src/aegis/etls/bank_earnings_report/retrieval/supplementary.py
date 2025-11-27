@@ -1418,7 +1418,7 @@ def format_raw_metrics_table(
 
     Creates a table structure with:
     - Rows: Each metric (alphabetically sorted)
-    - Columns: Metric name, Units, 8 quarters of history, QoQ delta, YoY delta
+    - Columns: Metric name, Type ($M or %), 8 quarters of history, QoQ delta, YoY delta
 
     The output is designed for easy copy/paste into Excel with tab-separated values.
 
@@ -1428,11 +1428,11 @@ def format_raw_metrics_table(
     Returns:
         Dict with table structure:
         {
-            "headers": ["Metric", "Units", "Q1 24", "Q2 24", ..., "QoQ", "YoY"],
+            "headers": ["Metric", "Type", "Q1 24", "Q2 24", ..., "QoQ", "YoY"],
             "rows": [
                 {
                     "metric": "Net Income",
-                    "units": "$M",
+                    "type": "$M",
                     "values": [3900, 4100, 4200, ...],
                     "qoq": "+2.4%",
                     "yoy": "+8.3%",
@@ -1441,7 +1441,7 @@ def format_raw_metrics_table(
                 },
                 ...
             ],
-            "tsv": "Metric\\tUnits\\tQ1 24\\t...\\nNet Income\\t$M\\t3900\\t..."
+            "tsv": "Metric\\tType\\tQ1 24\\t...\\nNet Income\\t$M\\t3900\\t..."
         }
     """
     if not metrics_with_history:
@@ -1449,7 +1449,7 @@ def format_raw_metrics_table(
 
     # Build headers from first metric's history
     quarter_headers = [h["period"] for h in metrics_with_history[0]["history"]]
-    headers = ["Metric", "Units"] + quarter_headers + ["QoQ", "YoY"]
+    headers = ["Metric", "Type"] + quarter_headers + ["QoQ", "YoY"]
 
     rows = []
     tsv_lines = ["\t".join(headers)]
@@ -1459,15 +1459,13 @@ def format_raw_metrics_table(
         units = metric["units"]
         is_bps = metric["is_bps"]
 
-        # Determine display units
-        if is_bps or units == "bps":
-            display_units = "bps"
-        elif units == "%":
-            display_units = "%"
+        # Determine display type (simplified: $M for millions, % for percentages)
+        if is_bps or units == "bps" or units == "%":
+            display_type = "%"
         elif units == "millions":
-            display_units = "$M"
+            display_type = "$M"
         else:
-            display_units = units or ""
+            display_type = "$M" if units else ""
 
         # Format historical values for display
         formatted_values = []
@@ -1478,10 +1476,10 @@ def format_raw_metrics_table(
                 formatted_values.append("—")
                 raw_values.append("")
             else:
-                if display_units == "%" or display_units == "bps":
+                if display_type == "%":
                     formatted_values.append(f"{val:.2f}")
                     raw_values.append(f"{val:.2f}")
-                elif display_units == "$M":
+                elif display_type == "$M":
                     if abs(val) >= 1000:
                         formatted_values.append(f"{val:,.0f}")
                         raw_values.append(f"{val:.0f}")
@@ -1525,7 +1523,7 @@ def format_raw_metrics_table(
         rows.append(
             {
                 "metric": param,
-                "units": display_units,
+                "type": display_type,
                 "values": formatted_values,
                 "qoq": qoq_display,
                 "yoy": yoy_display,
@@ -1535,7 +1533,7 @@ def format_raw_metrics_table(
         )
 
         # Build TSV row for copy/paste
-        tsv_row = [param, display_units] + raw_values + [qoq_raw, yoy_raw]
+        tsv_row = [param, display_type] + raw_values + [qoq_raw, yoy_raw]
         tsv_lines.append("\t".join(tsv_row))
 
     return {

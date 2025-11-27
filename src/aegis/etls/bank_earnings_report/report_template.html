@@ -730,7 +730,7 @@
                             {% for row in _1_keymetrics_raw.rows %}
                             <tr style="background: {% if loop.index is odd %}#ffffff{% else %}#f8fafc{% endif %};">
                                 <td style="padding: 4px 6px; border-bottom: 1px solid #f0f4f8; font-weight: 600; color: #1e293b; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ row.metric }}">{{ row.metric }}</td>
-                                <td style="padding: 4px 6px; border-bottom: 1px solid #f0f4f8; color: #94a3b8;">{{ row.units }}</td>
+                                <td style="padding: 4px 6px; border-bottom: 1px solid #f0f4f8; color: #94a3b8;">{{ row.type }}</td>
                                 {% for val in row['values'] %}
                                 <td style="padding: 4px 6px; border-bottom: 1px solid #f0f4f8; text-align: right; color: #334155;">{{ val }}</td>
                                 {% endfor %}
