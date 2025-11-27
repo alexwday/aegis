@@ -299,7 +299,19 @@
         .delta {
             font-size: 12px;
             font-weight: 700;
-            display: block;
+        }
+        /* Value class - matches delta style but in black */
+        .value {
+            font-size: 12px;
+            font-weight: 700;
+            color: #1e293b;
+            font-family: 'Consolas', monospace;
+        }
+        /* Unit suffix styling (M, B, %) - distinguishes from numbers */
+        .unit {
+            font-weight: 600;
+            color: #64748b;
+            font-size: 0.85em;
         }
         /* Legacy delta classes (for any hardcoded content) */
         .pos { color: var(--pos); }
@@ -582,41 +594,23 @@
                 </div>
             </div>
 
-            <div style="display: flex; gap: 12px;">
-                <!-- Left side: metric tiles in 3-column rows -->
-                <div style="flex: 3; display: flex; flex-direction: column; gap: 12px;">
-                    
-                </div>
+            <!-- Unified 5-column grid for main tiles, chart, and slim tiles
+                 Row 1: Main tile 1, Main tile 2, Main tile 3, Chart (spans 2 cols, 2 rows)
+                 Row 2: Main tile 4, Main tile 5, Main tile 6, (chart continues)
+                 Row 3: Slim tile 1, Slim tile 2, Slim tile 3, Slim tile 4, Slim tile 5
+            -->
+            <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px;">
+                <!-- Main tiles (6 tiles in positions 1-3 of rows 1-2) -->
                 
-                <!-- -------- Subsection 1c: Trend Chart --------
-                     DATA SOURCE: 1_keymetrics_chart.json (label, quarters, values)
-                     SOURCE: Supp Pack
-                     NOTE: This chart is rendered dynamically via JavaScript
-                -->
-                <div id="trend-chart-container" style="flex: 2; background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%); border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.04); display: flex; flex-direction: column;">
-                    <!-- Chart will be rendered here by JavaScript -->
-                </div>
 
                 <!-- Chart data embedded for JavaScript -->
                 <script id="trend-chart-data" type="application/json">
                 {"decimal_places": 0, "label": "N/A", "quarters": [], "unit": "", "values": []}
                 </script>
-            </div>
-            </div>
 
-            <!-- -------- Subsection 1c: Dynamic Metrics (Slim Tiles) --------
-                 DATA SOURCE: 1_keymetrics_dynamic.json (metrics array - 5 LLM-selected)
-                 SOURCE: Supp Pack
-                 NOTE: Dynamic metrics selected by LLM, displayed directly below main tiles
-                 Width matches main tiles area (flex: 3 out of 5 total)
-            -->
-            <div style="display: flex; gap: 12px; margin-top: 12px;">
-                <!-- Slim tiles container - matches width of main tiles (flex: 3) -->
-                <div style="flex: 3; display: flex; gap: 12px;">
-                    
-                </div>
-                <!-- Empty spacer to match chart area width (flex: 2) -->
-                <div style="flex: 2;"></div>
+                <!-- Slim tiles (5 tiles spanning full row 3) -->
+                
+            </div>
             </div>
 
             <!-- -------- Subsection 1d: Items of Note --------
@@ -685,8 +679,8 @@
 
         <!-- ============================================
              SECTION 4: Segment Performance
-             DATA SOURCE: 4_segments.json (entries array with name, description, revenue, net_income, roe)
-             NOTE: Variable-length list of business segments with metrics
+             DATA SOURCE: 4_segments.json (entries array with name, description, core_metrics, highlighted_metrics)
+             NOTE: Variable-length list of business segments with two metric columns
              ============================================ -->
         <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px;">
             <div class="card">
@@ -806,25 +800,21 @@
 
             // Format value for display - matches Python format_metric_value logic
             // unit: "$M" for millions, "%" for percentage
+            // Uses up to 2 decimal places, strips trailing zeros
+            const stripTrailingZeros = (s) => s.replace(/\.?0+$/, '');
+
             const formatValue = (v, forAxis = false) => {
                 if (unit === '%') {
                     // Percentage: keep decimals, add % suffix
                     return v.toFixed(decimal_places) + '%';
                 } else if (unit === '$M') {
-                    // Currency in millions
+                    // Currency in millions - up to 2 decimal places, strip trailing zeros
                     if (Math.abs(v) >= 1000) {
-                        // Convert to billions: $X.X B
-                        return '$' + (v / 1000).toFixed(1) + ' B';
-                    } else if (Math.abs(v) >= 1) {
-                        // Keep as millions with commas: $X,XXX M
-                        // For axis labels, use shorter format
-                        if (forAxis) {
-                            return '$' + v.toLocaleString('en-US', {maximumFractionDigits: 0}) + ' M';
-                        }
-                        return '$' + v.toLocaleString('en-US', {maximumFractionDigits: 0}) + ' M';
+                        // Convert to billions: $X.XX B (strip .00)
+                        return '$' + stripTrailingZeros((v / 1000).toFixed(2)) + ' B';
                     } else {
-                        // Small number (less than 1 million), keep decimals
-                        return '$' + v.toFixed(decimal_places) + ' M';
+                        // Keep as millions: $X.XX M (strip .00)
+                        return '$' + stripTrailingZeros(v.toFixed(2)) + ' M';
                     }
                 } else {
                     // Default: format with commas and decimals
@@ -836,17 +826,16 @@
                 }
             };
 
-            // Compact format for chart data point labels (no unit suffix, just the number)
+            // Compact format for chart data point labels (no $ prefix for cleaner display)
             const formatChartLabel = (v) => {
                 if (unit === '%') {
                     return v.toFixed(decimal_places);
                 } else if (unit === '$M') {
+                    // Currency - up to 2 decimal places, strip trailing zeros
                     if (Math.abs(v) >= 1000) {
-                        return (v / 1000).toFixed(1) + 'B';
-                    } else if (Math.abs(v) >= 1) {
-                        return v.toLocaleString('en-US', {maximumFractionDigits: 0}) + 'M';
+                        return stripTrailingZeros((v / 1000).toFixed(2)) + 'B';
                     } else {
-                        return v.toFixed(decimal_places);
+                        return stripTrailingZeros(v.toFixed(2)) + 'M';
                     }
                 } else {
                     return v.toLocaleString('en-US', {maximumFractionDigits: decimal_places});

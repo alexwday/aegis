@@ -397,12 +397,13 @@ async def retrieve_metrics_by_names(
 
 def format_metric_value(actual: Optional[float], units: str, meta_unit: str) -> str:
     """
-    Format a metric value with appropriate units.
+    Format a metric value with appropriate units for template display.
 
     Uses standard financial formatting conventions:
     - Negative values in parentheses: ($157M) not $-157M
     - No space before M/B: $16.2B not $16.2 B
     - Billions with 1 decimal, millions as whole numbers
+    - Unit suffixes (M, B, %) wrapped in span.unit for styling
 
     Args:
         actual: Raw numeric value
@@ -410,22 +411,26 @@ def format_metric_value(actual: Optional[float], units: str, meta_unit: str) -> 
         meta_unit: Unit type from kpi_metadata
 
     Returns:
-        Formatted string (e.g., "$9,200M", "13.8%", "($157M)")
+        Formatted HTML string (e.g., "$9,200<span class='unit'>M</span>")
     """
     if actual is None:
         return "N/A"
 
+    # Helper to wrap unit suffix in span for CSS styling
+    def wrap_unit(suffix: str) -> str:
+        return f"<span class='unit'>{suffix}</span>"
+
     # Handle percentage metrics
     if units == "%" or meta_unit in ("percentage", "percent", "%"):
         if actual < 0:
-            return f"({abs(actual):.1f}%)"
-        return f"{actual:.1f}%"
+            return f"({abs(actual):.1f}{wrap_unit('%')})"
+        return f"{actual:.1f}{wrap_unit('%')}"
 
     # Handle basis points
     if meta_unit in ("bps", "basis_points"):
         if actual < 0:
-            return f"({abs(actual):.0f}bps)"
-        return f"{actual:.0f}bps"
+            return f"({abs(actual):.0f}{wrap_unit('bps')})"
+        return f"{actual:.0f}{wrap_unit('bps')}"
 
     # Handle millions (default for dollar amounts)
     # Industry standard: billions 1 decimal, millions whole or 1 decimal
@@ -436,10 +441,10 @@ def format_metric_value(actual: Optional[float], units: str, meta_unit: str) -> 
 
         if abs_val >= 1000:
             # Billions: 1 decimal place
-            formatted = f"${abs_val / 1000:,.1f}B"
+            formatted = f"${abs_val / 1000:,.1f}{wrap_unit('B')}"
         else:
             # Millions: whole number for clean display
-            formatted = f"${abs_val:,.0f}M"
+            formatted = f"${abs_val:,.0f}{wrap_unit('M')}"
 
         if is_negative:
             return f"({formatted})"
@@ -448,15 +453,15 @@ def format_metric_value(actual: Optional[float], units: str, meta_unit: str) -> 
     # Handle ratio metrics
     if meta_unit == "ratio":
         if actual < 0:
-            return f"({abs(actual):.2f}x)"
-        return f"{actual:.2f}x"
+            return f"({abs(actual):.2f}{wrap_unit('x')})"
+        return f"{actual:.2f}{wrap_unit('x')}"
 
     # Default: just format the number
     abs_val = abs(actual)
     is_negative = actual < 0
 
     if abs_val >= 1000000:
-        formatted = f"{abs_val / 1000000:,.1f}M"
+        formatted = f"{abs_val / 1000000:,.1f}{wrap_unit('M')}"
     elif abs_val >= 1000:
         formatted = f"{abs_val:,.0f}"
     else:

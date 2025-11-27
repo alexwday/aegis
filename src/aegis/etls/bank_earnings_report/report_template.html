@@ -300,6 +300,19 @@
             font-size: 12px;
             font-weight: 700;
         }
+        /* Value class - matches delta style but in black */
+        .value {
+            font-size: 12px;
+            font-weight: 700;
+            color: #1e293b;
+            font-family: 'Consolas', monospace;
+        }
+        /* Unit suffix styling (M, B, %) - distinguishes from numbers */
+        .unit {
+            font-weight: 600;
+            color: #64748b;
+            font-size: 0.85em;
+        }
         /* Legacy delta classes (for any hardcoded content) */
         .pos { color: var(--pos); }
         .neg { color: var(--neg); }
@@ -591,7 +604,7 @@
                 {% for metric in _1_keymetrics_tiles.metrics %}
                 <div class="metric-box">
                     <span class="metric-label">{{ metric.label }}</span>
-                    <span class="metric-val">{{ metric.value }}</span>
+                    <span class="metric-val">{{ metric.value|safe }}</span>
                     <div class="metric-changes-container">
                         <div class="metric-change-item">
                             <span class="change-label">QoQ</span>
@@ -632,7 +645,7 @@
                         <span style="font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700; text-align: center;">QoQ</span>
                         <span style="font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700; text-align: center;">YoY</span>
                         <!-- Value row -->
-                        <span style="font-size: 14px; font-weight: 700; color: var(--text-main); text-align: center;">{{ metric.value }}</span>
+                        <span style="font-size: 14px; font-weight: 700; color: var(--text-main); text-align: center;">{{ metric.value|safe }}</span>
                         <span class="delta {{ metric.qoq.direction }}" style="font-size: 10px; font-weight: 600; text-align: center;">{{ metric.qoq.display }}</span>
                         <span class="delta {{ metric.yoy.direction }}" style="font-size: 10px; font-weight: 600; text-align: center;">{{ metric.yoy.display }}</span>
                     </div>
@@ -788,7 +801,7 @@
                                         {% for metric in segment.core_metrics %}
                                         <tr>
                                             <td style="padding: 2px 4px; color: #334155; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ metric.label }}</td>
-                                            <td style="padding: 2px 4px; text-align: right; font-family: 'Consolas', monospace; font-size: 10px; white-space: nowrap;">{{ metric.value }}</td>
+                                            <td class="value" style="padding: 2px 4px; text-align: right; font-size: 10px; white-space: nowrap;">{{ metric.value|safe }}</td>
                                             <td class="delta {{ metric.qoq.direction }}" style="padding: 2px 4px; text-align: right; font-size: 10px; white-space: nowrap;">{{ metric.qoq.display }}</td>
                                             <td class="delta {{ metric.yoy.direction }}" style="padding: 2px 4px; text-align: right; font-size: 10px; white-space: nowrap;">{{ metric.yoy.display }}</td>
                                         </tr>
@@ -817,7 +830,7 @@
                                         {% for metric in segment.highlighted_metrics %}
                                         <tr>
                                             <td style="padding: 2px 4px; color: #334155; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ metric.label }}</td>
-                                            <td style="padding: 2px 4px; text-align: right; font-family: 'Consolas', monospace; font-size: 10px; white-space: nowrap;">{{ metric.value }}</td>
+                                            <td class="value" style="padding: 2px 4px; text-align: right; font-size: 10px; white-space: nowrap;">{{ metric.value|safe }}</td>
                                             <td class="delta {{ metric.qoq.direction }}" style="padding: 2px 4px; text-align: right; font-size: 10px; white-space: nowrap;">{{ metric.qoq.display }}</td>
                                             <td class="delta {{ metric.yoy.direction }}" style="padding: 2px 4px; text-align: right; font-size: 10px; white-space: nowrap;">{{ metric.yoy.display }}</td>
                                         </tr>
@@ -861,7 +874,7 @@
                         <div style="background: #f8fafc; border-radius: 6px; padding: 10px; border: 1px solid #e2e8f0;">
                             <div style="text-align: center; margin-bottom: 6px;">
                                 <div style="font-size: 9px; color: #64748b; text-transform: uppercase; font-weight: 600; margin-bottom: 4px;">{{ ratio.label }}{% if ratio.min_requirement %} <span style="font-weight: 400; text-transform: none;">(min {{ ratio.min_requirement }})</span>{% endif %}</div>
-                                <div style="font-size: 14px; font-weight: 700; color: var(--text-main);">{{ ratio.value }}</div>
+                                <div style="font-size: 14px; font-weight: 700; color: var(--text-main);">{{ ratio.value|safe }}</div>
                             </div>
                             <div style="display: flex; border-top: 1px solid #e2e8f0; padding-top: 6px;">
                                 <div style="flex: 1; text-align: center; border-right: 1px solid #e2e8f0;">
@@ -892,13 +905,13 @@
                             <div style="flex: 1; height: 6px; background: #e2e8f0; border-radius: 3px; overflow: hidden;">
                                 <div style="width: {{ component.percentage }}%; height: 100%; background: {{ component.color }}; border-radius: 3px;"></div>
                             </div>
-                            <span style="font-size: 11px; font-weight: 600; color: var(--text-main); width: 50px; text-align: right;">{{ component.value }}</span>
+                            <span style="font-size: 11px; font-weight: 600; color: var(--text-main); width: 50px; text-align: right;">{{ component.value|safe }}</span>
                         </div>
                         {% endfor %}
                         <div style="display: flex; align-items: center; gap: 8px; padding-top: 6px; border-top: 1px solid #e2e8f0; margin-top: 2px;">
                             <span style="font-size: 10px; color: var(--text-main); font-weight: 600; width: 65px;">Total RWA</span>
                             <div style="flex: 1;"></div>
-                            <span style="font-size: 12px; font-weight: 700; color: var(--text-main); width: 50px; text-align: right;">{{ _5_capital_risk.rwa.total }}</span>
+                            <span style="font-size: 12px; font-weight: 700; color: var(--text-main); width: 50px; text-align: right;">{{ _5_capital_risk.rwa.total|safe }}</span>
                         </div>
                     </div>
                 </div>
@@ -921,7 +934,7 @@
                         {% for metric in _5_capital_risk.liquidity_credit %}
                         <div style="display: flex; align-items: center;">
                             <span style="font-size: 10px; color: #64748b; font-weight: 600; width: 65px;">{{ metric.label }}</span>
-                            <span style="font-size: 11px; font-weight: 700; color: var(--text-main); flex: 1; text-align: center;">{{ metric.value }}</span>
+                            <span style="font-size: 11px; font-weight: 700; color: var(--text-main); flex: 1; text-align: center;">{{ metric.value|safe }}</span>
                             <span class="delta {{ metric.qoq.direction }}" style="font-size: 11px; flex: 1; text-align: center;">{{ metric.qoq.display }}</span>
                             <span class="delta {{ metric.yoy.direction }}" style="font-size: 11px; flex: 1; text-align: center;">{{ metric.yoy.display }}</span>
                         </div>
