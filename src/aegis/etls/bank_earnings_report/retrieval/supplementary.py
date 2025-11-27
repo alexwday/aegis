@@ -235,7 +235,7 @@ async def retrieve_all_metrics(
                         km.higher_is_better,
                         km.analyst_usage
                     FROM benchmarking_report br
-                    INNER JOIN kpi_metadata km ON br."Parameter" = km.kpi_name
+                    LEFT JOIN kpi_metadata km ON br."Parameter" = km.kpi_name
                     WHERE br."bank_symbol" = :bank_symbol
                       AND br."fiscal_year" = :fiscal_year
                       AND br."quarter" = :quarter

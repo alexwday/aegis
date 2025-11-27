@@ -1,14 +1,18 @@
 # Bank Earnings Report ETL Configuration
 
 # LLM Model Configuration
-# Models are referenced from aegis.utils.settings.config
+# Models are referenced by tier from aegis.utils.settings.config
 # Tiers: small, medium, large
 models:
-  # Section extraction uses medium for balance of cost/quality
-  section_extraction:
-    tier: medium  # Uses config.llm.medium.model
+  # Key metrics selection (chart, tiles, dynamic) - needs strong reasoning
+  key_metrics_selection:
+    tier: large
 
-# LLM Parameters
+  # Segment metrics selection - moderate complexity
+  segment_metrics_selection:
+    tier: medium
+
+# LLM Parameters (applied to all calls)
 llm:
   temperature: 0.1  # Low temperature for factual extraction
   max_tokens: 16384  # Generous limit for detailed sections

@@ -13,8 +13,8 @@ import json
 from typing import Any, Dict, List
 
 from aegis.connections.llm_connector import complete_with_tools
+from aegis.etls.bank_earnings_report.config.etl_config import etl_config
 from aegis.utils.logging import get_logger
-from aegis.utils.settings import config
 
 
 # =============================================================================
@@ -416,15 +416,15 @@ Return exact metric names from the tables above."""
     ]
 
     try:
-        # Use large model for this task - need good reasoning
-        model_config = config.llm.large
+        # Use model from ETL config
+        model = etl_config.get_model("key_metrics_selection")
 
         response = await complete_with_tools(
             messages=messages,
             tools=[tool_definition],
             context=context,
             llm_params={
-                "model": model_config.model,
+                "model": model,
                 "temperature": 0.3,  # Some creativity for dynamic selection
                 "max_tokens": 2000,
             },
