@@ -1418,7 +1418,8 @@ def format_raw_metrics_table(
 
     Creates a table structure with:
     - Rows: Each metric (alphabetically sorted)
-    - Columns: Metric name, Type ($M or %), 8 quarters of history, QoQ delta, YoY delta
+    - Columns: Metric name, 8 quarters of history, Type ($M or %), QoQ, YoY deltas
+    - TSV includes additional 2Y, 3Y, 4Y, 5Y deltas (not shown in HTML)
 
     The output is designed for easy copy/paste into Excel with tab-separated values.
 
@@ -1428,12 +1429,12 @@ def format_raw_metrics_table(
     Returns:
         Dict with table structure:
         {
-            "headers": ["Metric", "Type", "Q1 24", "Q2 24", ..., "QoQ", "YoY"],
+            "headers": ["Metric", "Q1 24", "Q2 24", ..., "Type", "QoQ", "YoY"],
             "rows": [
                 {
                     "metric": "Net Income",
-                    "type": "$M",
                     "values": [3900, 4100, 4200, ...],
+                    "type": "$M",
                     "qoq": "+2.4%",
                     "yoy": "+8.3%",
                     "qoq_direction": "positive",
@@ -1441,7 +1442,7 @@ def format_raw_metrics_table(
                 },
                 ...
             ],
-            "tsv": "Metric\\tType\\tQ1 24\\t...\\nNet Income\\t$M\\t3900\\t..."
+            "tsv": "Metric\\tQ1 24\\t...\\tType\\tQoQ\\tYoY\\t2Y\\t3Y\\t4Y\\t5Y\\n..."
         }
     """
     if not metrics_with_history:
@@ -1449,23 +1450,24 @@ def format_raw_metrics_table(
 
     # Build headers from first metric's history
     quarter_headers = [h["period"] for h in metrics_with_history[0]["history"]]
-    headers = ["Metric", "Type"] + quarter_headers + ["QoQ", "YoY"]
+    # HTML headers: Metric, quarters, Type, QoQ, YoY
+    headers = ["Metric"] + quarter_headers + ["Type", "QoQ", "YoY"]
+    # TSV headers include additional year deltas
+    tsv_headers = ["Metric"] + quarter_headers + ["Type", "QoQ", "YoY", "2Y", "3Y", "4Y", "5Y"]
 
     rows = []
-    tsv_lines = ["\t".join(headers)]
+    tsv_lines = ["\t".join(tsv_headers)]
 
     for metric in metrics_with_history:
         param = metric["parameter"]
-        units = metric["units"]
         is_bps = metric["is_bps"]
 
-        # Determine display type (simplified: $M for millions, % for percentages)
-        if is_bps or units == "bps" or units == "%":
-            display_type = "%"
-        elif units == "millions":
-            display_type = "$M"
-        else:
-            display_type = "$M" if units else ""
+        # Determine display type: % only if is_bps, otherwise $M
+        display_type = "%" if is_bps else "$M"
+
+        # Get historical values for multi-year delta calculations
+        history_values = [h["value"] for h in metric["history"]]
+        current_val = history_values[-1] if history_values else None
 
         # Format historical values for display
         formatted_values = []
@@ -1479,18 +1481,15 @@ def format_raw_metrics_table(
                 if display_type == "%":
                     formatted_values.append(f"{val:.2f}")
                     raw_values.append(f"{val:.2f}")
-                elif display_type == "$M":
+                else:  # $M
                     if abs(val) >= 1000:
                         formatted_values.append(f"{val:,.0f}")
                         raw_values.append(f"{val:.0f}")
                     else:
                         formatted_values.append(f"{val:,.1f}")
                         raw_values.append(f"{val:.1f}")
-                else:
-                    formatted_values.append(f"{val:,.2f}")
-                    raw_values.append(f"{val:.2f}")
 
-        # Format deltas
+        # Format QoQ and YoY deltas
         qoq_val = metric["qoq"]
         yoy_val = metric["yoy"]
 
@@ -1520,11 +1519,35 @@ def format_raw_metrics_table(
                 yoy_display = f"{yoy_val:+.1f}%"
                 yoy_raw = f"{yoy_val:.1f}"
 
+        # Calculate multi-year deltas (2Y, 3Y, 4Y, 5Y) for TSV only
+        # History is 8 quarters: [Q-7, Q-6, Q-5, Q-4, Q-3, Q-2, Q-1, Current]
+        # 2Y = compare current to Q-7 (index 0), 8 quarters back
+        # 3Y = would need 12 quarters, 4Y = 16, 5Y = 20 - not available with 8Q
+        # With 8 quarters, we can only calculate up to ~2Y reliably
+        # For now, calculate based on available data positions
+        multi_year_deltas = []
+        for years_back, quarters_back in [(2, 8), (3, 12), (4, 16), (5, 20)]:
+            # Index into history (0 = oldest, -1 = current)
+            idx = len(history_values) - quarters_back
+            if idx >= 0 and current_val is not None and history_values[idx] is not None:
+                old_val = history_values[idx]
+                if old_val != 0:
+                    if is_bps:
+                        delta = current_val - old_val
+                        multi_year_deltas.append(f"{delta:.0f}")
+                    else:
+                        delta_pct = ((current_val - old_val) / abs(old_val)) * 100
+                        multi_year_deltas.append(f"{delta_pct:.1f}")
+                else:
+                    multi_year_deltas.append("")
+            else:
+                multi_year_deltas.append("")
+
         rows.append(
             {
                 "metric": param,
-                "type": display_type,
                 "values": formatted_values,
+                "type": display_type,
                 "qoq": qoq_display,
                 "yoy": yoy_display,
                 "qoq_direction": qoq_direction,
@@ -1532,8 +1555,8 @@ def format_raw_metrics_table(
             }
         )
 
-        # Build TSV row for copy/paste
-        tsv_row = [param, display_type] + raw_values + [qoq_raw, yoy_raw]
+        # Build TSV row for copy/paste (includes multi-year deltas)
+        tsv_row = [param] + raw_values + [display_type, qoq_raw, yoy_raw] + multi_year_deltas
         tsv_lines.append("\t".join(tsv_row))
 
     return {
