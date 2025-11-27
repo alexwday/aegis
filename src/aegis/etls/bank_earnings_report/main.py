@@ -391,6 +391,7 @@ async def extract_all_sections(
         DEFAULT_CORE_METRICS,
     )
     from .extraction.analyst_focus import extract_analyst_focus
+    from .extraction.management_narrative import extract_transcript_quotes
 
     execution_id = context.get("execution_id")
     db_symbol = f"{bank_info['bank_symbol']}-CA"
@@ -639,8 +640,36 @@ async def extract_all_sections(
     # Key Metrics Items of Note - placeholder (template uses .source and .entries)
     sections["1_keymetrics_items"] = {"source": "Supp Pack", "entries": []}
 
-    # Narrative - placeholder (template uses .entries)
-    sections["2_narrative"] = {"entries": []}
+    # =========================================================================
+    # Section 2: Management Narrative (transcript quotes)
+    # Future: Will also include RTS summaries and LLM-based ordering
+    # =========================================================================
+    logger.info(
+        "etl.bank_earnings_report.management_narrative_start",
+        execution_id=execution_id,
+    )
+
+    transcript_quotes = await extract_transcript_quotes(
+        bank_info=bank_info,
+        fiscal_year=fiscal_year,
+        quarter=quarter,
+        context=context,
+        num_quotes=5,
+    )
+
+    sections["2_narrative"] = {"entries": transcript_quotes}
+
+    # Add to debug log
+    llm_debug_log["sections"]["2_narrative"] = {
+        "transcript_quotes": len(transcript_quotes),
+        "speakers": [q.get("speaker", "") for q in transcript_quotes],
+    }
+
+    logger.info(
+        "etl.bank_earnings_report.section_complete",
+        section="2_narrative",
+        transcript_quotes=len(transcript_quotes),
+    )
 
     # =========================================================================
     # Section 3: Analyst Focus (from transcripts + LLM extraction)

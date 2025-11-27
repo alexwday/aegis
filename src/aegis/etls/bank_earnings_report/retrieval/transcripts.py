@@ -1,8 +1,9 @@
 """
 Transcript retrieval utilities for Bank Earnings Report ETL.
 
-Retrieves Q&A sections from earnings call transcripts and groups them by qa_group_id
-for individual LLM processing.
+Retrieves transcript sections from earnings call transcripts:
+- Q&A sections: grouped by qa_group_id for individual LLM processing
+- MD (Management Discussion) sections: grouped by speaker_block_id for quote extraction
 """
 
 from typing import Any, Dict, List
@@ -339,3 +340,244 @@ def get_qa_group_summary(chunks: List[Dict[str, Any]]) -> Dict[str, Any]:
         "topics": chunks[0].get("classification_names", []),
         "summary": chunks[0].get("block_summary", ""),
     }
+
+
+# =============================================================================
+# Management Discussion (MD) Section Retrieval
+# =============================================================================
+
+
+async def retrieve_md_chunks(
+    bank_id: int,
+    fiscal_year: int,
+    quarter: str,
+    context: Dict[str, Any],
+) -> List[Dict[str, Any]]:
+    """
+    Retrieve all Management Discussion section chunks from the transcript.
+
+    Args:
+        bank_id: Bank ID
+        fiscal_year: Fiscal year
+        quarter: Quarter (e.g., "Q2")
+        context: Execution context
+
+    Returns:
+        List of transcript chunks for MD section
+    """
+    logger = get_logger()
+    execution_id = context.get("execution_id")
+    bank_id_str = str(bank_id)
+
+    try:
+        async with get_connection() as conn:
+            # First get diagnostic count
+            count_query = text(
+                """
+                SELECT COUNT(*) FROM aegis_transcripts
+                WHERE (institution_id = :bank_id_str OR institution_id::text = :bank_id_str)
+                    AND fiscal_year = :fiscal_year
+                    AND fiscal_quarter = :quarter
+                    AND section_name = 'MANAGEMENT DISCUSSION SECTION'
+                """
+            )
+            count_result = await conn.execute(
+                count_query,
+                {
+                    "bank_id_str": bank_id_str,
+                    "fiscal_year": fiscal_year,
+                    "quarter": quarter,
+                },
+            )
+            md_chunk_count = count_result.scalar()
+
+            # Get distinct speaker blocks
+            block_count_query = text(
+                """
+                SELECT COUNT(DISTINCT speaker_block_id) FROM aegis_transcripts
+                WHERE (institution_id = :bank_id_str OR institution_id::text = :bank_id_str)
+                    AND fiscal_year = :fiscal_year
+                    AND fiscal_quarter = :quarter
+                    AND section_name = 'MANAGEMENT DISCUSSION SECTION'
+                    AND speaker_block_id IS NOT NULL
+                """
+            )
+            block_result = await conn.execute(
+                block_count_query,
+                {
+                    "bank_id_str": bank_id_str,
+                    "fiscal_year": fiscal_year,
+                    "quarter": quarter,
+                },
+            )
+            speaker_block_count = block_result.scalar()
+
+            logger.info(
+                "etl.bank_earnings_report.md_diagnostics",
+                execution_id=execution_id,
+                bank_id=bank_id,
+                fiscal_year=fiscal_year,
+                quarter=quarter,
+                md_chunks=md_chunk_count,
+                speaker_blocks=speaker_block_count,
+            )
+
+            # Retrieve all MD chunks
+            query = text(
+                """
+                SELECT
+                    id,
+                    section_name,
+                    speaker_block_id,
+                    qa_group_id,
+                    chunk_id,
+                    chunk_content,
+                    block_summary,
+                    classification_ids,
+                    classification_names,
+                    title
+                FROM aegis_transcripts
+                WHERE (institution_id = :bank_id_str OR institution_id::text = :bank_id_str)
+                    AND fiscal_year = :fiscal_year
+                    AND fiscal_quarter = :quarter
+                    AND section_name = 'MANAGEMENT DISCUSSION SECTION'
+                ORDER BY speaker_block_id, chunk_id
+                """
+            )
+
+            result = await conn.execute(
+                query,
+                {
+                    "bank_id_str": bank_id_str,
+                    "fiscal_year": fiscal_year,
+                    "quarter": quarter,
+                },
+            )
+
+            chunks = []
+            for row in result:
+                # Only include chunks with valid speaker_block_id
+                if row[2] is not None:
+                    chunks.append(
+                        {
+                            "id": row[0],
+                            "section_name": row[1],
+                            "speaker_block_id": row[2],
+                            "qa_group_id": row[3],
+                            "chunk_id": row[4],
+                            "content": row[5],
+                            "block_summary": row[6],
+                            "classification_ids": row[7],
+                            "classification_names": row[8],
+                            "title": row[9],
+                        }
+                    )
+
+            logger.info(
+                "etl.bank_earnings_report.md_chunks_retrieved",
+                execution_id=execution_id,
+                chunks_count=len(chunks),
+                speaker_blocks_expected=speaker_block_count,
+            )
+
+            return chunks
+
+    except Exception as e:
+        logger.error(
+            "etl.bank_earnings_report.md_retrieval_error",
+            execution_id=execution_id,
+            error=str(e),
+        )
+        return []
+
+
+def group_chunks_by_speaker_block(chunks: List[Dict[str, Any]]) -> Dict[int, List[Dict[str, Any]]]:
+    """
+    Group MD chunks by their speaker_block_id.
+
+    Each speaker_block_id represents a single speaker's remarks.
+
+    Args:
+        chunks: List of MD transcript chunks
+
+    Returns:
+        Dict mapping speaker_block_id to list of chunks in that block
+    """
+    groups: Dict[int, List[Dict[str, Any]]] = {}
+
+    for chunk in chunks:
+        block_id = chunk.get("speaker_block_id")
+        if block_id is not None:
+            if block_id not in groups:
+                groups[block_id] = []
+            groups[block_id].append(chunk)
+
+    # Sort chunks within each group by chunk_id
+    for block_id in groups:
+        groups[block_id].sort(key=lambda x: x.get("chunk_id", 0))
+
+    return groups
+
+
+def format_md_section_for_llm(
+    chunks: List[Dict[str, Any]],
+    bank_name: str,
+    quarter: str,
+    fiscal_year: int,
+) -> str:
+    """
+    Format the entire MD section for LLM processing.
+
+    Groups chunks by speaker_block_id and presents them in order.
+
+    Args:
+        chunks: List of MD chunks (will be grouped internally)
+        bank_name: Bank name for context
+        quarter: Quarter
+        fiscal_year: Fiscal year
+
+    Returns:
+        Formatted text of the entire MD section
+    """
+    if not chunks:
+        return ""
+
+    # Group by speaker block
+    groups = group_chunks_by_speaker_block(chunks)
+    sorted_block_ids = sorted(groups.keys())
+
+    # Build header
+    formatted = f"""# Management Discussion Section
+
+**Bank:** {bank_name}
+**Period:** {quarter} {fiscal_year}
+**Total Speaker Blocks:** {len(sorted_block_ids)}
+
+---
+
+"""
+
+    # Format each speaker block
+    for block_id in sorted_block_ids:
+        block_chunks = groups[block_id]
+
+        # Get metadata from first chunk
+        block_summary = block_chunks[0].get("block_summary", "")
+        classification_names = block_chunks[0].get("classification_names", [])
+
+        # Concatenate all chunk content
+        full_content = "\n\n".join(
+            chunk.get("content", "") for chunk in block_chunks if chunk.get("content")
+        )
+
+        formatted += f"## Speaker Block {block_id}\n\n"
+
+        if block_summary:
+            formatted += f"**Summary:** {block_summary}\n"
+
+        if classification_names:
+            formatted += f"**Topics:** {', '.join(classification_names)}\n"
+
+        formatted += f"\n{full_content}\n\n---\n\n"
+
+    return formatted

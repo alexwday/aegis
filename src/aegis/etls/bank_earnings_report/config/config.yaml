@@ -16,6 +16,10 @@ models:
   analyst_focus_extraction:
     tier: medium
 
+  # Management narrative transcript quote extraction - single call for full MD section
+  management_narrative_extraction:
+    tier: medium
+
 # LLM Parameters (applied to all calls)
 llm:
   temperature: 0.1  # Low temperature for factual extraction
