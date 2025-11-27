@@ -702,40 +702,40 @@
             -->
             {% if _1_keymetrics_raw.rows %}
             <div style="margin-top: 16px; text-align: center;">
-                <button id="raw-metrics-toggle" onclick="toggleRawMetrics()" style="background: none; border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px 16px; cursor: pointer; font-size: 11px; color: #64748b; transition: all 0.2s;">
+                <button id="raw-metrics-toggle" onclick="toggleRawMetrics()" style="background: none; border: 1px solid #e2e8f0; border-radius: 6px; padding: 6px 12px; cursor: pointer; font-size: 9px; color: #64748b; transition: all 0.2s;">
                     <span id="toggle-icon">▶</span> View All Enterprise Metrics ({{ _1_keymetrics_raw.rows|length }} metrics, 8Q history)
                 </button>
             </div>
 
-            <div id="raw-metrics-container" style="display: none; margin-top: 16px; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; max-width: 100%;">
+            <div id="raw-metrics-container" style="display: none; margin-top: 12px; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; max-width: 100%;">
                 <!-- Copy button -->
-                <div style="background: #f8fafc; padding: 8px 12px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center;">
-                    <span style="font-size: 11px; color: #64748b;">Select table data and copy, or use button:</span>
-                    <button onclick="copyRawMetrics()" style="background: #005587; color: white; border: none; border-radius: 4px; padding: 6px 12px; cursor: pointer; font-size: 11px;">
-                        Copy to Clipboard (TSV)
+                <div style="background: #f8fafc; padding: 6px 10px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700;">Select table data and copy, or use button</span>
+                    <button onclick="copyRawMetrics()" style="background: #005587; color: white; border: none; border-radius: 4px; padding: 4px 10px; cursor: pointer; font-size: 9px; font-weight: 600;">
+                        Copy to Clipboard
                     </button>
                 </div>
 
                 <!-- Scrollable table container (both vertical and horizontal) -->
-                <div style="max-height: 400px; overflow: auto;">
-                    <table id="raw-metrics-table" style="border-collapse: collapse; font-size: 11px; font-family: 'Consolas', 'Monaco', monospace; min-width: 100%;">
+                <div style="max-height: 350px; overflow: auto;">
+                    <table id="raw-metrics-table" style="border-collapse: collapse; font-size: 9px; font-family: 'Consolas', 'Monaco', monospace; min-width: 100%;">
                         <thead style="position: sticky; top: 0; background: #f1f5f9; z-index: 10;">
                             <tr>
                                 {% for header in _1_keymetrics_raw.headers %}
-                                <th style="padding: 8px 10px; text-align: {% if loop.index <= 2 %}left{% else %}right{% endif %}; border-bottom: 2px solid #e2e8f0; font-weight: 700; color: #334155; white-space: nowrap;">{{ header }}</th>
+                                <th style="padding: 5px 6px; text-align: {% if loop.index <= 2 %}left{% else %}right{% endif %}; border-bottom: 1px solid #e2e8f0; font-weight: 700; color: #64748b; white-space: nowrap; font-size: 8px; text-transform: uppercase;">{{ header }}</th>
                                 {% endfor %}
                             </tr>
                         </thead>
                         <tbody>
                             {% for row in _1_keymetrics_raw.rows %}
                             <tr style="background: {% if loop.index is odd %}#ffffff{% else %}#f8fafc{% endif %};">
-                                <td style="padding: 6px 10px; border-bottom: 1px solid #f0f4f8; font-weight: 600; color: #1e293b; white-space: nowrap;">{{ row.metric }}</td>
-                                <td style="padding: 6px 10px; border-bottom: 1px solid #f0f4f8; color: #64748b;">{{ row.units }}</td>
+                                <td style="padding: 4px 6px; border-bottom: 1px solid #f0f4f8; font-weight: 600; color: #1e293b; white-space: nowrap;">{{ row.metric }}</td>
+                                <td style="padding: 4px 6px; border-bottom: 1px solid #f0f4f8; color: #94a3b8;">{{ row.units }}</td>
                                 {% for val in row['values'] %}
-                                <td style="padding: 6px 10px; border-bottom: 1px solid #f0f4f8; text-align: right; color: #334155;">{{ val }}</td>
+                                <td style="padding: 4px 6px; border-bottom: 1px solid #f0f4f8; text-align: right; color: #334155;">{{ val }}</td>
                                 {% endfor %}
-                                <td style="padding: 6px 10px; border-bottom: 1px solid #f0f4f8; text-align: right;" class="delta {{ row.qoq_direction }}">{{ row.qoq }}</td>
-                                <td style="padding: 6px 10px; border-bottom: 1px solid #f0f4f8; text-align: right;" class="delta {{ row.yoy_direction }}">{{ row.yoy }}</td>
+                                <td style="padding: 4px 6px; border-bottom: 1px solid #f0f4f8; text-align: right; font-weight: 600;" class="delta {{ row.qoq_direction }}">{{ row.qoq }}</td>
+                                <td style="padding: 4px 6px; border-bottom: 1px solid #f0f4f8; text-align: right; font-weight: 600;" class="delta {{ row.yoy_direction }}">{{ row.yoy }}</td>
                             </tr>
                             {% endfor %}
                         </tbody>
