@@ -411,15 +411,16 @@ async def extract_rts_items_of_note(
     max_items: int = 10,
 ) -> Dict[str, Any]:
     """
-    Extract significant impact items from RTS regulatory filings.
+    Extract key highlights from RTS regulatory filings.
 
-    Items of Note are SPECIFIC EVENTS with quantifiable $ impact:
-    - Acquisitions, divestitures, major deals
-    - Fines, settlements, regulatory resolutions
-    - Litigation reserves, legal outcomes
-    - Restructuring charges, impairments
-    - One-time gains or losses
-    - Major contract wins/losses
+    Items of Note are HEADLINE-WORTHY events disclosed in the filing:
+    - Major M&A activity (acquisitions, divestitures)
+    - Significant impairments or write-downs
+    - Notable legal/regulatory matters
+    - Strategic restructuring programs
+    - Material one-time items
+
+    Focus on items that would appear in analyst reports, not routine disclosures.
 
     Args:
         bank_symbol: Bank symbol (e.g., "RY")
@@ -459,65 +460,75 @@ async def extract_rts_items_of_note(
     if not full_rts.strip() or full_rts == "No RTS content available.":
         return {"source": "RTS", "items": []}
 
-    system_prompt = """You are a senior financial analyst extracting significant impact items \
-from bank regulatory filings (RTS - Report to Shareholders).
+    system_prompt = """You are a senior financial analyst extracting KEY HIGHLIGHTS from \
+bank regulatory filings (RTS - Report to Shareholders) for an executive earnings summary.
 
 ## WHAT "ITEMS OF NOTE" MEANS
 
-Items of Note are SPECIFIC EVENTS that have a quantifiable dollar impact on the business. \
-These are high-profile items disclosed in regulatory filings that affect financial results.
+Items of Note are the HEADLINE-WORTHY events and decisions that investors and analysts \
+would want to know about. These are the significant developments that would be discussed \
+in analyst reports, earnings headlines, or investor presentations.
 
-## TYPES OF ITEMS TO EXTRACT
+Think: "What would make the financial news?" or "What would an analyst highlight to clients?"
 
-- **Acquisitions/Divestitures**: Deals, purchases, sales of businesses with disclosed values
-- **Regulatory**: Fines, settlements, consent orders, remediation costs
-- **Legal**: Litigation reserves, lawsuit settlements, legal judgments
-- **Restructuring**: Branch closures, severance, integration costs
-- **Impairments**: Goodwill writedowns, asset impairments, valuation adjustments
-- **One-time items**: Gains on sales, insurance recoveries, tax adjustments
-- **Credit provisions**: Significant PCL changes, loan write-offs with $ amounts
+## TYPES OF ITEMS TO EXTRACT (in order of importance)
+
+1. **Major M&A Activity**: Significant acquisitions, divestitures, or strategic transactions
+2. **Large Impairments/Write-downs**: Goodwill impairments, asset write-downs that are material
+3. **Significant Legal/Regulatory**: Major settlements, fines, or regulatory actions
+4. **Strategic Restructuring**: Major programs affecting headcount, branches, or operations
+5. **Notable One-Time Items**: Large gains or losses that materially affect results
+
+## MATERIALITY THRESHOLD
+
+Only extract items that are SIGNIFICANT to the bank's overall results:
+- Would this item be mentioned in earnings headlines?
+- Would analysts specifically ask about this on the earnings call?
+- Does this represent a meaningful portion of quarterly earnings?
 
 ## WHAT TO EXTRACT FOR EACH ITEM
 
-1. **Description**: What specifically happened (the event, not commentary about it)
-2. **Impact**: Dollar amount as stated. Use format like "+$150M" or "-$45M". Use "TBD" if not stated.
-3. **Segment**: Which business segment affected (e.g., "Canadian Banking", "Capital Markets", \
-"All", or "N/A")
-4. **Timing**: Is it recurring or one-time? Expected resolution date if applicable
+1. **Description**: Clear, specific description of the event (10-20 words)
+2. **Impact**: Dollar amount EXACTLY as stated in the filing. Format: '+$150M', '-$45M', '-$1.2B'. \
+Use "TBD" only if truly not quantified.
+3. **Segment**: Affected segment or "All" if enterprise-wide
+4. **Timing**: One-time, recurring, or expected duration
 
-## IMPORTANT RULES
+## WHAT NOT TO EXTRACT
 
-- Only extract SPECIFIC EVENTS with $ impact - not themes or observations
-- The event must be STATED in the filing, not assumed or implied
-- Focus on items explicitly quantified in the regulatory disclosure
-- If the RTS doesn't mention specific impact items, return fewer items or none
-- Do NOT fabricate items - only extract what is actually disclosed
+- Routine quarterly provisions or reserves (unless unusually large)
+- Standard operational items with dollar amounts (these are not "notable")
+- General performance commentary with numbers
+- Accounting adjustments that are routine
+- Items that would NOT warrant mention in an analyst summary
 
-## EXAMPLES OF GOOD ITEMS
+## EXAMPLES OF GOOD ITEMS (Headline-Worthy)
 
 | Description | Impact | Segment | Timing |
 |-------------|--------|---------|--------|
-| City National Bank integration costs | -$120M | U.S. Banking | Through 2025 |
-| Settlement of securities class action | -$85M | Capital Markets | Resolved Q2 |
-| Gain on sale of insurance business | +$340M | Wealth & Insurance | Q3 2024 |
-| Increased litigation provisions | -$200M | All | One-time |
-| Goodwill impairment in wealth segment | -$450M | Wealth & Insurance | Q2 2024 |
+| Acquisition of HSBC Canada operations | -$13.5B | Canadian Banking | Q1 2024 |
+| Goodwill impairment in City National | -$450M | U.S. Banking | Q2 2024 |
+| Settlement of securities class action lawsuit | -$85M | Capital Markets | Resolved Q2 |
+| Sale of asset management subsidiary | +$340M | Wealth Management | Q3 2024 |
+| Restructuring program for branch optimization | -$200M | Canadian Banking | Through 2025 |
 
 ## EXAMPLES OF BAD ITEMS (DO NOT EXTRACT)
 
-- "Credit quality remains stable" - qualitative observation
-- "We continue to invest in digital" - strategic initiative, no $ event
-- "Interest rates impacted margins" - general trend, not specific event
-- "Capital ratios exceed requirements" - status update, not an event"""
+- "PCL increased by $50M due to model updates" - routine provision adjustment
+- "Severance costs of $15M in the quarter" - too small, routine
+- "Technology investment of $100M" - operational spending, not a notable event
+- "FX translation impact of $30M" - accounting adjustment, not an event
+- "Higher trading revenue of $200M" - performance result, not an event"""
 
-    user_prompt = f"""Extract significant impact items from {bank_name}'s \
-{quarter} {fiscal_year} regulatory filing (RTS).
+    user_prompt = f"""Extract KEY HIGHLIGHTS from {bank_name}'s {quarter} {fiscal_year} \
+regulatory filing (RTS).
 
 {full_rts}
 
-Identify SPECIFIC EVENTS with dollar impact that are disclosed in this filing. Only extract \
-items that are explicitly mentioned with clear financial implications. If the filing doesn't \
-contain specific impact items, return an empty list - do not fabricate items."""
+Identify the HEADLINE-WORTHY events - major M&A, significant impairments, notable legal matters, \
+or strategic restructuring. Focus on items that would be mentioned in analyst reports or earnings \
+headlines. If there are no truly significant items, return a short list or empty - do not pad \
+with routine operational items."""
 
     tool_definition = {
         "type": "function",

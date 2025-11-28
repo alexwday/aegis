@@ -134,35 +134,34 @@ async def deduplicate_and_select_items(
 
     formatted_items = format_items_for_dedup(rts_items, transcript_items)
 
-    system_prompt = f"""You are a senior financial analyst reviewing Items of Note from two \
+    system_prompt = f"""You are a senior financial analyst combining Items of Note from two \
 sources for {bank_name}'s {quarter} {fiscal_year} earnings report.
 
 ## YOUR TASK
+
+The ONLY purpose of this step is to REMOVE DUPLICATES where both sources mention the same event. \
+We want to show a combined list without showing the same item twice.
 
 1. **Identify Duplicates**: Find items that refer to the SAME underlying event
    - Same acquisition/deal mentioned in both sources
    - Same regulatory matter or settlement
    - Same restructuring program or impairment
 
-2. **Select Best Version**: When duplicates exist, pick the item with:
-   - More precise dollar amount
-   - More specific timing
+2. **When Duplicates Exist**: Pick the version with MORE DETAIL:
+   - More precise dollar amount (actual number vs "TBD")
+   - More specific timing information
    - More detailed description
-   - Default to RTS if both are equally detailed (regulatory filing is authoritative)
+   - If truly equal in detail, pick either one - NO source preference
 
-3. **Rank by Significance**: Order unique items by:
-   - Magnitude of dollar impact (larger = more significant)
-   - Strategic importance (M&A > routine provisions)
-   - Investor interest (high-profile > routine)
-
-4. **Return Top {max_items}**: Select the {max_items} most significant unique items
+3. **Return Combined List**: Return up to {max_items} items total, removing only true duplicates
 
 ## IMPORTANT RULES
 
-- Two items are duplicates ONLY if they refer to the exact same event
+- Two items are duplicates ONLY if they refer to the EXACT SAME event
 - Items about similar topics (e.g., two different legal matters) are NOT duplicates
-- Preserve the original description, impact, segment, and timing from the selected source
-- Every returned item must include its source ("RTS" or "Transcript")"""
+- Do NOT prefer one source over another - choose purely based on detail level
+- Preserve the original description, impact, segment, and timing from the selected item
+- Keep items from BOTH sources in the final list (unless one has no unique items)"""
 
     user_prompt = f"""Review these Items of Note from {bank_name}'s {quarter} {fiscal_year} report:
 
@@ -299,7 +298,7 @@ def _fallback_combine(
     """
     Fallback combination without LLM deduplication.
 
-    Interleaves items from both sources, prioritizing RTS.
+    Interleaves items from both sources fairly (alternating).
 
     Args:
         rts_items: Items from RTS
@@ -311,13 +310,17 @@ def _fallback_combine(
     """
     combined = []
 
-    # Add RTS items first (more authoritative)
-    for item in rts_items:
-        combined.append({**item, "source": "RTS"})
+    # Interleave items from both sources fairly
+    rts_with_source = [{**item, "source": "RTS"} for item in rts_items]
+    transcript_with_source = [{**item, "source": "Transcript"} for item in transcript_items]
 
-    # Then transcript items
-    for item in transcript_items:
-        combined.append({**item, "source": "Transcript"})
+    # Alternate between sources
+    max_len = max(len(rts_with_source), len(transcript_with_source))
+    for i in range(max_len):
+        if i < len(rts_with_source):
+            combined.append(rts_with_source[i])
+        if i < len(transcript_with_source):
+            combined.append(transcript_with_source[i])
 
     return {
         "items": combined[:max_items],

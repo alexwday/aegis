@@ -198,17 +198,16 @@ async def extract_transcript_items_of_note(
     max_items: int = 10,
 ) -> Dict[str, Any]:
     """
-    Extract significant impact items from the Management Discussion section.
+    Extract key highlights from the Management Discussion section.
 
-    Items of Note are SPECIFIC EVENTS with quantifiable $ impact:
-    - Acquisitions, divestitures, major deals
-    - Fines, settlements, regulatory resolutions
-    - Litigation reserves, legal outcomes
-    - Restructuring charges, impairments
-    - One-time gains or losses
-    - Major contract wins/losses
+    Items of Note are HEADLINE-WORTHY events that management emphasized:
+    - Major M&A activity (acquisitions, divestitures)
+    - Significant impairments or write-downs
+    - Notable legal/regulatory matters
+    - Strategic restructuring programs
+    - Material one-time items
 
-    NOT general themes, observations, or qualitative commentary.
+    Focus on items that would appear in analyst takeaways, not routine commentary.
 
     Args:
         bank_info: Bank information dict with bank_id, bank_name, bank_symbol
@@ -256,64 +255,74 @@ async def extract_transcript_items_of_note(
     if not md_content.strip():
         return {"source": "Transcript", "items": []}
 
-    system_prompt = """You are a senior financial analyst extracting significant impact items \
-from bank earnings call transcripts.
+    system_prompt = """You are a senior financial analyst extracting KEY HIGHLIGHTS from \
+bank earnings call transcripts for an executive earnings summary.
 
 ## WHAT "ITEMS OF NOTE" MEANS
 
-Items of Note are SPECIFIC EVENTS that have a quantifiable dollar impact on the business. \
-These are high-profile items that affect financial results.
+Items of Note are the HEADLINE-WORTHY events and decisions that management specifically \
+calls out or emphasizes during the earnings call. These are the significant developments \
+that investors and analysts would want to highlight.
 
-## TYPES OF ITEMS TO EXTRACT
+Think: "What did management want investors to remember from this call?"
 
-- **Acquisitions/Divestitures**: Deals, purchases, sales of businesses
-- **Regulatory**: Fines, settlements, consent orders, remediation costs
-- **Legal**: Litigation reserves, lawsuit settlements, legal judgments
-- **Restructuring**: Branch closures, severance, integration costs
-- **Impairments**: Goodwill writedowns, asset impairments
-- **One-time items**: Gains on sales, insurance recoveries, tax adjustments
-- **Major contracts**: Significant wins or losses with $ impact
+## TYPES OF ITEMS TO EXTRACT (in order of importance)
+
+1. **Major M&A Activity**: Acquisitions, divestitures, strategic transactions management highlighted
+2. **Large Impairments/Write-downs**: Significant charges management called out
+3. **Notable Legal/Regulatory**: Settlements, fines, or regulatory matters discussed
+4. **Strategic Restructuring**: Major programs management announced or updated
+5. **Significant One-Time Items**: Material gains or losses management emphasized
+
+## MATERIALITY THRESHOLD
+
+Only extract items that management HIGHLIGHTED as significant:
+- Was this item specifically called out in prepared remarks?
+- Did management spend time explaining this item?
+- Would this appear in the earnings call headline?
 
 ## WHAT TO EXTRACT FOR EACH ITEM
 
-1. **Description**: What specifically happened (the event, not commentary about it)
-2. **Impact**: Dollar amount as stated. Use format like "+$150M" or "-$45M". Use "TBD" if not stated.
-3. **Segment**: Which business segment affected (e.g., "Canadian Banking", "Capital Markets", \
-"All", or "N/A")
-4. **Timing**: Is it recurring or one-time? Expected resolution date if applicable
+1. **Description**: Clear, specific description of what management announced (10-20 words)
+2. **Impact**: Dollar amount EXACTLY as stated by management. Format: '+$150M', '-$45M'. \
+Use "TBD" only if management discussed the item but didn't quantify it.
+3. **Segment**: Affected segment or "All" if enterprise-wide
+4. **Timing**: One-time, recurring, or expected duration as stated
 
-## IMPORTANT RULES
+## WHAT NOT TO EXTRACT
 
-- Only extract SPECIFIC EVENTS with $ impact - not themes or observations
-- The event must be STATED, not assumed or implied
-- If no $ amount is explicitly stated, use "TBD" - do NOT estimate
-- If the transcript doesn't mention specific impact items, return fewer items or none
-- Do NOT fabricate items - only extract what is actually mentioned
+- Performance results (revenue up, earnings beat) - these are results, not notable items
+- Forward guidance without specific events - general outlook is not an item
+- Routine operational updates with numbers
+- Items just mentioned in passing without emphasis
+- Anything that wouldn't be in an analyst's key takeaways
 
-## EXAMPLES OF GOOD ITEMS
+## EXAMPLES OF GOOD ITEMS (Management Highlighted)
 
 | Description | Impact | Segment | Timing |
 |-------------|--------|---------|--------|
-| HSBC Canada integration costs | -$150M | Canadian Banking | One-time, through 2025 |
-| Settlement of OSFI regulatory matter | -$45M | All | Resolved Q2 |
-| Sale of insurance subsidiary | +$200M | Wealth & Insurance | Expected Q3 |
-| Litigation reserve for class action | -$80M | Capital Markets | Resolution 2026 |
+| Completion of HSBC Canada acquisition | -$13.5B | Canadian Banking | Closed Q1 2024 |
+| City National goodwill impairment charge | -$450M | U.S. Banking | Q2 2024 |
+| Settlement of long-standing litigation | -$85M | Capital Markets | Resolved |
+| Branch network optimization program | -$200M | Canadian Banking | Through 2025 |
 
 ## EXAMPLES OF BAD ITEMS (DO NOT EXTRACT)
 
-- "M&A pipeline at highest level since 2021" - not a specific $ event
-- "Credit quality remains strong" - qualitative observation
-- "We expect continued growth" - forward guidance, not an event
-- "Trading performed well" - performance commentary, not an event"""
+- "Revenue increased 8% year-over-year" - performance result, not an event
+- "We're investing in digital capabilities" - ongoing strategy, not a notable item
+- "M&A pipeline remains strong" - commentary, not a specific event
+- "Credit costs were elevated" - performance observation, not a highlighted item
+- "We expect NIM to stabilize" - guidance, not an event"""
 
-    user_prompt = f"""Extract significant impact items from {bank_info['bank_name']}'s \
-{quarter} {fiscal_year} earnings call.
+    user_prompt = f"""Extract KEY HIGHLIGHTS from {bank_info['bank_name']}'s {quarter} \
+{fiscal_year} earnings call.
 
 {md_content}
 
-Identify SPECIFIC EVENTS with dollar impact. Only extract items that are explicitly mentioned \
-with clear financial implications. If the transcript doesn't contain specific impact items, \
-return an empty list - do not fabricate items."""
+Identify the HEADLINE-WORTHY items that management specifically called out or emphasized - \
+major M&A, significant charges, notable legal matters, or strategic programs. Focus on items \
+that would appear in analyst takeaways. If management didn't highlight any notable items, \
+return a short list or empty - do not pad with routine commentary."""
 
     tool_definition = {
         "type": "function",
