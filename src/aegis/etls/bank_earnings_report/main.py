@@ -1156,7 +1156,7 @@ async def save_to_database(
 
 
 async def generate_bank_earnings_report(
-    bank_name: str, fiscal_year: int, quarter: str, generate_pdf: bool = False
+    bank_name: str, fiscal_year: int, quarter: str, generate_pdf: bool = True
 ) -> str:
     """
     Generate a bank earnings report.
@@ -1165,7 +1165,7 @@ async def generate_bank_earnings_report(
         bank_name: ID, name, or symbol of the bank
         fiscal_year: Year (e.g., 2024)
         quarter: Quarter (e.g., "Q3")
-        generate_pdf: If True, also generate a PDF version of the report
+        generate_pdf: If True, also generate a PDF version of the report (default: True)
 
     Returns:
         Success/error message string
@@ -1321,16 +1321,17 @@ def main():
         "--quarter", required=True, choices=["Q1", "Q2", "Q3", "Q4"], help="Quarter"
     )
     parser.add_argument(
-        "--pdf",
+        "--no-pdf",
         action="store_true",
-        help="Also generate PDF report (6-page format with title bar on each page)",
+        help="Skip PDF generation (by default both HTML and PDF are generated)",
     )
 
     args = parser.parse_args()
 
     postgresql_prompts()
 
-    pdf_msg = " (with PDF)" if args.pdf else ""
+    generate_pdf = not args.no_pdf
+    pdf_msg = "" if generate_pdf else " (HTML only)"
     print(f"\n🔄 Generating report for {args.bank} {args.quarter} {args.year}{pdf_msg}...\n")
 
     result = asyncio.run(
@@ -1338,7 +1339,7 @@ def main():
             bank_name=args.bank,
             fiscal_year=args.year,
             quarter=args.quarter,
-            generate_pdf=args.pdf,
+            generate_pdf=generate_pdf,
         )
     )
 
