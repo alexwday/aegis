@@ -396,6 +396,7 @@ async def extract_all_sections(
         extract_transcript_overview,
         extract_transcript_items_of_note,
     )
+    from .retrieval.rts import get_segment_drivers_from_rts
 
     execution_id = context.get("execution_id")
     db_symbol = f"{bank_info['bank_symbol']}-CA"
@@ -844,12 +845,27 @@ async def extract_all_sections(
                 "reasoning": selection.get("reasoning", ""),
             }
 
-            # Get segment description from our config (placeholder for now)
-            # TODO: In future, this description will come from RTS driver narrative
-            segment_info = SEGMENT_METADATA.get(platform, {})
-            description = segment_info.get(
-                "description", f"Performance metrics for {platform} segment."
+            # Get segment drivers from RTS (regulatory filings)
+            # Falls back to static description from SEGMENT_METADATA if RTS unavailable
+            rts_drivers = await get_segment_drivers_from_rts(
+                bank=bank_info["bank_name"],
+                year=fiscal_year,
+                quarter=quarter,
+                segment_name=platform,
+                context=context,
+                top_k=20,
             )
+
+            if rts_drivers:
+                description = rts_drivers
+                segment_debug["segment_selections"][platform]["rts_drivers"] = True
+            else:
+                # Fallback to static description
+                segment_info = SEGMENT_METADATA.get(platform, {})
+                description = segment_info.get(
+                    "description", f"Performance metrics for {platform} segment."
+                )
+                segment_debug["segment_selections"][platform]["rts_drivers"] = False
 
             # Format the segment entry with both core and highlighted metrics
             segment_entry = format_segment_json(

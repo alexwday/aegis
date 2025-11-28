@@ -28,6 +28,10 @@ models:
   transcript_items_extraction:
     tier: medium
 
+  # RTS segment drivers extraction - synthesize drivers from regulatory filings
+  segment_drivers_extraction:
+    tier: medium
+
 # LLM Parameters (applied to all calls)
 llm:
   temperature: 0.1  # Low temperature for factual extraction
