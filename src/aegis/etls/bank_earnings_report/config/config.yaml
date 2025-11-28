@@ -8,10 +8,6 @@ models:
   key_metrics_selection:
     tier: medium
 
-  # Segment metrics selection - moderate complexity
-  segment_metrics_selection:
-    tier: medium
-
   # Analyst focus Q&A extraction - one call per Q&A exchange
   analyst_focus_extraction:
     tier: medium

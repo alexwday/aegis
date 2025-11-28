@@ -357,7 +357,6 @@ async def extract_all_sections(
     )
     from .extraction.key_metrics import select_chart_and_tile_metrics, KEY_METRICS
     from .extraction.segment_metrics import (
-        select_top_segment_metrics,
         MONITORED_PLATFORMS,
         CORE_SEGMENT_METRICS,
         DEFAULT_CORE_METRICS,
@@ -753,21 +752,9 @@ async def extract_all_sections(
                 if core_name in metrics_by_name:
                     core_metrics_data.append(metrics_by_name[core_name])
 
-            selection = await select_top_segment_metrics(
-                metrics=segment_metrics,
-                segment_name=platform,
-                bank_name=bank_info["bank_name"],
-                quarter=quarter,
-                fiscal_year=fiscal_year,
-                context=context,
-                num_metrics=3,
-            )
-
             segment_debug["segment_selections"][platform] = {
                 "available_metrics": len(segment_metrics),
                 "core_metrics": [m["parameter"] for m in core_metrics_data],
-                "selected_metrics": selection.get("selected_metrics", []),
-                "reasoning": selection.get("reasoning", ""),
             }
 
             description = all_segment_drivers.get(platform, "")
@@ -777,7 +764,6 @@ async def extract_all_sections(
                 segment_name=platform,
                 description=description,
                 core_metrics=core_metrics_data,
-                highlighted_metrics=selection.get("metrics_data", []),
             )
 
             segment_metrics_history = await retrieve_segment_metrics_with_history(
@@ -802,7 +788,6 @@ async def extract_all_sections(
                 execution_id=execution_id,
                 segment=platform,
                 core_metrics=len(core_metrics_data),
-                highlighted_metrics=len(selection.get("metrics_data", [])),
                 raw_table_rows=len(segment_entry["raw_table"].get("rows", [])),
             )
         else:
