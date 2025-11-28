@@ -21,7 +21,7 @@ import traceback
 import uuid
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
 
 from aegis.connections.llm_connector import embed
 from aegis.connections.oauth_connector import setup_authentication
@@ -265,20 +265,32 @@ async def get_sample_chunks(
                 # Parse and count propositions
                 if chunk["propositions"]:
                     try:
-                        props = json.loads(chunk["propositions"])
-                        print(f"   Propositions: {len(props)} items")
-                    except json.JSONDecodeError:
-                        print("   Propositions: [parse error]")
+                        # Handle both JSON string and already-parsed list/array
+                        props = chunk["propositions"]
+                        if isinstance(props, str):
+                            props = json.loads(props)
+                        if isinstance(props, (list, tuple)):
+                            print(f"   Propositions: {len(props)} items")
+                        else:
+                            print(f"   Propositions: {type(props).__name__}")
+                    except (json.JSONDecodeError, TypeError) as parse_err:
+                        print(f"   Propositions: [parse error: {parse_err}]")
                 else:
                     print("   Propositions: None")
 
                 # Parse and count tables
                 if chunk["tables"]:
                     try:
-                        tables = json.loads(chunk["tables"])
-                        print(f"   Tables: {len(tables)} items")
-                    except json.JSONDecodeError:
-                        print("   Tables: [parse error]")
+                        # Handle both JSON string and already-parsed list/array
+                        tables = chunk["tables"]
+                        if isinstance(tables, str):
+                            tables = json.loads(tables)
+                        if isinstance(tables, (list, tuple)):
+                            print(f"   Tables: {len(tables)} items")
+                        else:
+                            print(f"   Tables: {type(tables).__name__}")
+                    except (json.JSONDecodeError, TypeError) as parse_err:
+                        print(f"   Tables: [parse error: {parse_err}]")
                 else:
                     print("   Tables: None")
 
@@ -290,7 +302,7 @@ async def get_sample_chunks(
     return chunks
 
 
-async def inspect_chunk_detail(chunk_id: int) -> Optional[Dict[str, Any]]:
+async def inspect_chunk_detail(chunk_id: int) -> Optional[Dict[str, Any]]:  # pylint: disable=too-many-statements
     """
     Get detailed view of a single chunk including full text and parsed JSON.
 
@@ -370,14 +382,23 @@ async def inspect_chunk_detail(chunk_id: int) -> Optional[Dict[str, Any]]:
             print("\n💡 Propositions:")
             if chunk["propositions"]:
                 try:
-                    props = json.loads(chunk["propositions"])
-                    print(f"   Count: {len(props)}")
-                    for i, prop in enumerate(props[:5], 1):
-                        print(f"   {i}. {prop}")
-                    if len(props) > 5:
-                        print(f"   ... and {len(props) - 5} more")
-                except json.JSONDecodeError as e:
-                    print(f"   [JSON parse error: {e}]")
+                    # Handle both JSON string and already-parsed list/array
+                    props = chunk["propositions"]
+                    if isinstance(props, str):
+                        props = json.loads(props)
+                    if isinstance(props, (list, tuple)):
+                        print(f"   Count: {len(props)}")
+                        for i, prop in enumerate(props[:5], 1):
+                            print(f"   {i}. {prop}")
+                        if len(props) > 5:
+                            print(f"   ... and {len(props) - 5} more")
+                    else:
+                        print(f"   Type: {type(props).__name__}")
+                        print(f"   Value: {str(props)[:200]}")
+                except (json.JSONDecodeError, TypeError) as e:
+                    print(f"   [parse error: {e}]")
+                    print(f"   Raw type: {type(chunk['propositions']).__name__}")
+                    print(f"   Raw value: {str(chunk['propositions'])[:200]}")
             else:
                 print("   [none]")
 
@@ -385,13 +406,22 @@ async def inspect_chunk_detail(chunk_id: int) -> Optional[Dict[str, Any]]:
             print("\n📊 Tables:")
             if chunk["tables"]:
                 try:
-                    tables = json.loads(chunk["tables"])
-                    print(f"   Count: {len(tables)}")
-                    for i, table in enumerate(tables[:2], 1):
-                        preview = table[:200] if len(table) > 200 else table
-                        print(f"   Table {i}: {preview}...")
-                except json.JSONDecodeError as e:
-                    print(f"   [JSON parse error: {e}]")
+                    # Handle both JSON string and already-parsed list/array
+                    tables = chunk["tables"]
+                    if isinstance(tables, str):
+                        tables = json.loads(tables)
+                    if isinstance(tables, (list, tuple)):
+                        print(f"   Count: {len(tables)}")
+                        for i, table in enumerate(tables[:2], 1):
+                            preview = str(table)[:200] if len(str(table)) > 200 else str(table)
+                            print(f"   Table {i}: {preview}...")
+                    else:
+                        print(f"   Type: {type(tables).__name__}")
+                        print(f"   Value: {str(tables)[:200]}")
+                except (json.JSONDecodeError, TypeError) as e:
+                    print(f"   [parse error: {e}]")
+                    print(f"   Raw type: {type(chunk['tables']).__name__}")
+                    print(f"   Raw value: {str(chunk['tables'])[:200]}")
             else:
                 print("   [none]")
 
@@ -454,7 +484,7 @@ async def test_similarity_search(
         query_embedding = embedding_response["data"][0]["embedding"]
         print(f"✅ Generated embedding ({len(query_embedding)} dimensions)")
 
-        # Format embedding for PostgreSQL
+        # Format embedding for PostgreSQL - use string format for halfvec
         embedding_str = "[" + ",".join(str(x) for x in query_embedding) + "]"
 
         # Perform similarity search
@@ -463,32 +493,32 @@ async def test_similarity_search(
         async with get_connection() as conn:
             # Using cosine distance (1 - cosine_similarity)
             # Lower distance = more similar
-            result = await conn.execute(
-                text(
-                    """
-                    SELECT
-                        id,
-                        chunk_id,
-                        page_no,
-                        summary_title,
-                        source_section,
-                        raw_text,
-                        propositions,
-                        embedding <=> :query_embedding::halfvec AS distance
-                    FROM rts_embedding
-                    WHERE bank = :bank AND year = :year AND quarter = :quarter
-                    ORDER BY embedding <=> :query_embedding::halfvec
-                    LIMIT :top_k
-                    """
-                ),
-                {
-                    "query_embedding": embedding_str,
-                    "bank": bank,
-                    "year": year,
-                    "quarter": quarter,
-                    "top_k": top_k,
-                },
+            # Note: Using $1 style placeholders and raw SQL to avoid SQLAlchemy
+            # parameter parsing issues with the :: cast operator and array literals
+            sql = text(
+                """
+                SELECT
+                    id,
+                    chunk_id,
+                    page_no,
+                    summary_title,
+                    source_section,
+                    raw_text,
+                    propositions,
+                    embedding <=> cast(:query_embedding as halfvec) AS distance
+                FROM rts_embedding
+                WHERE bank = :bank AND year = :year AND quarter = :quarter
+                ORDER BY embedding <=> cast(:query_embedding as halfvec)
+                LIMIT :top_k
+                """
+            ).bindparams(
+                bindparam("query_embedding", value=embedding_str),
+                bindparam("bank", value=bank),
+                bindparam("year", value=year),
+                bindparam("quarter", value=quarter),
+                bindparam("top_k", value=top_k),
             )
+            result = await conn.execute(sql)
 
             print(f"\n📊 Top {top_k} Results:")
             print("-" * 80)
