@@ -12,13 +12,14 @@ Usage:
 
 import argparse
 import asyncio
+import base64
 import json
 import os
 import sys
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import yaml
 from jinja2 import Environment, FileSystemLoader
@@ -61,6 +62,46 @@ def _load_monitored_institutions() -> Dict[int, Dict[str, Any]]:
     return _MONITORED_INSTITUTIONS
 
 
+def _get_logos_dir() -> Path:
+    """Get the path to the logos directory."""
+    return Path(os.path.dirname(__file__)) / "config" / "logos"
+
+
+def load_logo_base64(logo_file: Optional[str]) -> Optional[str]:
+    """
+    Load a bank logo and encode it as base64 for embedding in HTML.
+
+    Args:
+        logo_file: Filename of the logo (e.g., "ry.png")
+
+    Returns:
+        Base64-encoded string of the logo, or None if not found
+    """
+    if not logo_file:
+        return None
+
+    logo_path = _get_logos_dir() / logo_file
+    if not logo_path.exists():
+        logger.warning(f"Logo file not found: {logo_path}")
+        return None
+
+    try:
+        with open(logo_path, "rb") as f:
+            return base64.b64encode(f.read()).decode("utf-8")
+    except (IOError, OSError) as e:
+        logger.warning(f"Failed to load logo {logo_file}: {e}")
+        return None
+
+
+# Default brand colors for banks without custom brand configuration
+DEFAULT_BRAND = {
+    "primary": "#005587",
+    "secondary": "#003366",
+    "accent": "#FFFFFF",
+    "logo_file": None,
+}
+
+
 def get_bank_info_from_config(bank_identifier: str) -> Dict[str, Any]:
     """
     Look up bank from monitored institutions configuration file.
@@ -69,43 +110,37 @@ def get_bank_info_from_config(bank_identifier: str) -> Dict[str, Any]:
         bank_identifier: Bank ID (as string/int), symbol (e.g., "RY"), or name
 
     Returns:
-        Dictionary with bank_id, bank_name, bank_symbol, bank_type
+        Dictionary with bank_id, bank_name, bank_symbol, bank_type, brand
 
     Raises:
         ValueError: If bank not found in monitored institutions
     """
     institutions = _load_monitored_institutions()
 
+    def _build_bank_info(inst: Dict[str, Any]) -> Dict[str, Any]:
+        """Build standardized bank info dict including brand data."""
+        return {
+            "bank_id": inst["id"],
+            "bank_name": inst["name"],
+            "bank_symbol": inst["symbol"],
+            "bank_type": inst["type"],
+            "brand": inst.get("brand", DEFAULT_BRAND),
+        }
+
     if bank_identifier.isdigit():
         bank_id = int(bank_identifier)
         if bank_id in institutions:
-            inst = institutions[bank_id]
-            return {
-                "bank_id": inst["id"],
-                "bank_name": inst["name"],
-                "bank_symbol": inst["symbol"],
-                "bank_type": inst["type"],
-            }
+            return _build_bank_info(institutions[bank_id])
 
     bank_identifier_upper = bank_identifier.upper()
     bank_identifier_lower = bank_identifier.lower()
 
     for inst in institutions.values():
         if inst["symbol"].upper() == bank_identifier_upper:
-            return {
-                "bank_id": inst["id"],
-                "bank_name": inst["name"],
-                "bank_symbol": inst["symbol"],
-                "bank_type": inst["type"],
-            }
+            return _build_bank_info(inst)
 
         if bank_identifier_lower in inst["name"].lower():
-            return {
-                "bank_id": inst["id"],
-                "bank_name": inst["name"],
-                "bank_symbol": inst["symbol"],
-                "bank_type": inst["type"],
-            }
+            return _build_bank_info(inst)
 
     available = [f"{inst['symbol']} ({inst['name']})" for inst in institutions.values()]
     raise ValueError(
@@ -303,19 +338,30 @@ def extract_header_params(
     Generate header parameters (no LLM needed - direct input).
 
     Args:
-        bank_info: Bank information dict
+        bank_info: Bank information dict (includes brand configuration)
         fiscal_year: Fiscal year
         quarter: Quarter
 
     Returns:
-        Header params JSON structure
+        Header params JSON structure with bank name, period info, brand colors, and logo
     """
+    brand = bank_info.get("brand", DEFAULT_BRAND)
+    logo_file = brand.get("logo_file")
+    logo_base64 = load_logo_base64(logo_file)
+
     return {
         "bank_name": bank_info["bank_name"],
+        "bank_symbol": bank_info["bank_symbol"],
         "fiscal_quarter": quarter,
         "fiscal_year": str(fiscal_year),
         "period_ending": get_period_ending_date(fiscal_year, quarter),
         "currency": "CAD",
+        "logo_base64": logo_base64,
+        "brand": {
+            "primary": brand.get("primary", "#005587"),
+            "secondary": brand.get("secondary", "#003366"),
+            "accent": brand.get("accent", "#FFFFFF"),
+        },
     }
 
 

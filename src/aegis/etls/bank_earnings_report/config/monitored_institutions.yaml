@@ -1,11 +1,71 @@
 # Monitored Financial Institutions - Canadian Banks Only
-# Format: ticker: {id, name, type, path_safe_name}
+# Format: ticker: {id, name, type, path_safe_name, brand}
 # IDs match the shared institution IDs used across Aegis
+# Brand colors sourced from official brand guidelines
 
 # Canadian Banks (6)
-RY-CA: {id: 1, name: "Royal Bank of Canada", type: "Canadian_Banks", path_safe_name: "RY-CA_Royal_Bank_of_Canada"}
-BMO-CA: {id: 2, name: "Bank of Montreal", type: "Canadian_Banks", path_safe_name: "BMO-CA_Bank_of_Montreal"}
-CM-CA: {id: 3, name: "Canadian Imperial Bank of Commerce", type: "Canadian_Banks", path_safe_name: "CM-CA_Canadian_Imperial_Bank_of_Commerce"}
-NA-CA: {id: 4, name: "National Bank of Canada", type: "Canadian_Banks", path_safe_name: "NA-CA_National_Bank_of_Canada"}
-BNS-CA: {id: 5, name: "Bank of Nova Scotia", type: "Canadian_Banks", path_safe_name: "BNS-CA_Bank_of_Nova_Scotia"}
-TD-CA: {id: 6, name: "Toronto-Dominion Bank", type: "Canadian_Banks", path_safe_name: "TD-CA_Toronto-Dominion_Bank"}
+RY-CA:
+  id: 1
+  name: "Royal Bank of Canada"
+  type: "Canadian_Banks"
+  path_safe_name: "RY-CA_Royal_Bank_of_Canada"
+  brand:
+    primary: "#005587"
+    secondary: "#003366"
+    accent: "#FFD700"
+    logo_file: "ry.png"
+
+BMO-CA:
+  id: 2
+  name: "Bank of Montreal"
+  type: "Canadian_Banks"
+  path_safe_name: "BMO-CA_Bank_of_Montreal"
+  brand:
+    primary: "#0079C2"
+    secondary: "#004170"
+    accent: "#FFFFFF"
+    logo_file: "bmo.png"
+
+CM-CA:
+  id: 3
+  name: "Canadian Imperial Bank of Commerce"
+  type: "Canadian_Banks"
+  path_safe_name: "CM-CA_Canadian_Imperial_Bank_of_Commerce"
+  brand:
+    primary: "#BB2227"
+    secondary: "#6B0012"
+    accent: "#FFFFFF"
+    logo_file: "cm.png"
+
+NA-CA:
+  id: 4
+  name: "National Bank of Canada"
+  type: "Canadian_Banks"
+  path_safe_name: "NA-CA_National_Bank_of_Canada"
+  brand:
+    primary: "#E31937"
+    secondary: "#B0001E"
+    accent: "#FFFFFF"
+    logo_file: "na.png"
+
+BNS-CA:
+  id: 5
+  name: "Bank of Nova Scotia"
+  type: "Canadian_Banks"
+  path_safe_name: "BNS-CA_Bank_of_Nova_Scotia"
+  brand:
+    primary: "#EC111A"
+    secondary: "#A50C12"
+    accent: "#FFFFFF"
+    logo_file: "bns.png"
+
+TD-CA:
+  id: 6
+  name: "Toronto-Dominion Bank"
+  type: "Canadian_Banks"
+  path_safe_name: "TD-CA_Toronto-Dominion_Bank"
+  brand:
+    primary: "#34A853"
+    secondary: "#1A5F2A"
+    accent: "#FFFFFF"
+    logo_file: "td.png"
