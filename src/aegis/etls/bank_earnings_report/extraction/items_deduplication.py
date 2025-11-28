@@ -67,7 +67,7 @@ async def deduplicate_and_select_items(
     quarter: str,
     fiscal_year: int,
     context: Dict[str, Any],
-    max_items: int = 8,
+    max_items: int = 10,
 ) -> Dict[str, Any]:
     """
     Deduplicate and select top items from RTS and transcript sources.

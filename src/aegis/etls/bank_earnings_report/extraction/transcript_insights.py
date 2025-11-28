@@ -195,7 +195,7 @@ async def extract_transcript_items_of_note(
     fiscal_year: int,
     quarter: str,
     context: Dict[str, Any],
-    max_items: int = 10,
+    max_items: int = 8,
 ) -> Dict[str, Any]:
     """
     Extract key highlights from the Management Discussion section.
@@ -255,64 +255,70 @@ async def extract_transcript_items_of_note(
     if not md_content.strip():
         return {"source": "Transcript", "items": []}
 
-    system_prompt = """You are a senior financial analyst extracting KEY HIGHLIGHTS from \
+    system_prompt = """You are a senior financial analyst extracting MAJOR BUSINESS HIGHLIGHTS from \
 bank earnings call transcripts for an executive earnings summary.
 
 ## WHAT "ITEMS OF NOTE" MEANS
 
-Items of Note are the HEADLINE-WORTHY events and decisions that management specifically \
-calls out or emphasizes during the earnings call. These are the significant developments \
-that investors and analysts would want to highlight.
+Items of Note are STRATEGIC BUSINESS EVENTS that management specifically calls out as significant. \
+These are the headline-worthy developments - acquisitions, divestitures, major charges, or strategic \
+programs that would be discussed in analyst reports or news articles.
 
-Think: "What did management want investors to remember from this call?"
+Think: "What BUSINESS EVENTS did management announce or highlight?" (not performance results)
 
-## TYPES OF ITEMS TO EXTRACT (in order of importance)
+## TYPES OF ITEMS TO EXTRACT
 
-1. **Major M&A Activity**: Acquisitions, divestitures, strategic transactions management highlighted
-2. **Large Impairments/Write-downs**: Significant charges management called out
-3. **Notable Legal/Regulatory**: Settlements, fines, or regulatory matters discussed
-4. **Strategic Restructuring**: Major programs management announced or updated
-5. **Significant One-Time Items**: Material gains or losses management emphasized
+1. **Major Acquisitions**: Buying another company or business unit
+2. **Major Divestitures**: Selling a business unit or subsidiary
+3. **Significant Impairments**: Large goodwill or asset write-downs management called out
+4. **Major Legal/Regulatory Events**: Large settlements, significant fines, consent orders
+5. **Strategic Restructuring**: Major programs with material costs (branch closures, workforce reductions)
+6. **Significant One-Time Charges**: Material items management specifically highlighted
 
-## MATERIALITY THRESHOLD
+## WHAT NOT TO EXTRACT - VERY IMPORTANT
 
-Only extract items that management HIGHLIGHTED as significant:
-- Was this item specifically called out in prepared remarks?
-- Did management spend time explaining this item?
-- Would this appear in the earnings call headline?
+**Routine Capital Management Activities (NEVER extract these):**
+- Issuance or redemption of subordinated debentures
+- Issuance or redemption of capital notes (NVCC, Limited Recourse, etc.)
+- Redemption or issuance of preferred shares
+- Normal course issuer bid (NCIB) share repurchases
+- Regular dividend announcements
+- Debt refinancing
+
+These are routine treasury operations - NOT business highlights.
+
+**Other Items NOT to Extract:**
+- Performance results (revenue up, earnings beat, NIM improved)
+- Forward guidance or outlook commentary
+- Ongoing operational metrics with dollar amounts
+- Credit provision updates (unless tied to a specific extraordinary event)
+- General strategic commentary without a specific event
 
 ## WHAT TO EXTRACT FOR EACH ITEM
 
-1. **Description**: Clear, specific description of what management announced (10-20 words)
-2. **Impact**: Dollar amount EXACTLY as stated by management. Format: '+$150M', '-$45M'. \
-Use "TBD" only if management discussed the item but didn't quantify it.
+1. **Description**: Clear description of the BUSINESS EVENT (10-20 words)
+2. **Impact**: Dollar amount EXACTLY as stated. Format: '+$150M', '-$45M'. Use "TBD" if not quantified.
 3. **Segment**: Affected segment or "All" if enterprise-wide
-4. **Timing**: One-time, recurring, or expected duration as stated
+4. **Timing**: One-time, or expected duration
 
-## WHAT NOT TO EXTRACT
-
-- Performance results (revenue up, earnings beat) - these are results, not notable items
-- Forward guidance without specific events - general outlook is not an item
-- Routine operational updates with numbers
-- Items just mentioned in passing without emphasis
-- Anything that wouldn't be in an analyst's key takeaways
-
-## EXAMPLES OF GOOD ITEMS (Management Highlighted)
+## EXAMPLES OF GOOD ITEMS (Major Business Events)
 
 | Description | Impact | Segment | Timing |
 |-------------|--------|---------|--------|
 | Completion of HSBC Canada acquisition | -$13.5B | Canadian Banking | Closed Q1 2024 |
-| City National goodwill impairment charge | -$450M | U.S. Banking | Q2 2024 |
-| Settlement of long-standing litigation | -$85M | Capital Markets | Resolved |
-| Branch network optimization program | -$200M | Canadian Banking | Through 2025 |
+| Goodwill impairment charge for City National | -$450M | U.S. Banking | Q2 2024 |
+| Settlement of securities class action | -$85M | Capital Markets | Resolved |
+| Branch network restructuring program | -$200M | Canadian Banking | Through 2025 |
 
 ## EXAMPLES OF BAD ITEMS (DO NOT EXTRACT)
 
+- "Issued $2B in subordinated debentures" - routine capital management
+- "Redeemed Series AZ Preferred Shares" - routine preferred share activity
 - "Revenue increased 8% year-over-year" - performance result, not an event
-- "We're investing in digital capabilities" - ongoing strategy, not a notable item
-- "M&A pipeline remains strong" - commentary, not a specific event
-- "Credit costs were elevated" - performance observation, not a highlighted item
-- "We expect NIM to stabilize" - guidance, not an event"""
+- "NIM expanded by 5 basis points" - performance metric, not an event
+- "PCL was $450M this quarter" - routine provision update
+- "We're investing in digital capabilities" - ongoing strategy, not an event
+- "M&A pipeline remains strong" - commentary, not a specific event"""
 
     user_prompt = f"""Extract KEY HIGHLIGHTS from {bank_info['bank_name']}'s {quarter} \
 {fiscal_year} earnings call.

@@ -408,7 +408,7 @@ async def extract_rts_items_of_note(
     fiscal_year: int,
     quarter: str,
     context: Dict[str, Any],
-    max_items: int = 10,
+    max_items: int = 8,
 ) -> Dict[str, Any]:
     """
     Extract key highlights from RTS regulatory filings.
@@ -460,65 +460,71 @@ async def extract_rts_items_of_note(
     if not full_rts.strip() or full_rts == "No RTS content available.":
         return {"source": "RTS", "items": []}
 
-    system_prompt = """You are a senior financial analyst extracting KEY HIGHLIGHTS from \
+    system_prompt = """You are a senior financial analyst extracting MAJOR BUSINESS HIGHLIGHTS from \
 bank regulatory filings (RTS - Report to Shareholders) for an executive earnings summary.
 
 ## WHAT "ITEMS OF NOTE" MEANS
 
-Items of Note are the HEADLINE-WORTHY events and decisions that investors and analysts \
-would want to know about. These are the significant developments that would be discussed \
-in analyst reports, earnings headlines, or investor presentations.
+Items of Note are STRATEGIC BUSINESS EVENTS that change the company or materially affect earnings. \
+These are the headline-worthy developments that would be discussed in analyst reports, news articles, \
+or investor presentations.
 
-Think: "What would make the financial news?" or "What would an analyst highlight to clients?"
+Think: "Would this make the business news?" or "Would an analyst write about this specifically?"
 
-## TYPES OF ITEMS TO EXTRACT (in order of importance)
+## TYPES OF ITEMS TO EXTRACT
 
-1. **Major M&A Activity**: Significant acquisitions, divestitures, or strategic transactions
-2. **Large Impairments/Write-downs**: Goodwill impairments, asset write-downs that are material
-3. **Significant Legal/Regulatory**: Major settlements, fines, or regulatory actions
-4. **Strategic Restructuring**: Major programs affecting headcount, branches, or operations
-5. **Notable One-Time Items**: Large gains or losses that materially affect results
+1. **Major Acquisitions**: Buying another company or business unit (e.g., "Acquisition of HSBC Canada")
+2. **Major Divestitures**: Selling a business unit or subsidiary (e.g., "Sale of insurance division")
+3. **Significant Impairments**: Large goodwill or asset write-downs that affect earnings
+4. **Major Legal/Regulatory Events**: Large settlements, significant fines, consent orders
+5. **Strategic Restructuring**: Major programs with material costs (branch closures, workforce reductions)
+6. **Significant One-Time Charges**: Material items that notably impact quarterly earnings
 
-## MATERIALITY THRESHOLD
+## WHAT NOT TO EXTRACT - VERY IMPORTANT
 
-Only extract items that are SIGNIFICANT to the bank's overall results:
-- Would this item be mentioned in earnings headlines?
-- Would analysts specifically ask about this on the earnings call?
-- Does this represent a meaningful portion of quarterly earnings?
+**Routine Capital Management Activities (NEVER extract these):**
+- Issuance or redemption of subordinated debentures
+- Issuance or redemption of capital notes (NVCC, Limited Recourse, etc.)
+- Redemption of preferred shares (any series)
+- Issuance of preferred shares
+- Normal course issuer bid (NCIB) share repurchases
+- Regular dividend declarations
+- Debt refinancing or maturity extensions
+
+These are routine treasury operations that happen every quarter - NOT business highlights.
+
+**Other Items NOT to Extract:**
+- Quarterly provision for credit losses (PCL) - routine unless extraordinary
+- Performance results (revenue up, earnings beat) - results, not events
+- Ongoing operational costs with dollar amounts
+- FX translation impacts
+- Accounting adjustments
 
 ## WHAT TO EXTRACT FOR EACH ITEM
 
-1. **Description**: Clear, specific description of the event (10-20 words)
-2. **Impact**: Dollar amount EXACTLY as stated in the filing. Format: '+$150M', '-$45M', '-$1.2B'. \
-Use "TBD" only if truly not quantified.
+1. **Description**: Clear description of the BUSINESS EVENT (10-20 words)
+2. **Impact**: Dollar amount EXACTLY as stated. Format: '+$150M', '-$45M', '-$1.2B'. Use "TBD" if not quantified.
 3. **Segment**: Affected segment or "All" if enterprise-wide
-4. **Timing**: One-time, recurring, or expected duration
+4. **Timing**: One-time, or expected duration
 
-## WHAT NOT TO EXTRACT
-
-- Routine quarterly provisions or reserves (unless unusually large)
-- Standard operational items with dollar amounts (these are not "notable")
-- General performance commentary with numbers
-- Accounting adjustments that are routine
-- Items that would NOT warrant mention in an analyst summary
-
-## EXAMPLES OF GOOD ITEMS (Headline-Worthy)
+## EXAMPLES OF GOOD ITEMS (Major Business Events)
 
 | Description | Impact | Segment | Timing |
 |-------------|--------|---------|--------|
-| Acquisition of HSBC Canada operations | -$13.5B | Canadian Banking | Q1 2024 |
-| Goodwill impairment in City National | -$450M | U.S. Banking | Q2 2024 |
-| Settlement of securities class action lawsuit | -$85M | Capital Markets | Resolved Q2 |
+| Acquisition of HSBC Canada operations | -$13.5B | Canadian Banking | Closed Q1 2024 |
+| Goodwill impairment charge for City National | -$450M | U.S. Banking | Q2 2024 |
+| Settlement of securities class action lawsuit | -$85M | Capital Markets | Resolved |
 | Sale of asset management subsidiary | +$340M | Wealth Management | Q3 2024 |
-| Restructuring program for branch optimization | -$200M | Canadian Banking | Through 2025 |
+| Branch network restructuring program | -$200M | Canadian Banking | Through 2025 |
 
 ## EXAMPLES OF BAD ITEMS (DO NOT EXTRACT)
 
-- "PCL increased by $50M due to model updates" - routine provision adjustment
-- "Severance costs of $15M in the quarter" - too small, routine
-- "Technology investment of $100M" - operational spending, not a notable event
-- "FX translation impact of $30M" - accounting adjustment, not an event
-- "Higher trading revenue of $200M" - performance result, not an event"""
+- "Issued US$1.5B Limited Recourse Capital Notes" - routine capital management
+- "Redeemed $500M NVCC Subordinated Debentures" - routine debt management
+- "Redeemed Series BK First Preferred Shares" - routine preferred share activity
+- "Repurchased 2M common shares under NCIB" - normal course buyback
+- "PCL of $450M for the quarter" - routine provision (unless extraordinary event)
+- "Trading revenue increased $200M" - performance result, not an event"""
 
     user_prompt = f"""Extract KEY HIGHLIGHTS from {bank_name}'s {quarter} {fiscal_year} \
 regulatory filing (RTS).

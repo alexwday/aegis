@@ -642,13 +642,13 @@ async def extract_all_sections(
         execution_id=execution_id,
     )
 
-    # Extract items from both sources in parallel
+    # Extract items from both sources in parallel (max 8 each)
     transcript_items = await extract_transcript_items_of_note(
         bank_info=bank_info,
         fiscal_year=fiscal_year,
         quarter=quarter,
         context=context,
-        max_items=10,
+        max_items=8,
     )
 
     rts_items = await extract_rts_items_of_note(
@@ -657,10 +657,10 @@ async def extract_all_sections(
         fiscal_year=fiscal_year,
         quarter=quarter,
         context=context,
-        max_items=10,
+        max_items=8,
     )
 
-    # Deduplicate and select top items from both sources
+    # Deduplicate and select top items from both sources (max 10 total displayed)
     combined_items = await deduplicate_and_select_items(
         rts_items=rts_items.get("items", []),
         transcript_items=transcript_items.get("items", []),
@@ -668,7 +668,7 @@ async def extract_all_sections(
         quarter=quarter,
         fiscal_year=fiscal_year,
         context=context,
-        max_items=8,
+        max_items=10,
     )
 
     sections["1_keymetrics_items"] = {
