@@ -104,21 +104,14 @@
         .hero-title-group {
             display: flex;
             align-items: center;
-            gap: 20px;
             position: relative;
             z-index: 1;
         }
         .bank-logo {
-            height: 56px;
+            height: 48px;
             width: auto;
-            max-width: 120px;
             object-fit: contain;
-            filter: brightness(1.05);
             flex-shrink: 0;
-        }
-        .hero-title-text {
-            display: flex;
-            flex-direction: column;
         }
         .pill-row {
             display: flex;
@@ -561,17 +554,17 @@
              ============================================ -->
         <div class="hero full-row" style="background: linear-gradient(135deg, {{ _0_header_params.brand.secondary }} 0%, #0a0a0c 50%);">
             <div class="hero-title-group">
+                <div>
+                    <h1 style="font-size: 36px; font-family: 'Inter', sans-serif; font-weight: 600;">{{ _0_header_params.bank_name }}</h1>
+                    <div class="sub-header">Fiscal {{ _0_header_params.fiscal_quarter }} {{ _0_header_params.fiscal_year }} Report • Period Ending {{ _0_header_params.period_ending }}</div>
+                </div>
+            </div>
+            <div class="hero-right" style="display: flex; align-items: center; gap: 20px; width: fit-content; margin-left: auto; padding: 8px 16px;">
                 {% if _0_header_params.logo_base64 %}
                 <img src="data:image/png;base64,{{ _0_header_params.logo_base64 }}"
                      alt="{{ _0_header_params.bank_name }} Logo"
                      class="bank-logo">
                 {% endif %}
-                <div class="hero-title-text">
-                    <h1 style="font-size: 36px; font-family: 'Inter', sans-serif; font-weight: 600;">{{ _0_header_params.bank_name }}</h1>
-                    <div class="sub-header">Fiscal {{ _0_header_params.fiscal_quarter }} {{ _0_header_params.fiscal_year }} Report • Period Ending {{ _0_header_params.period_ending }}</div>
-                </div>
-            </div>
-            <div class="hero-right" style="display: flex; align-items: center; gap: 16px; width: fit-content; margin-left: auto; padding: 8px 16px;">
                 <div>
                     <div class="hero-label" style="font-size: 10px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 2px;">Quarterly Dividend</div>
                     <span class="dividend-amount" style="font-size: 24px; font-family: 'Inter', sans-serif; font-weight: 600;">{{ _0_header_dividend.dividend.amount }}</span>
