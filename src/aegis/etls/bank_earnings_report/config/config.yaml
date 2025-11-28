@@ -52,6 +52,10 @@ models:
   segment_drivers_extraction:
     tier: medium
 
+  # Capital & risk metrics extraction - extract from Pillar 3 disclosures
+  capital_risk_extraction:
+    tier: medium
+
 # LLM Parameters (applied to all calls)
 llm:
   temperature: 0.1  # Low temperature for factual extraction

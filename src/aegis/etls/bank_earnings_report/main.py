@@ -425,6 +425,7 @@ async def extract_all_sections(
         extract_rts_overview,
         extract_rts_narrative_paragraphs,
     )
+    from .extraction.capital_risk import extract_capital_risk_section
 
     execution_id = context.get("execution_id")
     db_symbol = f"{bank_info['bank_symbol']}-CA"
@@ -942,12 +943,27 @@ async def extract_all_sections(
         segments_found=len(segment_entries),
     )
 
-    sections["5_capital_risk"] = {
-        "source": "Pillar 3",
-        "regulatory_capital": [],
-        "rwa": {"components": [], "total": ""},
-        "liquidity_credit": [],
+    sections["5_capital_risk"] = await extract_capital_risk_section(
+        bank_symbol=bank_info["bank_symbol"],
+        bank_name=bank_info["bank_name"],
+        fiscal_year=fiscal_year,
+        quarter=quarter,
+        context=context,
+    )
+
+    llm_debug_log["sections"]["5_capital_risk"] = {
+        "capital_ratios": len(sections["5_capital_risk"].get("regulatory_capital", [])),
+        "rwa_components": len(sections["5_capital_risk"].get("rwa", {}).get("components", [])),
+        "liquidity_metrics": len(sections["5_capital_risk"].get("liquidity_credit", [])),
     }
+
+    logger.info(
+        "etl.bank_earnings_report.capital_risk_complete",
+        execution_id=execution_id,
+        capital_ratios=len(sections["5_capital_risk"].get("regulatory_capital", [])),
+        rwa_components=len(sections["5_capital_risk"].get("rwa", {}).get("components", [])),
+        liquidity_metrics=len(sections["5_capital_risk"].get("liquidity_credit", [])),
+    )
 
     logger.info(
         "etl.bank_earnings_report.extract_sections_complete",
