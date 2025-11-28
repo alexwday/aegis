@@ -302,7 +302,9 @@ async def get_sample_chunks(
     return chunks
 
 
-async def inspect_chunk_detail(chunk_id: int) -> Optional[Dict[str, Any]]:  # pylint: disable=too-many-statements
+async def inspect_chunk_detail(
+    chunk_id: int,
+) -> Optional[Dict[str, Any]]:  # pylint: disable=too-many-statements
     """
     Get detailed view of a single chunk including full text and parsed JSON.
 
@@ -437,6 +439,42 @@ async def inspect_chunk_detail(chunk_id: int) -> Optional[Dict[str, Any]]:  # py
 # =============================================================================
 
 
+def format_query_for_embedding(
+    query: str,
+    bank: str,
+    year: int,
+    quarter: str,
+) -> str:
+    """
+    Format a search query to match the indexed embedding format.
+
+    The rts_embedding table embeddings were created from labeled fields:
+    Bank + Quarter + Year + Summary + Section + Table Terms + Propositions
+
+    To maximize similarity scores, we construct query strings in the same format.
+
+    Args:
+        query: The search topic/terms
+        bank: Bank name
+        year: Fiscal year
+        quarter: Quarter
+
+    Returns:
+        Formatted query string matching the embedding index format
+    """
+    # Match the labeled field format used when creating embeddings
+    # The query terms go into Summary and Propositions fields since those
+    # contain the semantic content we're searching for
+    formatted = (
+        f"Bank: {bank} "
+        f"Quarter: {quarter} "
+        f"Year: {year} "
+        f"Summary: {query} "
+        f"Propositions: {query}"
+    )
+    return formatted
+
+
 # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals
 async def test_similarity_search(
     query: str,
@@ -450,7 +488,7 @@ async def test_similarity_search(
     Test embedding similarity search against RTS chunks.
 
     Args:
-        query: Search query text
+        query: Search query text (will be formatted to match embedding index)
         bank: Bank name to filter
         year: Fiscal year to filter
         quarter: Quarter to filter
@@ -469,10 +507,14 @@ async def test_similarity_search(
     results = []
 
     try:
-        # Generate embedding for query
+        # Format query to match the indexed embedding format
+        formatted_query = format_query_for_embedding(query, bank, year, quarter)
+        print(f"\n📝 Formatted query:\n   {formatted_query}")
+
+        # Generate embedding for formatted query
         print("\n⏳ Generating query embedding...")
         embedding_response = await embed(
-            input_text=query,
+            input_text=formatted_query,
             context=context,
             embedding_params={"model": "text-embedding-3-large", "dimensions": 3072},
         )
