@@ -542,8 +542,11 @@ contain specific impact items, return an empty list - do not fabricate items."""
                                 "impact": {
                                     "type": "string",
                                     "description": (
-                                        "Dollar impact with sign. Examples: '+$150M', '-$45M', "
-                                        "'~$100M', 'TBD'. Use M for millions, B for billions."
+                                        "Dollar impact ONLY - no additional text. "
+                                        "Format: sign + $ + number + unit. "
+                                        "Examples: '+$150M', '-$45M', '~$100M', '-$1.2B', 'TBD'. "
+                                        "Use M for millions, B for billions. "
+                                        "Do NOT add qualifiers like 'before-tax' or 'cumulative'."
                                     ),
                                 },
                                 "segment": {

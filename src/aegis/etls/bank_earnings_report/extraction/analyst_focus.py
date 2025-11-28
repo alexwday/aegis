@@ -394,7 +394,7 @@ async def extract_analyst_focus(
     quarter: str,
     context: Dict[str, Any],
     max_entries: int = 12,
-    num_featured: int = 3,
+    num_featured: int = 4,
 ) -> Dict[str, Any]:
     """
     Extract analyst focus entries from earnings call Q&A section.
