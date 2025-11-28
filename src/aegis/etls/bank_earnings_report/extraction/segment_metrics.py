@@ -18,15 +18,6 @@ from aegis.etls.bank_earnings_report.config.etl_config import etl_config
 from aegis.utils.logging import get_logger
 
 
-# =============================================================================
-# Monitored Segments - These are the business segments we track
-# =============================================================================
-
-# Standard business segment names used by Canadian Big 6 banks
-# These are the EXACT platform names as they appear in the benchmarking_report table
-# Only exact matches will be processed - no fuzzy matching
-
-# Monitored platforms in standard reporting order
 MONITORED_PLATFORMS = [
     "Canadian Banking",
     "U.S. & International Banking",
@@ -35,7 +26,6 @@ MONITORED_PLATFORMS = [
     "Corporate Support",
 ]
 
-# Segment metadata for LLM context and descriptions
 SEGMENT_METADATA = {
     "Canadian Banking": {
         "description": (
@@ -92,10 +82,6 @@ SEGMENT_METADATA = {
     },
 }
 
-
-# Core metrics per segment (left column of segment performance tiles)
-# These are the standard financial performance metrics shown for each segment
-# Selected by large LLM model based on cross-bank metric availability
 CORE_SEGMENT_METRICS = {
     "Canadian Banking": [
         "Net Income",
@@ -124,16 +110,12 @@ CORE_SEGMENT_METRICS = {
     ],
 }
 
-# Legacy: Generic core metrics (kept for backwards compatibility)
 DEFAULT_CORE_METRICS = [
     "Total Revenue",
     "Net Income",
     "Efficiency Ratio",
 ]
 
-
-# Metrics that are less relevant for segment-level analysis
-# (These are enterprise-level or capital metrics better shown elsewhere)
 EXCLUDED_SEGMENT_METRICS = [
     "CET1 Ratio",
     "CET1 Capital",
@@ -166,7 +148,6 @@ def is_monitored_platform(platform_name: str) -> bool:
     if not platform_name:
         return False
 
-    # Exact match only - no fuzzy matching
     return platform_name in MONITORED_PLATFORMS
 
 
@@ -188,20 +169,16 @@ def format_segment_metrics_for_llm(
     Returns:
         Formatted table string for LLM prompt
     """
-    # Import shared formatting functions
     from aegis.etls.bank_earnings_report.retrieval.supplementary import (
         format_value_for_llm,
         format_delta_for_llm,
     )
 
-    # Build exclusion set - exclude enterprise metrics AND core metrics (shown separately)
-    # Get core metrics for this specific segment, or use default
     segment_core_metrics = CORE_SEGMENT_METRICS.get(segment_name, DEFAULT_CORE_METRICS)
     exclude_set = (
         set(exclude_names or []) | set(EXCLUDED_SEGMENT_METRICS) | set(segment_core_metrics)
     )
 
-    # Filter to relevant metrics
     filtered_metrics = [m for m in metrics if m["parameter"] not in exclude_set]
 
     if not filtered_metrics:
@@ -279,32 +256,25 @@ async def select_top_segment_metrics(
             "metrics_data": [],
         }
 
-    # Get segment info for context
     segment_info = SEGMENT_METADATA.get(segment_name, {})
     segment_description = segment_info.get("description", "Business segment")
     key_focus_areas = segment_info.get("key_focus", [])
 
-    # Filter out excluded metrics AND core metrics (shown separately)
-    # Get core metrics for this specific segment, or use default
     segment_core_metrics = CORE_SEGMENT_METRICS.get(segment_name, DEFAULT_CORE_METRICS)
     exclude_set = set(EXCLUDED_SEGMENT_METRICS) | set(segment_core_metrics)
     available_metrics = [m for m in metrics if m["parameter"] not in exclude_set]
 
     if len(available_metrics) <= num_metrics:
-        # Return all available if we have fewer than requested
         return {
             "selected_metrics": [m["parameter"] for m in available_metrics],
             "reasoning": "All available metrics selected (fewer than requested)",
             "metrics_data": available_metrics,
         }
 
-    # Format metrics table for LLM
     metrics_table = format_segment_metrics_for_llm(metrics, segment_name)
 
-    # Get available metric names for enum validation
     available_names = [m["parameter"] for m in available_metrics]
 
-    # Build the system prompt with segment awareness
     system_prompt = f"""You are a senior financial analyst preparing a bank quarterly earnings \
 report. Your task is to select the {num_metrics} most impactful metrics to highlight for a \
 specific business segment.
@@ -336,7 +306,6 @@ a modest improvement.
 - Consider what makes this segment unique vs other segments
 - Return metric names EXACTLY as shown in the table"""
 
-    # Build the user prompt
     user_prompt = f"""Analyze {bank_name}'s {segment_name} segment for {quarter} {fiscal_year}.
 
 {metrics_table}
@@ -346,7 +315,6 @@ Consider the segment's key focus areas and what would be most meaningful to inve
 
 Return the exact metric names from the table above."""
 
-    # Define the tool for structured output
     tool_definition = {
         "type": "function",
         "function": {
@@ -384,7 +352,6 @@ Return the exact metric names from the table above."""
     ]
 
     try:
-        # Use model from ETL config
         model = etl_config.get_model("segment_metrics_selection")
 
         response = await complete_with_tools(
@@ -393,12 +360,11 @@ Return the exact metric names from the table above."""
             context=context,
             llm_params={
                 "model": model,
-                "temperature": 0.3,
-                "max_tokens": 1000,
+                "temperature": etl_config.temperature,
+                "max_tokens": etl_config.max_tokens,
             },
         )
 
-        # Parse the tool call response
         if response.get("choices") and response["choices"][0].get("message"):
             message = response["choices"][0]["message"]
             if message.get("tool_calls"):
@@ -408,7 +374,6 @@ Return the exact metric names from the table above."""
                 selected_names = function_args.get("selected_metrics", [])
                 reasoning = function_args.get("reasoning", "")
 
-                # Validate selected metrics exist in available metrics
                 validated_names = [n for n in selected_names if n in available_names]
 
                 if len(validated_names) < len(selected_names):
@@ -420,7 +385,6 @@ Return the exact metric names from the table above."""
                         validated=validated_names,
                     )
 
-                # Get full metric data for selected metrics
                 metrics_dict = {m["parameter"]: m for m in available_metrics}
                 metrics_data = [metrics_dict[n] for n in validated_names if n in metrics_dict]
 
@@ -437,7 +401,6 @@ Return the exact metric names from the table above."""
                     "metrics_data": metrics_data,
                 }
 
-        # Fallback if no tool call
         logger.warning(
             "etl.bank_earnings_report.no_segment_tool_call",
             execution_id=execution_id,
@@ -474,7 +437,6 @@ def _fallback_segment_selection(
         Selection dict with selected_metrics, reasoning, and metrics_data
     """
 
-    # Sort by absolute YoY change (largest movements first)
     def sort_key(m):
         yoy = m.get("yoy")
         if yoy is None:

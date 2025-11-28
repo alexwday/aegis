@@ -4,9 +4,9 @@
 # Models are referenced by tier from aegis.utils.settings.config
 # Tiers: small, medium, large
 models:
-  # Key metrics selection (chart, tiles, dynamic) - needs strong reasoning
+  # Key metrics selection (chart, tiles, dynamic)
   key_metrics_selection:
-    tier: large
+    tier: medium
 
   # Segment metrics selection - moderate complexity
   segment_metrics_selection:

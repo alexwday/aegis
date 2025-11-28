@@ -26,11 +26,6 @@ from aegis.etls.bank_earnings_report.config.etl_config import etl_config
 from aegis.utils.logging import get_logger
 
 
-# =============================================================================
-# RTS Document Loading
-# =============================================================================
-
-
 async def retrieve_all_rts_chunks(
     bank: str,
     year: int,
@@ -137,7 +132,6 @@ def format_full_rts_for_llm(chunks: List[Dict[str, Any]]) -> str:
         page = chunk.get("page_no", "?")
         raw_text = chunk.get("raw_text", "")
 
-        # Add section header if changed
         if section and section != current_section:
             lines.append(f"\n## {section}")
             lines.append(f"[Page {page}]")
@@ -149,11 +143,6 @@ def format_full_rts_for_llm(chunks: List[Dict[str, Any]]) -> str:
             lines.append("")
 
     return "\n".join(lines)
-
-
-# =============================================================================
-# Batch Segment Driver Extraction
-# =============================================================================
 
 
 async def generate_all_segment_drivers_from_full_rts(
@@ -178,7 +167,6 @@ async def generate_all_segment_drivers_from_full_rts(
     logger = get_logger()
     execution_id = context.get("execution_id")
 
-    # Initialize result with empty strings for all segments
     result: Dict[str, str] = {name: "" for name in segment_names}
 
     if not chunks:
@@ -191,7 +179,6 @@ async def generate_all_segment_drivers_from_full_rts(
 
     full_rts = format_full_rts_for_llm(chunks)
 
-    # Build segment list for prompt
     segment_list = "\n".join(f"- {name}" for name in segment_names)
 
     system_prompt = f"""You are a senior financial analyst writing a bank quarterly earnings report.
@@ -257,7 +244,6 @@ Remember: NO specific metrics, percentages, or dollar amounts. Focus only on the
 
 Extract the qualitative drivers statement for each segment listed above."""
 
-    # Build properties for each segment dynamically
     segment_properties = {}
     for name in segment_names:
         safe_key = name.lower().replace(" ", "_").replace("&", "and").replace(".", "")
@@ -305,7 +291,11 @@ Extract the qualitative drivers statement for each segment listed above."""
             messages=messages,
             tools=[tool_definition],
             context=context,
-            llm_params={"model": model, "temperature": 0.2, "max_tokens": 2000},
+            llm_params={
+                "model": model,
+                "temperature": etl_config.temperature,
+                "max_tokens": etl_config.max_tokens,
+            },
         )
 
         if response.get("choices") and response["choices"][0].get("message"):
@@ -314,7 +304,6 @@ Extract the qualitative drivers statement for each segment listed above."""
                 tool_call = message["tool_calls"][0]
                 function_args = json.loads(tool_call["function"]["arguments"])
 
-                # Map back from safe keys to original segment names
                 for name in segment_names:
                     safe_key = name.lower().replace(" ", "_").replace("&", "and").replace(".", "")
                     segment_data = function_args.get(safe_key, {})
@@ -348,11 +337,6 @@ Extract the qualitative drivers statement for each segment listed above."""
     except Exception as e:  # pylint: disable=broad-exception-caught
         logger.error("etl.rts.batch_drivers_error", error=str(e))
         return result
-
-
-# =============================================================================
-# Main Entry Point
-# =============================================================================
 
 
 async def get_all_segment_drivers_from_rts(
@@ -391,7 +375,6 @@ async def get_all_segment_drivers_from_rts(
         segments=segment_names,
     )
 
-    # Step 1: Load all chunks (single DB call)
     all_chunks = await retrieve_all_rts_chunks(
         bank=bank,
         year=year,
@@ -403,7 +386,6 @@ async def get_all_segment_drivers_from_rts(
         logger.warning("etl.rts.no_chunks_loaded_batch", execution_id=execution_id)
         return {name: "" for name in segment_names}
 
-    # Step 2: Generate all drivers in one LLM call
     drivers = await generate_all_segment_drivers_from_full_rts(
         chunks=all_chunks,
         segment_names=segment_names,

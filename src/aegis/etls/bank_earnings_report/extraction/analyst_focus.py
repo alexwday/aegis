@@ -22,31 +22,6 @@ from aegis.etls.bank_earnings_report.retrieval.transcripts import (
 from aegis.utils.logging import get_logger
 
 
-# Common financial themes for analyst Q&A
-COMMON_THEMES = [
-    "NIM Outlook",
-    "Credit Quality",
-    "Capital Allocation",
-    "Expense Management",
-    "Loan Growth",
-    "Deposit Trends",
-    "Fee Income",
-    "Trading Revenue",
-    "Mortgage Portfolio",
-    "CRE Exposure",
-    "U.S. Strategy",
-    "Digital Banking",
-    "M&A Strategy",
-    "Regulatory Capital",
-    "Dividend Policy",
-    "Share Buybacks",
-    "Interest Rate Sensitivity",
-    "Provision Outlook",
-    "Revenue Guidance",
-    "Efficiency Ratio",
-]
-
-
 async def extract_qa_entry(
     qa_group_id: int,
     chunks: List[Dict[str, Any]],
@@ -72,7 +47,6 @@ async def extract_qa_entry(
     logger = get_logger()
     execution_id = context.get("execution_id")
 
-    # Format the Q&A content for LLM
     qa_content = format_qa_group_for_llm(qa_group_id, chunks, bank_name, quarter, fiscal_year)
     qa_summary = get_qa_group_summary(chunks)
 
@@ -84,7 +58,6 @@ async def extract_qa_entry(
         )
         return None
 
-    # Build the system prompt
     system_prompt = """You are a senior financial analyst extracting key information from bank \
 earnings call Q&A transcripts.
 
@@ -123,7 +96,6 @@ M&A Strategy, Regulatory Capital, Dividend Policy
 - Preserve exact figures and percentages from the transcript
 - Focus on information investors would find valuable"""
 
-    # Build the user prompt
     user_prompt = f"""Analyze this Q&A exchange from {bank_name}'s {quarter} {fiscal_year} \
 earnings call and extract the key information.
 
@@ -132,7 +104,6 @@ earnings call and extract the key information.
 Extract the theme, question summary, and answer summary. If this exchange has no meaningful \
 financial content, indicate it should be skipped."""
 
-    # Define the tool for structured output
     tool_definition = {
         "type": "function",
         "function": {
@@ -186,7 +157,6 @@ financial content, indicate it should be skipped."""
     ]
 
     try:
-        # Use medium model for Q&A extraction (one call per Q&A group)
         model = etl_config.get_model("analyst_focus_extraction")
 
         response = await complete_with_tools(
@@ -195,12 +165,11 @@ financial content, indicate it should be skipped."""
             context=context,
             llm_params={
                 "model": model,
-                "temperature": 0.2,  # Low temperature for factual extraction
-                "max_tokens": 1000,
+                "temperature": etl_config.temperature,
+                "max_tokens": etl_config.max_tokens,
             },
         )
 
-        # Parse the tool call response
         if response.get("choices") and response["choices"][0].get("message"):
             message = response["choices"][0]["message"]
             if message.get("tool_calls"):
@@ -279,10 +248,8 @@ async def rank_qa_entries(
     execution_id = context.get("execution_id")
 
     if len(entries) <= num_featured:
-        # If we have fewer entries than requested, return all indices
         return list(range(len(entries)))
 
-    # Format entries for LLM review
     entries_text = ""
     for i, entry in enumerate(entries):
         entries_text += f"""
@@ -327,7 +294,6 @@ earnings call and select the {num_featured} most important to feature.
 
 Select {num_featured} entry numbers that provide the most valuable insights for investors."""
 
-    # Define the tool for structured output
     tool_definition = {
         "type": "function",
         "function": {
@@ -377,8 +343,8 @@ Select {num_featured} entry numbers that provide the most valuable insights for 
             context=context,
             llm_params={
                 "model": model,
-                "temperature": 0.2,
-                "max_tokens": 1000,
+                "temperature": etl_config.temperature,
+                "max_tokens": etl_config.max_tokens,
             },
         )
 
@@ -391,10 +357,9 @@ Select {num_featured} entry numbers that provide the most valuable insights for 
                 featured_nums = function_args.get("featured_entries", [])
                 reasoning = function_args.get("reasoning", "")
 
-                # Convert 1-indexed to 0-indexed and validate
                 featured_indices = []
                 for num in featured_nums:
-                    idx = num - 1  # Convert to 0-indexed
+                    idx = num - 1
                     if 0 <= idx < len(entries):
                         featured_indices.append(idx)
 
@@ -408,7 +373,6 @@ Select {num_featured} entry numbers that provide the most valuable insights for 
                 if len(featured_indices) >= num_featured:
                     return featured_indices[:num_featured]
 
-        # Fallback: return first N entries
         logger.warning(
             "etl.bank_earnings_report.qa_ranking_fallback",
             execution_id=execution_id,
@@ -466,7 +430,6 @@ async def extract_analyst_focus(
         period=f"{quarter} {fiscal_year}",
     )
 
-    # Step 1: Retrieve Q&A chunks
     chunks = await retrieve_qa_chunks(
         bank_id=bank_info["bank_id"],
         fiscal_year=fiscal_year,
@@ -482,7 +445,6 @@ async def extract_analyst_focus(
         )
         return {"source": "Transcript", "featured": [], "entries": []}
 
-    # Step 2: Group by qa_group_id
     qa_groups = group_chunks_by_qa_id(chunks)
     sorted_qa_ids = sorted(qa_groups.keys())
 
@@ -493,7 +455,6 @@ async def extract_analyst_focus(
         total_chunks=len(chunks),
     )
 
-    # Step 3: Extract each Q&A group (process sequentially to maintain order)
     entries = []
     for qa_id in sorted_qa_ids:
         qa_chunks = qa_groups[qa_id]
@@ -510,7 +471,6 @@ async def extract_analyst_focus(
         if entry:
             entries.append(entry)
 
-        # Stop if we have enough entries
         if len(entries) >= max_entries:
             logger.info(
                 "etl.bank_earnings_report.max_entries_reached",
@@ -526,7 +486,6 @@ async def extract_analyst_focus(
         )
         return {"source": "Transcript", "featured": [], "entries": []}
 
-    # Step 4: Rank entries and select top N for featuring
     featured_indices = await rank_qa_entries(
         entries=entries,
         bank_name=bank_info["bank_name"],
@@ -536,7 +495,6 @@ async def extract_analyst_focus(
         num_featured=num_featured,
     )
 
-    # Step 5: Format final output
     formatted_entries = [
         {
             "theme": e["theme"],
@@ -546,12 +504,10 @@ async def extract_analyst_focus(
         for e in entries
     ]
 
-    # Featured entries (top N selected by ranking)
     featured_entries = [
         formatted_entries[i] for i in featured_indices if i < len(formatted_entries)
     ]
 
-    # Remaining entries (not featured) - for expandable section
     featured_set = set(featured_indices)
     remaining_entries = [
         formatted_entries[i] for i in range(len(formatted_entries)) if i not in featured_set

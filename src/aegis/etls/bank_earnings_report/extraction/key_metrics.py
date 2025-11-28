@@ -16,22 +16,6 @@ from aegis.etls.bank_earnings_report.config.etl_config import etl_config
 from aegis.utils.logging import get_logger
 
 
-# =============================================================================
-# Fixed Key Metrics - These 7 metrics are ALWAYS shown in the Key Metrics section
-# =============================================================================
-
-# These are the core metrics that analysts expect to see for bank earnings.
-# The LLM does not choose these - they are mandatory.
-# The LLM only decides which ONE of these 7 to feature on the trend chart.
-#
-# Selection rationale:
-# 1. Core Cash Diluted EPS - Headline metric in every earnings release, drives analyst models
-# 2. Return on Equity - Primary measure of return on shareholder capital (target 15-17%)
-# 3. NIM (AIEA) - Net Interest Margin, core spread business health (~50% of bank revenue)
-# 4. Efficiency Ratio - Cost discipline benchmark (lower = better)
-# 5. Total Revenue - Top-line indicator, shows business momentum
-# 6. Pre Provision Profit - Core earnings power before credit costs
-# 7. Provisions for Credit Losses - Credit quality indicator
 KEY_METRICS = [
     "Core Cash Diluted EPS",
     "Return on Equity",
@@ -42,10 +26,6 @@ KEY_METRICS = [
     "Provisions for Credit Losses",
 ]
 
-
-# =============================================================================
-# Excluded Metrics - Capital/Risk metrics have their own section
-# =============================================================================
 
 EXCLUDED_METRICS = [
     "CET1 Ratio",
@@ -59,7 +39,6 @@ EXCLUDED_METRICS = [
     "Liquidity Coverage Ratio",
     "NSFR",
     "PCL",
-    # Note: "Provision for Credit Losses" removed - now a KEY_METRIC
     "GIL",
     "Gross Impaired Loans",
     "Net Impaired Loans",
@@ -92,19 +71,15 @@ def compute_trend_score(metric: Dict[str, Any]) -> float:
     y3 = abs(metric.get("3y") or 0)
     y5 = abs(metric.get("5y") or 0)
 
-    # Weight recent changes more heavily
-    # QoQ and YoY tell the current story, multi-year shows trajectory
     score = (qoq * 3.0) + (yoy * 2.5) + (y2 * 1.5) + (y3 * 1.0) + (y5 * 0.5)
 
-    # Bonus for directional consistency (sustained trends are more compelling)
     changes = [metric.get("qoq"), metric.get("yoy"), metric.get("2y")]
     non_null = [c for c in changes if c is not None]
     if len(non_null) >= 2:
-        # All same direction = bonus
         all_positive = all(c > 0 for c in non_null)
         all_negative = all(c < 0 for c in non_null)
         if all_positive or all_negative:
-            score *= 1.3  # 30% bonus for consistent direction
+            score *= 1.3
 
     return round(score, 1)
 
@@ -123,13 +98,11 @@ def format_key_metrics_for_llm(metrics: List[Dict[str, Any]], key_metric_names: 
     Returns:
         Formatted table string for LLM prompt
     """
-    # Import shared formatting functions
     from aegis.etls.bank_earnings_report.retrieval.supplementary import (
         format_value_for_llm,
         format_delta_for_llm,
     )
 
-    # Filter to only key metrics that exist in the data
     key_metrics = [m for m in metrics if m["parameter"] in key_metric_names]
 
     lines = [
@@ -147,10 +120,8 @@ def format_key_metrics_for_llm(metrics: List[Dict[str, Any]], key_metric_names: 
         yoy = format_delta_for_llm(m.get("yoy"), units, is_bps)
         y2 = format_delta_for_llm(m.get("2y"), units, is_bps)
 
-        # Compute trend score
         trend_score = compute_trend_score(m)
 
-        # Determine chart suitability
         if trend_score >= 15:
             suitability = "EXCELLENT"
         elif trend_score >= 8:
@@ -180,13 +151,11 @@ def format_remaining_metrics_for_llm(
     Returns:
         Formatted table string for LLM prompt
     """
-    # Import shared formatting functions
     from aegis.etls.bank_earnings_report.retrieval.supplementary import (
         format_value_for_llm,
         format_delta_for_llm,
     )
 
-    # Filter out excluded metrics
     exclude_set = set(exclude_names)
     remaining_metrics = [m for m in metrics if m["parameter"] not in exclude_set]
 
@@ -268,25 +237,21 @@ async def select_chart_and_tile_metrics(
             "prompt": "",
         }
 
-    # Find which key metrics exist in the data
     available_metric_names = {m["parameter"] for m in metrics}
     available_key_metrics = [m for m in KEY_METRICS if m in available_metric_names]
 
     if not available_key_metrics:
-        logger.warning(
+        logger.error(
             "etl.bank_earnings_report.no_key_metrics_available",
             execution_id=execution_id,
         )
-        return _fallback_selection(metrics, [], num_tile_metrics, num_dynamic_metrics)
+        raise ValueError("No key metrics available in data")
 
-    # Build exclusion list for dynamic metrics (key metrics + capital/risk)
     exclusion_list = KEY_METRICS + EXCLUDED_METRICS
 
-    # Format tables for LLM
     key_metrics_table = format_key_metrics_for_llm(metrics, available_key_metrics)
     remaining_metrics_table = format_remaining_metrics_for_llm(metrics, exclusion_list)
 
-    # Build the system prompt
     system_prompt = """You are a senior financial analyst preparing a bank quarterly earnings \
 report. Your task is to make THREE selections based on the data provided.
 
@@ -340,7 +305,6 @@ Selection criteria for chart:
 
 Return EXACTLY the metric names as shown in the tables - do not modify them."""
 
-    # Build the user prompt
     user_prompt = f"""Analyze {bank_name}'s {quarter} {fiscal_year} earnings data and make your \
 selections.
 
@@ -365,7 +329,6 @@ Pick a metric with EXCELLENT or Good rating - the chart needs meaningful visual 
 
 Return exact metric names from the tables above."""
 
-    # Define the tool for structured output
     tool_definition = {
         "type": "function",
         "function": {
@@ -444,7 +407,6 @@ Return exact metric names from the tables above."""
     ]
 
     try:
-        # Use model from ETL config
         model = etl_config.get_model("key_metrics_selection")
 
         response = await complete_with_tools(
@@ -453,12 +415,11 @@ Return exact metric names from the tables above."""
             context=context,
             llm_params={
                 "model": model,
-                "temperature": 0.3,  # Some creativity for dynamic selection
-                "max_tokens": 2000,
+                "temperature": etl_config.temperature,
+                "max_tokens": etl_config.max_tokens,
             },
         )
 
-        # Parse the tool call response
         if response.get("choices") and response["choices"][0].get("message"):
             message = response["choices"][0]["message"]
             if message.get("tool_calls"):
@@ -472,18 +433,14 @@ Return exact metric names from the tables above."""
                 chart_metric = function_args.get("chart_metric", "")
                 chart_reasoning = function_args.get("chart_reasoning", "")
 
-                # Validate tile metrics are from the key metrics
                 validated_tiles = [m for m in tile_metrics if m in available_key_metrics]
                 if len(validated_tiles) < num_tile_metrics:
-                    # Fill with remaining key metrics if needed
                     for km in available_key_metrics:
                         if km not in validated_tiles and len(validated_tiles) < num_tile_metrics:
                             validated_tiles.append(km)
 
-                # Build exclusion set for dynamic validation
                 exclusion_set = set(KEY_METRICS) | set(EXCLUDED_METRICS)
 
-                # Validate dynamic metrics (must not be in key metrics or excluded)
                 validated_dynamic = [
                     m
                     for m in dynamic_metrics
@@ -498,7 +455,6 @@ Return exact metric names from the tables above."""
                         validated=validated_dynamic,
                     )
 
-                # Validate chart metric is one of the 11 selected metrics
                 all_visible_metrics = set(validated_tiles) | set(validated_dynamic)
                 if chart_metric not in all_visible_metrics:
                     logger.warning(
@@ -507,7 +463,6 @@ Return exact metric names from the tables above."""
                         chart_metric=chart_metric,
                         valid_options=list(all_visible_metrics),
                     )
-                    # Default to first tile metric
                     chart_metric = validated_tiles[0] if validated_tiles else ""
 
                 logger.info(
@@ -545,14 +500,11 @@ Return exact metric names from the tables above."""
                     ],
                 }
 
-        # Fallback if no tool call
-        logger.warning(
+        logger.error(
             "etl.bank_earnings_report.no_tool_call_response",
             execution_id=execution_id,
         )
-        return _fallback_selection(
-            metrics, available_key_metrics, num_tile_metrics, num_dynamic_metrics
-        )
+        raise RuntimeError("LLM did not return a tool call response for metric selection")
 
     except Exception as e:
         logger.error(
@@ -560,83 +512,7 @@ Return exact metric names from the tables above."""
             execution_id=execution_id,
             error=str(e),
         )
-        return _fallback_selection(
-            metrics, available_key_metrics, num_tile_metrics, num_dynamic_metrics
-        )
-
-
-def _fallback_selection(
-    metrics: List[Dict[str, Any]],
-    available_key_metrics: List[str],
-    num_tile_metrics: int,
-    num_dynamic_metrics: int = 5,
-) -> Dict[str, Any]:
-    """
-    Fallback metric selection when LLM fails.
-
-    Args:
-        metrics: List of metric dicts
-        available_key_metrics: List of key metric names available in data
-        num_tile_metrics: Number of tile metrics (will be 6)
-        num_dynamic_metrics: Number of dynamic metrics to select
-
-    Returns:
-        Selection dict with chart_metric, tile_metrics, and dynamic_metrics
-    """
-    # Take first 6 key metrics for tiles
-    tile_metrics = available_key_metrics[:num_tile_metrics]
-
-    # Priority metrics for dynamic (additional highlights)
-    priority_dynamic = [
-        "Operating Leverage",
-        "Net Interest Income",
-        "Non-Interest Income",
-        "Non-Interest Expense",
-        "Loan Growth",
-        "Deposit Growth",
-        "Book Value per Share",
-        "Average Assets",
-        "Average Loans",
-        "Average Deposits",
-    ]
-
-    # Build exclusion set
-    exclusion_set = set(KEY_METRICS) | set(EXCLUDED_METRICS)
-    metric_names = {m["parameter"] for m in metrics}
-
-    # Select dynamic metrics (excluding key metrics and capital/risk)
-    dynamic_metrics = []
-    for priority in priority_dynamic:
-        if len(dynamic_metrics) >= num_dynamic_metrics:
-            break
-        if priority in metric_names and priority not in exclusion_set:
-            dynamic_metrics.append(priority)
-
-    # If we don't have enough, fill from remaining metrics
-    if len(dynamic_metrics) < num_dynamic_metrics:
-        remaining = [m for m in metric_names if m not in exclusion_set and m not in dynamic_metrics]
-        for m in remaining[: num_dynamic_metrics - len(dynamic_metrics)]:
-            dynamic_metrics.append(m)
-
-    # Chart metric defaults to first tile metric
-    chart_metric = tile_metrics[0] if tile_metrics else ""
-
-    return {
-        "chart_metric": chart_metric,
-        "chart_reasoning": "Fallback selection - LLM unavailable",
-        "tile_metrics": tile_metrics,
-        "tile_reasoning": "First 6 key metrics selected (fallback)",
-        "dynamic_metrics": dynamic_metrics,
-        "dynamic_reasoning": "Fallback selection - LLM unavailable",
-        "available_metrics": len(metrics),
-        "available_key_metrics": available_key_metrics,
-        "prompt": "",
-    }
-
-
-# =============================================================================
-# Legacy function for backwards compatibility
-# =============================================================================
+        raise
 
 
 async def select_top_metrics(
@@ -661,7 +537,6 @@ async def select_top_metrics(
         num_tile_metrics=num_metrics,
     )
 
-    # Return in legacy format
     return {
         "selected_metrics": result.get("tile_metrics", []),
         "reasoning": result.get("tile_reasoning", ""),

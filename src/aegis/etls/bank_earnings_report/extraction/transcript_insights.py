@@ -59,7 +59,6 @@ async def extract_transcript_overview(
         period=f"{quarter} {fiscal_year}",
     )
 
-    # Retrieve MD section chunks
     chunks = await retrieve_md_chunks(
         bank_id=bank_info["bank_id"],
         fiscal_year=fiscal_year,
@@ -74,7 +73,6 @@ async def extract_transcript_overview(
         )
         return {"source": "Transcript", "narrative": ""}
 
-    # Format MD section for LLM
     md_content = format_md_section_for_llm(
         chunks=chunks,
         bank_name=bank_info["bank_name"],
@@ -85,7 +83,6 @@ async def extract_transcript_overview(
     if not md_content.strip():
         return {"source": "Transcript", "narrative": ""}
 
-    # Build prompts
     system_prompt = """You are a senior financial analyst creating an executive summary from \
 bank earnings call transcripts.
 
@@ -122,7 +119,6 @@ from management's prepared remarks. This overview sets the stage for a quarterly
 
 Provide a 3-5 sentence overview that captures the quarter's tone and strategic themes."""
 
-    # Tool definition
     tool_definition = {
         "type": "function",
         "function": {
@@ -159,8 +155,8 @@ Provide a 3-5 sentence overview that captures the quarter's tone and strategic t
             context=context,
             llm_params={
                 "model": model,
-                "temperature": 0.3,
-                "max_tokens": 1000,
+                "temperature": etl_config.temperature,
+                "max_tokens": etl_config.max_tokens,
             },
         )
 
@@ -236,7 +232,6 @@ async def extract_transcript_items_of_note(
         period=f"{quarter} {fiscal_year}",
     )
 
-    # Retrieve MD section chunks
     chunks = await retrieve_md_chunks(
         bank_id=bank_info["bank_id"],
         fiscal_year=fiscal_year,
@@ -251,7 +246,6 @@ async def extract_transcript_items_of_note(
         )
         return {"source": "Transcript", "items": []}
 
-    # Format MD section for LLM
     md_content = format_md_section_for_llm(
         chunks=chunks,
         bank_name=bank_info["bank_name"],
@@ -262,7 +256,6 @@ async def extract_transcript_items_of_note(
     if not md_content.strip():
         return {"source": "Transcript", "items": []}
 
-    # Build prompts
     system_prompt = """You are a senior financial analyst extracting significant impact items \
 from bank earnings call transcripts.
 
@@ -322,7 +315,6 @@ Identify SPECIFIC EVENTS with dollar impact. Only extract items that are explici
 with clear financial implications. If the transcript doesn't contain specific impact items, \
 return an empty list - do not fabricate items."""
 
-    # Tool definition with structured output
     tool_definition = {
         "type": "function",
         "function": {
@@ -399,8 +391,8 @@ return an empty list - do not fabricate items."""
             context=context,
             llm_params={
                 "model": model,
-                "temperature": 0.2,  # Lower temperature for factual extraction
-                "max_tokens": 3000,
+                "temperature": etl_config.temperature,
+                "max_tokens": etl_config.max_tokens,
             },
         )
 

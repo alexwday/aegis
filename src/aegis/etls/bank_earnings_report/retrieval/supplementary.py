@@ -132,11 +132,9 @@ def format_dividend_json(dividend_data: Optional[Dict[str, Any]]) -> Dict[str, A
             }
         }
 
-    # Format the amount
     actual = dividend_data["actual"]
     amount = f"${actual:.2f}/share"
 
-    # Format QoQ
     qoq_value = dividend_data.get("qoq")
     if qoq_value is not None:
         qoq_direction = "positive" if qoq_value > 0 else "negative" if qoq_value < 0 else "neutral"
@@ -146,7 +144,6 @@ def format_dividend_json(dividend_data: Optional[Dict[str, Any]]) -> Dict[str, A
     else:
         qoq = {"value": 0, "direction": "neutral", "display": "—"}
 
-    # Format YoY
     yoy_value = dividend_data.get("yoy")
     if yoy_value is not None:
         yoy_direction = "positive" if yoy_value > 0 else "negative" if yoy_value < 0 else "neutral"
@@ -163,11 +160,6 @@ def format_dividend_json(dividend_data: Optional[Dict[str, Any]]) -> Dict[str, A
             "yoy": yoy,
         }
     }
-
-
-# =============================================================================
-# Key Metrics Retrieval
-# =============================================================================
 
 
 async def retrieve_all_metrics(
@@ -252,7 +244,6 @@ async def retrieve_all_metrics(
 
             metrics = []
             for row in result:
-                # BPS field is "Yes"/"No" indicating if metric should display as basis points
                 bps_raw = row[9]
                 is_bps = bps_raw in ("Yes", "yes", True, 1) if bps_raw else False
 
@@ -353,10 +344,8 @@ async def retrieve_metrics_by_names(
                 },
             )
 
-            # Build a lookup dict
             metrics_dict = {}
             for row in result:
-                # BPS field is "Yes"/"No" indicating if metric should display as basis points
                 bps_raw = row[5]
                 is_bps = bps_raw in ("Yes", "yes", True, 1) if bps_raw else False
 
@@ -372,7 +361,6 @@ async def retrieve_metrics_by_names(
                     "higher_is_better": row[8] if row[8] is not None else None,
                 }
 
-            # Return in the order requested
             metrics = []
             for name in metric_names:
                 if name in metrics_dict:
@@ -416,47 +404,37 @@ def format_metric_value(actual: Optional[float], units: str, meta_unit: str) -> 
     if actual is None:
         return "N/A"
 
-    # Helper to wrap unit suffix in span for CSS styling
     def wrap_unit(suffix: str) -> str:
         return f"<span class='unit'>{suffix}</span>"
 
-    # Handle percentage metrics
     if units == "%" or meta_unit in ("percentage", "percent", "%"):
         if actual < 0:
             return f"({abs(actual):.1f}{wrap_unit('%')})"
         return f"{actual:.1f}{wrap_unit('%')}"
 
-    # Handle basis points
     if meta_unit in ("bps", "basis_points"):
         if actual < 0:
             return f"({abs(actual):.0f}{wrap_unit('bps')})"
         return f"{actual:.0f}{wrap_unit('bps')}"
 
-    # Handle millions (default for dollar amounts)
-    # Industry standard: billions 1 decimal, millions whole or 1 decimal
-    # Negative values in parentheses
     if units == "millions" or meta_unit in ("millions", "currency"):
         abs_val = abs(actual)
         is_negative = actual < 0
 
         if abs_val >= 1000:
-            # Billions: 1 decimal place
             formatted = f"${abs_val / 1000:,.1f}{wrap_unit('B')}"
         else:
-            # Millions: whole number for clean display
             formatted = f"${abs_val:,.0f}{wrap_unit('M')}"
 
         if is_negative:
             return f"({formatted})"
         return formatted
 
-    # Handle ratio metrics
     if meta_unit == "ratio":
         if actual < 0:
             return f"({abs(actual):.2f}{wrap_unit('x')})"
         return f"{actual:.2f}{wrap_unit('x')}"
 
-    # Default: just format the number
     abs_val = abs(actual)
     is_negative = actual < 0
 
@@ -472,8 +450,6 @@ def format_metric_value(actual: Optional[float], units: str, meta_unit: str) -> 
     return formatted
 
 
-# Threshold for converting bps to percentage (100 bps = 1%)
-# Industry convention: use bps for small changes, % for larger changes
 BPS_TO_PERCENT_THRESHOLD = 100
 
 
@@ -487,39 +463,29 @@ def format_delta(value: Optional[float], units: str, is_bps: bool = False) -> Di
         is_bps: Whether to display as basis points (from BPS column)
 
     Returns:
-        Dict with value, direction, and display string
-        - direction is simply "positive" for increase, "negative" for decrease
-
-    Note:
-        For bps values >= 100 (1%), automatically converts to percentage display
-        for better readability. This follows industry convention.
+        Dict with value, direction, and display string where direction is
+        "positive" for increase, "negative" for decrease, or "neutral".
+        For bps values >= 100 (1%), automatically converts to percentage
+        display for better readability.
     """
     if value is None:
         return {"value": 0, "direction": "neutral", "display": "—"}
 
-    # Simple: increase = positive (green), decrease = negative (red)
     direction = "positive" if value > 0 else "negative" if value < 0 else "neutral"
 
-    # Format display
     arrow = "▲" if value > 0 else "▼" if value < 0 else "—"
     abs_val = abs(value)
 
-    # Use BPS display if flagged or if units indicate basis points
     if is_bps or units == "bps":
-        # If bps value is large (>= threshold), convert to percentage for readability
         if abs_val >= BPS_TO_PERCENT_THRESHOLD:
-            # Convert bps to percentage: divide by 100
             pct_val = abs_val / 100
-            # Use comma separator for large percentages (>= 1000)
             if pct_val >= 1000:
                 display = f"{arrow} {pct_val:,.1f}%" if value != 0 else "—"
             else:
                 display = f"{arrow} {pct_val:.1f}%" if value != 0 else "—"
         else:
-            # Display as basis points - value is already in bps
             display = f"{arrow} {abs_val:.0f}bps" if value != 0 else "—"
     else:
-        # Display as percentage - use comma separator for large values (>= 1000)
         if abs_val >= 1000:
             display = f"{arrow} {abs_val:,.1f}%" if value != 0 else "—"
         else:
@@ -540,11 +506,8 @@ def format_delta_for_llm(value: Optional[float], units: str, is_bps: bool = Fals
         is_bps: Whether to display as basis points
 
     Returns:
-        Formatted string like "+2.3%" or "+15bps" or "—"
-
-    Note:
-        For bps values >= 100 (1%), automatically converts to percentage display
-        for better readability. This follows industry convention.
+        Formatted string like "+2.3%" or "+15bps" or "—". For bps values >= 100
+        (1%), automatically converts to percentage display for better readability.
     """
     if value is None:
         return "—"
@@ -552,20 +515,15 @@ def format_delta_for_llm(value: Optional[float], units: str, is_bps: bool = Fals
     sign = "+" if value > 0 else ""
     abs_val = abs(value)
 
-    # Use BPS display if flagged or if units indicate basis points
     if is_bps or units == "bps":
-        # If bps value is large (>= threshold), convert to percentage for readability
         if abs_val >= BPS_TO_PERCENT_THRESHOLD:
-            # Convert bps to percentage: divide by 100
             pct_val = value / 100
-            # Use comma separator for large percentages (>= 1000)
             if abs(pct_val) >= 1000:
                 return f"{sign}{pct_val:,.1f}%"
             return f"{sign}{pct_val:.1f}%"
         else:
             return f"{sign}{value:.0f}bps"
     else:
-        # Use comma separator for large percentages (>= 1000)
         if abs_val >= 1000:
             return f"{sign}{value:,.1f}%"
         return f"{sign}{value:.1f}%"
@@ -594,13 +552,11 @@ def format_value_for_llm(metric: Dict[str, Any]) -> str:
     meta_unit = metric.get("meta_unit", "")
     is_bps = metric.get("is_bps", False)
 
-    # Handle percentage metrics (ratios like ROE, efficiency ratio, NIM)
     if units == "%" or meta_unit in ("percentage", "percent", "%") or is_bps:
         if actual < 0:
             return f"({abs(actual):.2f}%)"
         return f"{actual:.2f}%"
 
-    # Handle millions (default for dollar amounts)
     if units == "millions" or meta_unit in ("millions", "currency"):
         abs_val = abs(actual)
         is_negative = actual < 0
@@ -614,13 +570,11 @@ def format_value_for_llm(metric: Dict[str, Any]) -> str:
             return f"({formatted})"
         return formatted
 
-    # Handle ratio metrics
     if meta_unit == "ratio":
         if actual < 0:
             return f"({abs(actual):.2f}x)"
         return f"{actual:.2f}x"
 
-    # Default formatting
     return f"{actual:,.2f}"
 
 
@@ -666,11 +620,6 @@ def format_key_metrics_json(metrics: List[Dict[str, Any]]) -> Dict[str, Any]:
     }
 
 
-# =============================================================================
-# Historical Data Retrieval for Charts
-# =============================================================================
-
-
 def get_previous_quarters(fiscal_year: int, quarter: str, num_quarters: int = 8) -> List[tuple]:
     """
     Calculate the previous N quarters from a given quarter.
@@ -690,7 +639,6 @@ def get_previous_quarters(fiscal_year: int, quarter: str, num_quarters: int = 8)
     current_year = fiscal_year
     current_q_idx = q_idx
 
-    # Include the current quarter and go back num_quarters-1 more
     for _ in range(num_quarters):
         result.append((current_year, quarters[current_q_idx]))
         current_q_idx -= 1
@@ -698,7 +646,6 @@ def get_previous_quarters(fiscal_year: int, quarter: str, num_quarters: int = 8)
             current_q_idx = 3
             current_year -= 1
 
-    # Reverse to get chronological order (oldest first)
     return list(reversed(result))
 
 
@@ -732,7 +679,6 @@ async def retrieve_metric_history(
     logger = get_logger()
     execution_id = context.get("execution_id")
 
-    # Get list of quarters to query
     quarters_to_query = get_previous_quarters(fiscal_year, quarter, num_quarters)
 
     logger.info(
@@ -745,8 +691,6 @@ async def retrieve_metric_history(
 
     try:
         async with get_connection() as conn:
-            # Build WHERE clause for each quarter pair
-            # Can't use IN with tuple of tuples in asyncpg, so build OR conditions
             quarter_conditions = []
             params = {
                 "bank_symbol": bank_symbol,
@@ -780,13 +724,11 @@ async def retrieve_metric_history(
                 params,
             )
 
-            # Build a lookup dict from results
             data_lookup = {}
             for row in result:
-                key = (row[0], row[1])  # (year, quarter)
+                key = (row[0], row[1])
                 data_lookup[key] = float(row[2]) if row[2] is not None else None
 
-            # Build output in chronological order
             history = []
             for year, q in quarters_to_query:
                 value = data_lookup.get((year, q))
@@ -838,9 +780,6 @@ def format_chart_json(
             "values": [4200, 4350, ...]
         }
     """
-    # Determine unit label and decimal places based on is_bps flag
-    # is_bps=True: value is a percentage (e.g., ROE 13.5%)
-    # is_bps=False: value is in millions (e.g., Net Income $4,200M)
     if is_bps:
         unit_label = "%"
         decimal_places = 2
@@ -853,13 +792,11 @@ def format_chart_json(
 
     for h in history:
         if h["value"] is not None:
-            # Format quarter label as "Q3 23" style
-            q_label = h["quarter"]  # e.g., "Q3 2023"
+            q_label = h["quarter"]
             parts = q_label.split()
             if len(parts) == 2:
-                q_label = f"{parts[0]} {parts[1][2:]}"  # "Q3 2023" -> "Q3 23"
+                q_label = f"{parts[0]} {parts[1][2:]}"
             quarters.append(q_label)
-            # Round value to match decimal_places for consistent display
             values.append(round(h["value"], decimal_places))
 
     return {
@@ -909,11 +846,9 @@ def format_multi_chart_json(
         history = metric["history"]
         is_bps = metric.get("is_bps", False)
 
-        # Track initial metric index
         if name == initial_metric_name:
             initial_index = i
 
-        # Determine unit label and decimal places
         if is_bps:
             unit_label = "%"
             decimal_places = 2
@@ -926,15 +861,13 @@ def format_multi_chart_json(
 
         for h in history:
             if h["value"] is not None:
-                # Format quarter label as "Q3 23" style
-                q_label = h["quarter"]  # e.g., "Q3 2023"
+                q_label = h["quarter"]
                 parts = q_label.split()
                 if len(parts) == 2:
-                    q_label = f"{parts[0]} {parts[1][2:]}"  # "Q3 2023" -> "Q3 23"
+                    q_label = f"{parts[0]} {parts[1][2:]}"
                 quarters.append(q_label)
                 values.append(round(h["value"], decimal_places))
 
-        # Only include metrics that have data
         if values:
             formatted_metrics.append(
                 {
@@ -947,7 +880,6 @@ def format_multi_chart_json(
                 }
             )
 
-    # Recalculate initial_index after filtering (in case some metrics had no data)
     initial_index = 0
     for i, m in enumerate(formatted_metrics):
         if m["name"] == initial_metric_name:
@@ -958,11 +890,6 @@ def format_multi_chart_json(
         "initial_index": initial_index,
         "metrics": formatted_metrics,
     }
-
-
-# =============================================================================
-# Segment Performance Retrieval
-# =============================================================================
 
 
 async def retrieve_available_platforms(
@@ -1124,7 +1051,6 @@ async def retrieve_segment_metrics(
 
             metrics = []
             for row in result:
-                # BPS field is "Yes"/"No" indicating if metric should display as basis points
                 bps_raw = row[9]
                 is_bps = bps_raw in ("Yes", "yes", True, 1) if bps_raw else False
 
@@ -1241,11 +1167,6 @@ def format_segment_json(
     }
 
 
-# =============================================================================
-# Raw Enterprise Metrics Table (All metrics with 8Q history)
-# =============================================================================
-
-
 async def retrieve_all_metrics_with_history(
     bank_symbol: str,
     fiscal_year: int,
@@ -1286,7 +1207,6 @@ async def retrieve_all_metrics_with_history(
     logger = get_logger()
     execution_id = context.get("execution_id")
 
-    # Get list of quarters to query
     quarters_to_query = get_previous_quarters(fiscal_year, quarter, num_quarters)
 
     logger.info(
@@ -1298,7 +1218,6 @@ async def retrieve_all_metrics_with_history(
 
     try:
         async with get_connection() as conn:
-            # Build WHERE clause for quarter filtering
             quarter_conditions = []
             params = {"bank_symbol": bank_symbol}
 
@@ -1311,7 +1230,6 @@ async def retrieve_all_metrics_with_history(
 
             quarter_filter = " OR ".join(quarter_conditions)
 
-            # Query all metrics for all quarters in one go
             result = await conn.execute(
                 text(
                     f"""
@@ -1338,7 +1256,6 @@ async def retrieve_all_metrics_with_history(
                 params,
             )
 
-            # Group results by parameter
             metrics_data: Dict[str, Dict[str, Any]] = {}
 
             for row in result:
@@ -1371,10 +1288,8 @@ async def retrieve_all_metrics_with_history(
                         "history_lookup": {},
                     }
 
-                # Store value in lookup
                 metrics_data[param_name]["history_lookup"][(year, q)] = actual
 
-                # If this is the current quarter, capture current value and deltas
                 if year == fiscal_year and q == quarter:
                     metrics_data[param_name]["current"] = actual
                     metrics_data[param_name]["qoq"] = qoq
@@ -1384,7 +1299,6 @@ async def retrieve_all_metrics_with_history(
                     metrics_data[param_name]["4y"] = delta_4y
                     metrics_data[param_name]["5y"] = delta_5y
 
-            # Build final output with history in chronological order
             output = []
             for param_name in sorted(metrics_data.keys()):
                 metric = metrics_data[param_name]
@@ -1392,7 +1306,6 @@ async def retrieve_all_metrics_with_history(
 
                 for year, q in quarters_to_query:
                     value = metric["history_lookup"].get((year, q))
-                    # Format period as "Q1 24" style
                     period_label = f"{q} {str(year)[2:]}"
                     history.append({"period": period_label, "value": value})
 
@@ -1468,11 +1381,8 @@ def format_raw_metrics_table(
     if not metrics_with_history:
         return {"headers": [], "rows": [], "tsv": ""}
 
-    # Build headers from first metric's history
     quarter_headers = [h["period"] for h in metrics_with_history[0]["history"]]
-    # HTML headers: Metric, quarters, Type, QoQ, YoY
     headers = ["Metric"] + quarter_headers + ["Type", "QoQ", "YoY"]
-    # TSV headers include additional year deltas
     tsv_headers = ["Metric"] + quarter_headers + ["Type", "QoQ", "YoY", "2Y", "3Y", "4Y", "5Y"]
 
     rows = []
@@ -1482,10 +1392,8 @@ def format_raw_metrics_table(
         param = metric["parameter"]
         is_bps = metric["is_bps"]
 
-        # Determine display type: % only if is_bps, otherwise $M
         display_type = "%" if is_bps else "$M"
 
-        # Format historical values for display
         formatted_values = []
         raw_values = []
         for h in metric["history"]:
@@ -1497,7 +1405,7 @@ def format_raw_metrics_table(
                 if display_type == "%":
                     formatted_values.append(f"{val:.2f}")
                     raw_values.append(f"{val:.2f}")
-                else:  # $M
+                else:
                     if abs(val) >= 1000:
                         formatted_values.append(f"{val:,.0f}")
                         raw_values.append(f"{val:.0f}")
@@ -1505,7 +1413,6 @@ def format_raw_metrics_table(
                         formatted_values.append(f"{val:,.1f}")
                         raw_values.append(f"{val:.1f}")
 
-        # Format QoQ and YoY deltas
         qoq_val = metric["qoq"]
         yoy_val = metric["yoy"]
 
@@ -1535,7 +1442,6 @@ def format_raw_metrics_table(
                 yoy_display = f"{yoy_val:+.1f}%"
                 yoy_raw = f"{yoy_val:.1f}"
 
-        # Format multi-year deltas (2Y, 3Y, 4Y, 5Y) from database for TSV only
         multi_year_deltas = []
         for delta_key in ["2y", "3y", "4y", "5y"]:
             delta_val = metric.get(delta_key)
@@ -1559,7 +1465,6 @@ def format_raw_metrics_table(
             }
         )
 
-        # Build TSV row for copy/paste (includes multi-year deltas)
         tsv_row = [param] + raw_values + [display_type, qoq_raw, yoy_raw] + multi_year_deltas
         tsv_lines.append("\t".join(tsv_row))
 
@@ -1568,11 +1473,6 @@ def format_raw_metrics_table(
         "rows": rows,
         "tsv": "\n".join(tsv_lines),
     }
-
-
-# =============================================================================
-# Raw Segment Metrics Table (All segment metrics with 8Q history)
-# =============================================================================
 
 
 async def retrieve_segment_metrics_with_history(
@@ -1603,7 +1503,6 @@ async def retrieve_segment_metrics_with_history(
     logger = get_logger()
     execution_id = context.get("execution_id")
 
-    # Get list of quarters to query
     quarters_to_query = get_previous_quarters(fiscal_year, quarter, num_quarters)
 
     logger.info(
@@ -1616,7 +1515,6 @@ async def retrieve_segment_metrics_with_history(
 
     try:
         async with get_connection() as conn:
-            # Build WHERE clause for quarter filtering
             quarter_conditions = []
             params = {"bank_symbol": bank_symbol, "platform": platform}
 
@@ -1629,7 +1527,6 @@ async def retrieve_segment_metrics_with_history(
 
             quarter_filter = " OR ".join(quarter_conditions)
 
-            # Query all metrics for this platform across all quarters
             result = await conn.execute(
                 text(
                     f"""
@@ -1656,7 +1553,6 @@ async def retrieve_segment_metrics_with_history(
                 params,
             )
 
-            # Group results by parameter
             metrics_data: Dict[str, Dict[str, Any]] = {}
 
             for row in result:
@@ -1689,10 +1585,8 @@ async def retrieve_segment_metrics_with_history(
                         "history_lookup": {},
                     }
 
-                # Store value in lookup
                 metrics_data[param_name]["history_lookup"][(year, q)] = actual
 
-                # If this is the current quarter, capture current value and deltas
                 if year == fiscal_year and q == quarter:
                     metrics_data[param_name]["current"] = actual
                     metrics_data[param_name]["qoq"] = qoq
@@ -1702,7 +1596,6 @@ async def retrieve_segment_metrics_with_history(
                     metrics_data[param_name]["4y"] = delta_4y
                     metrics_data[param_name]["5y"] = delta_5y
 
-            # Build final output with history in chronological order
             output = []
             for param_name in sorted(metrics_data.keys()):
                 metric = metrics_data[param_name]
@@ -1710,7 +1603,6 @@ async def retrieve_segment_metrics_with_history(
 
                 for year, q in quarters_to_query:
                     value = metric["history_lookup"].get((year, q))
-                    # Format period as "Q1 24" style
                     period_label = f"{q} {str(year)[2:]}"
                     history.append({"period": period_label, "value": value})
 
@@ -1776,14 +1668,11 @@ def format_segment_raw_table(
     if not metrics_with_history:
         return {"headers": [], "rows": [], "tsv": ""}
 
-    # Get all quarter headers from first metric
     all_quarter_headers = [h["period"] for h in metrics_with_history[0]["history"]]
 
-    # HTML: Only show last N quarters
     display_quarter_headers = all_quarter_headers[-display_quarters:]
     headers = ["Metric"] + display_quarter_headers + ["Type", "QoQ", "YoY"]
 
-    # TSV: All 8 quarters + all deltas
     tsv_headers = ["Metric"] + all_quarter_headers + ["Type", "QoQ", "YoY", "2Y", "3Y", "4Y", "5Y"]
 
     rows = []
@@ -1793,10 +1682,8 @@ def format_segment_raw_table(
         param = metric["parameter"]
         is_bps = metric["is_bps"]
 
-        # Determine display type: % only if is_bps, otherwise $M
         display_type = "%" if is_bps else "$M"
 
-        # Format ALL historical values (for TSV)
         all_formatted_values = []
         all_raw_values = []
         for h in metric["history"]:
@@ -1808,7 +1695,7 @@ def format_segment_raw_table(
                 if display_type == "%":
                     all_formatted_values.append(f"{val:.2f}")
                     all_raw_values.append(f"{val:.2f}")
-                else:  # $M
+                else:
                     if abs(val) >= 1000:
                         all_formatted_values.append(f"{val:,.0f}")
                         all_raw_values.append(f"{val:.0f}")
@@ -1816,10 +1703,8 @@ def format_segment_raw_table(
                         all_formatted_values.append(f"{val:,.1f}")
                         all_raw_values.append(f"{val:.1f}")
 
-        # HTML display: only last N quarters
         display_formatted_values = all_formatted_values[-display_quarters:]
 
-        # Format QoQ and YoY deltas
         qoq_val = metric["qoq"]
         yoy_val = metric["yoy"]
 
@@ -1849,7 +1734,6 @@ def format_segment_raw_table(
                 yoy_display = f"{yoy_val:+.1f}%"
                 yoy_raw = f"{yoy_val:.1f}"
 
-        # Format multi-year deltas for TSV only
         multi_year_deltas = []
         for delta_key in ["2y", "3y", "4y", "5y"]:
             delta_val = metric.get(delta_key)
@@ -1873,7 +1757,6 @@ def format_segment_raw_table(
             }
         )
 
-        # Build TSV row with ALL 8 quarters and all deltas
         tsv_row = [param] + all_raw_values + [display_type, qoq_raw, yoy_raw] + multi_year_deltas
         tsv_lines.append("\t".join(tsv_row))
 

@@ -64,7 +64,6 @@ async def extract_transcript_quotes(
         num_quotes=num_quotes,
     )
 
-    # Step 1: Retrieve MD section chunks
     chunks = await retrieve_md_chunks(
         bank_id=bank_info["bank_id"],
         fiscal_year=fiscal_year,
@@ -80,7 +79,6 @@ async def extract_transcript_quotes(
         )
         return []
 
-    # Step 2: Format MD section for LLM
     md_content = format_md_section_for_llm(
         chunks=chunks,
         bank_name=bank_info["bank_name"],
@@ -96,7 +94,6 @@ async def extract_transcript_quotes(
         )
         return []
 
-    # Step 3: Build prompts for LLM
     system_prompt = f"""You are a senior financial analyst extracting impactful management quotes \
 from bank earnings call transcripts.
 
@@ -164,7 +161,6 @@ Return exactly {num_quotes} verbatim quotes (condensed with ellipsis as needed).
 
 Select {num_quotes} quotes that best capture management's key messages for this quarter."""
 
-    # Define the tool for structured output
     tool_definition = {
         "type": "function",
         "function": {
@@ -218,7 +214,6 @@ Select {num_quotes} quotes that best capture management's key messages for this 
     ]
 
     try:
-        # Use medium model for extraction
         model = etl_config.get_model("management_narrative_extraction")
 
         response = await complete_with_tools(
@@ -227,12 +222,11 @@ Select {num_quotes} quotes that best capture management's key messages for this 
             context=context,
             llm_params={
                 "model": model,
-                "temperature": 0.2,  # Low temperature for factual extraction
-                "max_tokens": 4000,
+                "temperature": etl_config.temperature,
+                "max_tokens": etl_config.max_tokens,
             },
         )
 
-        # Parse the tool call response
         if response.get("choices") and response["choices"][0].get("message"):
             message = response["choices"][0]["message"]
             if message.get("tool_calls"):
@@ -241,7 +235,6 @@ Select {num_quotes} quotes that best capture management's key messages for this 
 
                 quotes = function_args.get("quotes", [])
 
-                # Format quotes for template (add type field)
                 formatted_quotes = []
                 for quote in quotes:
                     if quote.get("content") and quote.get("speaker") and quote.get("title"):

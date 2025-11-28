@@ -34,11 +34,6 @@ from aegis.utils.sql_prompt import postgresql_prompts
 setup_logging()
 logger = get_logger()
 
-
-# =============================================================================
-# Monitored Institutions (shared with call_summary)
-# =============================================================================
-
 _MONITORED_INSTITUTIONS = None
 
 
@@ -81,7 +76,6 @@ def get_bank_info_from_config(bank_identifier: str) -> Dict[str, Any]:
     """
     institutions = _load_monitored_institutions()
 
-    # Try lookup by ID
     if bank_identifier.isdigit():
         bank_id = int(bank_identifier)
         if bank_id in institutions:
@@ -93,7 +87,6 @@ def get_bank_info_from_config(bank_identifier: str) -> Dict[str, Any]:
                 "bank_type": inst["type"],
             }
 
-    # Try lookup by symbol or name
     bank_identifier_upper = bank_identifier.upper()
     bank_identifier_lower = bank_identifier.lower()
 
@@ -119,11 +112,6 @@ def get_bank_info_from_config(bank_identifier: str) -> Dict[str, Any]:
         f"Bank '{bank_identifier}' not found in monitored institutions.\n"
         f"Available banks: {', '.join(sorted(available))}"
     )
-
-
-# =============================================================================
-# Data Availability Verification
-# =============================================================================
 
 
 async def verify_data_availability(
@@ -173,11 +161,6 @@ async def verify_data_availability(
         return availability
 
 
-# =============================================================================
-# Stage 2: Data Retrieval (Placeholder functions)
-# =============================================================================
-
-
 async def retrieve_supplementary_data(
     bank_id: int, fiscal_year: int, quarter: str, context: Dict[str, Any]
 ) -> Dict[str, Any]:
@@ -201,7 +184,6 @@ async def retrieve_supplementary_data(
         bank_id=bank_id,
         period=f"{quarter} {fiscal_year}",
     )
-    # TODO: Implement retrieval from aegis_supplementary table
     return {}
 
 
@@ -228,7 +210,6 @@ async def retrieve_pillar3_data(
         bank_id=bank_id,
         period=f"{quarter} {fiscal_year}",
     )
-    # TODO: Implement retrieval from aegis_pillar3 table
     return {}
 
 
@@ -255,7 +236,6 @@ async def retrieve_rts_data(
         bank_id=bank_id,
         period=f"{quarter} {fiscal_year}",
     )
-    # TODO: Implement retrieval from aegis_rts table
     return {}
 
 
@@ -282,13 +262,7 @@ async def retrieve_transcript_data(
         bank_id=bank_id,
         period=f"{quarter} {fiscal_year}",
     )
-    # TODO: Implement retrieval from aegis_transcripts table
     return {}
-
-
-# =============================================================================
-# Stage 3: Section Extraction (Placeholder functions)
-# =============================================================================
 
 
 def get_period_ending_date(fiscal_year: int, quarter: str) -> str:
@@ -365,7 +339,6 @@ async def extract_all_sections(
     Returns:
         Dict mapping section names to extracted JSON data
     """
-    # Import retrieval and extraction functions
     from .retrieval.supplementary import (
         retrieve_dividend,
         format_dividend_json,
@@ -408,25 +381,15 @@ async def extract_all_sections(
 
     sections = {}
 
-    # =========================================================================
-    # Section 0: Header Params (no DB needed)
-    # =========================================================================
     sections["0_header_params"] = extract_header_params(bank_info, fiscal_year, quarter)
     logger.info("etl.bank_earnings_report.section_complete", section="0_header_params")
 
-    # =========================================================================
-    # Section 0: Header Dividend (from supplementary)
-    # =========================================================================
     dividend_data = await retrieve_dividend(db_symbol, fiscal_year, quarter, context)
     sections["0_header_dividend"] = format_dividend_json(dividend_data)
     logger.info("etl.bank_earnings_report.section_complete", section="0_header_dividend")
 
-    # =========================================================================
-    # Section 1: Key Metrics Tiles + Chart (from supplementary + LLM selection)
-    # =========================================================================
     all_metrics = await retrieve_all_metrics(db_symbol, fiscal_year, quarter, context)
 
-    # Initialize LLM debug log
     llm_debug_log = {
         "execution_id": str(execution_id),
         "bank": bank_info["bank_name"],
@@ -434,7 +397,6 @@ async def extract_all_sections(
         "sections": {},
     }
 
-    # Log key metrics availability (X of 7)
     available_metric_names = {m["parameter"] for m in all_metrics} if all_metrics else set()
     found_key_metrics = [m for m in KEY_METRICS if m in available_metric_names]
     missing_key_metrics = [m for m in KEY_METRICS if m not in available_metric_names]
@@ -449,7 +411,6 @@ async def extract_all_sections(
     )
 
     if all_metrics:
-        # LLM selects 1 chart metric + 6 tile metrics + 5 dynamic metrics
         selection_result = await select_chart_and_tile_metrics(
             metrics=all_metrics,
             bank_name=bank_info["bank_name"],
@@ -460,7 +421,6 @@ async def extract_all_sections(
             num_dynamic_metrics=5,
         )
 
-        # Store debug info for chart, tiles, and dynamic metrics
         llm_debug_log["sections"]["1_keymetrics_selection"] = {
             "available_metrics": selection_result.get("available_metrics", 0),
             "available_chartable": selection_result.get("available_chartable", []),
@@ -473,7 +433,6 @@ async def extract_all_sections(
             "all_metrics_summary": selection_result.get("all_metrics_summary", []),
         }
 
-        # Retrieve the selected tile metrics
         tile_names = selection_result.get("tile_metrics", [])
         tile_metrics = await retrieve_metrics_by_names(
             db_symbol, fiscal_year, quarter, tile_names, context
@@ -481,14 +440,12 @@ async def extract_all_sections(
         tiles_json = format_key_metrics_json(tile_metrics)
         sections["1_keymetrics_tiles"] = tiles_json
 
-        # Add tile metrics data to debug log
         llm_debug_log["sections"]["1_keymetrics_tiles"] = {
             "requested_metrics": tile_names,
             "retrieved_count": len(tile_metrics),
             "formatted_metrics": tiles_json.get("metrics", []),
         }
 
-        # Retrieve the selected dynamic metrics (for slim tiles row)
         dynamic_names = selection_result.get("dynamic_metrics", [])
         if dynamic_names:
             dynamic_metrics = await retrieve_metrics_by_names(
@@ -497,7 +454,6 @@ async def extract_all_sections(
             dynamic_json = format_key_metrics_json(dynamic_metrics)
             sections["1_keymetrics_dynamic"] = dynamic_json
 
-            # Add dynamic metrics data to debug log
             llm_debug_log["sections"]["1_keymetrics_dynamic"] = {
                 "requested_metrics": dynamic_names,
                 "retrieved_count": len(dynamic_metrics),
@@ -511,30 +467,24 @@ async def extract_all_sections(
                 "formatted_metrics": [],
             }
 
-        # Retrieve historical data for ALL metrics (tiles + dynamic + chart)
-        # Combine all metric names, deduplicated, preserving order
         chart_metric_name = selection_result.get("chart_metric", "")
         all_chart_metrics = []
         seen_metrics = set()
 
-        # Add chart metric first (will be initial display)
         if chart_metric_name and chart_metric_name not in seen_metrics:
             all_chart_metrics.append(chart_metric_name)
             seen_metrics.add(chart_metric_name)
 
-        # Add tile metrics
         for name in tile_names:
             if name not in seen_metrics:
                 all_chart_metrics.append(name)
                 seen_metrics.add(name)
 
-        # Add dynamic metrics
         for name in dynamic_names:
             if name not in seen_metrics:
                 all_chart_metrics.append(name)
                 seen_metrics.add(name)
 
-        # Build metrics_with_history for all metrics
         metrics_with_history = []
         metrics_by_param = {m["parameter"]: m for m in all_metrics}
 
@@ -543,7 +493,6 @@ async def extract_all_sections(
             if not metric_data:
                 continue
 
-            # Retrieve 8Q history for this metric
             history = await retrieve_metric_history(
                 bank_symbol=db_symbol,
                 metric_name=metric_name,
@@ -566,7 +515,6 @@ async def extract_all_sections(
             chart_json = format_multi_chart_json(metrics_with_history, chart_metric_name)
             sections["1_keymetrics_chart"] = chart_json
 
-            # Add chart data to debug log
             llm_debug_log["sections"]["1_keymetrics_chart"] = {
                 "initial_metric": chart_metric_name,
                 "total_metrics": len(metrics_with_history),
@@ -600,15 +548,10 @@ async def extract_all_sections(
             "dynamic_reasoning": "No metrics available",
         }
 
-    # Store debug log in context for later saving
     context["llm_debug_log"] = llm_debug_log
 
     logger.info("etl.bank_earnings_report.section_complete", section="1_keymetrics_tiles")
     logger.info("etl.bank_earnings_report.section_complete", section="1_keymetrics_chart")
-
-    # =========================================================================
-    # Raw Enterprise Metrics Table (expandable section with all metrics + 8Q history)
-    # =========================================================================
 
     raw_metrics_with_history = await retrieve_all_metrics_with_history(
         bank_symbol=db_symbol,
@@ -634,10 +577,6 @@ async def extract_all_sections(
 
     logger.info("etl.bank_earnings_report.section_complete", section="1_keymetrics_raw")
 
-    # =========================================================================
-    # Section 1b: Key Metrics Overview (from transcripts)
-    # Future: Will combine with RTS overview for final summary
-    # =========================================================================
     logger.info(
         "etl.bank_earnings_report.transcript_overview_start",
         execution_id=execution_id,
@@ -654,7 +593,6 @@ async def extract_all_sections(
         "narrative": transcript_overview.get("narrative", ""),
     }
 
-    # Add to debug log
     llm_debug_log["sections"]["1_keymetrics_overview"] = {
         "source": "Transcript",
         "narrative_length": len(transcript_overview.get("narrative", "")),
@@ -666,10 +604,6 @@ async def extract_all_sections(
         narrative_length=len(transcript_overview.get("narrative", "")),
     )
 
-    # =========================================================================
-    # Section 1c: Key Metrics Items of Note (from transcripts)
-    # Future: Will combine with RTS items, dedupe, and select top 5
-    # =========================================================================
     logger.info(
         "etl.bank_earnings_report.transcript_items_start",
         execution_id=execution_id,
@@ -688,7 +622,6 @@ async def extract_all_sections(
         "entries": transcript_items.get("items", []),
     }
 
-    # Add to debug log
     llm_debug_log["sections"]["1_keymetrics_items"] = {
         "source": "Transcript",
         "items_count": len(transcript_items.get("items", [])),
@@ -702,10 +635,6 @@ async def extract_all_sections(
         items_count=len(transcript_items.get("items", [])),
     )
 
-    # =========================================================================
-    # Section 2: Management Narrative (transcript quotes)
-    # Future: Will also include RTS summaries and LLM-based ordering
-    # =========================================================================
     logger.info(
         "etl.bank_earnings_report.management_narrative_start",
         execution_id=execution_id,
@@ -721,7 +650,6 @@ async def extract_all_sections(
 
     sections["2_narrative"] = {"entries": transcript_quotes}
 
-    # Add to debug log
     llm_debug_log["sections"]["2_narrative"] = {
         "transcript_quotes": len(transcript_quotes),
         "speakers": [q.get("speaker", "") for q in transcript_quotes],
@@ -733,9 +661,6 @@ async def extract_all_sections(
         transcript_quotes=len(transcript_quotes),
     )
 
-    # =========================================================================
-    # Section 3: Analyst Focus (from transcripts + LLM extraction)
-    # =========================================================================
     logger.info(
         "etl.bank_earnings_report.analyst_focus_start",
         execution_id=execution_id,
@@ -751,7 +676,6 @@ async def extract_all_sections(
 
     sections["3_analyst_focus"] = analyst_focus_result
 
-    # Add to debug log
     llm_debug_log["sections"]["3_analyst_focus"] = {
         "total_entries": len(analyst_focus_result.get("entries", [])),
         "featured_entries": len(analyst_focus_result.get("featured", [])),
@@ -764,20 +688,15 @@ async def extract_all_sections(
         entries=len(analyst_focus_result.get("entries", [])),
     )
 
-    # =========================================================================
-    # Section 4: Segment Performance (from supplementary + LLM selection)
-    # =========================================================================
     logger.info(
         "etl.bank_earnings_report.segments_start",
         execution_id=execution_id,
     )
 
-    # Get all platforms available in the database for this bank/period
     available_platforms = await retrieve_available_platforms(
         db_symbol, fiscal_year, quarter, context
     )
 
-    # Log platform availability (X of 5) - exact matching only
     found_platforms = [p for p in MONITORED_PLATFORMS if p in available_platforms]
     missing_platforms = [p for p in MONITORED_PLATFORMS if p not in available_platforms]
 
@@ -790,7 +709,6 @@ async def extract_all_sections(
         missing_platforms=missing_platforms,
     )
 
-    # Process only exact matches to monitored platforms
     segment_entries = []
     segment_debug = {
         "available_platforms": available_platforms,
@@ -800,7 +718,6 @@ async def extract_all_sections(
         "segment_selections": {},
     }
 
-    # Get ALL segment drivers from RTS in a single LLM call (more efficient)
     all_segment_drivers = await get_all_segment_drivers_from_rts(
         bank=db_symbol,  # e.g., "RY-CA"
         year=fiscal_year,
@@ -817,31 +734,25 @@ async def extract_all_sections(
     )
 
     for platform in found_platforms:
-        # Platform is already an exact match - use it directly
         logger.info(
             "etl.bank_earnings_report.segment_matched",
             execution_id=execution_id,
             platform=platform,
         )
 
-        # Retrieve all metrics for this segment
         segment_metrics = await retrieve_segment_metrics(
             db_symbol, fiscal_year, quarter, platform, context
         )
 
         if segment_metrics:
-            # Build lookup for core metrics
             metrics_by_name = {m["parameter"]: m for m in segment_metrics}
 
-            # Get core metrics for this specific segment
             segment_core_metrics = CORE_SEGMENT_METRICS.get(platform, DEFAULT_CORE_METRICS)
             core_metrics_data = []
             for core_name in segment_core_metrics:
                 if core_name in metrics_by_name:
                     core_metrics_data.append(metrics_by_name[core_name])
 
-            # Use LLM to select top 3 highlighted metrics for this segment
-            # Exclude core metrics from LLM selection
             selection = await select_top_segment_metrics(
                 metrics=segment_metrics,
                 segment_name=platform,
@@ -852,7 +763,6 @@ async def extract_all_sections(
                 num_metrics=3,
             )
 
-            # Store debug info
             segment_debug["segment_selections"][platform] = {
                 "available_metrics": len(segment_metrics),
                 "core_metrics": [m["parameter"] for m in core_metrics_data],
@@ -860,11 +770,9 @@ async def extract_all_sections(
                 "reasoning": selection.get("reasoning", ""),
             }
 
-            # Get RTS drivers from the batch result (already retrieved above)
             description = all_segment_drivers.get(platform, "")
             segment_debug["segment_selections"][platform]["rts_drivers"] = bool(description)
 
-            # Format the segment entry with both core and highlighted metrics
             segment_entry = format_segment_json(
                 segment_name=platform,
                 description=description,
@@ -872,7 +780,6 @@ async def extract_all_sections(
                 highlighted_metrics=selection.get("metrics_data", []),
             )
 
-            # Retrieve 8Q historical data for raw table (displays 4Q, copies 8Q)
             segment_metrics_history = await retrieve_segment_metrics_with_history(
                 bank_symbol=db_symbol,
                 fiscal_year=fiscal_year,
@@ -914,7 +821,6 @@ async def extract_all_sections(
         segments_found=len(segment_entries),
     )
 
-    # Capital & Risk - placeholder (uses .source, .regulatory_capital, .rwa, .liquidity_credit)
     sections["5_capital_risk"] = {
         "source": "Pillar 3",
         "regulatory_capital": [],
@@ -931,11 +837,6 @@ async def extract_all_sections(
     return sections
 
 
-# =============================================================================
-# Stage 4: Template Rendering
-# =============================================================================
-
-
 def render_report(sections: Dict[str, Any], output_path: Path) -> Path:
     """
     Render the HTML report from extracted sections using Jinja2.
@@ -948,9 +849,8 @@ def render_report(sections: Dict[str, Any], output_path: Path) -> Path:
         Path to the rendered HTML file
     """
     base_dir = Path(__file__).parent
-    template_path = base_dir / "report_template.html"
+    template_path = base_dir / "templates" / "report_template.html"
 
-    # Prepare template data with underscore prefix for numeric keys
     template_data = {}
     for key, value in sections.items():
         if key[0].isdigit():
@@ -958,21 +858,14 @@ def render_report(sections: Dict[str, Any], output_path: Path) -> Path:
         else:
             template_data[key] = value
 
-    # Render template
     env = Environment(loader=FileSystemLoader(base_dir))
     template = env.get_template(template_path.name)
     rendered = template.render(**template_data)
 
-    # Write output
     with open(output_path, "w", encoding="utf-8") as f:
         f.write(rendered)
 
     return output_path
-
-
-# =============================================================================
-# Stage 5: Database Storage
-# =============================================================================
 
 
 async def save_to_database(
@@ -996,7 +889,6 @@ async def save_to_database(
 
     try:
         async with get_connection() as conn:
-            # Delete existing report for same bank/period/type
             await conn.execute(
                 text(
                     """
@@ -1015,7 +907,6 @@ async def save_to_database(
                 },
             )
 
-            # Insert new report
             await conn.execute(
                 text(
                     """
@@ -1088,11 +979,6 @@ async def save_to_database(
         raise
 
 
-# =============================================================================
-# Main ETL Orchestrator
-# =============================================================================
-
-
 async def generate_bank_earnings_report(bank_name: str, fiscal_year: int, quarter: str) -> str:
     """
     Generate a bank earnings report.
@@ -1115,9 +1001,6 @@ async def generate_bank_earnings_report(bank_name: str, fiscal_year: int, quarte
     )
 
     try:
-        # =================================================================
-        # Stage 1: Setup & Validation
-        # =================================================================
         bank_info = get_bank_info_from_config(bank_name)
 
         availability = await verify_data_availability(
@@ -1148,15 +1031,11 @@ async def generate_bank_earnings_report(bank_name: str, fiscal_year: int, quarte
             "ssl_config": ssl_config,
         }
 
-        # =================================================================
-        # Stage 2: Data Retrieval (Parallel)
-        # =================================================================
         logger.info(
             "etl.bank_earnings_report.retrieval_start",
             execution_id=execution_id,
         )
 
-        # Retrieve all data sources in parallel
         supplementary_task = retrieve_supplementary_data(
             bank_info["bank_id"], fiscal_year, quarter, context
         )
@@ -1182,14 +1061,8 @@ async def generate_bank_earnings_report(bank_name: str, fiscal_year: int, quarte
             execution_id=execution_id,
         )
 
-        # =================================================================
-        # Stage 3: Section Extraction
-        # =================================================================
         sections = await extract_all_sections(bank_info, fiscal_year, quarter, raw_data, context)
 
-        # =================================================================
-        # Stage 4: Template Rendering
-        # =================================================================
         output_dir = Path(__file__).parent / "output"
         output_dir.mkdir(exist_ok=True)
 
@@ -1198,7 +1071,6 @@ async def generate_bank_earnings_report(bank_name: str, fiscal_year: int, quarte
 
         render_report(sections, output_path)
 
-        # Save LLM debug log alongside the report
         if "llm_debug_log" in context:
             debug_filename = f"{bank_info['bank_symbol']}_{fiscal_year}_{quarter}_llm_debug.json"
             debug_path = output_dir / debug_filename
@@ -1216,9 +1088,6 @@ async def generate_bank_earnings_report(bank_name: str, fiscal_year: int, quarte
             output_path=str(output_path),
         )
 
-        # =================================================================
-        # Stage 5: Database Storage
-        # =================================================================
         await save_to_database(bank_info, fiscal_year, quarter, output_path, execution_id)
 
         logger.info(
@@ -1246,11 +1115,6 @@ async def generate_bank_earnings_report(bank_name: str, fiscal_year: int, quarte
         return f"❌ {error_msg}"
 
 
-# =============================================================================
-# CLI Entry Point
-# =============================================================================
-
-
 def main():
     """Main entry point for command-line execution."""
     parser = argparse.ArgumentParser(
@@ -1266,7 +1130,6 @@ def main():
 
     args = parser.parse_args()
 
-    # Load prompts from database
     postgresql_prompts()
 
     print(f"\n🔄 Generating report for {args.bank} {args.quarter} {args.year}...\n")

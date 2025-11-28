@@ -38,11 +38,9 @@ async def get_transcript_diagnostics(
 
     try:
         async with get_connection() as conn:
-            # Total records
             result = await conn.execute(text("SELECT COUNT(*) FROM aegis_transcripts"))
             diagnostics["total_records"] = result.scalar()
 
-            # Records matching bank_id
             result = await conn.execute(
                 text(
                     """
@@ -55,21 +53,18 @@ async def get_transcript_diagnostics(
             )
             diagnostics["matching_bank_id"] = result.scalar()
 
-            # Records matching fiscal_year
             result = await conn.execute(
                 text("SELECT COUNT(*) FROM aegis_transcripts WHERE fiscal_year = :fiscal_year"),
                 {"fiscal_year": fiscal_year},
             )
             diagnostics["matching_year"] = result.scalar()
 
-            # Records matching quarter
             result = await conn.execute(
                 text("SELECT COUNT(*) FROM aegis_transcripts WHERE fiscal_quarter = :quarter"),
                 {"quarter": quarter},
             )
             diagnostics["matching_quarter"] = result.scalar()
 
-            # Records matching all filters
             result = await conn.execute(
                 text(
                     """
@@ -87,7 +82,6 @@ async def get_transcript_diagnostics(
             )
             diagnostics["matching_all_filters"] = result.scalar()
 
-            # Q&A records matching all filters
             result = await conn.execute(
                 text(
                     """
@@ -106,7 +100,6 @@ async def get_transcript_diagnostics(
             )
             diagnostics["qa_chunks"] = result.scalar()
 
-            # Distinct Q&A groups
             result = await conn.execute(
                 text(
                     """
@@ -155,7 +148,6 @@ async def retrieve_qa_chunks(
     execution_id = context.get("execution_id")
     bank_id_str = str(bank_id)
 
-    # Get diagnostics for debugging
     diagnostics = await get_transcript_diagnostics(bank_id, fiscal_year, quarter, context)
 
     logger.info(
@@ -202,7 +194,6 @@ async def retrieve_qa_chunks(
 
             chunks = []
             for row in result:
-                # Only include chunks with valid qa_group_id
                 if row[3] is not None:
                     chunks.append(
                         {
@@ -258,7 +249,6 @@ def group_chunks_by_qa_id(chunks: List[Dict[str, Any]]) -> Dict[int, List[Dict[s
                 groups[qa_id] = []
             groups[qa_id].append(chunk)
 
-    # Sort chunks within each group by chunk_id
     for qa_id in groups:
         groups[qa_id].sort(key=lambda x: x.get("chunk_id", 0))
 
@@ -290,15 +280,12 @@ def format_qa_group_for_llm(
     if not chunks:
         return ""
 
-    # Get metadata from first chunk
     title = chunks[0].get("title", "Earnings Call Transcript")
     classification_names = chunks[0].get("classification_names", [])
     block_summary = chunks[0].get("block_summary", "")
 
-    # Concatenate all chunk content
     full_content = "\n\n".join(chunk.get("content", "") for chunk in chunks if chunk.get("content"))
 
-    # Format for LLM
     formatted = f"""## Q&A Exchange #{qa_group_id}
 
 **Bank:** {bank_name}
@@ -342,11 +329,6 @@ def get_qa_group_summary(chunks: List[Dict[str, Any]]) -> Dict[str, Any]:
     }
 
 
-# =============================================================================
-# Management Discussion (MD) Section Retrieval
-# =============================================================================
-
-
 async def retrieve_md_chunks(
     bank_id: int,
     fiscal_year: int,
@@ -371,7 +353,6 @@ async def retrieve_md_chunks(
 
     try:
         async with get_connection() as conn:
-            # First get diagnostic count
             count_query = text(
                 """
                 SELECT COUNT(*) FROM aegis_transcripts
@@ -391,7 +372,6 @@ async def retrieve_md_chunks(
             )
             md_chunk_count = count_result.scalar()
 
-            # Get distinct speaker blocks
             block_count_query = text(
                 """
                 SELECT COUNT(DISTINCT speaker_block_id) FROM aegis_transcripts
@@ -422,7 +402,6 @@ async def retrieve_md_chunks(
                 speaker_blocks=speaker_block_count,
             )
 
-            # Retrieve all MD chunks
             query = text(
                 """
                 SELECT
@@ -456,7 +435,6 @@ async def retrieve_md_chunks(
 
             chunks = []
             for row in result:
-                # Only include chunks with valid speaker_block_id
                 if row[2] is not None:
                     chunks.append(
                         {
@@ -512,7 +490,6 @@ def group_chunks_by_speaker_block(chunks: List[Dict[str, Any]]) -> Dict[int, Lis
                 groups[block_id] = []
             groups[block_id].append(chunk)
 
-    # Sort chunks within each group by chunk_id
     for block_id in groups:
         groups[block_id].sort(key=lambda x: x.get("chunk_id", 0))
 
@@ -542,11 +519,9 @@ def format_md_section_for_llm(
     if not chunks:
         return ""
 
-    # Group by speaker block
     groups = group_chunks_by_speaker_block(chunks)
     sorted_block_ids = sorted(groups.keys())
 
-    # Build header
     formatted = f"""# Management Discussion Section
 
 **Bank:** {bank_name}
@@ -557,15 +532,12 @@ def format_md_section_for_llm(
 
 """
 
-    # Format each speaker block
     for block_id in sorted_block_ids:
         block_chunks = groups[block_id]
 
-        # Get metadata from first chunk
         block_summary = block_chunks[0].get("block_summary", "")
         classification_names = block_chunks[0].get("classification_names", [])
 
-        # Concatenate all chunk content
         full_content = "\n\n".join(
             chunk.get("content", "") for chunk in block_chunks if chunk.get("content")
         )
