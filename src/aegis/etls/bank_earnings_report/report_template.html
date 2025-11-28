@@ -930,8 +930,8 @@
 
         <!-- ============================================
              SECTION 4: Segment Performance
-             DATA SOURCE: 4_segments.json (entries array with name, description, core_metrics, highlighted_metrics)
-             NOTE: Variable-length list of business segments with two metric columns
+             DATA SOURCE: 4_segments.json (primary array + secondary array)
+             NOTE: Primary segments shown by default, secondary segments in expandable section
              ============================================ -->
         <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px;">
             <div class="card">
@@ -946,14 +946,17 @@
                 </div>
 
                 <div style="display: flex; flex-direction: column; margin-top: 10px;">
-                    {% for segment in _4_segments.entries %}
+                    <!-- Primary segments (shown by default) -->
+                    {% for segment in _4_segments.primary %}
                     <div class="qa-item" style="padding: 10px 12px; margin-bottom: 8px;">
                         <!-- Segment header and description -->
                         <div style="margin-bottom: 6px;">
                             <div style="margin-bottom: 2px;">
                                 <span style="font-size: 11px; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;">{{ segment.name }}</span>
                             </div>
+                            {% if segment.description %}
                             <div style="font-size: 11px; color: var(--text-main); line-height: 1.4;">{{ segment.description }}</div>
+                            {% endif %}
                         </div>
                         <!-- Two-column metrics layout -->
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
@@ -1020,15 +1023,15 @@
                         <!-- Expandable Raw Metrics Table for this segment -->
                         {% if segment.raw_table.rows %}
                         <div style="margin-top: 8px; text-align: center;">
-                            <button id="segment-toggle-{{ loop.index }}" onclick="toggleSegmentRaw({{ loop.index }})" style="background: none; border: 1px solid #e2e8f0; border-radius: 6px; padding: 4px 10px; cursor: pointer; font-size: 8px; color: #64748b; transition: all 0.2s;">
-                                <span id="segment-icon-{{ loop.index }}">▶</span> View All {{ segment.name }} Metrics ({{ segment.raw_table.rows|length }} metrics)
+                            <button id="segment-toggle-primary-{{ loop.index }}" onclick="toggleSegmentRaw('primary-{{ loop.index }}')" style="background: none; border: 1px solid #e2e8f0; border-radius: 6px; padding: 4px 10px; cursor: pointer; font-size: 8px; color: #64748b; transition: all 0.2s;">
+                                <span id="segment-icon-primary-{{ loop.index }}">▶</span> View All {{ segment.name }} Metrics ({{ segment.raw_table.rows|length }} metrics)
                             </button>
                         </div>
 
-                        <div id="segment-container-{{ loop.index }}" style="display: none; margin-top: 8px; border: 1px solid #e2e8f0; border-radius: 6px; overflow: hidden; max-width: 100%;">
+                        <div id="segment-container-primary-{{ loop.index }}" style="display: none; margin-top: 8px; border: 1px solid #e2e8f0; border-radius: 6px; overflow: hidden; max-width: 100%;">
                             <!-- Copy button bar -->
                             <div style="background: #f8fafc; padding: 4px 8px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: flex-end; align-items: center;">
-                                <button onclick="copySegmentRaw({{ loop.index }})" style="background: #005587; color: white; border: none; border-radius: 4px; padding: 3px 8px; cursor: pointer; font-size: 8px; font-weight: 600;">
+                                <button onclick="copySegmentRaw('primary-{{ loop.index }}')" style="background: #005587; color: white; border: none; border-radius: 4px; padding: 3px 8px; cursor: pointer; font-size: 8px; font-weight: 600;">
                                     Copy to Clipboard
                                 </button>
                             </div>
@@ -1061,10 +1064,143 @@
                         </div>
 
                         <!-- Hidden textarea for TSV copy -->
-                        <textarea id="segment-tsv-{{ loop.index }}" style="position: absolute; left: -9999px;">{{ segment.raw_table.tsv }}</textarea>
+                        <textarea id="segment-tsv-primary-{{ loop.index }}" style="position: absolute; left: -9999px;">{{ segment.raw_table.tsv }}</textarea>
                         {% endif %}
                     </div>
                     {% endfor %}
+
+                    <!-- Expandable section for secondary segments -->
+                    {% if _4_segments.secondary|length > 0 %}
+                    <div style="margin-top: 12px; text-align: center;">
+                        <button id="segments-toggle" onclick="toggleSecondarySegments()" style="background: none; border: 1px solid #e2e8f0; border-radius: 6px; padding: 6px 12px; cursor: pointer; font-size: 9px; color: #64748b; transition: all 0.2s;">
+                            <span id="segments-icon">▶</span> Show {{ _4_segments.secondary|length }} More Segments
+                        </button>
+                    </div>
+
+                    <div id="secondary-segments-container" style="display: none; margin-top: 12px; padding-top: 12px; border-top: 1px solid #e2e8f0;">
+                        {% for segment in _4_segments.secondary %}
+                        <div class="qa-item" style="padding: 10px 12px; margin-bottom: 8px; background: #fafbfc;">
+                            <!-- Segment header and description -->
+                            <div style="margin-bottom: 6px;">
+                                <div style="margin-bottom: 2px;">
+                                    <span style="font-size: 10px; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;">{{ segment.name }}</span>
+                                </div>
+                                {% if segment.description %}
+                                <div style="font-size: 10px; color: var(--text-main); line-height: 1.4;">{{ segment.description }}</div>
+                                {% endif %}
+                            </div>
+                            <!-- Two-column metrics layout -->
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                                <!-- Left column: Core Metrics -->
+                                <div style="background: #f1f5f9; border-radius: 4px; padding: 6px 8px;">
+                                    <table style="width: 100%; border-collapse: collapse; font-size: 10px; table-layout: fixed;">
+                                        <colgroup>
+                                            <col style="width: 44%;">
+                                            <col style="width: 22%;">
+                                            <col style="width: 17%;">
+                                            <col style="width: 17%;">
+                                        </colgroup>
+                                        <thead>
+                                            <tr>
+                                                <th style="text-align: left; font-size: 7px; color: #94a3b8; text-transform: uppercase; font-weight: 700; padding: 2px 4px; border-bottom: 1px solid #e2e8f0;">Metric</th>
+                                                <th style="text-align: right; font-size: 7px; color: #94a3b8; text-transform: uppercase; font-weight: 700; padding: 2px 4px; border-bottom: 1px solid #e2e8f0;">Current</th>
+                                                <th style="text-align: right; font-size: 7px; color: #94a3b8; text-transform: uppercase; font-weight: 700; padding: 2px 4px; border-bottom: 1px solid #e2e8f0;">QoQ</th>
+                                                <th style="text-align: right; font-size: 7px; color: #94a3b8; text-transform: uppercase; font-weight: 700; padding: 2px 4px; border-bottom: 1px solid #e2e8f0;">YoY</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for metric in segment.core_metrics %}
+                                            <tr>
+                                                <td style="padding: 2px 4px; color: #334155; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ metric.label }}</td>
+                                                <td class="value" style="padding: 2px 4px; text-align: right; font-size: 9px; white-space: nowrap;">{{ metric.value|safe }}</td>
+                                                <td class="delta {{ metric.qoq.direction }}" style="padding: 2px 4px; text-align: right; font-size: 9px; white-space: nowrap;">{{ metric.qoq.display }}</td>
+                                                <td class="delta {{ metric.yoy.direction }}" style="padding: 2px 4px; text-align: right; font-size: 9px; white-space: nowrap;">{{ metric.yoy.display }}</td>
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <!-- Right column: Highlighted Metrics -->
+                                <div style="background: #f1f5f9; border-radius: 4px; padding: 6px 8px;">
+                                    <table style="width: 100%; border-collapse: collapse; font-size: 10px; table-layout: fixed;">
+                                        <colgroup>
+                                            <col style="width: 44%;">
+                                            <col style="width: 22%;">
+                                            <col style="width: 17%;">
+                                            <col style="width: 17%;">
+                                        </colgroup>
+                                        <thead>
+                                            <tr>
+                                                <th style="text-align: left; font-size: 7px; color: #94a3b8; text-transform: uppercase; font-weight: 700; padding: 2px 4px; border-bottom: 1px solid #e2e8f0;">Metric</th>
+                                                <th style="text-align: right; font-size: 7px; color: #94a3b8; text-transform: uppercase; font-weight: 700; padding: 2px 4px; border-bottom: 1px solid #e2e8f0;">Current</th>
+                                                <th style="text-align: right; font-size: 7px; color: #94a3b8; text-transform: uppercase; font-weight: 700; padding: 2px 4px; border-bottom: 1px solid #e2e8f0;">QoQ</th>
+                                                <th style="text-align: right; font-size: 7px; color: #94a3b8; text-transform: uppercase; font-weight: 700; padding: 2px 4px; border-bottom: 1px solid #e2e8f0;">YoY</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for metric in segment.highlighted_metrics %}
+                                            <tr>
+                                                <td style="padding: 2px 4px; color: #334155; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ metric.label }}</td>
+                                                <td class="value" style="padding: 2px 4px; text-align: right; font-size: 9px; white-space: nowrap;">{{ metric.value|safe }}</td>
+                                                <td class="delta {{ metric.qoq.direction }}" style="padding: 2px 4px; text-align: right; font-size: 9px; white-space: nowrap;">{{ metric.qoq.display }}</td>
+                                                <td class="delta {{ metric.yoy.direction }}" style="padding: 2px 4px; text-align: right; font-size: 9px; white-space: nowrap;">{{ metric.yoy.display }}</td>
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <!-- Expandable Raw Metrics Table for this segment -->
+                            {% if segment.raw_table.rows %}
+                            <div style="margin-top: 8px; text-align: center;">
+                                <button id="segment-toggle-secondary-{{ loop.index }}" onclick="toggleSegmentRaw('secondary-{{ loop.index }}')" style="background: none; border: 1px solid #e2e8f0; border-radius: 6px; padding: 4px 10px; cursor: pointer; font-size: 8px; color: #64748b; transition: all 0.2s;">
+                                    <span id="segment-icon-secondary-{{ loop.index }}">▶</span> View All {{ segment.name }} Metrics ({{ segment.raw_table.rows|length }} metrics)
+                                </button>
+                            </div>
+
+                            <div id="segment-container-secondary-{{ loop.index }}" style="display: none; margin-top: 8px; border: 1px solid #e2e8f0; border-radius: 6px; overflow: hidden; max-width: 100%;">
+                                <!-- Copy button bar -->
+                                <div style="background: #f8fafc; padding: 4px 8px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: flex-end; align-items: center;">
+                                    <button onclick="copySegmentRaw('secondary-{{ loop.index }}')" style="background: #005587; color: white; border: none; border-radius: 4px; padding: 3px 8px; cursor: pointer; font-size: 8px; font-weight: 600;">
+                                        Copy to Clipboard
+                                    </button>
+                                </div>
+
+                                <!-- Scrollable table container -->
+                                <div style="max-height: 250px; overflow: auto;">
+                                    <table style="border-collapse: collapse; font-size: 8px; font-family: 'Consolas', 'Monaco', monospace; min-width: 100%;">
+                                        <thead style="position: sticky; top: 0; background: #f1f5f9; z-index: 10;">
+                                            <tr>
+                                                {% for header in segment.raw_table.headers %}
+                                                <th style="padding: 4px 5px; text-align: {% if loop.index == 1 %}left{% else %}right{% endif %}; border-bottom: 1px solid #e2e8f0; font-weight: 700; color: #64748b; white-space: nowrap; font-size: 7px; text-transform: uppercase;">{{ header }}</th>
+                                                {% endfor %}
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for row in segment.raw_table.rows %}
+                                            <tr style="background: {% if loop.index is odd %}#ffffff{% else %}#f8fafc{% endif %};">
+                                                <td style="padding: 3px 5px; border-bottom: 1px solid #f0f4f8; font-weight: 600; color: #1e293b; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ row.metric }}">{{ row.metric }}</td>
+                                                {% for val in row['values'] %}
+                                                <td style="padding: 3px 5px; border-bottom: 1px solid #f0f4f8; text-align: right; color: #334155;">{{ val }}</td>
+                                                {% endfor %}
+                                                <td style="padding: 3px 5px; border-bottom: 1px solid #f0f4f8; color: #94a3b8; text-align: center;">{{ row.type }}</td>
+                                                <td style="padding: 3px 5px; border-bottom: 1px solid #f0f4f8; text-align: right;" class="{{ row.qoq_direction }}">{{ row.qoq }}</td>
+                                                <td style="padding: 3px 5px; border-bottom: 1px solid #f0f4f8; text-align: right;" class="{{ row.yoy_direction }}">{{ row.yoy }}</td>
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <!-- Hidden textarea for TSV copy -->
+                            <textarea id="segment-tsv-secondary-{{ loop.index }}" style="position: absolute; left: -9999px;">{{ segment.raw_table.tsv }}</textarea>
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
                 </div>
             </div>
 
@@ -1579,6 +1715,25 @@
             button.textContent = originalText;
             button.style.background = '#005587';
         }, 2000);
+    }
+
+    // Toggle secondary segments visibility
+    function toggleSecondarySegments() {
+        const container = document.getElementById('secondary-segments-container');
+        const icon = document.getElementById('segments-icon');
+        const button = document.getElementById('segments-toggle');
+
+        if (container.style.display === 'none') {
+            container.style.display = 'block';
+            icon.textContent = '▼';
+            button.style.background = '#f1f5f9';
+            button.style.borderColor = '#cbd5e1';
+        } else {
+            container.style.display = 'none';
+            icon.textContent = '▶';
+            button.style.background = 'none';
+            button.style.borderColor = '#e2e8f0';
+        }
     }
     </script>
 

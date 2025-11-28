@@ -729,7 +729,360 @@ Write a 2-3 sentence qualitative drivers statement."""
 
 
 # =============================================================================
-# Main Entry Point - Full Pipeline
+# Alternative Approach: Full RTS Loading (No Similarity Search)
+# =============================================================================
+
+
+async def retrieve_all_rts_chunks(
+    bank: str,
+    year: int,
+    quarter: str,
+    context: Dict[str, Any],
+) -> List[Dict[str, Any]]:
+    """
+    Retrieve ALL chunks from RTS for a given bank/quarter.
+
+    This loads the entire RTS document without any filtering, allowing
+    the LLM to find relevant sections directly.
+
+    Args:
+        bank: Bank symbol with suffix (e.g., "RY-CA")
+        year: Fiscal year
+        quarter: Quarter (e.g., "Q3")
+        context: Execution context
+
+    Returns:
+        List of all chunk dicts ordered by chunk_id
+    """
+    logger = get_logger()
+    execution_id = context.get("execution_id")
+
+    logger.info(
+        "etl.rts.load_all_chunks_start",
+        execution_id=execution_id,
+        bank=bank,
+        period=f"{quarter} {year}",
+    )
+
+    try:
+        async with get_connection() as conn:
+            sql = text(
+                """
+                SELECT
+                    id, chunk_id, page_no, summary_title, source_section,
+                    raw_text, propositions
+                FROM rts_embedding
+                WHERE bank = :bank AND year = :year AND quarter = :quarter
+                ORDER BY chunk_id
+                """
+            ).bindparams(
+                bindparam("bank", value=bank),
+                bindparam("year", value=year),
+                bindparam("quarter", value=quarter),
+            )
+
+            result = await conn.execute(sql)
+            chunks = []
+
+            for row in result.fetchall():
+                propositions = row[6]
+                if isinstance(propositions, str):
+                    try:
+                        propositions = json.loads(propositions)
+                    except json.JSONDecodeError:
+                        propositions = []
+
+                chunks.append(
+                    {
+                        "id": row[0],
+                        "chunk_id": row[1],
+                        "page_no": row[2],
+                        "summary_title": row[3],
+                        "source_section": row[4],
+                        "raw_text": row[5],
+                        "propositions": propositions or [],
+                    }
+                )
+
+            logger.info(
+                "etl.rts.load_all_chunks_complete",
+                execution_id=execution_id,
+                bank=bank,
+                period=f"{quarter} {year}",
+                total_chunks=len(chunks),
+            )
+            return chunks
+
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        logger.error("etl.rts.load_all_chunks_error", error=str(e))
+        return []
+
+
+def format_full_rts_for_llm(chunks: List[Dict[str, Any]]) -> str:
+    """
+    Format all RTS chunks into a single document for LLM processing.
+
+    Args:
+        chunks: List of all chunks sorted by chunk_id
+
+    Returns:
+        Formatted full RTS content string
+    """
+    if not chunks:
+        return "No RTS content available."
+
+    lines = ["# Full Regulatory Filing Document", ""]
+
+    current_section = None
+    for chunk in chunks:
+        section = chunk.get("source_section", "")
+        page = chunk.get("page_no", "?")
+        raw_text = chunk.get("raw_text", "")
+
+        # Add section header if changed
+        if section and section != current_section:
+            lines.append(f"\n## {section}")
+            lines.append(f"[Page {page}]")
+            lines.append("")
+            current_section = section
+
+        if raw_text:
+            lines.append(raw_text)
+            lines.append("")
+
+    return "\n".join(lines)
+
+
+async def generate_segment_drivers_from_full_rts(
+    chunks: List[Dict[str, Any]],
+    segment_name: str,
+    context: Dict[str, Any],
+) -> Optional[str]:
+    """
+    Generate a qualitative drivers statement by letting the LLM find the relevant
+    section in the full RTS document.
+
+    Args:
+        chunks: All RTS chunks for the bank/quarter
+        segment_name: Business segment name
+        context: Execution context
+
+    Returns:
+        Drivers statement string or None if generation fails
+    """
+    logger = get_logger()
+    execution_id = context.get("execution_id")
+
+    if not chunks:
+        logger.warning("etl.rts.no_chunks_for_full_drivers", execution_id=execution_id)
+        return None
+
+    full_rts = format_full_rts_for_llm(chunks)
+
+    system_prompt = f"""You are a senior financial analyst writing a bank quarterly earnings report.
+
+Your task is to:
+1. FIND the section(s) in the regulatory filing that discuss the {segment_name} segment
+2. EXTRACT the key performance drivers mentioned for this segment
+3. WRITE a concise qualitative drivers statement (2-3 sentences)
+
+## CRITICAL REQUIREMENTS
+
+1. **NO METRICS OR NUMBERS**: Do NOT include specific dollar amounts, percentages, basis points, \
+or any numerical values. The metrics are shown separately in the report.
+2. **QUALITATIVE ONLY**: Focus on the business drivers, trends, and factors - not the numbers.
+3. **Length**: 2-3 sentences maximum
+4. **Tone**: Professional, factual, analyst-style
+
+## SEGMENT TO FIND: {segment_name}
+
+Look for sections with headings like:
+- "{segment_name}"
+- "Business Segment Results"
+- "Segment Performance"
+- "Operating Results by Segment"
+
+The segment discussion typically includes explanations of what drove performance changes.
+
+## WHAT TO INCLUDE
+
+- Business drivers (e.g., "higher trading activity", "increased client demand")
+- Market conditions (e.g., "favorable rate environment", "challenging credit conditions")
+- Strategic factors (e.g., "expansion into new markets", "cost discipline initiatives")
+- Operational factors (e.g., "improved efficiency", "technology investments")
+
+## WHAT TO EXCLUDE
+
+- Specific dollar amounts (e.g., "$2.1B", "CAD 500 million")
+- Percentages (e.g., "8% growth", "up 12%")
+- Basis points (e.g., "expanded 15 bps")
+- Quarter-over-quarter or year-over-year comparisons with numbers
+
+## IF SEGMENT NOT FOUND
+
+If you cannot find content specifically about the {segment_name} segment, return an empty string.
+Do NOT make up information or use content from other segments.
+
+## IMPORTANT
+
+Do NOT include the segment name in the statement - it's already shown in the header."""
+
+    user_prompt = f"""Below is the complete regulatory filing document. Find the section \
+discussing the {segment_name} segment and write a 2-3 sentence QUALITATIVE drivers statement.
+
+Remember: NO specific metrics, percentages, or dollar amounts. Focus only on the business drivers.
+
+{full_rts}
+
+Write the qualitative drivers statement for {segment_name}, or return empty if not found."""
+
+    tool_definition = {
+        "type": "function",
+        "function": {
+            "name": "segment_drivers_statement",
+            "description": f"Generate a qualitative drivers statement for {segment_name}",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "found_segment": {
+                        "type": "boolean",
+                        "description": f"Whether content for {segment_name} was found",
+                    },
+                    "drivers_statement": {
+                        "type": "string",
+                        "description": (
+                            "A 2-3 sentence QUALITATIVE statement about performance drivers. "
+                            "Must NOT contain any numbers, percentages, or dollar amounts. "
+                            "Empty string if segment not found."
+                        ),
+                    },
+                    "source_sections": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Section headings where segment content was found",
+                    },
+                },
+                "required": ["found_segment", "drivers_statement"],
+            },
+        },
+    }
+
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_prompt},
+    ]
+
+    try:
+        model = etl_config.get_model("segment_drivers_extraction")
+
+        response = await complete_with_tools(
+            messages=messages,
+            tools=[tool_definition],
+            context=context,
+            llm_params={"model": model, "temperature": 0.2, "max_tokens": 1000},
+        )
+
+        if response.get("choices") and response["choices"][0].get("message"):
+            message = response["choices"][0]["message"]
+            if message.get("tool_calls"):
+                tool_call = message["tool_calls"][0]
+                function_args = json.loads(tool_call["function"]["arguments"])
+
+                found_segment = function_args.get("found_segment", False)
+                drivers_statement = function_args.get("drivers_statement", "")
+                source_sections = function_args.get("source_sections", [])
+
+                logger.info(
+                    "etl.rts.full_drivers_generated",
+                    execution_id=execution_id,
+                    segment=segment_name,
+                    found_segment=found_segment,
+                    source_sections=source_sections,
+                    statement_length=len(drivers_statement) if drivers_statement else 0,
+                )
+
+                if found_segment and drivers_statement:
+                    return drivers_statement
+                return None
+
+        logger.warning("etl.rts.full_drivers_no_tool_call", execution_id=execution_id)
+        return None
+
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        logger.error("etl.rts.full_drivers_error", error=str(e))
+        return None
+
+
+# pylint: disable=too-many-arguments,too-many-positional-arguments
+async def get_segment_drivers_from_full_rts(
+    bank: str,
+    year: int,
+    quarter: str,
+    segment_name: str,
+    context: Dict[str, Any],
+) -> Optional[str]:
+    """
+    Get a qualitative drivers statement by loading the full RTS and letting
+    the LLM find the relevant segment section.
+
+    This approach:
+    1. Loads ALL chunks for the bank/quarter (no similarity search)
+    2. Passes the full RTS content to the LLM
+    3. LLM finds the segment-specific section and extracts drivers
+
+    Args:
+        bank: Bank symbol (e.g., "RY-CA")
+        year: Fiscal year
+        quarter: Quarter (e.g., "Q3")
+        segment_name: Business segment (e.g., "Capital Markets")
+        context: Execution context
+
+    Returns:
+        Qualitative drivers statement or None if unavailable
+    """
+    logger = get_logger()
+    execution_id = context.get("execution_id")
+
+    logger.info(
+        "etl.rts.full_pipeline_start",
+        execution_id=execution_id,
+        segment=segment_name,
+        bank=bank,
+        period=f"{quarter} {year}",
+    )
+
+    # Step 1: Load all chunks
+    all_chunks = await retrieve_all_rts_chunks(
+        bank=bank,
+        year=year,
+        quarter=quarter,
+        context=context,
+    )
+
+    if not all_chunks:
+        logger.warning("etl.rts.no_chunks_loaded", execution_id=execution_id)
+        return None
+
+    # Step 2: Generate drivers from full RTS
+    drivers = await generate_segment_drivers_from_full_rts(
+        chunks=all_chunks,
+        segment_name=segment_name,
+        context=context,
+    )
+
+    logger.info(
+        "etl.rts.full_pipeline_complete",
+        execution_id=execution_id,
+        segment=segment_name,
+        total_chunks=len(all_chunks),
+        drivers_generated=drivers is not None,
+    )
+
+    return drivers
+
+
+# =============================================================================
+# Main Entry Point - Full Pipeline (Original Similarity Search Approach)
 # =============================================================================
 
 
