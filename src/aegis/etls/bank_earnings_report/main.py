@@ -367,7 +367,15 @@ async def extract_all_sections(
         extract_transcript_overview,
         extract_transcript_items_of_note,
     )
-    from .retrieval.rts import get_all_segment_drivers_from_rts
+    from .extraction.items_deduplication import deduplicate_and_select_items
+    from .extraction.overview_combination import combine_overview_narratives
+    from .extraction.narrative_combination import combine_narrative_entries
+    from .retrieval.rts import (
+        get_all_segment_drivers_from_rts,
+        extract_rts_items_of_note,
+        extract_rts_overview,
+        extract_rts_narrative_paragraphs,
+    )
 
     execution_id = context.get("execution_id")
     db_symbol = f"{bank_info['bank_symbol']}-CA"
@@ -577,10 +585,11 @@ async def extract_all_sections(
     logger.info("etl.bank_earnings_report.section_complete", section="1_keymetrics_raw")
 
     logger.info(
-        "etl.bank_earnings_report.transcript_overview_start",
+        "etl.bank_earnings_report.overview_start",
         execution_id=execution_id,
     )
 
+    # Extract overview from both sources
     transcript_overview = await extract_transcript_overview(
         bank_info=bank_info,
         fiscal_year=fiscal_year,
@@ -588,26 +597,52 @@ async def extract_all_sections(
         context=context,
     )
 
+    rts_overview = await extract_rts_overview(
+        bank_symbol=bank_info["bank_symbol"],
+        bank_name=bank_info["bank_name"],
+        fiscal_year=fiscal_year,
+        quarter=quarter,
+        context=context,
+    )
+
+    # Combine overviews into final narrative
+    combined_overview = await combine_overview_narratives(
+        rts_overview=rts_overview.get("narrative", ""),
+        transcript_overview=transcript_overview.get("narrative", ""),
+        bank_name=bank_info["bank_name"],
+        quarter=quarter,
+        fiscal_year=fiscal_year,
+        context=context,
+    )
+
     sections["1_keymetrics_overview"] = {
-        "narrative": transcript_overview.get("narrative", ""),
+        "narrative": combined_overview.get("narrative", ""),
     }
 
     llm_debug_log["sections"]["1_keymetrics_overview"] = {
-        "source": "Transcript",
-        "narrative_length": len(transcript_overview.get("narrative", "")),
+        "rts_narrative": rts_overview.get("narrative", ""),
+        "rts_length": len(rts_overview.get("narrative", "")),
+        "transcript_narrative": transcript_overview.get("narrative", ""),
+        "transcript_length": len(transcript_overview.get("narrative", "")),
+        "combined_narrative": combined_overview.get("narrative", ""),
+        "combined_length": len(combined_overview.get("narrative", "")),
+        "combination_notes": combined_overview.get("combination_notes", ""),
     }
 
     logger.info(
         "etl.bank_earnings_report.section_complete",
         section="1_keymetrics_overview",
-        narrative_length=len(transcript_overview.get("narrative", "")),
+        rts_length=len(rts_overview.get("narrative", "")),
+        transcript_length=len(transcript_overview.get("narrative", "")),
+        combined_length=len(combined_overview.get("narrative", "")),
     )
 
     logger.info(
-        "etl.bank_earnings_report.transcript_items_start",
+        "etl.bank_earnings_report.items_of_note_start",
         execution_id=execution_id,
     )
 
+    # Extract items from both sources in parallel
     transcript_items = await extract_transcript_items_of_note(
         bank_info=bank_info,
         fiscal_year=fiscal_year,
@@ -616,22 +651,48 @@ async def extract_all_sections(
         max_items=10,
     )
 
+    rts_items = await extract_rts_items_of_note(
+        bank_symbol=bank_info["bank_symbol"],
+        bank_name=bank_info["bank_name"],
+        fiscal_year=fiscal_year,
+        quarter=quarter,
+        context=context,
+        max_items=10,
+    )
+
+    # Deduplicate and select top items from both sources
+    combined_items = await deduplicate_and_select_items(
+        rts_items=rts_items.get("items", []),
+        transcript_items=transcript_items.get("items", []),
+        bank_name=bank_info["bank_name"],
+        quarter=quarter,
+        fiscal_year=fiscal_year,
+        context=context,
+        max_items=8,
+    )
+
     sections["1_keymetrics_items"] = {
-        "source": "Transcript",
-        "entries": transcript_items.get("items", []),
+        "entries": combined_items.get("items", []),
     }
 
     llm_debug_log["sections"]["1_keymetrics_items"] = {
-        "source": "Transcript",
-        "items_count": len(transcript_items.get("items", [])),
-        "items": transcript_items.get("items", []),
-        "extraction_notes": transcript_items.get("notes", ""),
+        "rts_items_count": len(rts_items.get("items", [])),
+        "rts_items": rts_items.get("items", []),
+        "rts_notes": rts_items.get("notes", ""),
+        "transcript_items_count": len(transcript_items.get("items", [])),
+        "transcript_items": transcript_items.get("items", []),
+        "transcript_notes": transcript_items.get("notes", ""),
+        "final_items_count": len(combined_items.get("items", [])),
+        "final_items": combined_items.get("items", []),
+        "dedup_notes": combined_items.get("dedup_notes", ""),
     }
 
     logger.info(
         "etl.bank_earnings_report.section_complete",
         section="1_keymetrics_items",
-        items_count=len(transcript_items.get("items", [])),
+        rts_items=len(rts_items.get("items", [])),
+        transcript_items=len(transcript_items.get("items", [])),
+        final_items=len(combined_items.get("items", [])),
     )
 
     logger.info(
@@ -639,6 +700,16 @@ async def extract_all_sections(
         execution_id=execution_id,
     )
 
+    # Extract RTS narrative paragraphs (4 themed paragraphs)
+    rts_narrative = await extract_rts_narrative_paragraphs(
+        bank_symbol=bank_info["bank_symbol"],
+        bank_name=bank_info["bank_name"],
+        fiscal_year=fiscal_year,
+        quarter=quarter,
+        context=context,
+    )
+
+    # Extract transcript quotes (up to 5 quotes)
     transcript_quotes = await extract_transcript_quotes(
         bank_info=bank_info,
         fiscal_year=fiscal_year,
@@ -647,17 +718,33 @@ async def extract_all_sections(
         num_quotes=5,
     )
 
-    sections["2_narrative"] = {"entries": transcript_quotes}
+    # Combine: interleave RTS paragraphs with strategically placed quotes
+    combined_narrative = await combine_narrative_entries(
+        rts_paragraphs=rts_narrative.get("paragraphs", []),
+        transcript_quotes=transcript_quotes,
+        bank_name=bank_info["bank_name"],
+        quarter=quarter,
+        fiscal_year=fiscal_year,
+        context=context,
+    )
+
+    sections["2_narrative"] = {"entries": combined_narrative.get("entries", [])}
 
     llm_debug_log["sections"]["2_narrative"] = {
+        "rts_paragraphs": len(rts_narrative.get("paragraphs", [])),
+        "rts_themes": [p.get("theme", "") for p in rts_narrative.get("paragraphs", [])],
         "transcript_quotes": len(transcript_quotes),
-        "speakers": [q.get("speaker", "") for q in transcript_quotes],
+        "transcript_speakers": [q.get("speaker", "") for q in transcript_quotes],
+        "combined_entries": len(combined_narrative.get("entries", [])),
+        "combination_notes": combined_narrative.get("combination_notes", ""),
     }
 
     logger.info(
         "etl.bank_earnings_report.section_complete",
         section="2_narrative",
+        rts_paragraphs=len(rts_narrative.get("paragraphs", [])),
         transcript_quotes=len(transcript_quotes),
+        combined_entries=len(combined_narrative.get("entries", [])),
     )
 
     logger.info(

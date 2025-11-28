@@ -16,12 +16,36 @@ models:
   management_narrative_extraction:
     tier: medium
 
+  # RTS narrative paragraphs extraction - 4 themed paragraphs from regulatory filing
+  rts_narrative_extraction:
+    tier: medium
+
+  # Narrative combination - interleave RTS paragraphs with transcript quotes
+  narrative_combination:
+    tier: medium
+
   # Transcript overview summary extraction
   transcript_overview_extraction:
     tier: medium
 
+  # RTS overview summary extraction
+  rts_overview_extraction:
+    tier: medium
+
+  # Overview combination - synthesize RTS and transcript overviews
+  overview_combination:
+    tier: medium
+
   # Transcript items of note extraction
   transcript_items_extraction:
+    tier: medium
+
+  # RTS items of note extraction - extract $ impact items from regulatory filing
+  rts_items_extraction:
+    tier: medium
+
+  # Items deduplication - dedupe and rank items from RTS and transcript
+  items_deduplication:
     tier: medium
 
   # RTS segment drivers extraction - synthesize drivers from regulatory filings
