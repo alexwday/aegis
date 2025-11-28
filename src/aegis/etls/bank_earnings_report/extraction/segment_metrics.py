@@ -28,21 +28,10 @@ from aegis.utils.logging import get_logger
 
 # Monitored platforms in standard reporting order
 MONITORED_PLATFORMS = [
-    "Personal & Commercial Banking",
     "Canadian Banking",
-    "Wealth Management",
-    "Canadian Wealth & Insurance",
-    "Capital Markets",
     "U.S. & International Banking",
-    "Corporate Support",
-]
-
-# Primary segments - shown by default in the report
-# These are the main business segments that get RTS driver text
-PRIMARY_SEGMENTS = [
-    "Personal & Commercial Banking",
-    "Wealth Management",
     "Capital Markets",
+    "Canadian Wealth & Insurance",
     "Corporate Support",
 ]
 

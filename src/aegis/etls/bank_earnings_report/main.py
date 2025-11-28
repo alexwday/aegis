@@ -386,7 +386,6 @@ async def extract_all_sections(
     from .extraction.segment_metrics import (
         select_top_segment_metrics,
         MONITORED_PLATFORMS,
-        PRIMARY_SEGMENTS,
         CORE_SEGMENT_METRICS,
         DEFAULT_CORE_METRICS,
     )
@@ -778,44 +777,35 @@ async def extract_all_sections(
         db_symbol, fiscal_year, quarter, context
     )
 
-    # Log platform availability - exact matching only
+    # Log platform availability (X of 5) - exact matching only
     found_platforms = [p for p in MONITORED_PLATFORMS if p in available_platforms]
     missing_platforms = [p for p in MONITORED_PLATFORMS if p not in available_platforms]
-
-    # Split into primary (shown by default) and secondary (hidden in dropdown)
-    found_primary = [p for p in found_platforms if p in PRIMARY_SEGMENTS]
-    found_secondary = [p for p in found_platforms if p not in PRIMARY_SEGMENTS]
 
     logger.info(
         "etl.bank_earnings_report.platform_availability",
         execution_id=execution_id,
         found=len(found_platforms),
         total=len(MONITORED_PLATFORMS),
-        primary_segments=found_primary,
-        secondary_segments=found_secondary,
+        found_platforms=found_platforms,
         missing_platforms=missing_platforms,
     )
 
-    # Process segments - separate into primary and secondary lists
-    primary_entries = []
-    secondary_entries = []
+    # Process only exact matches to monitored platforms
+    segment_entries = []
     segment_debug = {
         "available_platforms": available_platforms,
         "monitored_platforms": MONITORED_PLATFORMS,
-        "primary_segments": PRIMARY_SEGMENTS,
         "matched_platforms": found_platforms,
         "missing_platforms": missing_platforms,
         "segment_selections": {},
     }
 
     for platform in found_platforms:
-        is_primary = platform in PRIMARY_SEGMENTS
-
+        # Platform is already an exact match - use it directly
         logger.info(
             "etl.bank_earnings_report.segment_matched",
             execution_id=execution_id,
             platform=platform,
-            is_primary=is_primary,
         )
 
         # Retrieve all metrics for this segment
@@ -835,6 +825,7 @@ async def extract_all_sections(
                     core_metrics_data.append(metrics_by_name[core_name])
 
             # Use LLM to select top 3 highlighted metrics for this segment
+            # Exclude core metrics from LLM selection
             selection = await select_top_segment_metrics(
                 metrics=segment_metrics,
                 segment_name=platform,
@@ -847,32 +838,28 @@ async def extract_all_sections(
 
             # Store debug info
             segment_debug["segment_selections"][platform] = {
-                "is_primary": is_primary,
                 "available_metrics": len(segment_metrics),
                 "core_metrics": [m["parameter"] for m in core_metrics_data],
                 "selected_metrics": selection.get("selected_metrics", []),
                 "reasoning": selection.get("reasoning", ""),
             }
 
-            # Only get RTS drivers for PRIMARY segments
-            # Secondary segments have no driver text (blank description)
-            description = ""
-            if is_primary:
-                rts_drivers = await get_segment_drivers_from_full_rts(
-                    bank=db_symbol,  # e.g., "RY-CA"
-                    year=fiscal_year,
-                    quarter=quarter,
-                    segment_name=platform,
-                    context=context,
-                )
-                if rts_drivers:
-                    description = rts_drivers
-                    segment_debug["segment_selections"][platform]["rts_drivers"] = True
-                else:
-                    # No fallback - leave blank if RTS not available
-                    segment_debug["segment_selections"][platform]["rts_drivers"] = False
+            # Get segment drivers from RTS (regulatory filings)
+            # No fallback - leave blank if RTS not available
+            rts_drivers = await get_segment_drivers_from_full_rts(
+                bank=db_symbol,  # e.g., "RY-CA"
+                year=fiscal_year,
+                quarter=quarter,
+                segment_name=platform,
+                context=context,
+            )
+
+            if rts_drivers:
+                description = rts_drivers
+                segment_debug["segment_selections"][platform]["rts_drivers"] = True
             else:
-                segment_debug["segment_selections"][platform]["rts_drivers"] = "skipped"
+                description = ""
+                segment_debug["segment_selections"][platform]["rts_drivers"] = False
 
             # Format the segment entry with both core and highlighted metrics
             segment_entry = format_segment_json(
@@ -898,21 +885,15 @@ async def extract_all_sections(
             else:
                 segment_entry["raw_table"] = {"headers": [], "rows": [], "tsv": ""}
 
-            # Add to appropriate list
-            if is_primary:
-                primary_entries.append(segment_entry)
-            else:
-                secondary_entries.append(segment_entry)
+            segment_entries.append(segment_entry)
 
             logger.info(
                 "etl.bank_earnings_report.segment_complete",
                 execution_id=execution_id,
                 segment=platform,
-                is_primary=is_primary,
                 core_metrics=len(core_metrics_data),
                 highlighted_metrics=len(selection.get("metrics_data", [])),
                 raw_table_rows=len(segment_entry["raw_table"].get("rows", [])),
-                has_rts_drivers=bool(description),
             )
         else:
             logger.warning(
@@ -921,18 +902,13 @@ async def extract_all_sections(
                 platform=platform,
             )
 
-    # New format: separate primary and secondary arrays
-    sections["4_segments"] = {
-        "primary": primary_entries,
-        "secondary": secondary_entries,
-    }
+    sections["4_segments"] = {"entries": segment_entries}
     llm_debug_log["sections"]["4_segments"] = segment_debug
 
     logger.info(
         "etl.bank_earnings_report.segments_complete",
         execution_id=execution_id,
-        primary_segments=len(primary_entries),
-        secondary_segments=len(secondary_entries),
+        segments_found=len(segment_entries),
     )
 
     # Capital & Risk - placeholder (uses .source, .regulatory_capital, .rwa, .liquidity_credit)
