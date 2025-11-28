@@ -277,7 +277,7 @@ These are high-profile items that affect financial results.
 ## WHAT TO EXTRACT FOR EACH ITEM
 
 1. **Description**: What specifically happened (the event, not commentary about it)
-2. **Impact**: Dollar amount (stated or estimated). Use format like "+$150M" or "-$45M"
+2. **Impact**: Dollar amount as stated. Use format like "+$150M" or "-$45M". Use "TBD" if not stated.
 3. **Segment**: Which business segment affected (e.g., "Canadian Banking", "Capital Markets", \
 "All", or "N/A")
 4. **Timing**: Is it recurring or one-time? Expected resolution date if applicable
@@ -286,7 +286,7 @@ These are high-profile items that affect financial results.
 
 - Only extract SPECIFIC EVENTS with $ impact - not themes or observations
 - The event must be STATED, not assumed or implied
-- If no $ amount is given, estimate based on context or use "TBD"
+- If no $ amount is explicitly stated, use "TBD" - do NOT estimate
 - If the transcript doesn't mention specific impact items, return fewer items or none
 - Do NOT fabricate items - only extract what is actually mentioned
 

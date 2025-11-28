@@ -818,7 +818,7 @@
 
                 <!-- Disclaimer -->
                 <div style="margin-top: 12px; padding-top: 8px; border-top: 1px solid #e2e8f0;">
-                    <div style="font-size: 9px; color: #94a3b8; font-style: italic;">Items extracted from RTS regulatory filing and earnings call transcript. Impact amounts as stated or estimated. Duplicates removed.</div>
+                    <div style="font-size: 9px; color: #94a3b8; font-style: italic;">* Items extracted from RTS regulatory filing and earnings call transcript. Impact amounts as stated.</div>
                 </div>
             </div>
         </div>
@@ -854,7 +854,7 @@
                 <!-- Disclaimer for AI-summarized quotes -->
                 {% if _2_narrative.entries|selectattr('type', 'equalto', 'transcript')|list|length > 0 %}
                 <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #e2e8f0;">
-                    <div style="font-size: 9px; color: #94a3b8; font-style: italic;">* Quotes are condensed from earnings call transcript.</div>
+                    <div style="font-size: 9px; color: #94a3b8; font-style: italic;">* Quotes are condensed and summarized from earnings call transcript.</div>
                 </div>
                 {% endif %}
             </div>
@@ -917,7 +917,7 @@
 
                 <!-- Disclaimer for summarized Q&A -->
                 <div style="margin-top: 12px; padding-top: 8px; border-top: 1px solid #e2e8f0;">
-                    <div style="font-size: 9px; color: #94a3b8; font-style: italic;">Questions and answers are summarized from earnings call transcript.</div>
+                    <div style="font-size: 9px; color: #94a3b8; font-style: italic;">* Questions and answers are summarized from earnings call transcript.</div>
                 </div>
             </div>
         </div>

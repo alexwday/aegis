@@ -480,7 +480,7 @@ These are high-profile items disclosed in regulatory filings that affect financi
 ## WHAT TO EXTRACT FOR EACH ITEM
 
 1. **Description**: What specifically happened (the event, not commentary about it)
-2. **Impact**: Dollar amount (stated or estimated). Use format like "+$150M" or "-$45M"
+2. **Impact**: Dollar amount as stated. Use format like "+$150M" or "-$45M". Use "TBD" if not stated.
 3. **Segment**: Which business segment affected (e.g., "Canadian Banking", "Capital Markets", \
 "All", or "N/A")
 4. **Timing**: Is it recurring or one-time? Expected resolution date if applicable
