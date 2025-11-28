@@ -32,6 +32,8 @@ from aegis.utils.logging import get_logger, setup_logging
 from aegis.utils.ssl import setup_ssl
 from aegis.utils.sql_prompt import postgresql_prompts
 
+from .pdf_generator import generate_pdf_report
+
 setup_logging()
 logger = get_logger()
 
@@ -1005,6 +1007,43 @@ def render_report(sections: Dict[str, Any], output_path: Path) -> Path:
     return output_path
 
 
+def render_pdf(sections: Dict[str, Any], output_path: Path) -> Path:
+    """
+    Render the PDF report from extracted sections.
+
+    The PDF contains 6 pages:
+    1. Overview + Key Metrics (landscape)
+    2. Items of Note (landscape)
+    3. Management Narrative (portrait)
+    4. Analyst Focus (portrait)
+    5. Segment Performance (portrait)
+    6. Capital & Risk Metrics (portrait)
+
+    Args:
+        sections: Dict mapping section names to JSON data
+        output_path: Path for the output PDF file
+
+    Returns:
+        Path to the rendered PDF file
+    """
+    generate_pdf_report(
+        output_path=str(output_path),
+        header_params=sections.get("0_header_params", {}),
+        dividend_data=sections.get("0_header_dividend", {}),
+        overview_data=sections.get("1_keymetrics_overview", {}),
+        tiles_data=sections.get("1_keymetrics_tiles", {}),
+        items_data=sections.get("1_keymetrics_items", {}),
+        narrative_data=sections.get("2_narrative", {}),
+        analyst_data=sections.get("3_analyst_focus", {}),
+        segments_data=sections.get("4_segments", {}),
+        capital_risk_data=sections.get("5_capital_risk", {}),
+        chart_data=sections.get("1_keymetrics_chart", {}),
+        dynamic_data=sections.get("1_keymetrics_dynamic", {}),
+    )
+
+    return output_path
+
+
 async def save_to_database(
     bank_info: Dict[str, Any],
     fiscal_year: int,
@@ -1116,7 +1155,9 @@ async def save_to_database(
         raise
 
 
-async def generate_bank_earnings_report(bank_name: str, fiscal_year: int, quarter: str) -> str:
+async def generate_bank_earnings_report(
+    bank_name: str, fiscal_year: int, quarter: str, generate_pdf: bool = False
+) -> str:
     """
     Generate a bank earnings report.
 
@@ -1124,6 +1165,7 @@ async def generate_bank_earnings_report(bank_name: str, fiscal_year: int, quarte
         bank_name: ID, name, or symbol of the bank
         fiscal_year: Year (e.g., 2024)
         quarter: Quarter (e.g., "Q3")
+        generate_pdf: If True, also generate a PDF version of the report
 
     Returns:
         Success/error message string
@@ -1208,6 +1250,18 @@ async def generate_bank_earnings_report(bank_name: str, fiscal_year: int, quarte
 
         render_report(sections, output_path)
 
+        # Generate PDF if requested
+        pdf_path = None
+        if generate_pdf:
+            pdf_filename = f"{bank_info['bank_symbol']}_{fiscal_year}_{quarter}.pdf"
+            pdf_path = output_dir / pdf_filename
+            render_pdf(sections, pdf_path)
+            logger.info(
+                "etl.bank_earnings_report.pdf_rendered",
+                execution_id=execution_id,
+                pdf_path=str(pdf_path),
+            )
+
         if "llm_debug_log" in context:
             debug_filename = f"{bank_info['bank_symbol']}_{fiscal_year}_{quarter}_llm_debug.json"
             debug_path = output_dir / debug_filename
@@ -1232,6 +1286,8 @@ async def generate_bank_earnings_report(bank_name: str, fiscal_year: int, quarte
             execution_id=execution_id,
         )
 
+        if pdf_path:
+            return f"✅ Complete: {output_path}\n   PDF: {pdf_path}"
         return f"✅ Complete: {output_path}"
 
     except ValueError as e:
@@ -1264,16 +1320,25 @@ def main():
     parser.add_argument(
         "--quarter", required=True, choices=["Q1", "Q2", "Q3", "Q4"], help="Quarter"
     )
+    parser.add_argument(
+        "--pdf",
+        action="store_true",
+        help="Also generate PDF report (6-page format with title bar on each page)",
+    )
 
     args = parser.parse_args()
 
     postgresql_prompts()
 
-    print(f"\n🔄 Generating report for {args.bank} {args.quarter} {args.year}...\n")
+    pdf_msg = " (with PDF)" if args.pdf else ""
+    print(f"\n🔄 Generating report for {args.bank} {args.quarter} {args.year}{pdf_msg}...\n")
 
     result = asyncio.run(
         generate_bank_earnings_report(
-            bank_name=args.bank, fiscal_year=args.year, quarter=args.quarter
+            bank_name=args.bank,
+            fiscal_year=args.year,
+            quarter=args.quarter,
+            generate_pdf=args.pdf,
         )
     )
 
