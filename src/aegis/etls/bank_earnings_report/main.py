@@ -858,7 +858,7 @@ def render_report(sections: Dict[str, Any], output_path: Path) -> Path:
         else:
             template_data[key] = value
 
-    env = Environment(loader=FileSystemLoader(base_dir))
+    env = Environment(loader=FileSystemLoader(template_path.parent))
     template = env.get_template(template_path.name)
     rendered = template.render(**template_data)
 
