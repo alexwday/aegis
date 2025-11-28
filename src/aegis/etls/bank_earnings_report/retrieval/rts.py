@@ -133,7 +133,7 @@ async def retrieve_segment_chunks(
     performance narrative.
 
     Args:
-        bank: Bank name (e.g., "Royal Bank of Canada")
+        bank: Bank symbol with suffix (e.g., "RY-CA") - must match rts_embedding.bank column
         year: Fiscal year
         quarter: Quarter (e.g., "Q3")
         segment_name: Business segment name (e.g., "Capital Markets")
@@ -515,7 +515,7 @@ async def get_segment_drivers_from_rts(
     This is the main entry point for RTS-based segment drivers.
 
     Args:
-        bank: Bank name (e.g., "Royal Bank of Canada")
+        bank: Bank symbol with suffix (e.g., "RY-CA") - must match rts_embedding.bank column
         year: Fiscal year
         quarter: Quarter (e.g., "Q3")
         segment_name: Business segment name (e.g., "Capital Markets")

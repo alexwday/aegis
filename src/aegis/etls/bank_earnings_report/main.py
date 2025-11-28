@@ -847,8 +847,9 @@ async def extract_all_sections(
 
             # Get segment drivers from RTS (regulatory filings)
             # Falls back to static description from SEGMENT_METADATA if RTS unavailable
+            # Note: rts_embedding table uses bank symbols like "RY-CA", not full names
             rts_drivers = await get_segment_drivers_from_rts(
-                bank=bank_info["bank_name"],
+                bank=db_symbol,  # e.g., "RY-CA"
                 year=fiscal_year,
                 quarter=quarter,
                 segment_name=platform,
