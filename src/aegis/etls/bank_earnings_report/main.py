@@ -135,10 +135,13 @@ def get_bank_info_from_config(bank_identifier: str) -> Dict[str, Any]:
     bank_identifier_upper = bank_identifier.upper()
     bank_identifier_lower = bank_identifier.lower()
 
+    # First pass: exact symbol match (highest priority)
     for inst in institutions.values():
         if inst["symbol"].upper() == bank_identifier_upper:
             return _build_bank_info(inst)
 
+    # Second pass: partial name match (fallback)
+    for inst in institutions.values():
         if bank_identifier_lower in inst["name"].lower():
             return _build_bank_info(inst)
 
