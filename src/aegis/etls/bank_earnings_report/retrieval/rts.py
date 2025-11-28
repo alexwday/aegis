@@ -9,14 +9,15 @@ The rts_embedding table contains chunks from bank regulatory filings with:
 - Propositions: GPT-extracted factual financial statements
 - Source sections: Hierarchical section paths from markdown headings
 
-Workflow:
-1. For each business segment, format a query matching the embedding index format
-2. Retrieve top N chunks via cosine similarity search
-3. Use LLM to synthesize a drivers statement from the retrieved chunks
+Pipeline:
+1. Initial retrieval: Top-k chunks via semantic similarity search
+2. LLM reranking: Binary filter for segment relevance using source_section + summary + propositions
+3. Page expansion: Pull chunks from relevant pages ±1, with gap filling (≤5 page gaps)
+4. Driver generation: LLM synthesizes qualitative drivers (no metrics/deltas)
 """
 
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 
 from sqlalchemy import bindparam, text
 
@@ -47,15 +48,13 @@ def format_query_for_embedding(
 
     Args:
         query: The search topic/terms (e.g., "revenue growth loan performance NIM")
-        bank: Bank name (e.g., "Royal Bank of Canada")
+        bank: Bank symbol (e.g., "RY-CA")
         year: Fiscal year (e.g., 2025)
         quarter: Quarter (e.g., "Q3")
 
     Returns:
         Formatted query string matching the embedding index format
     """
-    # Match the labeled field format used when creating embeddings
-    # Place search terms in Summary and Propositions where semantic content is indexed
     formatted = (
         f"Bank: {bank} "
         f"Quarter: {quarter} "
@@ -71,7 +70,6 @@ def format_query_for_embedding(
 # =============================================================================
 
 # Segment-specific search terms for RTS retrieval
-# These terms are designed to find chunks relevant to each segment's performance
 SEGMENT_QUERY_TERMS = {
     "Canadian Banking": (
         "Canadian personal commercial banking retail loan growth mortgage deposit "
@@ -97,15 +95,7 @@ SEGMENT_QUERY_TERMS = {
 
 
 def get_segment_query_terms(segment_name: str) -> str:
-    """
-    Get search terms for a specific segment.
-
-    Args:
-        segment_name: Segment name (e.g., "Capital Markets")
-
-    Returns:
-        Search terms string for embedding query
-    """
+    """Get search terms for a specific segment."""
     return SEGMENT_QUERY_TERMS.get(
         segment_name,
         f"{segment_name} performance revenue growth expenses efficiency",
@@ -113,12 +103,12 @@ def get_segment_query_terms(segment_name: str) -> str:
 
 
 # =============================================================================
-# Chunk Retrieval via Semantic Search
+# Step 1: Initial Chunk Retrieval via Semantic Search
 # =============================================================================
 
 
 # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals
-async def retrieve_segment_chunks(
+async def retrieve_initial_chunks(
     bank: str,
     year: int,
     quarter: str,
@@ -127,41 +117,28 @@ async def retrieve_segment_chunks(
     top_k: int = 20,
 ) -> List[Dict[str, Any]]:
     """
-    Retrieve top chunks from RTS embeddings for a specific segment.
-
-    Uses semantic similarity search to find chunks most relevant to the segment's
-    performance narrative.
+    Retrieve top-k chunks from RTS embeddings for initial candidate set.
 
     Args:
-        bank: Bank symbol with suffix (e.g., "RY-CA") - must match rts_embedding.bank column
+        bank: Bank symbol with suffix (e.g., "RY-CA")
         year: Fiscal year
         quarter: Quarter (e.g., "Q3")
         segment_name: Business segment name (e.g., "Capital Markets")
-        context: Execution context with auth_config, ssl_config
+        context: Execution context
         top_k: Number of chunks to retrieve (default 20)
 
     Returns:
-        List of chunk dicts with:
-            - id: Database ID
-            - chunk_id: Sequential chunk number
-            - page_no: Page number from original PDF
-            - summary_title: GPT-generated summary
-            - source_section: Hierarchical section path
-            - raw_text: Markdown text content
-            - propositions: JSON array of factual statements
-            - similarity: Cosine similarity score (0-1)
+        List of chunk dicts with id, chunk_id, page_no, summary_title,
+        source_section, raw_text, propositions, similarity
     """
     logger = get_logger()
     execution_id = context.get("execution_id")
 
-    # Get segment-specific search terms
     query_terms = get_segment_query_terms(segment_name)
-
-    # Format query to match embedding index
     formatted_query = format_query_for_embedding(query_terms, bank, year, quarter)
 
     logger.info(
-        "etl.bank_earnings_report.rts_retrieve_start",
+        "etl.rts.initial_retrieve_start",
         execution_id=execution_id,
         segment=segment_name,
         bank=bank,
@@ -170,7 +147,6 @@ async def retrieve_segment_chunks(
     )
 
     try:
-        # Generate embedding for the formatted query
         embedding_response = await embed(
             input_text=formatted_query,
             context=context,
@@ -178,30 +154,18 @@ async def retrieve_segment_chunks(
         )
 
         if not embedding_response.get("data"):
-            logger.error(
-                "etl.bank_earnings_report.rts_embedding_failed",
-                execution_id=execution_id,
-                segment=segment_name,
-            )
+            logger.error("etl.rts.embedding_failed", execution_id=execution_id)
             return []
 
         query_embedding = embedding_response["data"][0]["embedding"]
-
-        # Format embedding for PostgreSQL halfvec
         embedding_str = "[" + ",".join(str(x) for x in query_embedding) + "]"
 
-        # Perform similarity search
         async with get_connection() as conn:
             sql = text(
                 """
                 SELECT
-                    id,
-                    chunk_id,
-                    page_no,
-                    summary_title,
-                    source_section,
-                    raw_text,
-                    propositions,
+                    id, chunk_id, page_no, summary_title, source_section,
+                    raw_text, propositions,
                     embedding <=> cast(:query_embedding as halfvec) AS distance
                 FROM rts_embedding
                 WHERE bank = :bank AND year = :year AND quarter = :quarter
@@ -217,13 +181,9 @@ async def retrieve_segment_chunks(
             )
 
             result = await conn.execute(sql)
-
             chunks = []
-            for row in result.fetchall():
-                distance = row[7]
-                similarity = 1 - distance if distance is not None else 0
 
-                # Parse propositions if stored as JSON string
+            for row in result.fetchall():
                 propositions = row[6]
                 if isinstance(propositions, str):
                     try:
@@ -240,92 +200,377 @@ async def retrieve_segment_chunks(
                         "source_section": row[4],
                         "raw_text": row[5],
                         "propositions": propositions or [],
-                        "similarity": similarity,
+                        "similarity": 1 - row[7] if row[7] is not None else 0,
                     }
                 )
 
             logger.info(
-                "etl.bank_earnings_report.rts_retrieve_complete",
+                "etl.rts.initial_retrieve_complete",
                 execution_id=execution_id,
                 segment=segment_name,
                 chunks_retrieved=len(chunks),
-                top_similarity=chunks[0]["similarity"] if chunks else 0,
             )
-
             return chunks
 
     except Exception as e:  # pylint: disable=broad-exception-caught
-        logger.error(
-            "etl.bank_earnings_report.rts_retrieve_error",
-            execution_id=execution_id,
-            segment=segment_name,
-            error=str(e),
-        )
+        logger.error("etl.rts.initial_retrieve_error", error=str(e))
         return []
 
 
 # =============================================================================
-# Drivers Statement Generation
+# Step 2: LLM Reranking - Binary Relevance Filter
 # =============================================================================
 
 
-def format_chunks_for_llm(
-    chunks: List[Dict[str, Any]],
-    segment_name: str,
-    bank_name: str,
-    quarter: str,
-    fiscal_year: int,
-) -> str:
+def format_chunk_card_for_rerank(chunk: Dict[str, Any], index: int) -> str:
     """
-    Format retrieved chunks into context for LLM drivers extraction.
+    Format a chunk as a card for LLM reranking.
+
+    Uses source_section + summary_title + propositions (not raw_text).
 
     Args:
-        chunks: List of chunk dicts from retrieve_segment_chunks()
-        segment_name: Business segment name
-        bank_name: Bank name
-        quarter: Quarter
-        fiscal_year: Fiscal year
+        chunk: Chunk dict
+        index: Card index number
 
     Returns:
-        Formatted context string for LLM prompt
+        Formatted card string
+    """
+    section = chunk.get("source_section", "Unknown")
+    summary = chunk.get("summary_title", "No summary")
+    propositions = chunk.get("propositions", [])
+
+    lines = [
+        f"### Card {index}",
+        f"**Section Path:** {section}",
+        f"**Summary:** {summary}",
+    ]
+
+    if propositions and isinstance(propositions, list):
+        lines.append("**Key Facts:**")
+        for prop in propositions[:7]:  # Limit propositions shown
+            lines.append(f"- {prop}")
+
+    return "\n".join(lines)
+
+
+async def rerank_chunks_for_segment(
+    chunks: List[Dict[str, Any]],
+    segment_name: str,
+    context: Dict[str, Any],
+) -> List[Dict[str, Any]]:
+    """
+    Use LLM to filter chunks by binary relevance to the specific segment.
+
+    Args:
+        chunks: List of candidate chunks from initial retrieval
+        segment_name: Target segment (e.g., "Capital Markets")
+        context: Execution context
+
+    Returns:
+        Filtered list of chunks that are directly relevant to the segment
+    """
+    logger = get_logger()
+    execution_id = context.get("execution_id")
+
+    if not chunks:
+        return []
+
+    # Format chunks as cards
+    cards = []
+    for i, chunk in enumerate(chunks, 1):
+        cards.append(format_chunk_card_for_rerank(chunk, i))
+
+    cards_text = "\n\n".join(cards)
+
+    system_prompt = f"""You are a financial document analyst. Your task is to determine which \
+document excerpts are DIRECTLY relevant to the {segment_name} business segment.
+
+## SEGMENT: {segment_name}
+
+## CRITERIA FOR RELEVANCE
+
+A chunk is RELEVANT if it:
+- Explicitly discusses the {segment_name} segment by name
+- Contains information about business activities specific to {segment_name}
+- Discusses metrics, performance, or drivers for this segment
+- Is nested under a section heading that indicates {segment_name} content
+
+A chunk is NOT RELEVANT if it:
+- Discusses a different business segment (e.g., Canadian Banking when looking for Capital Markets)
+- Is about enterprise-wide or consolidated results without segment breakdown
+- Is general corporate information not specific to this segment
+- Only mentions the segment in passing without substantive content
+
+## IMPORTANT
+
+Be STRICT. Only mark chunks as relevant if they are DIRECTLY about {segment_name}.
+If a chunk is about multiple segments or enterprise-wide, mark it NOT relevant.
+We want segment-specific content only."""
+
+    user_prompt = f"""Review each card below and determine if it is DIRECTLY relevant to the \
+{segment_name} segment.
+
+{cards_text}
+
+For each card (1 to {len(chunks)}), provide a binary decision: relevant or not_relevant."""
+
+    # Tool for structured output
+    tool_definition = {
+        "type": "function",
+        "function": {
+            "name": "classify_chunk_relevance",
+            "description": f"Classify each chunk's relevance to {segment_name}",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "decisions": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "card_number": {"type": "integer"},
+                                "relevant": {"type": "boolean"},
+                                "reason": {"type": "string"},
+                            },
+                            "required": ["card_number", "relevant"],
+                        },
+                        "description": "Binary relevance decision for each card",
+                    },
+                },
+                "required": ["decisions"],
+            },
+        },
+    }
+
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_prompt},
+    ]
+
+    try:
+        model = etl_config.get_model("segment_drivers_extraction")
+
+        response = await complete_with_tools(
+            messages=messages,
+            tools=[tool_definition],
+            context=context,
+            llm_params={"model": model, "temperature": 0.1, "max_tokens": 2000},
+        )
+
+        if response.get("choices") and response["choices"][0].get("message"):
+            message = response["choices"][0]["message"]
+            if message.get("tool_calls"):
+                tool_call = message["tool_calls"][0]
+                function_args = json.loads(tool_call["function"]["arguments"])
+                decisions = function_args.get("decisions", [])
+
+                # Build set of relevant card numbers
+                relevant_indices = set()
+                for decision in decisions:
+                    if decision.get("relevant"):
+                        relevant_indices.add(decision.get("card_number"))
+
+                # Filter chunks
+                filtered = [chunk for i, chunk in enumerate(chunks, 1) if i in relevant_indices]
+
+                logger.info(
+                    "etl.rts.rerank_complete",
+                    execution_id=execution_id,
+                    segment=segment_name,
+                    input_chunks=len(chunks),
+                    relevant_chunks=len(filtered),
+                )
+                return filtered
+
+        logger.warning("etl.rts.rerank_no_tool_call", execution_id=execution_id)
+        return chunks  # Return original if reranking fails
+
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        logger.error("etl.rts.rerank_error", error=str(e))
+        return chunks  # Return original on error
+
+
+# =============================================================================
+# Step 3: Page-Based Context Expansion with Gap Filling
+# =============================================================================
+
+
+def get_expanded_page_set(page_numbers: Set[int], max_gap: int = 5) -> Set[int]:
+    """
+    Expand page set with ±1 context and fill gaps ≤ max_gap.
+
+    Args:
+        page_numbers: Set of page numbers from relevant chunks
+        max_gap: Maximum gap size to fill (default 5)
+
+    Returns:
+        Expanded set of page numbers
+    """
+    if not page_numbers:
+        return set()
+
+    # Step 1: Add ±1 page context
+    expanded = set()
+    for page in page_numbers:
+        expanded.add(page - 1)
+        expanded.add(page)
+        expanded.add(page + 1)
+
+    # Remove invalid page numbers (< 1)
+    expanded = {p for p in expanded if p >= 1}
+
+    # Step 2: Fill gaps ≤ max_gap
+    if len(expanded) < 2:
+        return expanded
+
+    sorted_pages = sorted(expanded)
+    filled = set(sorted_pages)
+
+    for i in range(len(sorted_pages) - 1):
+        current = sorted_pages[i]
+        next_page = sorted_pages[i + 1]
+        gap = next_page - current - 1
+
+        if 0 < gap <= max_gap:
+            # Fill the gap
+            for page in range(current + 1, next_page):
+                filled.add(page)
+
+    return filled
+
+
+async def expand_chunks_by_page(
+    relevant_chunks: List[Dict[str, Any]],
+    bank: str,
+    year: int,
+    quarter: str,
+    context: Dict[str, Any],
+) -> List[Dict[str, Any]]:
+    """
+    Expand chunk set by pulling all chunks from relevant pages with context.
+
+    Args:
+        relevant_chunks: Chunks that passed reranking
+        bank: Bank symbol
+        year: Fiscal year
+        quarter: Quarter
+        context: Execution context
+
+    Returns:
+        Expanded and sorted list of chunks (by chunk_id)
+    """
+    logger = get_logger()
+    execution_id = context.get("execution_id")
+
+    if not relevant_chunks:
+        return []
+
+    # Get page numbers from relevant chunks
+    page_numbers = {c["page_no"] for c in relevant_chunks if c.get("page_no")}
+
+    if not page_numbers:
+        return relevant_chunks
+
+    # Expand page set
+    expanded_pages = get_expanded_page_set(page_numbers, max_gap=5)
+
+    logger.info(
+        "etl.rts.page_expansion",
+        execution_id=execution_id,
+        original_pages=len(page_numbers),
+        expanded_pages=len(expanded_pages),
+        page_range=f"{min(expanded_pages)}-{max(expanded_pages)}" if expanded_pages else "none",
+    )
+
+    try:
+        async with get_connection() as conn:
+            # Build page list for SQL IN clause
+            page_list = list(expanded_pages)
+
+            sql = text(
+                """
+                SELECT
+                    id, chunk_id, page_no, summary_title, source_section,
+                    raw_text, propositions
+                FROM rts_embedding
+                WHERE bank = :bank AND year = :year AND quarter = :quarter
+                  AND page_no = ANY(:pages)
+                ORDER BY chunk_id
+                """
+            ).bindparams(
+                bindparam("bank", value=bank),
+                bindparam("year", value=year),
+                bindparam("quarter", value=quarter),
+                bindparam("pages", value=page_list),
+            )
+
+            result = await conn.execute(sql)
+            chunks = []
+
+            for row in result.fetchall():
+                propositions = row[6]
+                if isinstance(propositions, str):
+                    try:
+                        propositions = json.loads(propositions)
+                    except json.JSONDecodeError:
+                        propositions = []
+
+                chunks.append(
+                    {
+                        "id": row[0],
+                        "chunk_id": row[1],
+                        "page_no": row[2],
+                        "summary_title": row[3],
+                        "source_section": row[4],
+                        "raw_text": row[5],
+                        "propositions": propositions or [],
+                    }
+                )
+
+            logger.info(
+                "etl.rts.page_expansion_complete",
+                execution_id=execution_id,
+                chunks_retrieved=len(chunks),
+            )
+            return chunks
+
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        logger.error("etl.rts.page_expansion_error", error=str(e))
+        return relevant_chunks
+
+
+# =============================================================================
+# Step 4: Driver Statement Generation (No Metrics/Deltas)
+# =============================================================================
+
+
+def format_chunks_for_drivers(chunks: List[Dict[str, Any]]) -> str:
+    """
+    Format expanded chunks for driver generation LLM.
+
+    Args:
+        chunks: List of chunks sorted by chunk_id
+
+    Returns:
+        Formatted context string
     """
     if not chunks:
         return "No relevant content found."
 
-    lines = [
-        f"# {bank_name} - {segment_name} Segment",
-        f"## {quarter} {fiscal_year} Regulatory Filing Excerpts",
-        "",
-        "The following excerpts are from the bank's regulatory filings, "
-        "ordered by relevance to the segment:",
-        "",
-    ]
+    lines = ["# Regulatory Filing Excerpts (sorted by document order)", ""]
 
-    for i, chunk in enumerate(chunks, 1):
+    for chunk in chunks:
+        page = chunk.get("page_no", "?")
         section = chunk.get("source_section", "Unknown Section")
-        summary = chunk.get("summary_title", "")
         raw_text = chunk.get("raw_text", "")
-        propositions = chunk.get("propositions", [])
-        similarity = chunk.get("similarity", 0)
 
-        lines.append(f"### Excerpt {i} (Relevance: {similarity:.2%})")
-        lines.append(f"**Section:** {section}")
-
-        if summary:
-            lines.append(f"**Summary:** {summary}")
-
+        lines.append(f"## Page {page} | {section}")
         lines.append("")
 
         if raw_text:
-            # Truncate very long text
-            text_preview = raw_text[:1500] if len(raw_text) > 1500 else raw_text
-            lines.append(text_preview)
-
-        if propositions and isinstance(propositions, list):
-            lines.append("")
-            lines.append("**Key Facts:**")
-            for prop in propositions[:5]:  # Limit to 5 propositions per chunk
-                lines.append(f"- {prop}")
+            # Include full text (up to limit)
+            text_content = raw_text[:2000] if len(raw_text) > 2000 else raw_text
+            lines.append(text_content)
 
         lines.append("")
         lines.append("---")
@@ -338,24 +583,19 @@ def format_chunks_for_llm(
 async def generate_segment_drivers(
     chunks: List[Dict[str, Any]],
     segment_name: str,
-    bank_name: str,
-    quarter: str,
-    fiscal_year: int,
     context: Dict[str, Any],
 ) -> Optional[str]:
     """
-    Generate a drivers statement for a segment from RTS chunks.
+    Generate a qualitative drivers statement from expanded chunks.
 
-    Uses LLM to synthesize a concise narrative about key performance drivers
-    for the specified business segment.
+    IMPORTANT: Output should NOT include specific metrics or delta values.
+    The metrics are already shown separately from the supplementary pack.
+    This statement should focus on qualitative drivers only.
 
     Args:
-        chunks: List of chunk dicts from retrieve_segment_chunks()
-        segment_name: Business segment name (e.g., "Capital Markets")
-        bank_name: Bank name
-        quarter: Quarter
-        fiscal_year: Fiscal year
-        context: Execution context with auth_config, ssl_config
+        chunks: Expanded chunks sorted by chunk_id
+        segment_name: Business segment name
+        context: Execution context
 
     Returns:
         Drivers statement string or None if generation fails
@@ -364,73 +604,82 @@ async def generate_segment_drivers(
     execution_id = context.get("execution_id")
 
     if not chunks:
-        logger.warning(
-            "etl.bank_earnings_report.rts_no_chunks_for_drivers",
-            execution_id=execution_id,
-            segment=segment_name,
-        )
+        logger.warning("etl.rts.no_chunks_for_drivers", execution_id=execution_id)
         return None
 
-    # Format chunks for LLM context
-    chunks_context = format_chunks_for_llm(chunks, segment_name, bank_name, quarter, fiscal_year)
+    chunks_context = format_chunks_for_drivers(chunks)
 
-    # Build prompts
+    # Updated prompting - NO METRICS OR DELTAS
     system_prompt = f"""You are a senior financial analyst writing a bank quarterly earnings report.
 
-Your task is to write a concise drivers statement for the {segment_name} segment.
+Your task is to write a concise QUALITATIVE drivers statement for the {segment_name} segment.
 
-## REQUIREMENTS
+## CRITICAL REQUIREMENTS
 
-1. **Length**: 2-3 sentences maximum
-2. **Content**: Focus on the key performance drivers from the regulatory filings
-3. **Specificity**: Include specific metrics, percentages, or dollar amounts when available
+1. **NO METRICS OR NUMBERS**: Do NOT include specific dollar amounts, percentages, basis points, \
+or any numerical values. The metrics are shown separately in the report.
+2. **QUALITATIVE ONLY**: Focus on the business drivers, trends, and factors - not the numbers.
+3. **Length**: 2-3 sentences maximum
 4. **Tone**: Professional, factual, analyst-style
-5. **Focus**: What drove performance this quarter (positive and negative factors)
 
-## EXAMPLE OUTPUT
+## WHAT TO INCLUDE
 
-"Revenue growth of 8% YoY driven by higher trading volumes and advisory fees. \
-Net interest income benefited from loan growth of $2.1B, partially offset by \
-margin compression of 5 bps. Expenses well-controlled with efficiency ratio \
-improving to 62.3%."
+- Business drivers (e.g., "higher trading activity", "increased client demand")
+- Market conditions (e.g., "favorable rate environment", "challenging credit conditions")
+- Strategic factors (e.g., "expansion into new markets", "cost discipline initiatives")
+- Operational factors (e.g., "improved efficiency", "technology investments")
+
+## WHAT TO EXCLUDE
+
+- Specific dollar amounts (e.g., "$2.1B", "CAD 500 million")
+- Percentages (e.g., "8% growth", "up 12%")
+- Basis points (e.g., "expanded 15 bps")
+- Quarter-over-quarter or year-over-year comparisons with numbers
+- Any numerical metrics
+
+## EXAMPLE - CORRECT
+
+"Performance driven by higher trading volumes and strong advisory activity amid favorable market \
+conditions. Loan growth supported by increased corporate demand, while credit quality remained \
+stable. Continued focus on expense management and operational efficiency."
+
+## EXAMPLE - INCORRECT (has numbers)
+
+"Revenue growth of 8% YoY driven by higher trading volumes. Net interest income benefited from \
+loan growth of $2.1B, partially offset by margin compression of 5 bps."
 
 ## IMPORTANT
 
-- Do NOT include segment name in the statement (it's already shown in the header)
-- Do NOT use phrases like "In Q3 2024" or "This quarter" - context is already clear
-- Focus on the WHY behind the numbers, not just the numbers themselves
-- If data is limited, acknowledge what can be determined from available information"""
+Do NOT include the segment name in the statement - it's already shown in the header."""
 
-    user_prompt = f"""Based on the following regulatory filing excerpts for {bank_name}'s \
-{segment_name} segment in {quarter} {fiscal_year}, write a concise drivers statement.
+    user_prompt = f"""Based on the following regulatory filing excerpts for the {segment_name} \
+segment, write a concise QUALITATIVE drivers statement.
+
+Remember: NO specific metrics, percentages, or dollar amounts. Focus only on the business drivers.
 
 {chunks_context}
 
-Write a 2-3 sentence drivers statement summarizing the key performance factors."""
+Write a 2-3 sentence qualitative drivers statement."""
 
-    # Define tool for structured output
     tool_definition = {
         "type": "function",
         "function": {
             "name": "segment_drivers_statement",
-            "description": f"Generate a drivers statement for the {segment_name} segment",
+            "description": f"Generate a qualitative drivers statement for {segment_name}",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "drivers_statement": {
                         "type": "string",
                         "description": (
-                            "A 2-3 sentence statement describing the key performance drivers "
-                            "for this segment. Should be specific and include metrics "
-                            "where available."
+                            "A 2-3 sentence QUALITATIVE statement about performance drivers. "
+                            "Must NOT contain any numbers, percentages, or dollar amounts."
                         ),
                     },
                     "confidence": {
                         "type": "string",
                         "enum": ["high", "medium", "low"],
-                        "description": (
-                            "Confidence level based on relevance and completeness of source data"
-                        ),
+                        "description": "Confidence based on source data relevance",
                     },
                 },
                 "required": ["drivers_statement", "confidence"],
@@ -444,21 +693,15 @@ Write a 2-3 sentence drivers statement summarizing the key performance factors."
     ]
 
     try:
-        # Use model from ETL config
         model = etl_config.get_model("segment_drivers_extraction")
 
         response = await complete_with_tools(
             messages=messages,
             tools=[tool_definition],
             context=context,
-            llm_params={
-                "model": model,
-                "temperature": 0.2,  # Slightly higher for natural language
-                "max_tokens": 500,
-            },
+            llm_params={"model": model, "temperature": 0.2, "max_tokens": 500},
         )
 
-        # Parse response
         if response.get("choices") and response["choices"][0].get("message"):
             message = response["choices"][0]["message"]
             if message.get("tool_calls"):
@@ -469,34 +712,24 @@ Write a 2-3 sentence drivers statement summarizing the key performance factors."
                 confidence = function_args.get("confidence", "unknown")
 
                 logger.info(
-                    "etl.bank_earnings_report.rts_drivers_generated",
+                    "etl.rts.drivers_generated",
                     execution_id=execution_id,
                     segment=segment_name,
                     confidence=confidence,
                     statement_length=len(drivers_statement),
                 )
-
                 return drivers_statement
 
-        logger.warning(
-            "etl.bank_earnings_report.rts_no_tool_call",
-            execution_id=execution_id,
-            segment=segment_name,
-        )
+        logger.warning("etl.rts.drivers_no_tool_call", execution_id=execution_id)
         return None
 
     except Exception as e:  # pylint: disable=broad-exception-caught
-        logger.error(
-            "etl.bank_earnings_report.rts_drivers_error",
-            execution_id=execution_id,
-            segment=segment_name,
-            error=str(e),
-        )
+        logger.error("etl.rts.drivers_error", error=str(e))
         return None
 
 
 # =============================================================================
-# Main Entry Point for Segment Drivers
+# Main Entry Point - Full Pipeline
 # =============================================================================
 
 
@@ -510,34 +743,38 @@ async def get_segment_drivers_from_rts(
     top_k: int = 20,
 ) -> Optional[str]:
     """
-    Get a drivers statement for a segment by querying RTS and using LLM synthesis.
+    Get a qualitative drivers statement for a segment using the full pipeline.
 
-    This is the main entry point for RTS-based segment drivers.
+    Pipeline:
+    1. Initial retrieval: Top-k chunks via semantic similarity
+    2. LLM reranking: Binary filter for segment relevance
+    3. Page expansion: Pull chunks from relevant pages ±1 with gap filling
+    4. Driver generation: LLM synthesizes qualitative drivers (no metrics)
 
     Args:
-        bank: Bank symbol with suffix (e.g., "RY-CA") - must match rts_embedding.bank column
+        bank: Bank symbol (e.g., "RY-CA")
         year: Fiscal year
         quarter: Quarter (e.g., "Q3")
-        segment_name: Business segment name (e.g., "Capital Markets")
+        segment_name: Business segment (e.g., "Capital Markets")
         context: Execution context
-        top_k: Number of chunks to retrieve for context
+        top_k: Initial retrieval size (default 20)
 
     Returns:
-        Drivers statement string or None if unavailable
+        Qualitative drivers statement or None if unavailable
     """
     logger = get_logger()
     execution_id = context.get("execution_id")
 
     logger.info(
-        "etl.bank_earnings_report.rts_segment_drivers_start",
+        "etl.rts.pipeline_start",
         execution_id=execution_id,
         segment=segment_name,
         bank=bank,
         period=f"{quarter} {year}",
     )
 
-    # Step 1: Retrieve relevant chunks
-    chunks = await retrieve_segment_chunks(
+    # Step 1: Initial retrieval
+    initial_chunks = await retrieve_initial_chunks(
         bank=bank,
         year=year,
         quarter=quarter,
@@ -546,22 +783,49 @@ async def get_segment_drivers_from_rts(
         top_k=top_k,
     )
 
-    if not chunks:
-        logger.warning(
-            "etl.bank_earnings_report.rts_no_chunks",
-            execution_id=execution_id,
-            segment=segment_name,
-        )
+    if not initial_chunks:
+        logger.warning("etl.rts.no_initial_chunks", execution_id=execution_id)
         return None
 
-    # Step 2: Generate drivers statement from chunks
-    drivers = await generate_segment_drivers(
-        chunks=chunks,
+    # Step 2: LLM reranking
+    relevant_chunks = await rerank_chunks_for_segment(
+        chunks=initial_chunks,
         segment_name=segment_name,
-        bank_name=bank,
-        quarter=quarter,
-        fiscal_year=year,
         context=context,
+    )
+
+    if not relevant_chunks:
+        logger.warning("etl.rts.no_relevant_chunks", execution_id=execution_id)
+        return None
+
+    # Step 3: Page-based expansion
+    expanded_chunks = await expand_chunks_by_page(
+        relevant_chunks=relevant_chunks,
+        bank=bank,
+        year=year,
+        quarter=quarter,
+        context=context,
+    )
+
+    if not expanded_chunks:
+        logger.warning("etl.rts.no_expanded_chunks", execution_id=execution_id)
+        return None
+
+    # Step 4: Generate drivers statement
+    drivers = await generate_segment_drivers(
+        chunks=expanded_chunks,
+        segment_name=segment_name,
+        context=context,
+    )
+
+    logger.info(
+        "etl.rts.pipeline_complete",
+        execution_id=execution_id,
+        segment=segment_name,
+        initial_chunks=len(initial_chunks),
+        relevant_chunks=len(relevant_chunks),
+        expanded_chunks=len(expanded_chunks),
+        drivers_generated=drivers is not None,
     )
 
     return drivers
