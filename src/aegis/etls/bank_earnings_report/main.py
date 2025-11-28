@@ -395,7 +395,7 @@ async def extract_all_sections(
         extract_transcript_overview,
         extract_transcript_items_of_note,
     )
-    from .retrieval.rts import get_segment_drivers_from_full_rts
+    from .retrieval.rts import get_all_segment_drivers_from_rts
 
     execution_id = context.get("execution_id")
     db_symbol = f"{bank_info['bank_symbol']}-CA"
@@ -800,6 +800,22 @@ async def extract_all_sections(
         "segment_selections": {},
     }
 
+    # Get ALL segment drivers from RTS in a single LLM call (more efficient)
+    all_segment_drivers = await get_all_segment_drivers_from_rts(
+        bank=db_symbol,  # e.g., "RY-CA"
+        year=fiscal_year,
+        quarter=quarter,
+        segment_names=found_platforms,
+        context=context,
+    )
+
+    logger.info(
+        "etl.bank_earnings_report.rts_drivers_retrieved",
+        execution_id=execution_id,
+        segments_with_drivers=sum(1 for v in all_segment_drivers.values() if v),
+        total_segments=len(found_platforms),
+    )
+
     for platform in found_platforms:
         # Platform is already an exact match - use it directly
         logger.info(
@@ -844,22 +860,9 @@ async def extract_all_sections(
                 "reasoning": selection.get("reasoning", ""),
             }
 
-            # Get segment drivers from RTS (regulatory filings)
-            # No fallback - leave blank if RTS not available
-            rts_drivers = await get_segment_drivers_from_full_rts(
-                bank=db_symbol,  # e.g., "RY-CA"
-                year=fiscal_year,
-                quarter=quarter,
-                segment_name=platform,
-                context=context,
-            )
-
-            if rts_drivers:
-                description = rts_drivers
-                segment_debug["segment_selections"][platform]["rts_drivers"] = True
-            else:
-                description = ""
-                segment_debug["segment_selections"][platform]["rts_drivers"] = False
+            # Get RTS drivers from the batch result (already retrieved above)
+            description = all_segment_drivers.get(platform, "")
+            segment_debug["segment_selections"][platform]["rts_drivers"] = bool(description)
 
             # Format the segment entry with both core and highlighted metrics
             segment_entry = format_segment_json(

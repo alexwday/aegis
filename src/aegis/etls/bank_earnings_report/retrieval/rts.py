@@ -853,37 +853,53 @@ def format_full_rts_for_llm(chunks: List[Dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
-async def generate_segment_drivers_from_full_rts(
+async def generate_all_segment_drivers_from_full_rts(
     chunks: List[Dict[str, Any]],
-    segment_name: str,
+    segment_names: List[str],
     context: Dict[str, Any],
-) -> Optional[str]:
+) -> Dict[str, str]:
     """
-    Generate a qualitative drivers statement by letting the LLM find the relevant
-    section in the full RTS document.
+    Generate qualitative drivers statements for ALL segments in a single LLM call.
+
+    This is more efficient than calling the LLM once per segment, and provides
+    better consistency across segment summaries.
 
     Args:
         chunks: All RTS chunks for the bank/quarter
-        segment_name: Business segment name
+        segment_names: List of segment names to extract drivers for
         context: Execution context
 
     Returns:
-        Drivers statement string or None if generation fails
+        Dict mapping segment name to drivers statement (empty string if not found)
     """
     logger = get_logger()
     execution_id = context.get("execution_id")
 
+    # Initialize result with empty strings for all segments
+    result: Dict[str, str] = {name: "" for name in segment_names}
+
     if not chunks:
-        logger.warning("etl.rts.no_chunks_for_full_drivers", execution_id=execution_id)
-        return None
+        logger.warning("etl.rts.no_chunks_for_batch_drivers", execution_id=execution_id)
+        return result
+
+    if not segment_names:
+        logger.warning("etl.rts.no_segments_provided", execution_id=execution_id)
+        return result
 
     full_rts = format_full_rts_for_llm(chunks)
 
+    # Build segment list for prompt
+    segment_list = "\n".join(f"- {name}" for name in segment_names)
+
     system_prompt = f"""You are a senior financial analyst writing a bank quarterly earnings report.
 
-Your task is to:
-1. FIND the section(s) in the regulatory filing that discuss the {segment_name} segment
-2. EXTRACT the key performance drivers mentioned for this segment
+Your task is to extract performance driver statements for EACH of the following business segments:
+
+{segment_list}
+
+For EACH segment, you will:
+1. FIND the section(s) in the regulatory filing that discuss that segment
+2. EXTRACT the key performance drivers mentioned
 3. WRITE a concise qualitative drivers statement (2-3 sentences)
 
 ## CRITICAL REQUIREMENTS
@@ -891,20 +907,22 @@ Your task is to:
 1. **NO METRICS OR NUMBERS**: Do NOT include specific dollar amounts, percentages, basis points, \
 or any numerical values. The metrics are shown separately in the report.
 2. **QUALITATIVE ONLY**: Focus on the business drivers, trends, and factors - not the numbers.
-3. **Length**: 2-3 sentences maximum
+3. **Length**: 2-3 sentences maximum per segment
 4. **Tone**: Professional, factual, analyst-style
+5. **Consistency**: Use similar style and depth across all segments
 
-## SEGMENT TO FIND: {segment_name}
+## WHERE TO FIND SEGMENT INFORMATION
 
 Look for sections with headings like:
-- "{segment_name}"
+- The segment name itself (e.g., "Canadian Banking", "Capital Markets")
 - "Business Segment Results"
 - "Segment Performance"
 - "Operating Results by Segment"
+- "Results by Business Segment"
 
-The segment discussion typically includes explanations of what drove performance changes.
+Each segment's discussion typically includes explanations of what drove performance changes.
 
-## WHAT TO INCLUDE
+## WHAT TO INCLUDE IN EACH STATEMENT
 
 - Business drivers (e.g., "higher trading activity", "increased client demand")
 - Market conditions (e.g., "favorable rate environment", "challenging credit conditions")
@@ -917,52 +935,57 @@ The segment discussion typically includes explanations of what drove performance
 - Percentages (e.g., "8% growth", "up 12%")
 - Basis points (e.g., "expanded 15 bps")
 - Quarter-over-quarter or year-over-year comparisons with numbers
+- The segment name in the statement (it's already shown in the header)
 
-## IF SEGMENT NOT FOUND
+## IF A SEGMENT IS NOT FOUND
 
-If you cannot find content specifically about the {segment_name} segment, return an empty string.
-Do NOT make up information or use content from other segments.
+If you cannot find content specifically about a segment, return an empty string for that segment.
+Do NOT make up information or use content from other segments."""
 
-## IMPORTANT
+    user_prompt = f"""Below is the complete regulatory filing document. For each of the \
+following segments, find the relevant section and write a 2-3 sentence QUALITATIVE \
+drivers statement:
 
-Do NOT include the segment name in the statement - it's already shown in the header."""
-
-    user_prompt = f"""Below is the complete regulatory filing document. Find the section \
-discussing the {segment_name} segment and write a 2-3 sentence QUALITATIVE drivers statement.
+{segment_list}
 
 Remember: NO specific metrics, percentages, or dollar amounts. Focus only on the business drivers.
 
 {full_rts}
 
-Write the qualitative drivers statement for {segment_name}, or return empty if not found."""
+Extract the qualitative drivers statement for each segment listed above."""
+
+    # Build properties for each segment dynamically
+    segment_properties = {}
+    for name in segment_names:
+        safe_key = name.lower().replace(" ", "_").replace("&", "and").replace(".", "")
+        segment_properties[safe_key] = {
+            "type": "object",
+            "properties": {
+                "found": {
+                    "type": "boolean",
+                    "description": f"Whether content for {name} was found in the document",
+                },
+                "drivers_statement": {
+                    "type": "string",
+                    "description": (
+                        f"2-3 sentence qualitative drivers statement for {name}. "
+                        "No numbers, percentages, or dollar amounts. "
+                        "Empty string if segment not found."
+                    ),
+                },
+            },
+            "required": ["found", "drivers_statement"],
+        }
 
     tool_definition = {
         "type": "function",
         "function": {
-            "name": "segment_drivers_statement",
-            "description": f"Generate a qualitative drivers statement for {segment_name}",
+            "name": "all_segment_drivers",
+            "description": "Extract qualitative drivers statements for all business segments",
             "parameters": {
                 "type": "object",
-                "properties": {
-                    "found_segment": {
-                        "type": "boolean",
-                        "description": f"Whether content for {segment_name} was found",
-                    },
-                    "drivers_statement": {
-                        "type": "string",
-                        "description": (
-                            "A 2-3 sentence QUALITATIVE statement about performance drivers. "
-                            "Must NOT contain any numbers, percentages, or dollar amounts. "
-                            "Empty string if segment not found."
-                        ),
-                    },
-                    "source_sections": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                        "description": "Section headings where segment content was found",
-                    },
-                },
-                "required": ["found_segment", "drivers_statement"],
+                "properties": segment_properties,
+                "required": list(segment_properties.keys()),
             },
         },
     }
@@ -979,7 +1002,7 @@ Write the qualitative drivers statement for {segment_name}, or return empty if n
             messages=messages,
             tools=[tool_definition],
             context=context,
-            llm_params={"model": model, "temperature": 0.2, "max_tokens": 1000},
+            llm_params={"model": model, "temperature": 0.2, "max_tokens": 2000},
         )
 
         if response.get("choices") and response["choices"][0].get("message"):
@@ -988,70 +1011,79 @@ Write the qualitative drivers statement for {segment_name}, or return empty if n
                 tool_call = message["tool_calls"][0]
                 function_args = json.loads(tool_call["function"]["arguments"])
 
-                found_segment = function_args.get("found_segment", False)
-                drivers_statement = function_args.get("drivers_statement", "")
-                source_sections = function_args.get("source_sections", [])
+                # Map back from safe keys to original segment names
+                for name in segment_names:
+                    safe_key = name.lower().replace(" ", "_").replace("&", "and").replace(".", "")
+                    segment_data = function_args.get(safe_key, {})
+
+                    if segment_data.get("found") and segment_data.get("drivers_statement"):
+                        result[name] = segment_data["drivers_statement"]
+                        logger.info(
+                            "etl.rts.batch_driver_extracted",
+                            execution_id=execution_id,
+                            segment=name,
+                            statement_length=len(segment_data["drivers_statement"]),
+                        )
+                    else:
+                        logger.info(
+                            "etl.rts.batch_driver_not_found",
+                            execution_id=execution_id,
+                            segment=name,
+                        )
 
                 logger.info(
-                    "etl.rts.full_drivers_generated",
+                    "etl.rts.batch_drivers_complete",
                     execution_id=execution_id,
-                    segment=segment_name,
-                    found_segment=found_segment,
-                    source_sections=source_sections,
-                    statement_length=len(drivers_statement) if drivers_statement else 0,
+                    segments_requested=len(segment_names),
+                    segments_found=sum(1 for v in result.values() if v),
                 )
+                return result
 
-                if found_segment and drivers_statement:
-                    return drivers_statement
-                return None
-
-        logger.warning("etl.rts.full_drivers_no_tool_call", execution_id=execution_id)
-        return None
+        logger.warning("etl.rts.batch_drivers_no_tool_call", execution_id=execution_id)
+        return result
 
     except Exception as e:  # pylint: disable=broad-exception-caught
-        logger.error("etl.rts.full_drivers_error", error=str(e))
-        return None
+        logger.error("etl.rts.batch_drivers_error", error=str(e))
+        return result
 
 
-# pylint: disable=too-many-arguments,too-many-positional-arguments
-async def get_segment_drivers_from_full_rts(
+async def get_all_segment_drivers_from_rts(
     bank: str,
     year: int,
     quarter: str,
-    segment_name: str,
+    segment_names: List[str],
     context: Dict[str, Any],
-) -> Optional[str]:
+) -> Dict[str, str]:
     """
-    Get a qualitative drivers statement by loading the full RTS and letting
-    the LLM find the relevant segment section.
+    Get qualitative drivers statements for ALL segments in a single LLM call.
 
-    This approach:
-    1. Loads ALL chunks for the bank/quarter (no similarity search)
-    2. Passes the full RTS content to the LLM
-    3. LLM finds the segment-specific section and extracts drivers
+    This is more efficient than calling once per segment:
+    - Single RTS load
+    - Single LLM call for all segments
+    - Better consistency in tone/style across segments
 
     Args:
         bank: Bank symbol (e.g., "RY-CA")
         year: Fiscal year
         quarter: Quarter (e.g., "Q3")
-        segment_name: Business segment (e.g., "Capital Markets")
+        segment_names: List of segment names to extract drivers for
         context: Execution context
 
     Returns:
-        Qualitative drivers statement or None if unavailable
+        Dict mapping segment name to drivers statement (empty string if not found)
     """
     logger = get_logger()
     execution_id = context.get("execution_id")
 
     logger.info(
-        "etl.rts.full_pipeline_start",
+        "etl.rts.batch_pipeline_start",
         execution_id=execution_id,
-        segment=segment_name,
         bank=bank,
         period=f"{quarter} {year}",
+        segments=segment_names,
     )
 
-    # Step 1: Load all chunks
+    # Step 1: Load all chunks (single DB call)
     all_chunks = await retrieve_all_rts_chunks(
         bank=bank,
         year=year,
@@ -1060,22 +1092,21 @@ async def get_segment_drivers_from_full_rts(
     )
 
     if not all_chunks:
-        logger.warning("etl.rts.no_chunks_loaded", execution_id=execution_id)
-        return None
+        logger.warning("etl.rts.no_chunks_loaded_batch", execution_id=execution_id)
+        return {name: "" for name in segment_names}
 
-    # Step 2: Generate drivers from full RTS
-    drivers = await generate_segment_drivers_from_full_rts(
+    # Step 2: Generate all drivers in one LLM call
+    drivers = await generate_all_segment_drivers_from_full_rts(
         chunks=all_chunks,
-        segment_name=segment_name,
+        segment_names=segment_names,
         context=context,
     )
 
     logger.info(
-        "etl.rts.full_pipeline_complete",
+        "etl.rts.batch_pipeline_complete",
         execution_id=execution_id,
-        segment=segment_name,
         total_chunks=len(all_chunks),
-        drivers_generated=drivers is not None,
+        segments_with_drivers=sum(1 for v in drivers.values() if v),
     )
 
     return drivers
