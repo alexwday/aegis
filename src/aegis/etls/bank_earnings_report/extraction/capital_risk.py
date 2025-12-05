@@ -136,6 +136,14 @@ quarterly Report to Shareholders (RTS).
 Extract ONLY regulatory capital ratios and credit quality metrics.
 This section is specifically for Basel III capital adequacy and loan loss metrics.
 
+## CRITICAL: EXPLICIT VALUES ONLY
+
+- ONLY extract metrics with explicitly stated numerical values in the document
+- Do NOT infer, calculate, or estimate any values
+- Do NOT include values described as "implied" or "from context"
+- If a metric is mentioned but no specific number is given, skip it entirely
+- The value field must contain ONLY the number and unit (e.g., "13.2%", "$612B")
+
 ## CAPITAL METRICS TO EXTRACT
 
 Look in "Capital Management", "Capital Position", or regulatory sections:
@@ -159,8 +167,9 @@ Look in "Credit Quality", "Risk Management", or "Allowance for Credit Losses":
 - **Net Write-offs** - if available
 - **ACL Coverage Ratio** - ACL as % of GIL
 
-## DO NOT INCLUDE THESE (they belong in other report sections)
+## DO NOT INCLUDE
 
+- Metrics without explicit numerical values in the document
 - Net Income, Revenue, Expenses (financial performance metrics)
 - EPS, Diluted EPS (earnings metrics)
 - ROE, ROA, ROTCE (profitability ratios)
@@ -170,7 +179,9 @@ Look in "Credit Quality", "Risk Management", or "Allowance for Credit Losses":
 
 ## FORMATTING RULES
 
-1. Include the unit in the value (%, $B, $M, bps)
+1. Value must be ONLY the number with unit - no explanatory text
+   - CORRECT: "13.2%"
+   - WRONG: "13.2% (implied from context)"
 2. Use consistent formatting:
    - Ratios as percentages: "13.2%"
    - Large amounts in billions: "$612B"

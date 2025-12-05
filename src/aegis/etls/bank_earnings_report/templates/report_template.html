@@ -1100,8 +1100,8 @@
                                 <tbody>
                                     {% for metric in _5_capital_risk.capital_metrics %}
                                     <tr>
-                                        <td style="padding: 2px 4px; color: #334155; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ metric.name }}</td>
-                                        <td class="value" style="padding: 2px 4px; text-align: right; font-size: 10px; white-space: nowrap;">{{ metric.value }}</td>
+                                        <td style="padding: 2px 4px; color: #334155;">{{ metric.name }}</td>
+                                        <td class="value" style="padding: 2px 4px; text-align: right; font-size: 10px; word-break: break-word;">{{ metric.value }}</td>
                                     </tr>
                                     {% endfor %}
                                 </tbody>
@@ -1135,8 +1135,8 @@
                                 <tbody>
                                     {% for metric in _5_capital_risk.credit_metrics %}
                                     <tr>
-                                        <td style="padding: 2px 4px; color: #334155; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ metric.name }}</td>
-                                        <td class="value" style="padding: 2px 4px; text-align: right; font-size: 10px; white-space: nowrap;">{{ metric.value }}</td>
+                                        <td style="padding: 2px 4px; color: #334155;">{{ metric.name }}</td>
+                                        <td class="value" style="padding: 2px 4px; text-align: right; font-size: 10px; word-break: break-word;">{{ metric.value }}</td>
                                     </tr>
                                     {% endfor %}
                                 </tbody>
