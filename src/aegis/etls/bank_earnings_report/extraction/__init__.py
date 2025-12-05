@@ -12,5 +12,5 @@ Modules:
 - overview_combination.py: Combine RTS and transcript overviews
 - narrative_combination.py: Interleave RTS paragraphs with transcript quotes
 - items_deduplication.py: Deduplicate and rank items from multiple sources
-- capital_risk.py: Capital ratios, RWA, and credit quality from Pillar 3
+- capital_risk.py: Capital ratios, RWA, and credit quality from RTS
 """

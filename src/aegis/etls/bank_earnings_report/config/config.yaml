@@ -52,7 +52,7 @@ models:
   segment_drivers_extraction:
     tier: medium
 
-  # Capital & risk metrics extraction - extract from Pillar 3 disclosures
+  # Capital & risk metrics extraction - extract from RTS regulatory filings
   capital_risk_extraction:
     tier: medium
 

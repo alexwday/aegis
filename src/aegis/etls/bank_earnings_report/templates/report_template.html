@@ -1064,8 +1064,8 @@
                  DATA SOURCE: 5_capital_risk.json
                  SUBSECTIONS:
                    - regulatory_capital (4 ratio tiles)
-                   - rwa (composition bars + total)
-                   - liquidity_credit (4 metrics table)
+                   - rwa (total with QoQ/YoY)
+                   - credit_quality (3 metrics table)
                  ============================================ -->
             <div class="card">
                 <div class="section-header" style="align-items: center;">
@@ -1103,36 +1103,40 @@
                     </div>
                 </div>
 
-                <!-- RWA Breakdown -->
+                <!-- Total RWA -->
                 <div class="qa-item">
                     <div style="margin-bottom: 8px;">
                         <div style="margin-bottom: 4px;">
-                            <span style="font-size: 11px; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;">RWA Composition</span>
+                            <span style="font-size: 11px; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;">Risk-Weighted Assets</span>
                         </div>
                     </div>
-                    <div style="display: flex; flex-direction: column; gap: 6px;">
-                        {% for component in _5_capital_risk.rwa.components %}
-                        <div style="display: flex; align-items: center; gap: 8px;">
-                            <span style="font-size: 10px; color: #64748b; width: 65px;">{{ component.label }}</span>
-                            <div style="flex: 1; height: 6px; background: #e2e8f0; border-radius: 3px; overflow: hidden;">
-                                <div style="width: {{ component.percentage }}%; height: 100%; background: {{ component.color }}; border-radius: 3px;"></div>
+                    <div style="background: #f8fafc; border-radius: 6px; padding: 12px; border: 1px solid #e2e8f0;">
+                        <div style="display: flex; align-items: center; justify-content: space-between;">
+                            <div>
+                                <div style="font-size: 9px; color: #64748b; text-transform: uppercase; font-weight: 600; margin-bottom: 4px;">Total RWA</div>
+                                <div style="font-size: 18px; font-weight: 700; color: var(--text-main);">{{ _5_capital_risk.rwa.total|safe }}</div>
                             </div>
-                            <span style="font-size: 11px; font-weight: 700; color: var(--text-main); width: 50px; text-align: right;">{{ component.value|safe }}</span>
-                        </div>
-                        {% endfor %}
-                        <div style="display: flex; align-items: center; gap: 8px; padding-top: 6px; border-top: 1px solid #e2e8f0; margin-top: 2px;">
-                            <span style="font-size: 10px; color: var(--text-main); font-weight: 600; width: 65px;">Total RWA</span>
-                            <div style="flex: 1;"></div>
-                            <span style="font-size: 12px; font-weight: 700; color: var(--text-main); width: 50px; text-align: right;">{{ _5_capital_risk.rwa.total|safe }}</span>
+                            {% if _5_capital_risk.rwa.qoq and _5_capital_risk.rwa.yoy %}
+                            <div style="display: flex; gap: 16px;">
+                                <div style="text-align: center;">
+                                    <div style="font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700; margin-bottom: 2px;">QoQ</div>
+                                    <span class="delta {{ _5_capital_risk.rwa.qoq.direction }}" style="font-size: 11px;">{{ _5_capital_risk.rwa.qoq.display }}</span>
+                                </div>
+                                <div style="text-align: center;">
+                                    <div style="font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700; margin-bottom: 2px;">YoY</div>
+                                    <span class="delta {{ _5_capital_risk.rwa.yoy.direction }}" style="font-size: 11px;">{{ _5_capital_risk.rwa.yoy.display }}</span>
+                                </div>
+                            </div>
+                            {% endif %}
                         </div>
                     </div>
                 </div>
 
-                <!-- Liquidity & Credit Quality -->
+                <!-- Credit Quality -->
                 <div class="qa-item">
                     <div style="margin-bottom: 8px;">
                         <div style="margin-bottom: 4px;">
-                            <span style="font-size: 11px; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;">Liquidity & Credit Quality</span>
+                            <span style="font-size: 11px; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;">Credit Quality</span>
                         </div>
                     </div>
                     <div style="display: flex; flex-direction: column; gap: 6px;">
@@ -1143,7 +1147,7 @@
                             <span style="font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700; flex: 1; text-align: center;">QoQ</span>
                             <span style="font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700; flex: 1; text-align: center;">YoY</span>
                         </div>
-                        {% for metric in _5_capital_risk.liquidity_credit %}
+                        {% for metric in _5_capital_risk.credit_quality %}
                         <div style="display: flex; align-items: center;">
                             <span style="font-size: 10px; color: #64748b; font-weight: 600; width: 65px;">{{ metric.label }}</span>
                             <span style="font-size: 11px; font-weight: 700; color: var(--text-main); flex: 1; text-align: center;">{{ metric.value|safe }}</span>
