@@ -40,27 +40,39 @@ def build_capital_risk_tool_definition() -> Dict[str, Any]:
         "function": {
             "name": "extract_capital_risk_metrics",
             "description": (
-                "Extract ONLY regulatory capital ratios (CET1, Tier 1, Total Capital, "
-                "Leverage, RWA, LCR) and credit quality metrics (PCL, ACL, GIL). "
-                "Do NOT include earnings metrics like Net Income, EPS, ROE, NIM."
+                "Extract ONLY enterprise-level regulatory capital ratios and credit "
+                "quality metrics. Deduplicate metrics and include reasoning."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
+                    "reasoning": {
+                        "type": "string",
+                        "description": (
+                            "Chain of thought: List all metric candidates found, note which "
+                            "are duplicates, which are segment-level (exclude), and explain "
+                            "final selection for each unique enterprise-level metric."
+                        ),
+                    },
                     "metrics": {
                         "type": "array",
-                        "description": "List of all capital and risk metrics found",
+                        "description": (
+                            "Final deduplicated list of enterprise-level metrics only"
+                        ),
                         "items": {
                             "type": "object",
                             "properties": {
                                 "name": {
                                     "type": "string",
-                                    "description": "Metric name (e.g., 'CET1 Ratio', 'PCL')",
+                                    "description": (
+                                        "Metric name with context in parentheses if needed "
+                                        "(e.g., 'CET1 Ratio', 'PCL (Quarterly)', 'ACL (Total)')"
+                                    ),
                                 },
                                 "value": {
                                     "type": "string",
                                     "description": (
-                                        "Metric value with unit (e.g., '13.2%', '$612B', '$2,100M')"
+                                        "Metric value with unit (e.g., '13.2%', '$1.4B')"
                                     ),
                                 },
                                 "category": {
@@ -72,12 +84,8 @@ def build_capital_risk_tool_definition() -> Dict[str, Any]:
                             "required": ["name", "value", "category"],
                         },
                     },
-                    "extraction_notes": {
-                        "type": "string",
-                        "description": "Brief notes on what was found",
-                    },
                 },
-                "required": ["metrics", "extraction_notes"],
+                "required": ["reasoning", "metrics"],
             },
         },
     }
@@ -133,60 +141,61 @@ quarterly Report to Shareholders (RTS).
 
 ## YOUR TASK
 
-Extract ONLY regulatory capital ratios and credit quality metrics.
-This section is specifically for Basel III capital adequacy and loan loss metrics.
+Extract ONLY enterprise-level (total bank) regulatory capital and credit quality metrics.
+Deduplicate metrics that appear multiple times. Provide reasoning for your selections.
 
-## CRITICAL: EXPLICIT VALUES ONLY
+## CRITICAL RULES
 
-- ONLY extract metrics with explicitly stated numerical values in the document
-- Do NOT infer, calculate, or estimate any values
-- Do NOT include values described as "implied" or "from context"
-- If a metric is mentioned but no specific number is given, skip it entirely
-- The value field must contain ONLY the number and unit (e.g., "13.2%", "$612B")
+1. **ENTERPRISE-LEVEL ONLY**: Extract only bank-wide/consolidated metrics.
+   - EXCLUDE segment-level metrics (e.g., "Personal Banking PCL", "Capital Markets RWA")
+   - EXCLUDE geographic breakdowns (e.g., "Canadian PCL", "U.S. GIL")
+   - Look for metrics labeled "Total", "Consolidated", or in enterprise-wide summaries
 
-## CAPITAL METRICS TO EXTRACT
+2. **DEDUPLICATE**: The same metric may appear multiple times in different sections.
+   - CET1 Ratio might appear in highlights, capital section, and tables
+   - PCL might show quarterly vs YTD vs segment values
+   - Select ONE value per metric - the enterprise-level current quarter figure
 
-Look in "Capital Management", "Capital Position", or regulatory sections:
+3. **EXPLICIT VALUES ONLY**: Only use values explicitly stated in the document.
+   - Do NOT infer, calculate, or estimate values
+   - Skip metrics without explicit numerical values
 
-- **CET1 Ratio** (Common Equity Tier 1 ratio) - e.g., "13.2%"
+4. **ADD CONTEXT TO NAME**: If context is needed to understand the metric, add it in parentheses.
+   - "PCL (Quarterly)" vs "PCL (YTD)" if both could be confused
+   - "ACL (Total)" to clarify it's the full allowance
+   - "RWA (Total)" to distinguish from segment RWA
+
+## CAPITAL METRICS TO EXTRACT (enterprise-level only)
+
+- **CET1 Ratio** - Common Equity Tier 1 ratio, e.g., "13.2%"
 - **Tier 1 Capital Ratio** - e.g., "14.5%"
 - **Total Capital Ratio** - e.g., "16.8%"
 - **Leverage Ratio** - e.g., "4.3%"
-- **Risk-Weighted Assets (RWA)** - e.g., "$612B"
-- **LCR** (Liquidity Coverage Ratio) - e.g., "128%"
-- **NSFR** (Net Stable Funding Ratio) - if available
+- **RWA (Total)** - Total Risk-Weighted Assets, e.g., "$612B"
+- **LCR** - Liquidity Coverage Ratio, e.g., "128%"
 
-## CREDIT QUALITY METRICS TO EXTRACT
+## CREDIT QUALITY METRICS TO EXTRACT (enterprise-level only)
 
-Look in "Credit Quality", "Risk Management", or "Allowance for Credit Losses":
-
-- **PCL** (Provision for Credit Losses) - quarterly amount, e.g., "$720M"
-- **ACL** (Allowance for Credit Losses) - total reserve, e.g., "$5.2B"
-- **GIL** (Gross Impaired Loans) - e.g., "$3.8B"
-- **PCL Ratio** - PCL as % of average loans, e.g., "0.28%"
-- **Net Write-offs** - if available
-- **ACL Coverage Ratio** - ACL as % of GIL
+- **PCL (Quarterly)** - Total bank provision for credit losses this quarter, e.g., "$1.4B"
+- **ACL (Total)** - Total allowance for credit losses, e.g., "$5.2B"
+- **GIL (Total)** - Total gross impaired loans, e.g., "$3.8B"
+- **PCL Ratio** - PCL as % of average loans (enterprise), e.g., "0.28%"
 
 ## DO NOT INCLUDE
 
-- Metrics without explicit numerical values in the document
-- Net Income, Revenue, Expenses (financial performance metrics)
-- EPS, Diluted EPS (earnings metrics)
-- ROE, ROA, ROTCE (profitability ratios)
-- NIM, Efficiency Ratio (operating metrics)
-- Dividends, Book Value (shareholder metrics)
-- Any segment-level metrics
+- Segment-level metrics (Personal Banking, Commercial, Capital Markets, etc.)
+- Geographic breakdowns (Canadian, U.S., International)
+- Prior quarter or prior year values (current quarter only)
+- Net Income, Revenue, EPS, ROE, NIM, Efficiency Ratio
+- Metrics without explicit values
 
-## FORMATTING RULES
+## REASONING REQUIREMENT
 
-1. Value must be ONLY the number with unit - no explanatory text
-   - CORRECT: "13.2%"
-   - WRONG: "13.2% (implied from context)"
-2. Use consistent formatting:
-   - Ratios as percentages: "13.2%"
-   - Large amounts in billions: "$612B"
-   - Smaller amounts in millions: "$720M"
-3. Extract the CURRENT QUARTER value only"""
+In the reasoning field, explain:
+1. What metric candidates you found in the document
+2. Which ones are duplicates (same metric, different locations)
+3. Which ones are segment-level (excluded)
+4. Why you selected the specific value for each final metric"""
 
 
 def _build_user_prompt(bank_name: str, quarter: str, fiscal_year: int, content: str) -> str:
@@ -279,7 +288,7 @@ async def extract_capital_risk_section(
                     "etl.capital_risk.extraction_complete",
                     execution_id=execution_id,
                     metrics_found=len(function_args.get("metrics", [])),
-                    extraction_notes=function_args.get("extraction_notes", ""),
+                    reasoning=function_args.get("reasoning", "")[:500],
                 )
 
                 section = transform_llm_response_to_section(function_args)
