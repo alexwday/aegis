@@ -252,6 +252,8 @@
         /* Enhanced Metric Badges */
         .metric-box {
             flex: 1;
+            display: flex;
+            flex-direction: column;
             background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
             padding: 14px 12px;
             border-radius: 8px;
@@ -262,8 +264,8 @@
             position: relative;
             overflow: hidden;
         }
-        .metric-box:hover { 
-            transform: translateY(-2px); 
+        .metric-box:hover {
+            transform: translateY(-2px);
             box-shadow: 0 4px 8px rgba(0,0,0,0.08);
             background: linear-gradient(135deg, #ffffff 0%, #ffffff 100%);
         }
@@ -275,18 +277,25 @@
             text-transform: uppercase;
             letter-spacing: 0.8px;
             font-weight: 700;
+            flex-shrink: 0;
         }
-        .metric-val { 
-            font-size: 20px; 
-            font-weight: 700; 
+        .metric-content {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            justify-content: flex-end;
+        }
+        .metric-val {
+            font-size: 20px;
+            font-weight: 700;
             color: #1a202c;
             margin-bottom: 6px;
             display: block;
         }
         .metric-changes-container {
-            display: flex; 
-            justify-content: center; 
-            gap: 0; 
+            display: flex;
+            justify-content: center;
+            gap: 0;
             margin-top: 6px;
             padding-top: 6px;
             border-top: 1px solid #f0f4f8;
@@ -624,15 +633,17 @@
                 {% for metric in _1_keymetrics_tiles.metrics[:3] %}
                 <div class="metric-box">
                     <span class="metric-label">{{ metric.label }}</span>
-                    <span class="metric-val">{{ metric.value|safe }}</span>
-                    <div class="metric-changes-container">
-                        <div class="metric-change-item">
-                            <span class="change-label">QoQ</span>
-                            <span class="delta {{ metric.qoq.direction }}">{{ metric.qoq.display }}</span>
-                        </div>
-                        <div class="metric-change-item">
-                            <span class="change-label">YoY</span>
-                            <span class="delta {{ metric.yoy.direction }}">{{ metric.yoy.display }}</span>
+                    <div class="metric-content">
+                        <span class="metric-val">{{ metric.value|safe }}</span>
+                        <div class="metric-changes-container">
+                            <div class="metric-change-item">
+                                <span class="change-label">QoQ</span>
+                                <span class="delta {{ metric.qoq.direction }}">{{ metric.qoq.display }}</span>
+                            </div>
+                            <div class="metric-change-item">
+                                <span class="change-label">YoY</span>
+                                <span class="delta {{ metric.yoy.direction }}">{{ metric.yoy.display }}</span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -640,7 +651,9 @@
                 {% for _ in range(_1_keymetrics_tiles.metrics[:3]|length, 3) %}
                 <div class="metric-box" style="opacity: 0.4;">
                     <span class="metric-label">No Data</span>
-                    <span class="metric-val">—</span>
+                    <div class="metric-content">
+                        <span class="metric-val">—</span>
+                    </div>
                 </div>
                 {% endfor %}
 
@@ -671,15 +684,17 @@
                 {% for metric in _1_keymetrics_tiles.metrics[3:6] %}
                 <div class="metric-box">
                     <span class="metric-label">{{ metric.label }}</span>
-                    <span class="metric-val">{{ metric.value|safe }}</span>
-                    <div class="metric-changes-container">
-                        <div class="metric-change-item">
-                            <span class="change-label">QoQ</span>
-                            <span class="delta {{ metric.qoq.direction }}">{{ metric.qoq.display }}</span>
-                        </div>
-                        <div class="metric-change-item">
-                            <span class="change-label">YoY</span>
-                            <span class="delta {{ metric.yoy.direction }}">{{ metric.yoy.display }}</span>
+                    <div class="metric-content">
+                        <span class="metric-val">{{ metric.value|safe }}</span>
+                        <div class="metric-changes-container">
+                            <div class="metric-change-item">
+                                <span class="change-label">QoQ</span>
+                                <span class="delta {{ metric.qoq.direction }}">{{ metric.qoq.display }}</span>
+                            </div>
+                            <div class="metric-change-item">
+                                <span class="change-label">YoY</span>
+                                <span class="delta {{ metric.yoy.direction }}">{{ metric.yoy.display }}</span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -687,7 +702,9 @@
                 {% for _ in range(_1_keymetrics_tiles.metrics[3:6]|length, 3) %}
                 <div class="metric-box" style="opacity: 0.4;">
                     <span class="metric-label">No Data</span>
-                    <span class="metric-val">—</span>
+                    <div class="metric-content">
+                        <span class="metric-val">—</span>
+                    </div>
                 </div>
                 {% endfor %}
 
