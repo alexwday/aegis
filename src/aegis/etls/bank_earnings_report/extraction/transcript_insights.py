@@ -198,31 +198,29 @@ async def extract_transcript_items_of_note(
     max_items: int = 8,
 ) -> Dict[str, Any]:
     """
-    Extract key highlights from the Management Discussion section.
+    Extract key defining items from the Management Discussion section.
 
-    Items of Note are HEADLINE-WORTHY events that management emphasized:
-    - Major M&A activity (acquisitions, divestitures)
-    - Significant impairments or write-downs
-    - Notable legal/regulatory matters
-    - Strategic restructuring programs
-    - Material one-time items
+    Items of Note are the events and developments that MOST SIGNIFICANTLY DEFINED
+    this quarter for the bank - not just what management mentioned, but what matters
+    most to understanding the bank's quarter.
 
-    Focus on items that would appear in analyst takeaways, not routine commentary.
+    Each item is scored by significance (1-10) to enable ranking.
 
     Args:
         bank_info: Bank information dict with bank_id, bank_name, bank_symbol
         fiscal_year: Fiscal year
         quarter: Quarter (e.g., "Q2")
         context: Execution context
-        max_items: Maximum items to extract (default 10)
+        max_items: Maximum items to extract (default 8)
 
     Returns:
         Dict with:
             - source: "Transcript"
-            - items: List of item dicts with description, impact, segment, timing
+            - items: List of item dicts with description, impact, segment, timing, score
     """
     logger = get_logger()
     execution_id = context.get("execution_id")
+    bank_name = bank_info["bank_name"]
 
     logger.info(
         "etl.bank_earnings_report.transcript_items_start",
@@ -255,86 +253,95 @@ async def extract_transcript_items_of_note(
     if not md_content.strip():
         return {"source": "Transcript", "items": []}
 
-    system_prompt = """You are a senior financial analyst extracting MAJOR BUSINESS HIGHLIGHTS from \
-bank earnings call transcripts for an executive earnings summary.
+    system_prompt = f"""You are a senior financial analyst identifying the KEY DEFINING ITEMS \
+for {bank_name}'s {quarter} {fiscal_year} quarter from their earnings call transcript.
 
-## WHAT "ITEMS OF NOTE" MEANS
+## YOUR MISSION
 
-Items of Note are STRATEGIC BUSINESS EVENTS that management specifically calls out as significant. \
-These are the headline-worthy developments - acquisitions, divestitures, major charges, or strategic \
-programs that would be discussed in analyst reports or news articles.
+Find the items that MOST SIGNIFICANTLY DEFINED this quarter for the bank. Not just what \
+management mentioned, but what truly MATTERS - the events, decisions, and developments that \
+an analyst would point to when explaining "what happened this quarter" to investors.
 
-Think: "What BUSINESS EVENTS did management announce or highlight?" (not performance results)
+Think: "If I had to explain what defined {bank_name}'s {quarter} to an investor in 30 seconds, \
+which items from this transcript would I mention?"
 
-## TYPES OF ITEMS TO EXTRACT
+## WHAT MAKES AN ITEM "DEFINING"
 
-1. **Major Acquisitions**: Buying another company or business unit
-2. **Major Divestitures**: Selling a business unit or subsidiary
-3. **Significant Impairments**: Large goodwill or asset write-downs management called out
-4. **Major Legal/Regulatory Events**: Large settlements, significant fines, consent orders
-5. **Strategic Restructuring**: Major programs with material costs (branch closures, workforce reductions)
-6. **Significant One-Time Charges**: Material items management specifically highlighted
+A defining item has HIGH IMPACT on the bank through one or more of:
 
-## WHAT NOT TO EXTRACT - VERY IMPORTANT
+1. **Financial Materiality**: Significant dollar impact on earnings, capital, or valuation
+   - Major acquisitions or divestitures (>$500M)
+   - Large impairments or write-downs
+   - Significant legal settlements or regulatory penalties
 
-**Routine Capital Management Activities (NEVER extract these):**
-- Issuance or redemption of subordinated debentures
-- Issuance or redemption of capital notes (NVCC, Limited Recourse, etc.)
-- Redemption or issuance of preferred shares
-- Normal course issuer bid (NCIB) share repurchases
+2. **Strategic Significance**: Changes the bank's trajectory or market position
+   - Entry or exit from major business lines
+   - Transformational deals or partnerships
+   - Major restructuring programs
+
+3. **Investor Relevance**: Would be highlighted in analyst reports or earnings headlines
+   - Items that explain earnings beat/miss
+   - Risk events that affect outlook
+   - One-time items that distort comparisons
+
+## WHAT TO EXCLUDE
+
+**Routine Operations (NEVER extract):**
+- Capital note/debenture issuance or redemption
+- Preferred share activity
+- NCIB share repurchases
 - Regular dividend announcements
-- Debt refinancing
+- Normal PCL provisions
+- Routine debt refinancing
 
-These are routine treasury operations - NOT business highlights.
+**Performance Results (NOT items):**
+- "Revenue increased X%"
+- "NIM expanded Y bps"
+- "Expenses down Z%"
+These are RESULTS, not defining ITEMS.
 
-**Other Items NOT to Extract:**
-- Performance results (revenue up, earnings beat, NIM improved)
-- Forward guidance or outlook commentary
-- Ongoing operational metrics with dollar amounts
-- Credit provision updates (unless tied to a specific extraordinary event)
-- General strategic commentary without a specific event
+**Forward Guidance (NOT items):**
+- Outlook commentary
+- "M&A pipeline remains strong"
+- General strategic aspirations
+These are COMMENTARY, not defining items.
 
-## WHAT TO EXTRACT FOR EACH ITEM
+## SIGNIFICANCE SCORING (1-10)
 
-1. **Description**: Clear description of the BUSINESS EVENT (10-20 words)
-2. **Impact**: Dollar amount EXACTLY as stated. Format: '+$150M', '-$45M'. Use "TBD" if not quantified.
-3. **Segment**: Affected segment or "All" if enterprise-wide
-4. **Timing**: One-time, or expected duration
+Score each item based on how much it DEFINED the quarter:
 
-## EXAMPLES OF GOOD ITEMS (Major Business Events)
+- **9-10**: Quarter-defining event (major M&A close, significant impairment, transformational)
+- **7-8**: Highly significant (large one-time item, notable strategic move)
+- **5-6**: Moderately significant (meaningful but not headline-level)
+- **3-4**: Minor significance (worth noting but not quarter-defining)
+- **1-2**: Low significance (borderline whether to include)
 
-| Description | Impact | Segment | Timing |
-|-------------|--------|---------|--------|
-| Completion of HSBC Canada acquisition | -$13.5B | Canadian Banking | Closed Q1 2024 |
-| Goodwill impairment charge for City National | -$450M | U.S. Banking | Q2 2024 |
-| Settlement of securities class action | -$85M | Capital Markets | Resolved |
-| Branch network restructuring program | -$200M | Canadian Banking | Through 2025 |
+Be discriminating - not every item is highly significant. A quarter might have only 1-2 truly \
+defining items and several minor ones. That's fine.
 
-## EXAMPLES OF BAD ITEMS (DO NOT EXTRACT)
+## OUTPUT FORMAT
 
-- "Issued $2B in subordinated debentures" - routine capital management
-- "Redeemed Series AZ Preferred Shares" - routine preferred share activity
-- "Revenue increased 8% year-over-year" - performance result, not an event
-- "NIM expanded by 5 basis points" - performance metric, not an event
-- "PCL was $450M this quarter" - routine provision update
-- "We're investing in digital capabilities" - ongoing strategy, not an event
-- "M&A pipeline remains strong" - commentary, not a specific event"""
+For each item:
+- **Description**: What happened (10-20 words, factual)
+- **Impact**: Dollar amount exactly as stated ('+$150M', '-$1.2B', 'TBD')
+- **Segment**: Affected business segment
+- **Timing**: When/duration
+- **Score**: Significance score (1-10)"""
 
-    user_prompt = f"""Extract KEY HIGHLIGHTS from {bank_info['bank_name']}'s {quarter} \
-{fiscal_year} earnings call.
+    user_prompt = f"""Review {bank_name}'s {quarter} {fiscal_year} earnings call transcript and \
+identify the items that MOST SIGNIFICANTLY DEFINED this quarter for the bank.
 
 {md_content}
 
-Identify the HEADLINE-WORTHY items that management specifically called out or emphasized - \
-major M&A, significant charges, notable legal matters, or strategic programs. Focus on items \
-that would appear in analyst takeaways. If management didn't highlight any notable items, \
-return a short list or empty - do not pad with routine commentary."""
+Extract items based on their IMPACT TO THE BANK, not just their mention in the call. \
+Score each item by significance (1-10). Quality over quantity - it's better to return 3 truly \
+defining items than 8 marginal ones."""
 
     tool_definition = {
         "type": "function",
         "function": {
-            "name": "extract_items_of_note",
-            "description": "Extract specific $ impact events from earnings call",
+            "name": "extract_transcript_items_of_note",
+            "description": "Extract key defining items from earnings call with significance scores",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -346,18 +353,16 @@ return a short list or empty - do not pad with routine commentary."""
                                 "description": {
                                     "type": "string",
                                     "description": (
-                                        "Brief description of the specific event (10-20 words). "
-                                        "What happened, not commentary about it."
+                                        "Brief description of the defining item (10-20 words). "
+                                        "What happened - factual, not commentary."
                                     ),
                                 },
                                 "impact": {
                                     "type": "string",
                                     "description": (
-                                        "Dollar impact ONLY - no additional text. "
-                                        "Format: sign + $ + number + unit. "
-                                        "Examples: '+$150M', '-$45M', '~$100M', '-$1.2B', 'TBD'. "
-                                        "Use M for millions, B for billions. "
-                                        "Do NOT add qualifiers like 'before-tax' or 'cumulative'."
+                                        "Dollar impact ONLY. "
+                                        "Format: '+$150M', '-$45M', '~$100M', '-$1.2B', 'TBD'. "
+                                        "No qualifiers or additional text."
                                     ),
                                 },
                                 "segment": {
@@ -370,23 +375,37 @@ return a short list or empty - do not pad with routine commentary."""
                                 "timing": {
                                     "type": "string",
                                     "description": (
-                                        "Timing info: 'One-time', 'Recurring', 'Q3 2025', "
-                                        "'Through 2025', 'Resolution 2026', etc."
+                                        "Timing: 'One-time', 'Q3 2025', 'Through 2025', etc."
+                                    ),
+                                },
+                                "significance_score": {
+                                    "type": "integer",
+                                    "minimum": 1,
+                                    "maximum": 10,
+                                    "description": (
+                                        "How much this item DEFINED the quarter (1-10). "
+                                        "10=quarter-defining, 7-8=highly significant, "
+                                        "5-6=moderate, 3-4=minor, 1-2=low."
                                     ),
                                 },
                             },
-                            "required": ["description", "impact", "segment", "timing"],
+                            "required": [
+                                "description",
+                                "impact",
+                                "segment",
+                                "timing",
+                                "significance_score",
+                            ],
                         },
                         "description": (
-                            "List of significant impact items (may be empty if none found)"
+                            "Defining items with significance scores (quality over quantity)"
                         ),
                         "maxItems": max_items,
                     },
                     "extraction_notes": {
                         "type": "string",
                         "description": (
-                            "Brief note on extraction: how many items found, "
-                            "or why none were found if list is empty."
+                            "Brief note: what defined this quarter, or why few items found."
                         ),
                     },
                 },

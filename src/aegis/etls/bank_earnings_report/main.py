@@ -416,7 +416,7 @@ async def extract_all_sections(
         extract_transcript_overview,
         extract_transcript_items_of_note,
     )
-    from .extraction.items_deduplication import deduplicate_and_select_items
+    from .extraction.items_deduplication import combine_and_select_items
     from .extraction.overview_combination import combine_overview_narratives
     from .extraction.narrative_combination import combine_narrative_entries
     from .retrieval.rts import (
@@ -710,19 +710,18 @@ async def extract_all_sections(
         max_items=8,
     )
 
-    # Deduplicate and select top items from both sources (max 10 total displayed)
-    combined_items = await deduplicate_and_select_items(
+    # Combine items from both sources using score-based selection (top 2 from each)
+    combined_items = combine_and_select_items(
         rts_items=rts_items.get("items", []),
         transcript_items=transcript_items.get("items", []),
-        bank_name=bank_info["bank_name"],
-        quarter=quarter,
-        fiscal_year=fiscal_year,
-        context=context,
-        max_items=10,
+        featured_per_source=2,
     )
 
+    # Combine featured + remaining into entries (featured first for display)
+    all_entries = combined_items.get("featured", []) + combined_items.get("remaining", [])
+
     sections["1_keymetrics_items"] = {
-        "entries": combined_items.get("items", []),
+        "entries": all_entries,
     }
 
     llm_debug_log["sections"]["1_keymetrics_items"] = {
@@ -732,9 +731,11 @@ async def extract_all_sections(
         "transcript_items_count": len(transcript_items.get("items", [])),
         "transcript_items": transcript_items.get("items", []),
         "transcript_notes": transcript_items.get("notes", ""),
-        "final_items_count": len(combined_items.get("items", [])),
-        "final_items": combined_items.get("items", []),
-        "dedup_notes": combined_items.get("dedup_notes", ""),
+        "featured_count": len(combined_items.get("featured", [])),
+        "featured_items": combined_items.get("featured", []),
+        "remaining_count": len(combined_items.get("remaining", [])),
+        "remaining_items": combined_items.get("remaining", []),
+        "selection_notes": combined_items.get("selection_notes", ""),
     }
 
     logger.info(
@@ -742,7 +743,8 @@ async def extract_all_sections(
         section="1_keymetrics_items",
         rts_items=len(rts_items.get("items", [])),
         transcript_items=len(transcript_items.get("items", [])),
-        final_items=len(combined_items.get("items", [])),
+        featured_items=len(combined_items.get("featured", [])),
+        remaining_items=len(combined_items.get("remaining", [])),
     )
 
     logger.info(
