@@ -40,8 +40,9 @@ def build_capital_risk_tool_definition() -> Dict[str, Any]:
         "function": {
             "name": "extract_capital_risk_metrics",
             "description": (
-                "Extract all capital ratios and credit quality metrics found in the RTS. "
-                "Return each metric with its name, value, and unit."
+                "Extract ONLY regulatory capital ratios (CET1, Tier 1, Total Capital, "
+                "Leverage, RWA, LCR) and credit quality metrics (PCL, ACL, GIL). "
+                "Do NOT include earnings metrics like Net Income, EPS, ROE, NIM."
             ),
             "parameters": {
                 "type": "object",
@@ -132,37 +133,40 @@ quarterly Report to Shareholders (RTS).
 
 ## YOUR TASK
 
-Find ALL capital ratios and credit quality metrics mentioned in the document.
-Extract each metric's current value exactly as shown.
+Extract ONLY regulatory capital ratios and credit quality metrics.
+This section is specifically for Basel III capital adequacy and loan loss metrics.
 
-## CAPITAL METRICS TO LOOK FOR
+## CAPITAL METRICS TO EXTRACT
 
-Look for these in "Capital Management", "Capital Position", or "Financial Highlights":
+Look in "Capital Management", "Capital Position", or regulatory sections:
 
 - **CET1 Ratio** (Common Equity Tier 1 ratio) - e.g., "13.2%"
 - **Tier 1 Capital Ratio** - e.g., "14.5%"
 - **Total Capital Ratio** - e.g., "16.8%"
 - **Leverage Ratio** - e.g., "4.3%"
-- **Risk-Weighted Assets (RWA)** - e.g., "$612B" or "$612 billion"
-- **CET1 Capital** - the dollar amount, e.g., "$82B"
-- **Tier 1 Capital** - the dollar amount
-- **Total Capital** - the dollar amount
+- **Risk-Weighted Assets (RWA)** - e.g., "$612B"
 - **LCR** (Liquidity Coverage Ratio) - e.g., "128%"
 - **NSFR** (Net Stable Funding Ratio) - if available
 
-## CREDIT QUALITY METRICS TO LOOK FOR
+## CREDIT QUALITY METRICS TO EXTRACT
 
-Look for these in "Credit Quality", "Risk Management", or "Allowance for Credit Losses":
+Look in "Credit Quality", "Risk Management", or "Allowance for Credit Losses":
 
 - **PCL** (Provision for Credit Losses) - quarterly amount, e.g., "$720M"
 - **ACL** (Allowance for Credit Losses) - total reserve, e.g., "$5.2B"
 - **GIL** (Gross Impaired Loans) - e.g., "$3.8B"
-- **PCL Ratio** - PCL as % of loans, e.g., "0.28%"
-- **PCL on Impaired** - if shown separately
-- **PCL on Performing** - if shown separately
+- **PCL Ratio** - PCL as % of average loans, e.g., "0.28%"
 - **Net Write-offs** - if available
 - **ACL Coverage Ratio** - ACL as % of GIL
-- **ACL to Loans Ratio** - ACL as % of total loans
+
+## DO NOT INCLUDE THESE (they belong in other report sections)
+
+- Net Income, Revenue, Expenses (financial performance metrics)
+- EPS, Diluted EPS (earnings metrics)
+- ROE, ROA, ROTCE (profitability ratios)
+- NIM, Efficiency Ratio (operating metrics)
+- Dividends, Book Value (shareholder metrics)
+- Any segment-level metrics
 
 ## FORMATTING RULES
 
@@ -171,8 +175,7 @@ Look for these in "Credit Quality", "Risk Management", or "Allowance for Credit 
    - Ratios as percentages: "13.2%"
    - Large amounts in billions: "$612B"
    - Smaller amounts in millions: "$720M"
-3. Extract the CURRENT QUARTER value (not prior periods)
-4. Include any metric you find - more is better"""
+3. Extract the CURRENT QUARTER value only"""
 
 
 def _build_user_prompt(bank_name: str, quarter: str, fiscal_year: int, content: str) -> str:
