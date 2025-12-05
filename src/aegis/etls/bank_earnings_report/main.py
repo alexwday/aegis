@@ -199,110 +199,6 @@ async def verify_data_availability(
         return availability
 
 
-async def retrieve_supplementary_data(
-    bank_id: int, fiscal_year: int, quarter: str, context: Dict[str, Any]
-) -> Dict[str, Any]:
-    """
-    Retrieve supplementary pack data for financial metrics.
-
-    TODO: Implement actual database retrieval.
-
-    Args:
-        bank_id: Bank ID
-        fiscal_year: Fiscal year
-        quarter: Quarter (Q1-Q4)
-        context: Execution context
-
-    Returns:
-        Raw supplementary data dict
-    """
-    logger.info(
-        "etl.bank_earnings_report.retrieve_supplementary",
-        execution_id=context.get("execution_id"),
-        bank_id=bank_id,
-        period=f"{quarter} {fiscal_year}",
-    )
-    return {}
-
-
-async def retrieve_pillar3_data(
-    bank_id: int, fiscal_year: int, quarter: str, context: Dict[str, Any]
-) -> Dict[str, Any]:
-    """
-    Retrieve Pillar 3 capital and risk metrics.
-
-    TODO: Implement actual database retrieval.
-
-    Args:
-        bank_id: Bank ID
-        fiscal_year: Fiscal year
-        quarter: Quarter (Q1-Q4)
-        context: Execution context
-
-    Returns:
-        Raw Pillar 3 data dict
-    """
-    logger.info(
-        "etl.bank_earnings_report.retrieve_pillar3",
-        execution_id=context.get("execution_id"),
-        bank_id=bank_id,
-        period=f"{quarter} {fiscal_year}",
-    )
-    return {}
-
-
-async def retrieve_rts_data(
-    bank_id: int, fiscal_year: int, quarter: str, context: Dict[str, Any]
-) -> Dict[str, Any]:
-    """
-    Retrieve RTS regulatory filing narratives.
-
-    TODO: Implement actual database retrieval.
-
-    Args:
-        bank_id: Bank ID
-        fiscal_year: Fiscal year
-        quarter: Quarter (Q1-Q4)
-        context: Execution context
-
-    Returns:
-        Raw RTS data dict
-    """
-    logger.info(
-        "etl.bank_earnings_report.retrieve_rts",
-        execution_id=context.get("execution_id"),
-        bank_id=bank_id,
-        period=f"{quarter} {fiscal_year}",
-    )
-    return {}
-
-
-async def retrieve_transcript_data(
-    bank_id: int, fiscal_year: int, quarter: str, context: Dict[str, Any]
-) -> Dict[str, Any]:
-    """
-    Retrieve earnings call transcript data for quotes and Q&A.
-
-    TODO: Implement actual database retrieval.
-
-    Args:
-        bank_id: Bank ID
-        fiscal_year: Fiscal year
-        quarter: Quarter (Q1-Q4)
-        context: Execution context
-
-    Returns:
-        Raw transcript data dict
-    """
-    logger.info(
-        "etl.bank_earnings_report.retrieve_transcripts",
-        execution_id=context.get("execution_id"),
-        bank_id=bank_id,
-        period=f"{quarter} {fiscal_year}",
-    )
-    return {}
-
-
 def get_period_ending_date(fiscal_year: int, quarter: str) -> str:
     """
     Calculate the period ending date for Canadian banks (Oct 31 fiscal year end).
@@ -372,7 +268,6 @@ async def extract_all_sections(
     bank_info: Dict[str, Any],
     fiscal_year: int,
     quarter: str,
-    raw_data: Dict[str, Any],
     context: Dict[str, Any],
 ) -> Dict[str, Any]:
     """
@@ -382,7 +277,6 @@ async def extract_all_sections(
         bank_info: Bank information
         fiscal_year: Fiscal year
         quarter: Quarter
-        raw_data: Combined raw data from all sources (currently unused)
         context: Execution context
 
     Returns:
@@ -548,8 +442,7 @@ async def extract_all_sections(
             "metrics": [],
         }
 
-    logger.info("etl.bank_earnings_report.section_complete", section="1_keymetrics_tiles")
-    logger.info("etl.bank_earnings_report.section_complete", section="1_keymetrics_chart")
+    logger.info("etl.bank_earnings_report.section_complete", section="1_keymetrics")
 
     raw_metrics_with_history = await retrieve_all_metrics_with_history(
         bank_symbol=db_symbol,
@@ -566,11 +459,6 @@ async def extract_all_sections(
         sections["1_keymetrics_raw"] = {"headers": [], "rows": [], "tsv": ""}
 
     logger.info("etl.bank_earnings_report.section_complete", section="1_keymetrics_raw")
-
-    logger.info(
-        "etl.bank_earnings_report.overview_start",
-        execution_id=execution_id,
-    )
 
     # Extract overview from both sources
     transcript_overview = await extract_transcript_overview(
@@ -610,12 +498,7 @@ async def extract_all_sections(
         combined_length=len(combined_overview.get("narrative", "")),
     )
 
-    logger.info(
-        "etl.bank_earnings_report.items_of_note_start",
-        execution_id=execution_id,
-    )
-
-    # Extract items from both sources in parallel (max 8 each)
+    # Extract items from both sources (max 8 each)
     transcript_items = await extract_transcript_items_of_note(
         bank_info=bank_info,
         fiscal_year=fiscal_year,
@@ -660,11 +543,6 @@ async def extract_all_sections(
         remaining_items=len(processed_items.get("remaining", [])),
     )
 
-    logger.info(
-        "etl.bank_earnings_report.management_narrative_start",
-        execution_id=execution_id,
-    )
-
     # Extract RTS narrative paragraphs (4 themed paragraphs)
     rts_narrative = await extract_rts_narrative_paragraphs(
         bank_symbol=bank_info["bank_symbol"],
@@ -703,11 +581,6 @@ async def extract_all_sections(
         combined_entries=len(combined_narrative.get("entries", [])),
     )
 
-    logger.info(
-        "etl.bank_earnings_report.analyst_focus_start",
-        execution_id=execution_id,
-    )
-
     analyst_focus_result = await extract_analyst_focus(
         bank_info=bank_info,
         fiscal_year=fiscal_year,
@@ -722,11 +595,6 @@ async def extract_all_sections(
         "etl.bank_earnings_report.section_complete",
         section="3_analyst_focus",
         entries=len(analyst_focus_result.get("entries", [])),
-    )
-
-    logger.info(
-        "etl.bank_earnings_report.segments_start",
-        execution_id=execution_id,
     )
 
     available_platforms = await retrieve_available_platforms(
@@ -763,12 +631,6 @@ async def extract_all_sections(
     )
 
     for platform in found_platforms:
-        logger.info(
-            "etl.bank_earnings_report.segment_matched",
-            execution_id=execution_id,
-            platform=platform,
-        )
-
         segment_metrics = await retrieve_segment_metrics(
             db_symbol, fiscal_year, quarter, platform, context
         )
@@ -806,20 +668,6 @@ async def extract_all_sections(
                 segment_entry["raw_table"] = {"headers": [], "rows": [], "tsv": ""}
 
             segment_entries.append(segment_entry)
-
-            logger.info(
-                "etl.bank_earnings_report.segment_complete",
-                execution_id=execution_id,
-                segment=platform,
-                core_metrics=len(core_metrics_data),
-                raw_table_rows=len(segment_entry["raw_table"].get("rows", [])),
-            )
-        else:
-            logger.warning(
-                "etl.bank_earnings_report.segment_no_metrics",
-                execution_id=execution_id,
-                platform=platform,
-            )
 
     sections["4_segments"] = {"entries": segment_entries}
 
@@ -1050,37 +898,7 @@ async def generate_bank_earnings_report(bank_name: str, fiscal_year: int, quarte
             "ssl_config": ssl_config,
         }
 
-        logger.info(
-            "etl.bank_earnings_report.retrieval_start",
-            execution_id=execution_id,
-        )
-
-        supplementary_task = retrieve_supplementary_data(
-            bank_info["bank_id"], fiscal_year, quarter, context
-        )
-        pillar3_task = retrieve_pillar3_data(bank_info["bank_id"], fiscal_year, quarter, context)
-        rts_task = retrieve_rts_data(bank_info["bank_id"], fiscal_year, quarter, context)
-        transcript_task = retrieve_transcript_data(
-            bank_info["bank_id"], fiscal_year, quarter, context
-        )
-
-        supplementary_data, pillar3_data, rts_data, transcript_data = await asyncio.gather(
-            supplementary_task, pillar3_task, rts_task, transcript_task
-        )
-
-        raw_data = {
-            "supplementary": supplementary_data,
-            "pillar3": pillar3_data,
-            "rts": rts_data,
-            "transcripts": transcript_data,
-        }
-
-        logger.info(
-            "etl.bank_earnings_report.retrieval_complete",
-            execution_id=execution_id,
-        )
-
-        sections = await extract_all_sections(bank_info, fiscal_year, quarter, raw_data, context)
+        sections = await extract_all_sections(bank_info, fiscal_year, quarter, context)
 
         output_dir = Path(__file__).parent / "output"
         output_dir.mkdir(exist_ok=True)
