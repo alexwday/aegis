@@ -1,69 +1,101 @@
 """
 ETL Orchestrator - Automated Report Generation Scheduler
 
-This script monitors the aegis_data_availability table and automatically generates
-missing reports for monitored institutions. Designed to run every 15 minutes to
-catch new transcript data and generate Call Summary and Key Themes reports.
+This script orchestrates two types of ETL workflows:
+
+1. GAP-BASED ETLs (call_summary, key_themes):
+   - Monitors aegis_data_availability for new transcript data
+   - Generates missing per-bank reports automatically
+   - Each ETL uses its own monitored_institutions.yaml config
+   - Runs in parallel across banks (sequential within each bank)
+
+2. SCHEDULE-BASED ETLs (cm_readthrough):
+   - Runs on specific dates defined in quarterly_schedule.yaml
+   - Generates cross-bank quarterly reports
+   - Supports retry_until_next logic for late-arriving data
+   - Runs sequentially (expensive cross-bank operations)
 
 Features:
-- Parallel ETL execution across banks (sequential within each ETL)
+- Parallel ETL execution for gap-based ETLs
 - Exponential backoff retry on failures
 - Execution lock to prevent concurrent runs
 - Gap detection between availability and existing reports
-- Only processes Canadian and US banks from monitored_institutions.yaml
+- Schedule-based execution with configurable run dates
+- Force regeneration option for existing reports
 
 Usage:
-    python scripts/etl_orchestrator.py                    # Full run
-    python scripts/etl_orchestrator.py --dry-run          # Preview only
-    python scripts/etl_orchestrator.py --bank-symbol RY   # Specific bank
-    python scripts/etl_orchestrator.py --etl-type call_summary  # Specific ETL
+    python -m aegis.etls.etl_orchestrator --from-year 2025           # Production run
+    python -m aegis.etls.etl_orchestrator --dry-run --from-year 2025 # Preview only
+    python -m aegis.etls.etl_orchestrator --etl-type cm_readthrough  # Schedule-based only
+    python -m aegis.etls.etl_orchestrator --force --etl-type cm_readthrough  # Force regen
 """
 
 import argparse
 import asyncio
-import sys
-import os
-import time
-import yaml
-import subprocess
-from datetime import datetime
-from typing import Dict, Any, List, Optional, Tuple, Set
-from sqlalchemy import text
-from pathlib import Path
-import uuid
-import json
 import fcntl
+import os
+import subprocess
+import sys
+import time
+import uuid
+from datetime import date, datetime
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Set, Tuple
+
+import yaml
+from sqlalchemy import text
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from aegis.connections.postgres_connector import get_connection
-from aegis.utils.logging import setup_logging, get_logger
-from aegis.utils.settings import config
+from aegis.connections.postgres_connector import get_connection  # noqa: E402
+from aegis.utils.logging import setup_logging, get_logger  # noqa: E402
 
 # Initialize logging
 setup_logging()
 logger = get_logger()
 
 # Configuration
-MONITORED_INSTITUTIONS_PATH = "src/aegis/etls/call_summary/config/monitored_institutions.yaml"
 LOCK_FILE_PATH = "/tmp/aegis_etl_orchestrator.lock"
 MAX_RETRIES = 3
 INITIAL_RETRY_DELAY = 5  # seconds
 MAX_RETRY_DELAY = 300  # 5 minutes
 MAX_PARALLEL_ETLS = 4  # Number of banks to process in parallel
+QUARTERLY_SCHEDULE_PATH = "src/aegis/etls/config/quarterly_schedule.yaml"
 
 # ETL configurations
+# - Gap-based ETLs: Run when transcript data is available but report doesn't exist
+# - Schedule-based ETLs: Run on specific dates per quarterly_schedule.yaml
 ETL_CONFIGS = {
     "call_summary": {
         "module": "aegis.etls.call_summary.main",
         "report_type": "call_summary",
         "description": "Earnings call summary by category",
+        "monitored_institutions_path": (
+            "src/aegis/etls/call_summary/config/monitored_institutions.yaml"
+        ),
+        "is_cross_bank": False,
+        "schedule_driven": False,
     },
     "key_themes": {
         "module": "aegis.etls.key_themes.main",
         "report_type": "key_themes",
         "description": "Q&A themes extraction and grouping",
+        "monitored_institutions_path": (
+            "src/aegis/etls/key_themes/config/monitored_institutions.yaml"
+        ),
+        "is_cross_bank": False,
+        "schedule_driven": False,
+    },
+    "cm_readthrough": {
+        "module": "aegis.etls.cm_readthrough.main",
+        "report_type": "cm_readthrough",
+        "description": "Capital markets readthrough across US/European banks",
+        "monitored_institutions_path": (
+            "src/aegis/etls/cm_readthrough/config/monitored_institutions.yaml"
+        ),
+        "is_cross_bank": True,
+        "schedule_driven": True,
     },
 }
 
@@ -84,7 +116,7 @@ class ExecutionLock:
     def __enter__(self):
         """Acquire lock (blocking)."""
         logger.info(f"Attempting to acquire execution lock: {self.lock_file}")
-        self.file_handle = open(self.lock_file, "w")
+        self.file_handle = open(self.lock_file, "w", encoding="utf-8")
         try:
             # This will block until lock is available
             fcntl.flock(self.file_handle.fileno(), fcntl.LOCK_EX)
@@ -111,21 +143,40 @@ class ExecutionLock:
                 logger.warning(f"Error releasing lock: {e}")
 
 
-def load_monitored_institutions() -> Dict[str, Dict[str, Any]]:
+def load_monitored_institutions(
+    etl_type: Optional[str] = None, config_path: Optional[str] = None
+) -> Dict[str, Dict[str, Any]]:
     """
     Load monitored institutions from YAML file.
+
+    Args:
+        etl_type: ETL type to load institutions for (uses ETL_CONFIGS path)
+        config_path: Direct path to config file (overrides etl_type)
 
     Returns:
         Dictionary mapping database bank_symbol (without country suffix) to bank info
         Example: {"RY": {"id": 1, "name": "Royal Bank of Canada", "yaml_key": "RY-CA", ...}}
-    """
-    logger.info(f"Loading monitored institutions from {MONITORED_INSTITUTIONS_PATH}")
 
-    yaml_path = Path(MONITORED_INSTITUTIONS_PATH)
+    Raises:
+        FileNotFoundError: If config file doesn't exist
+        ValueError: If neither etl_type nor config_path provided
+    """
+    # Determine the path to use
+    if config_path:
+        yaml_path = Path(config_path)
+    elif etl_type:
+        if etl_type not in ETL_CONFIGS:
+            raise ValueError(f"Unknown ETL type: {etl_type}")
+        yaml_path = Path(ETL_CONFIGS[etl_type]["monitored_institutions_path"])
+    else:
+        raise ValueError("Either etl_type or config_path must be provided")
+
+    logger.info(f"Loading monitored institutions from {yaml_path}")
+
     if not yaml_path.exists():
         raise FileNotFoundError(f"Monitored institutions file not found: {yaml_path}")
 
-    with open(yaml_path, "r") as f:
+    with open(yaml_path, "r", encoding="utf-8") as f:
         yaml_data = yaml.safe_load(f)
 
     # Use YAML keys directly (RY-CA, BMO-CA, etc.) as they match database bank_symbol
@@ -137,7 +188,9 @@ def load_monitored_institutions() -> Dict[str, Dict[str, Any]]:
             "db_symbol": yaml_key.split("-")[0],  # Keep short symbol for reference
         }
 
-    logger.info(f"Loaded {len(institutions)} monitored institutions")
+    logger.info(
+        f"Loaded {len(institutions)} monitored institutions for {etl_type or 'custom path'}"
+    )
     return institutions
 
 
@@ -202,17 +255,27 @@ async def get_data_availability(
 
 async def get_existing_reports(
     bank_symbols: Optional[List[str]] = None,
+    report_types: Optional[List[str]] = None,
 ) -> Set[Tuple[int, int, str, str]]:
     """
-    Query aegis_reports table for existing reports.
+    Query aegis_reports table for existing per-bank reports.
 
     Args:
         bank_symbols: Optional list to filter by specific bank symbols
+        report_types: Optional list of report types to check (defaults to gap-based ETLs)
 
     Returns:
         Set of tuples: (bank_id, fiscal_year, quarter, report_type)
     """
-    logger.info("Querying existing reports...")
+    logger.info("Querying existing per-bank reports...")
+
+    # Default to gap-based ETL report types
+    if report_types is None:
+        report_types = [
+            cfg["report_type"]
+            for cfg in ETL_CONFIGS.values()
+            if not cfg.get("is_cross_bank", False)
+        ]
 
     query = """
         SELECT
@@ -221,10 +284,11 @@ async def get_existing_reports(
             quarter,
             report_type
         FROM aegis_reports
-        WHERE report_type IN ('call_summary', 'key_themes')
+        WHERE report_type = ANY(:report_types)
+          AND bank_id IS NOT NULL
     """
 
-    params = {}
+    params = {"report_types": report_types}
     if bank_symbols:
         query += " AND bank_symbol = ANY(:symbols)"
         params["symbols"] = bank_symbols
@@ -235,23 +299,73 @@ async def get_existing_reports(
 
     existing = {(row.bank_id, row.fiscal_year, row.quarter, row.report_type) for row in rows}
 
-    logger.info(f"Found {len(existing)} existing reports")
+    logger.info(f"Found {len(existing)} existing per-bank reports")
+    return existing
+
+
+async def get_existing_cross_bank_reports(
+    report_types: Optional[List[str]] = None,
+) -> Set[Tuple[int, str, str]]:
+    """
+    Query aegis_reports table for existing cross-bank reports.
+
+    Cross-bank reports have bank_id = NULL and are identified by
+    (fiscal_year, quarter, report_type).
+
+    Args:
+        report_types: Optional list of report types to check (defaults to schedule-based ETLs)
+
+    Returns:
+        Set of tuples: (fiscal_year, quarter, report_type)
+    """
+    logger.info("Querying existing cross-bank reports...")
+
+    # Default to schedule-based ETL report types
+    if report_types is None:
+        report_types = [
+            cfg["report_type"] for cfg in ETL_CONFIGS.values() if cfg.get("is_cross_bank", False)
+        ]
+
+    if not report_types:
+        logger.info("No cross-bank report types configured")
+        return set()
+
+    query = """
+        SELECT
+            fiscal_year,
+            quarter,
+            report_type
+        FROM aegis_reports
+        WHERE report_type = ANY(:report_types)
+          AND bank_id IS NULL
+    """
+
+    params = {"report_types": report_types}
+
+    async with get_connection() as conn:
+        result = await conn.execute(text(query), params)
+        rows = result.fetchall()
+
+    existing = {(row.fiscal_year, row.quarter, row.report_type) for row in rows}
+
+    logger.info(f"Found {len(existing)} existing cross-bank reports")
     return existing
 
 
 def identify_gaps(
     availability: List[Dict[str, Any]],
     existing_reports: Set[Tuple[int, int, str, str]],
-    institutions: Dict[str, Dict[str, Any]],
     etl_filter: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """
     Identify missing reports by comparing availability to existing reports.
 
+    This function only processes gap-based (per-bank) ETLs, not schedule-driven ETLs.
+    Each ETL type uses its own monitored institutions list.
+
     Args:
         availability: List of available data from aegis_data_availability
         existing_reports: Set of existing reports from aegis_reports
-        institutions: Monitored institutions metadata
         etl_filter: Optional filter for specific ETL type
 
     Returns:
@@ -260,23 +374,42 @@ def identify_gaps(
     logger.info("Identifying gaps between availability and reports...")
 
     gaps = []
-    etl_types = [etl_filter] if etl_filter else list(ETL_CONFIGS.keys())
 
-    for data in availability:
-        bank_id = data["bank_id"]
-        bank_symbol = data["bank_symbol"]
-        fiscal_year = data["fiscal_year"]
-        quarter = data["quarter"]
+    # Only process gap-based (non-schedule-driven) ETLs
+    if etl_filter:
+        if etl_filter not in ETL_CONFIGS:
+            logger.warning(f"Unknown ETL type: {etl_filter}")
+            return gaps
+        if ETL_CONFIGS[etl_filter].get("schedule_driven", False):
+            logger.info(f"ETL {etl_filter} is schedule-driven, skipping gap detection")
+            return gaps
+        etl_types = [etl_filter]
+    else:
+        etl_types = [
+            name for name, cfg in ETL_CONFIGS.items() if not cfg.get("schedule_driven", False)
+        ]
 
-        # Find institution metadata
-        institution = institutions.get(bank_symbol)
-        if not institution:
-            logger.warning(f"Bank {bank_symbol} not in monitored institutions - skipping")
+    # Load institutions per ETL type and identify gaps
+    for etl_type in etl_types:
+        try:
+            institutions = load_monitored_institutions(etl_type=etl_type)
+        except (FileNotFoundError, ValueError) as e:
+            logger.error(f"Failed to load institutions for {etl_type}: {e}")
             continue
 
-        # Check each ETL type
-        for etl_type in etl_types:
-            report_type = ETL_CONFIGS[etl_type]["report_type"]
+        report_type = ETL_CONFIGS[etl_type]["report_type"]
+
+        for data in availability:
+            bank_id = data["bank_id"]
+            bank_symbol = data["bank_symbol"]
+            fiscal_year = data["fiscal_year"]
+            quarter = data["quarter"]
+
+            # Find institution metadata (using this ETL's institution list)
+            institution = institutions.get(bank_symbol)
+            if not institution:
+                # Bank not monitored by this ETL - this is normal, not a warning
+                continue
 
             # Check if report exists
             report_key = (bank_id, fiscal_year, quarter, report_type)
@@ -293,8 +426,346 @@ def identify_gaps(
                     }
                 )
 
-    logger.info(f"Identified {len(gaps)} missing reports")
+    logger.info(f"Identified {len(gaps)} missing per-bank reports")
     return gaps
+
+
+def load_quarterly_schedule() -> Dict[str, Dict[str, Any]]:
+    """
+    Load the quarterly schedule configuration from YAML file.
+
+    Returns:
+        Dictionary mapping ETL type to schedule entries.
+        Example: {
+            "cm_readthrough": {
+                "FY2025_Q1": {"fiscal_year": 2025, "quarter": "Q1", "run_date": "2025-02-15", ...},
+                ...
+            }
+        }
+
+    Raises:
+        FileNotFoundError: If schedule file doesn't exist
+    """
+    schedule_path = Path(QUARTERLY_SCHEDULE_PATH)
+
+    if not schedule_path.exists():
+        raise FileNotFoundError(f"Quarterly schedule file not found: {schedule_path}")
+
+    logger.info(f"Loading quarterly schedule from {schedule_path}")
+
+    with open(schedule_path, "r", encoding="utf-8") as f:
+        schedule = yaml.safe_load(f)
+
+    if not schedule:
+        logger.warning("Quarterly schedule file is empty")
+        return {}
+
+    # Count enabled entries per ETL
+    for etl_type, entries in schedule.items():
+        if entries:
+            enabled_count = sum(1 for e in entries.values() if e.get("enabled", True))
+            logger.info(f"Loaded {enabled_count} enabled schedule entries for {etl_type}")
+
+    return schedule
+
+
+def get_next_quarter_run_date(
+    schedule_entries: Dict[str, Any], current_entry_key: str
+) -> Optional[date]:
+    """
+    Get the run_date of the next quarter's schedule entry.
+
+    Args:
+        schedule_entries: All schedule entries for an ETL type
+        current_entry_key: The key of the current entry (e.g., "FY2025_Q1")
+
+    Returns:
+        The run_date of the next quarter, or None if not found
+    """
+    # Parse current entry
+    current = schedule_entries.get(current_entry_key, {})
+    current_year = current.get("fiscal_year")
+    current_quarter = current.get("quarter")
+
+    if not current_year or not current_quarter:
+        return None
+
+    # Calculate next quarter
+    quarter_num = int(current_quarter[1])  # Q1 -> 1, Q2 -> 2, etc.
+    if quarter_num == 4:
+        next_year = current_year + 1
+        next_quarter = "Q1"
+    else:
+        next_year = current_year
+        next_quarter = f"Q{quarter_num + 1}"
+
+    # Find next quarter's entry
+    next_entry_key = f"FY{next_year}_{next_quarter}"
+    next_entry = schedule_entries.get(next_entry_key)
+
+    if next_entry and next_entry.get("run_date"):
+        try:
+            return datetime.strptime(next_entry["run_date"], "%Y-%m-%d").date()
+        except ValueError:
+            return None
+
+    return None
+
+
+def check_scheduled_etls(
+    schedule: Dict[str, Dict[str, Any]],
+    existing_cross_bank_reports: Set[Tuple[int, str, str]],
+    force: bool = False,
+    etl_filter: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    """
+    Check which scheduled ETLs should run based on current date and existing reports.
+
+    Args:
+        schedule: Quarterly schedule configuration
+        existing_cross_bank_reports: Set of (fiscal_year, quarter, report_type) tuples
+        force: If True, run even if report already exists
+        etl_filter: Optional filter for specific ETL type
+
+    Returns:
+        List of scheduled ETL jobs to execute
+    """
+    today = date.today()
+    scheduled_jobs = []
+
+    # Filter to schedule-driven ETLs only
+    schedule_driven_etls = [
+        name for name, cfg in ETL_CONFIGS.items() if cfg.get("schedule_driven", False)
+    ]
+
+    if etl_filter:
+        if etl_filter not in schedule_driven_etls:
+            if etl_filter in ETL_CONFIGS:
+                logger.info(f"ETL {etl_filter} is not schedule-driven")
+            return scheduled_jobs
+        schedule_driven_etls = [etl_filter]
+
+    for etl_type in schedule_driven_etls:
+        if etl_type not in schedule:
+            logger.warning(f"No schedule entries found for {etl_type}")
+            continue
+
+        entries = schedule[etl_type]
+        report_type = ETL_CONFIGS[etl_type]["report_type"]
+
+        for entry_key, entry in entries.items():
+            # Skip disabled entries
+            if not entry.get("enabled", True):
+                logger.debug(f"Schedule entry {entry_key} is disabled - skipping")
+                continue
+
+            fiscal_year = entry.get("fiscal_year")
+            quarter = entry.get("quarter")
+            run_date_str = entry.get("run_date")
+            use_latest = entry.get("use_latest", True)
+            retry_until_next = entry.get("retry_until_next", True)
+            force_regenerate = entry.get("force_regenerate", False)
+
+            if not all([fiscal_year, quarter, run_date_str]):
+                logger.warning(f"Incomplete schedule entry {entry_key} - skipping")
+                continue
+
+            try:
+                run_date = datetime.strptime(run_date_str, "%Y-%m-%d").date()
+            except ValueError:
+                logger.warning(f"Invalid run_date format in {entry_key}: {run_date_str}")
+                continue
+
+            # Check if report already exists
+            report_key = (fiscal_year, quarter, report_type)
+            report_exists = report_key in existing_cross_bank_reports
+
+            # Determine if we should run this entry
+            should_run = False
+            skip_reason = None
+
+            if today < run_date:
+                # Not yet time to run
+                skip_reason = f"run_date {run_date_str} is in the future"
+            elif today == run_date:
+                # Exact run date
+                if report_exists and not force and not force_regenerate:
+                    skip_reason = "report already exists (use --force to regenerate)"
+                else:
+                    should_run = True
+            else:
+                # Past run date - check retry_until_next logic
+                if retry_until_next:
+                    next_run_date = get_next_quarter_run_date(entries, entry_key)
+                    if next_run_date and today >= next_run_date:
+                        skip_reason = f"past retry window (next quarter run_date: {next_run_date})"
+                    elif report_exists and not force and not force_regenerate:
+                        skip_reason = "report already exists (use --force to regenerate)"
+                    else:
+                        should_run = True
+                else:
+                    # No retry - only run on exact date
+                    skip_reason = f"past run_date {run_date_str} and retry_until_next=false"
+
+            if should_run:
+                logger.info(
+                    f"📅 SCHEDULED: {etl_type} {fiscal_year} {quarter} - "
+                    f"{'regenerating' if report_exists else 'generating new report'}"
+                )
+                scheduled_jobs.append(
+                    {
+                        "etl_type": etl_type,
+                        "fiscal_year": fiscal_year,
+                        "quarter": quarter,
+                        "report_type": report_type,
+                        "use_latest": use_latest,
+                        "is_regeneration": report_exists,
+                    }
+                )
+            else:
+                logger.debug(f"Schedule entry {entry_key} skipped: {skip_reason}")
+
+    logger.info(f"Identified {len(scheduled_jobs)} scheduled ETL jobs to run")
+    return scheduled_jobs
+
+
+async def run_scheduled_etl_with_retry(
+    etl_type: str,
+    fiscal_year: int,
+    quarter: str,
+    use_latest: bool = True,
+    dry_run: bool = False,
+    verbose: bool = False,
+) -> Dict[str, Any]:
+    """
+    Execute a scheduled (cross-bank) ETL with exponential backoff retry logic.
+
+    Args:
+        etl_type: Type of ETL (e.g., cm_readthrough)
+        fiscal_year: Fiscal year
+        quarter: Quarter (Q1-Q4)
+        use_latest: If True, use latest available data
+        dry_run: If True, skip actual execution
+        verbose: If True, stream subprocess output to console
+
+    Returns:
+        Result dictionary with success status and metadata
+    """
+    etl_config = ETL_CONFIGS[etl_type]
+    module = etl_config["module"]
+
+    log_prefix = f"{etl_type} {fiscal_year} {quarter}"
+
+    if dry_run:
+        logger.info(f"[DRY RUN] Would execute scheduled ETL: {log_prefix}")
+        return {
+            "success": True,
+            "dry_run": True,
+            "etl_type": etl_type,
+            "fiscal_year": fiscal_year,
+            "quarter": quarter,
+            "is_scheduled": True,
+        }
+
+    # Build command for cross-bank ETL
+    cmd = [
+        sys.executable,
+        "-m",
+        module,
+        "--year",
+        str(fiscal_year),
+        "--quarter",
+        quarter,
+    ]
+
+    if use_latest:
+        cmd.append("--use-latest")
+
+    # Retry loop with exponential backoff
+    for attempt in range(1, MAX_RETRIES + 1):
+        try:
+            logger.info(f"Executing scheduled ETL {log_prefix} (attempt {attempt}/{MAX_RETRIES})")
+            start_time = time.time()
+
+            # Run ETL subprocess
+            if verbose:
+                print(f"\n{'='*60}")
+                print(f"OUTPUT: {log_prefix}")
+                print(f"{'='*60}")
+                result = subprocess.run(cmd, timeout=7200)  # 2 hour timeout for cross-bank
+                stdout_output = ""
+                stderr_output = ""
+            else:
+                result = subprocess.run(
+                    cmd, capture_output=True, text=True, timeout=7200  # 2 hour timeout
+                )
+                stdout_output = result.stdout or ""
+                stderr_output = result.stderr or ""
+
+            duration = time.time() - start_time
+
+            if result.returncode == 0:
+                logger.info(f"✅ Success {log_prefix} in {duration:.1f}s")
+                return {
+                    "success": True,
+                    "etl_type": etl_type,
+                    "fiscal_year": fiscal_year,
+                    "quarter": quarter,
+                    "duration": duration,
+                    "attempts": attempt,
+                    "is_scheduled": True,
+                }
+            else:
+                error_msg = stderr_output[-500:] if stderr_output else "Unknown error"
+                if not verbose and stdout_output:
+                    error_msg += f"\n[stdout]: {stdout_output[-500:]}"
+                logger.error(f"❌ Failed {log_prefix} (attempt {attempt}): {error_msg}")
+
+                if attempt < MAX_RETRIES:
+                    delay = min(INITIAL_RETRY_DELAY * (2 ** (attempt - 1)), MAX_RETRY_DELAY)
+                    logger.info(f"Retrying in {delay}s...")
+                    await asyncio.sleep(delay)
+                else:
+                    logger.error(f"Max retries reached for {log_prefix} - skipping")
+                    return {
+                        "success": False,
+                        "etl_type": etl_type,
+                        "fiscal_year": fiscal_year,
+                        "quarter": quarter,
+                        "error": error_msg,
+                        "attempts": attempt,
+                        "is_scheduled": True,
+                    }
+
+        except subprocess.TimeoutExpired:
+            logger.error(f"❌ Timeout {log_prefix} (attempt {attempt})")
+            if attempt >= MAX_RETRIES:
+                return {
+                    "success": False,
+                    "etl_type": etl_type,
+                    "fiscal_year": fiscal_year,
+                    "quarter": quarter,
+                    "error": "Timeout after 2 hours",
+                    "attempts": attempt,
+                    "is_scheduled": True,
+                }
+            delay = min(INITIAL_RETRY_DELAY * (2 ** (attempt - 1)), MAX_RETRY_DELAY)
+            await asyncio.sleep(delay)
+
+        except Exception as e:
+            logger.error(f"❌ Exception {log_prefix}: {e}", exc_info=True)
+            if attempt >= MAX_RETRIES:
+                return {
+                    "success": False,
+                    "etl_type": etl_type,
+                    "fiscal_year": fiscal_year,
+                    "quarter": quarter,
+                    "error": str(e),
+                    "attempts": attempt,
+                    "is_scheduled": True,
+                }
+            delay = min(INITIAL_RETRY_DELAY * (2 ** (attempt - 1)), MAX_RETRY_DELAY)
+            await asyncio.sleep(delay)
 
 
 async def run_etl_with_retry(
@@ -529,10 +1000,11 @@ async def execute_etls_parallel(
 
 
 def print_summary(
-    institutions: Dict[str, Dict[str, Any]],
     availability: List[Dict[str, Any]],
     existing_reports: Set[Tuple[int, int, str, str]],
     gaps: List[Dict[str, Any]],
+    scheduled_jobs: Optional[List[Dict[str, Any]]] = None,
+    existing_cross_bank_reports: Optional[Set[Tuple[int, str, str]]] = None,
     execution_summary: Optional[Dict[str, Any]] = None,
 ):
     """Print execution summary to console."""
@@ -540,13 +1012,15 @@ def print_summary(
     print("ETL ORCHESTRATOR EXECUTION SUMMARY")
     print("=" * 80)
     print(f"Timestamp: {datetime.now().isoformat()}")
-    print(f"Monitored Institutions: {len(institutions)} banks")
     print(f"Data Availability: {len(availability)} bank-period combinations with transcripts")
-    print(f"Existing Reports: {len(existing_reports)} reports")
+    print(f"Existing Per-Bank Reports: {len(existing_reports)} reports")
+    if existing_cross_bank_reports is not None:
+        print(f"Existing Cross-Bank Reports: {len(existing_cross_bank_reports)} reports")
     print()
 
+    # Gap-based ETLs section
     if gaps:
-        print(f"📋 GAPS IDENTIFIED: {len(gaps)} missing reports")
+        print(f"📋 GAP-BASED ETLs: {len(gaps)} missing per-bank reports")
         print("-" * 80)
 
         # Group by bank for display
@@ -563,8 +1037,21 @@ def print_summary(
                 print(f"  • {job}")
         print()
     else:
-        print("✅ NO GAPS FOUND - All reports up to date!")
+        print("✅ GAP-BASED ETLs: All per-bank reports up to date!")
         print()
+
+    # Scheduled ETLs section
+    if scheduled_jobs is not None:
+        if scheduled_jobs:
+            print(f"📅 SCHEDULED ETLs: {len(scheduled_jobs)} jobs to run")
+            print("-" * 80)
+            for job in scheduled_jobs:
+                status = "regenerating" if job.get("is_regeneration") else "new"
+                print(f"  • {job['etl_type']} {job['fiscal_year']} {job['quarter']} ({status})")
+            print()
+        else:
+            print("✅ SCHEDULED ETLs: No scheduled jobs due at this time")
+            print()
 
     if execution_summary:
         print("-" * 80)
@@ -581,10 +1068,17 @@ def print_summary(
             print("\nFailed Jobs:")
             for failure in failures:
                 error_preview = failure.get("error", "Unknown")[:100]
-                print(
-                    f"  ❌ {failure['bank_symbol']} {failure['fiscal_year']} {failure['quarter']} "
-                    f"[{failure['etl_type']}]: {error_preview}"
-                )
+                # Handle both per-bank and cross-bank failures
+                if failure.get("is_scheduled"):
+                    print(
+                        f"  ❌ {failure['etl_type']} {failure['fiscal_year']} {failure['quarter']}"
+                        f": {error_preview}"
+                    )
+                else:
+                    print(
+                        f"  ❌ {failure.get('bank_symbol', 'N/A')} {failure['fiscal_year']} "
+                        f"{failure['quarter']} [{failure['etl_type']}]: {error_preview}"
+                    )
         print()
 
     print("=" * 80 + "\n")
@@ -596,24 +1090,32 @@ async def main():
         description="ETL Orchestrator - Automated report generation for monitored banks",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
+IMPORTANT: Use --from-year to avoid processing all historical data!
+
 Examples:
-  # Full run - process all gaps
-  python scripts/etl_orchestrator.py
+  # RECOMMENDED: Production run from 2025 forward
+  python -m aegis.etls.etl_orchestrator --from-year 2025
 
-  # Dry run - preview gaps without executing
-  python scripts/etl_orchestrator.py --dry-run
+  # Dry run - preview what would be processed (always use --from-year!)
+  python -m aegis.etls.etl_orchestrator --dry-run --from-year 2025
 
-  # Process only 2024 and later (skip historical data)
-  python scripts/etl_orchestrator.py --from-year 2024
-
-  # Process specific bank
-  python scripts/etl_orchestrator.py --bank-symbol RY-CA
+  # Process specific bank from 2025 forward
+  python -m aegis.etls.etl_orchestrator --bank-symbol RY-CA --from-year 2025
 
   # Process only call summaries from 2025 forward
-  python scripts/etl_orchestrator.py --etl-type call_summary --from-year 2025
+  python -m aegis.etls.etl_orchestrator --etl-type call_summary --from-year 2025
+
+  # Run CM Readthrough (schedule-driven, uses quarterly_schedule.yaml dates)
+  python -m aegis.etls.etl_orchestrator --etl-type cm_readthrough
+
+  # Force regeneration of CM Readthrough even if report exists
+  python -m aegis.etls.etl_orchestrator --force --etl-type cm_readthrough
+
+  # WARNING: This processes ALL historical data (use with caution!)
+  python -m aegis.etls.etl_orchestrator
 
   # No lock (for testing - allows concurrent runs)
-  python scripts/etl_orchestrator.py --no-lock
+  python -m aegis.etls.etl_orchestrator --no-lock --from-year 2025
         """,
     )
 
@@ -624,7 +1126,9 @@ Examples:
     parser.add_argument("--bank-symbol", help="Process specific bank only (e.g., RY-CA, JPM-US)")
 
     parser.add_argument(
-        "--etl-type", choices=["call_summary", "key_themes"], help="Process specific ETL type only"
+        "--etl-type",
+        choices=list(ETL_CONFIGS.keys()),
+        help="Process specific ETL type only",
     )
 
     parser.add_argument(
@@ -639,7 +1143,13 @@ Examples:
     )
 
     parser.add_argument(
-        "--from-year", type=int, help="Only process data from this fiscal year forward (e.g., 2024)"
+        "--from-year",
+        type=int,
+        help=(
+            "IMPORTANT: Only process data from this fiscal year forward (e.g., 2025). "
+            "Without this flag, ALL historical data will be processed. "
+            "Recommended for production runs to avoid reprocessing old data."
+        ),
     )
 
     parser.add_argument(
@@ -647,6 +1157,12 @@ Examples:
         "-v",
         action="store_true",
         help="Stream subprocess output in real-time (useful for debugging)",
+    )
+
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Force regeneration of reports even if they already exist",
     )
 
     args = parser.parse_args()
@@ -672,49 +1188,150 @@ Examples:
 
 async def _run_orchestrator(args, execution_id: str):
     """Internal orchestrator logic (separated for lock management)."""
-    # Load monitored institutions
-    institutions = load_monitored_institutions()
+    logger.info(f"Orchestrator run started [execution_id={execution_id}]")
 
     # Filter by bank symbol if specified
     bank_symbols = [args.bank_symbol] if args.bank_symbol else None
 
-    # Get data availability
-    availability = await get_data_availability(bank_symbols, from_year=args.from_year)
+    # Initialize collections
+    gaps = []
+    scheduled_jobs = []
+    existing_reports = set()
+    existing_cross_bank_reports = set()
+    availability = []
 
-    if not availability:
-        logger.info("No transcript data available - nothing to process")
-        print_summary(institutions, availability, set(), [])
-        return
+    # =========================================================================
+    # PART 1: Gap-based ETLs (call_summary, key_themes)
+    # =========================================================================
+    # Only run gap-based processing if:
+    # - No ETL filter specified (run all), OR
+    # - ETL filter is a gap-based ETL
+    should_run_gap_based = args.etl_type is None or not ETL_CONFIGS.get(args.etl_type, {}).get(
+        "schedule_driven", False
+    )
 
-    # Get existing reports
-    existing_reports = await get_existing_reports(bank_symbols)
+    if should_run_gap_based:
+        logger.info("Processing gap-based ETLs...")
 
-    # Identify gaps
-    gaps = identify_gaps(availability, existing_reports, institutions, args.etl_type)
+        # Get data availability
+        availability = await get_data_availability(bank_symbols, from_year=args.from_year)
 
-    # Print preview
-    print_summary(institutions, availability, existing_reports, gaps)
+        if availability:
+            # Get existing per-bank reports
+            existing_reports = await get_existing_reports(bank_symbols)
 
-    if not gaps:
-        logger.info("No gaps identified - all reports up to date")
+            # Identify gaps (loads institutions per ETL type internally)
+            gaps = identify_gaps(availability, existing_reports, args.etl_type)
+        else:
+            logger.info("No transcript data available for gap-based ETLs")
+
+    # =========================================================================
+    # PART 2: Schedule-based ETLs (cm_readthrough)
+    # =========================================================================
+    # Only run schedule-based processing if:
+    # - No ETL filter specified (run all), OR
+    # - ETL filter is a schedule-driven ETL
+    should_run_scheduled = args.etl_type is None or ETL_CONFIGS.get(args.etl_type, {}).get(
+        "schedule_driven", False
+    )
+
+    if should_run_scheduled:
+        logger.info("Processing schedule-based ETLs...")
+
+        try:
+            # Load quarterly schedule
+            schedule = load_quarterly_schedule()
+
+            # Get existing cross-bank reports
+            existing_cross_bank_reports = await get_existing_cross_bank_reports()
+
+            # Check which scheduled ETLs should run
+            scheduled_jobs = check_scheduled_etls(
+                schedule=schedule,
+                existing_cross_bank_reports=existing_cross_bank_reports,
+                force=args.force,
+                etl_filter=args.etl_type,
+            )
+        except FileNotFoundError as e:
+            logger.warning(f"Quarterly schedule not found: {e}")
+        except Exception as e:
+            logger.error(f"Error processing schedule: {e}")
+
+    # =========================================================================
+    # Print summary of what needs to be done
+    # =========================================================================
+    print_summary(
+        availability=availability,
+        existing_reports=existing_reports,
+        gaps=gaps,
+        scheduled_jobs=scheduled_jobs,
+        existing_cross_bank_reports=existing_cross_bank_reports,
+    )
+
+    # Check if there's anything to do
+    total_jobs = len(gaps) + len(scheduled_jobs)
+    if total_jobs == 0:
+        logger.info("No jobs to execute - all reports up to date")
         return
 
     if args.dry_run:
         logger.info("DRY RUN MODE - Skipping execution")
         return
 
-    # Execute ETLs
-    logger.info(f"Executing {len(gaps)} ETL jobs...")
-    execution_summary = await execute_etls_parallel(
-        gaps, dry_run=args.dry_run, max_parallel=args.max_parallel, verbose=args.verbose
-    )
+    # =========================================================================
+    # Execute all ETLs
+    # =========================================================================
+    all_results = []
+    start_time = time.time()
+
+    # Execute gap-based ETLs in parallel
+    if gaps:
+        logger.info(f"Executing {len(gaps)} gap-based ETL jobs...")
+        gap_summary = await execute_etls_parallel(
+            gaps, dry_run=args.dry_run, max_parallel=args.max_parallel, verbose=args.verbose
+        )
+        all_results.extend(gap_summary.get("results", []))
+
+    # Execute scheduled ETLs sequentially (they're typically expensive cross-bank operations)
+    if scheduled_jobs:
+        logger.info(f"Executing {len(scheduled_jobs)} scheduled ETL jobs...")
+        for job in scheduled_jobs:
+            result = await run_scheduled_etl_with_retry(
+                etl_type=job["etl_type"],
+                fiscal_year=job["fiscal_year"],
+                quarter=job["quarter"],
+                use_latest=job.get("use_latest", True),
+                dry_run=args.dry_run,
+                verbose=args.verbose,
+            )
+            all_results.append(result)
+
+    # Calculate combined summary
+    total_duration = time.time() - start_time
+    successful = sum(1 for r in all_results if r.get("success"))
+    failed = len(all_results) - successful
+
+    execution_summary = {
+        "total_jobs": len(all_results),
+        "successful": successful,
+        "failed": failed,
+        "duration": total_duration,
+        "results": all_results,
+    }
 
     # Print final summary
-    print_summary(institutions, availability, existing_reports, gaps, execution_summary)
+    print_summary(
+        availability=availability,
+        existing_reports=existing_reports,
+        gaps=gaps,
+        scheduled_jobs=scheduled_jobs,
+        existing_cross_bank_reports=existing_cross_bank_reports,
+        execution_summary=execution_summary,
+    )
 
     # Exit with error code if any failures
-    if execution_summary["failed"] > 0:
-        logger.warning(f"{execution_summary['failed']} jobs failed")
+    if failed > 0:
+        logger.warning(f"{failed} jobs failed")
         sys.exit(1)
     else:
         logger.info("All jobs completed successfully")
