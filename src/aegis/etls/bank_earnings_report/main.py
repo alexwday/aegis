@@ -738,6 +738,7 @@ async def save_to_database(
     quarter: str,
     filepath: Path,
     execution_id: str,
+    sources_used: Dict[str, bool],
 ) -> None:
     """
     Save report metadata to aegis_reports table.
@@ -748,6 +749,8 @@ async def save_to_database(
         quarter: Quarter
         filepath: Path to generated report
         execution_id: Execution ID for tracking
+        sources_used: Dict indicating which data sources were used
+                      (e.g., {"rts": True, "supplementary": True, "transcripts": False})
     """
     generation_timestamp = datetime.now()
 
@@ -825,7 +828,13 @@ async def save_to_database(
                     "generation_date": generation_timestamp,
                     "generated_by": "bank_earnings_report_etl",
                     "execution_id": execution_id,
-                    "metadata": json.dumps({"format": "html"}),
+                    "metadata": json.dumps(
+                        {
+                            "format": "html",
+                            "sources_used": [k for k, v in sources_used.items() if v],
+                            "has_transcript": sources_used.get("transcripts", False),
+                        }
+                    ),
                 },
             )
 
@@ -914,11 +923,23 @@ async def generate_bank_earnings_report(bank_name: str, fiscal_year: int, quarte
             output_path=str(output_path),
         )
 
-        await save_to_database(bank_info, fiscal_year, quarter, output_path, execution_id)
+        # Track which sources were used for orchestrator's two-phase detection
+        sources_used = {
+            "rts": availability.get("rts", False),
+            "supplementary": availability.get("supplementary", False),
+            "transcripts": availability.get("transcripts", False),
+        }
 
+        await save_to_database(
+            bank_info, fiscal_year, quarter, output_path, execution_id, sources_used
+        )
+
+        sources_list = [k for k, v in sources_used.items() if v]
         logger.info(
             "etl.bank_earnings_report.completed",
             execution_id=execution_id,
+            sources_used=sources_list,
+            has_transcript=sources_used["transcripts"],
         )
 
         return f"✅ Complete: {output_path}"

@@ -33,6 +33,7 @@ Usage:
 import argparse
 import asyncio
 import fcntl
+import json
 import os
 import subprocess
 import sys
@@ -96,6 +97,20 @@ ETL_CONFIGS = {
         ),
         "is_cross_bank": True,
         "schedule_driven": True,
+    },
+    "bank_earnings_report": {
+        "module": "aegis.etls.bank_earnings_report.main",
+        "report_type": "bank_earnings_report",
+        "description": "Quarterly bank earnings report with metrics and analysis",
+        "monitored_institutions_path": (
+            "src/aegis/etls/bank_earnings_report/config/monitored_institutions.yaml"
+        ),
+        "is_cross_bank": False,
+        "schedule_driven": False,
+        # Two-phase generation: Phase 1 uses RTS+Supp, Phase 2 adds Transcripts
+        "two_phase": True,
+        "phase1_required": ["rts", "supplementary"],
+        "phase2_required": ["transcripts"],
     },
 }
 
@@ -428,6 +443,205 @@ def identify_gaps(
 
     logger.info(f"Identified {len(gaps)} missing per-bank reports")
     return gaps
+
+
+async def get_bank_earnings_data_availability(
+    bank_symbols: Optional[List[str]] = None, from_year: Optional[int] = None
+) -> List[Dict[str, Any]]:
+    """
+    Query aegis_data_availability for bank earnings report eligibility.
+
+    Returns entries where RTS and Supplementary data are available (Phase 1 requirement).
+
+    Args:
+        bank_symbols: Optional list to filter by specific bank symbols
+        from_year: Optional minimum fiscal year (inclusive) to process
+
+    Returns:
+        List of dicts with bank info, period, and database availability
+    """
+    logger.info("Querying data availability for bank earnings reports...")
+
+    query = """
+        SELECT
+            bank_id,
+            bank_name,
+            bank_symbol,
+            fiscal_year,
+            quarter,
+            database_names
+        FROM aegis_data_availability
+        WHERE 'rts' = ANY(database_names)
+          AND 'supplementary' = ANY(database_names)
+    """
+
+    params = {}
+    if bank_symbols:
+        query += " AND bank_symbol = ANY(:symbols)"
+        params["symbols"] = bank_symbols
+
+    if from_year:
+        query += " AND fiscal_year >= :from_year"
+        params["from_year"] = from_year
+
+    query += " ORDER BY fiscal_year DESC, quarter DESC, bank_id"
+
+    async with get_connection() as conn:
+        result = await conn.execute(text(query), params)
+        rows = result.fetchall()
+
+    availability = [
+        {
+            "bank_id": row.bank_id,
+            "bank_name": row.bank_name,
+            "bank_symbol": row.bank_symbol,
+            "fiscal_year": row.fiscal_year,
+            "quarter": row.quarter,
+            "database_names": row.database_names,
+            "has_transcript": "transcripts" in row.database_names,
+        }
+        for row in rows
+    ]
+
+    logger.info(f"Found {len(availability)} bank-period combinations with RTS+Supplementary data")
+    return availability
+
+
+async def get_bank_earnings_existing_reports(
+    bank_symbols: Optional[List[str]] = None,
+) -> Dict[Tuple[int, int, str], Dict[str, Any]]:
+    """
+    Query aegis_reports for existing bank_earnings_report entries with metadata.
+
+    Returns a dict keyed by (bank_id, fiscal_year, quarter) with report metadata,
+    specifically the has_transcript flag from metadata JSONB.
+
+    Args:
+        bank_symbols: Optional list to filter by specific bank symbols
+
+    Returns:
+        Dict mapping (bank_id, fiscal_year, quarter) to report info including has_transcript
+    """
+    logger.info("Querying existing bank earnings reports...")
+
+    query = """
+        SELECT
+            bank_id,
+            fiscal_year,
+            quarter,
+            metadata
+        FROM aegis_reports
+        WHERE report_type = 'bank_earnings_report'
+          AND bank_id IS NOT NULL
+    """
+
+    params = {}
+    if bank_symbols:
+        query += " AND bank_symbol = ANY(:symbols)"
+        params["symbols"] = bank_symbols
+
+    async with get_connection() as conn:
+        result = await conn.execute(text(query), params)
+        rows = result.fetchall()
+
+    existing = {}
+    for row in rows:
+        key = (row.bank_id, row.fiscal_year, row.quarter)
+        # Parse metadata to get has_transcript flag
+        metadata = row.metadata or {}
+        if isinstance(metadata, str):
+            try:
+                metadata = json.loads(metadata)
+            except (json.JSONDecodeError, TypeError):
+                metadata = {}
+        existing[key] = {
+            "has_transcript": metadata.get("has_transcript", False),
+            "sources_used": metadata.get("sources_used", []),
+        }
+
+    logger.info(f"Found {len(existing)} existing bank earnings reports")
+    return existing
+
+
+async def identify_bank_earnings_gaps(
+    bank_symbols: Optional[List[str]] = None,
+    from_year: Optional[int] = None,
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    """
+    Identify bank earnings report gaps for two-phase generation.
+
+    Phase 1: RTS + Supplementary available, no existing report
+    Phase 2: Transcript available, existing report generated WITHOUT transcript
+
+    Args:
+        bank_symbols: Optional list to filter by specific bank symbols
+        from_year: Optional minimum fiscal year (inclusive) to process
+
+    Returns:
+        Tuple of (phase1_gaps, phase2_gaps):
+            - phase1_gaps: New reports to generate (no existing report)
+            - phase2_gaps: Reports to regenerate (transcript now available)
+    """
+    etl_type = "bank_earnings_report"
+    etl_config = ETL_CONFIGS[etl_type]
+
+    # Load monitored institutions for this ETL
+    try:
+        institutions = load_monitored_institutions(etl_type=etl_type)
+    except (FileNotFoundError, ValueError) as e:
+        logger.error(f"Failed to load institutions for {etl_type}: {e}")
+        return [], []
+
+    # Get data availability (RTS + Supplementary required)
+    availability = await get_bank_earnings_data_availability(bank_symbols, from_year)
+
+    if not availability:
+        logger.info("No bank-period combinations with RTS+Supplementary data")
+        return [], []
+
+    # Get existing reports with metadata
+    existing_reports = await get_bank_earnings_existing_reports(bank_symbols)
+
+    phase1_gaps = []  # New reports
+    phase2_gaps = []  # Regenerations with transcript
+
+    for data in availability:
+        bank_id = data["bank_id"]
+        bank_symbol = data["bank_symbol"]
+        fiscal_year = data["fiscal_year"]
+        quarter = data["quarter"]
+        has_transcript_available = data["has_transcript"]
+
+        # Check if bank is monitored by this ETL
+        institution = institutions.get(bank_symbol)
+        if not institution:
+            continue
+
+        report_key = (bank_id, fiscal_year, quarter)
+        existing_report = existing_reports.get(report_key)
+
+        job_base = {
+            "etl_type": etl_type,
+            "bank_id": bank_id,
+            "bank_name": data["bank_name"],
+            "bank_symbol": bank_symbol,
+            "fiscal_year": fiscal_year,
+            "quarter": quarter,
+            "report_type": etl_config["report_type"],
+        }
+
+        if existing_report is None:
+            # Phase 1: No report exists - generate new
+            phase1_gaps.append({**job_base, "phase": 1, "is_regeneration": False})
+        elif has_transcript_available and not existing_report.get("has_transcript", False):
+            # Phase 2: Transcript now available, report was generated without it
+            phase2_gaps.append({**job_base, "phase": 2, "is_regeneration": True})
+        # else: Report exists with transcript already, nothing to do
+
+    logger.info(
+        f"Bank earnings report gaps: {len(phase1_gaps)} new, {len(phase2_gaps)} regenerations"
+    )
+    return phase1_gaps, phase2_gaps
 
 
 def load_quarterly_schedule() -> Dict[str, Dict[str, Any]]:
@@ -1005,6 +1219,8 @@ def print_summary(
     gaps: List[Dict[str, Any]],
     scheduled_jobs: Optional[List[Dict[str, Any]]] = None,
     existing_cross_bank_reports: Optional[Set[Tuple[int, str, str]]] = None,
+    bank_earnings_phase1: Optional[List[Dict[str, Any]]] = None,
+    bank_earnings_phase2: Optional[List[Dict[str, Any]]] = None,
     execution_summary: Optional[Dict[str, Any]] = None,
 ):
     """Print execution summary to console."""
@@ -1018,14 +1234,35 @@ def print_summary(
         print(f"Existing Cross-Bank Reports: {len(existing_cross_bank_reports)} reports")
     print()
 
-    # Gap-based ETLs section
-    if gaps:
-        print(f"📋 GAP-BASED ETLs: {len(gaps)} missing per-bank reports")
+    # Bank Earnings Report section (two-phase)
+    phase1 = bank_earnings_phase1 or []
+    phase2 = bank_earnings_phase2 or []
+    if phase1 or phase2:
+        total_bank_earnings = len(phase1) + len(phase2)
+        print(f"📊 BANK EARNINGS REPORTS: {total_bank_earnings} jobs")
+        print("-" * 80)
+
+        if phase1:
+            print(f"\n  Phase 1 - New Reports (RTS+Supp, no transcript): {len(phase1)}")
+            for job in phase1:
+                print(f"    • {job['bank_symbol']} {job['fiscal_year']} {job['quarter']}")
+
+        if phase2:
+            print(f"\n  Phase 2 - Regenerations (transcript now available): {len(phase2)}")
+            for job in phase2:
+                print(f"    • {job['bank_symbol']} {job['fiscal_year']} {job['quarter']} [regen]")
+
+        print()
+
+    # Gap-based ETLs section (excluding bank_earnings_report which is shown separately)
+    standard_gaps = [g for g in gaps if g.get("etl_type") != "bank_earnings_report"]
+    if standard_gaps:
+        print(f"📋 GAP-BASED ETLs: {len(standard_gaps)} missing per-bank reports")
         print("-" * 80)
 
         # Group by bank for display
         by_bank = {}
-        for gap in gaps:
+        for gap in standard_gaps:
             key = f"{gap['bank_name']} ({gap['bank_symbol']})"
             if key not in by_bank:
                 by_bank[key] = []
@@ -1036,7 +1273,7 @@ def print_summary(
             for job in jobs:
                 print(f"  • {job}")
         print()
-    else:
+    elif not phase1 and not phase2:
         print("✅ GAP-BASED ETLs: All per-bank reports up to date!")
         print()
 
@@ -1226,6 +1463,28 @@ async def _run_orchestrator(args, execution_id: str):
             logger.info("No transcript data available for gap-based ETLs")
 
     # =========================================================================
+    # PART 1B: Two-phase ETLs (bank_earnings_report)
+    # =========================================================================
+    # Bank earnings report has special two-phase logic:
+    # - Phase 1: RTS + Supplementary available, no existing report
+    # - Phase 2: Transcript available, report exists without transcript (regenerate)
+    bank_earnings_phase1 = []
+    bank_earnings_phase2 = []
+
+    should_run_bank_earnings = args.etl_type is None or args.etl_type == "bank_earnings_report"
+
+    if should_run_bank_earnings:
+        logger.info("Processing bank earnings report ETL (two-phase)...")
+
+        bank_earnings_phase1, bank_earnings_phase2 = await identify_bank_earnings_gaps(
+            bank_symbols, from_year=args.from_year
+        )
+
+        # Add to gaps list for unified execution
+        gaps.extend(bank_earnings_phase1)
+        gaps.extend(bank_earnings_phase2)
+
+    # =========================================================================
     # PART 2: Schedule-based ETLs (cm_readthrough)
     # =========================================================================
     # Only run schedule-based processing if:
@@ -1266,6 +1525,8 @@ async def _run_orchestrator(args, execution_id: str):
         gaps=gaps,
         scheduled_jobs=scheduled_jobs,
         existing_cross_bank_reports=existing_cross_bank_reports,
+        bank_earnings_phase1=bank_earnings_phase1,
+        bank_earnings_phase2=bank_earnings_phase2,
     )
 
     # Check if there's anything to do
@@ -1326,6 +1587,8 @@ async def _run_orchestrator(args, execution_id: str):
         gaps=gaps,
         scheduled_jobs=scheduled_jobs,
         existing_cross_bank_reports=existing_cross_bank_reports,
+        bank_earnings_phase1=bank_earnings_phase1,
+        bank_earnings_phase2=bank_earnings_phase2,
         execution_summary=execution_summary,
     )
 
