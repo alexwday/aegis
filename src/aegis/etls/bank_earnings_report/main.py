@@ -447,13 +447,6 @@ async def extract_all_sections(
 
     all_metrics = await retrieve_all_metrics(db_symbol, fiscal_year, quarter, context)
 
-    llm_debug_log = {
-        "execution_id": str(execution_id),
-        "bank": bank_info["bank_name"],
-        "period": f"{quarter} {fiscal_year}",
-        "sections": {},
-    }
-
     available_metric_names = {m["parameter"] for m in all_metrics} if all_metrics else set()
     found_key_metrics = [m for m in KEY_METRICS if m in available_metric_names]
     missing_key_metrics = [m for m in KEY_METRICS if m not in available_metric_names]
@@ -478,30 +471,12 @@ async def extract_all_sections(
             num_dynamic_metrics=5,
         )
 
-        llm_debug_log["sections"]["1_keymetrics_selection"] = {
-            "available_metrics": selection_result.get("available_metrics", 0),
-            "available_chartable": selection_result.get("available_chartable", []),
-            "chart_metric": selection_result.get("chart_metric", ""),
-            "chart_reasoning": selection_result.get("chart_reasoning", ""),
-            "tile_metrics": selection_result.get("tile_metrics", []),
-            "tile_reasoning": selection_result.get("tile_reasoning", ""),
-            "dynamic_metrics": selection_result.get("dynamic_metrics", []),
-            "dynamic_reasoning": selection_result.get("dynamic_reasoning", ""),
-            "all_metrics_summary": selection_result.get("all_metrics_summary", []),
-        }
-
         tile_names = selection_result.get("tile_metrics", [])
         tile_metrics = await retrieve_metrics_by_names(
             db_symbol, fiscal_year, quarter, tile_names, context
         )
         tiles_json = format_key_metrics_json(tile_metrics)
         sections["1_keymetrics_tiles"] = tiles_json
-
-        llm_debug_log["sections"]["1_keymetrics_tiles"] = {
-            "requested_metrics": tile_names,
-            "retrieved_count": len(tile_metrics),
-            "formatted_metrics": tiles_json.get("metrics", []),
-        }
 
         dynamic_names = selection_result.get("dynamic_metrics", [])
         if dynamic_names:
@@ -510,19 +485,8 @@ async def extract_all_sections(
             )
             dynamic_json = format_key_metrics_json(dynamic_metrics)
             sections["1_keymetrics_dynamic"] = dynamic_json
-
-            llm_debug_log["sections"]["1_keymetrics_dynamic"] = {
-                "requested_metrics": dynamic_names,
-                "retrieved_count": len(dynamic_metrics),
-                "formatted_metrics": dynamic_json.get("metrics", []),
-            }
         else:
             sections["1_keymetrics_dynamic"] = {"source": "Supp Pack", "metrics": []}
-            llm_debug_log["sections"]["1_keymetrics_dynamic"] = {
-                "requested_metrics": [],
-                "retrieved_count": 0,
-                "formatted_metrics": [],
-            }
 
         chart_metric_name = selection_result.get("chart_metric", "")
         all_chart_metrics = []
@@ -571,22 +535,10 @@ async def extract_all_sections(
         if metrics_with_history:
             chart_json = format_multi_chart_json(metrics_with_history, chart_metric_name)
             sections["1_keymetrics_chart"] = chart_json
-
-            llm_debug_log["sections"]["1_keymetrics_chart"] = {
-                "initial_metric": chart_metric_name,
-                "total_metrics": len(metrics_with_history),
-                "metric_names": [m["name"] for m in metrics_with_history],
-                "initial_index": chart_json.get("initial_index", 0),
-            }
         else:
             sections["1_keymetrics_chart"] = {
                 "initial_index": 0,
                 "metrics": [],
-            }
-            llm_debug_log["sections"]["1_keymetrics_chart"] = {
-                "initial_metric": "N/A",
-                "reason": "No metrics with history available",
-                "total_metrics": 0,
             }
     else:
         sections["1_keymetrics_tiles"] = {"source": "Supp Pack", "metrics": []}
@@ -595,17 +547,6 @@ async def extract_all_sections(
             "initial_index": 0,
             "metrics": [],
         }
-        llm_debug_log["sections"]["1_keymetrics_selection"] = {
-            "available_metrics": 0,
-            "chart_metric": "",
-            "chart_reasoning": "No metrics available",
-            "tile_metrics": [],
-            "tile_reasoning": "No metrics available",
-            "dynamic_metrics": [],
-            "dynamic_reasoning": "No metrics available",
-        }
-
-    context["llm_debug_log"] = llm_debug_log
 
     logger.info("etl.bank_earnings_report.section_complete", section="1_keymetrics_tiles")
     logger.info("etl.bank_earnings_report.section_complete", section="1_keymetrics_chart")
@@ -621,16 +562,8 @@ async def extract_all_sections(
     if raw_metrics_with_history:
         raw_table = format_raw_metrics_table(raw_metrics_with_history)
         sections["1_keymetrics_raw"] = raw_table
-        llm_debug_log["sections"]["1_keymetrics_raw"] = {
-            "metric_count": len(raw_metrics_with_history),
-            "quarters": 8,
-        }
     else:
         sections["1_keymetrics_raw"] = {"headers": [], "rows": [], "tsv": ""}
-        llm_debug_log["sections"]["1_keymetrics_raw"] = {
-            "metric_count": 0,
-            "reason": "No metrics with history available",
-        }
 
     logger.info("etl.bank_earnings_report.section_complete", section="1_keymetrics_raw")
 
@@ -667,16 +600,6 @@ async def extract_all_sections(
 
     sections["1_keymetrics_overview"] = {
         "narrative": combined_overview.get("narrative", ""),
-    }
-
-    llm_debug_log["sections"]["1_keymetrics_overview"] = {
-        "rts_narrative": rts_overview.get("narrative", ""),
-        "rts_length": len(rts_overview.get("narrative", "")),
-        "transcript_narrative": transcript_overview.get("narrative", ""),
-        "transcript_length": len(transcript_overview.get("narrative", "")),
-        "combined_narrative": combined_overview.get("narrative", ""),
-        "combined_length": len(combined_overview.get("narrative", "")),
-        "combination_notes": combined_overview.get("combination_notes", ""),
     }
 
     logger.info(
@@ -728,21 +651,6 @@ async def extract_all_sections(
         "entries": all_entries,
     }
 
-    llm_debug_log["sections"]["1_keymetrics_items"] = {
-        "rts_items_count": len(rts_items.get("items", [])),
-        "rts_items": rts_items.get("items", []),
-        "rts_notes": rts_items.get("notes", ""),
-        "transcript_items_count": len(transcript_items.get("items", [])),
-        "transcript_items": transcript_items.get("items", []),
-        "transcript_notes": transcript_items.get("notes", ""),
-        "featured_count": len(processed_items.get("featured", [])),
-        "featured_items": processed_items.get("featured", []),
-        "remaining_count": len(processed_items.get("remaining", [])),
-        "remaining_items": processed_items.get("remaining", []),
-        "merge_notes": processed_items.get("merge_notes", ""),
-        "selection_notes": processed_items.get("selection_notes", ""),
-    }
-
     logger.info(
         "etl.bank_earnings_report.section_complete",
         section="1_keymetrics_items",
@@ -787,15 +695,6 @@ async def extract_all_sections(
 
     sections["2_narrative"] = {"entries": combined_narrative.get("entries", [])}
 
-    llm_debug_log["sections"]["2_narrative"] = {
-        "rts_paragraphs": len(rts_narrative.get("paragraphs", [])),
-        "rts_themes": [p.get("theme", "") for p in rts_narrative.get("paragraphs", [])],
-        "transcript_quotes": len(transcript_quotes),
-        "transcript_speakers": [q.get("speaker", "") for q in transcript_quotes],
-        "combined_entries": len(combined_narrative.get("entries", [])),
-        "combination_notes": combined_narrative.get("combination_notes", ""),
-    }
-
     logger.info(
         "etl.bank_earnings_report.section_complete",
         section="2_narrative",
@@ -818,12 +717,6 @@ async def extract_all_sections(
     )
 
     sections["3_analyst_focus"] = analyst_focus_result
-
-    llm_debug_log["sections"]["3_analyst_focus"] = {
-        "total_entries": len(analyst_focus_result.get("entries", [])),
-        "featured_entries": len(analyst_focus_result.get("featured", [])),
-        "themes": [e.get("theme", "") for e in analyst_focus_result.get("entries", [])],
-    }
 
     logger.info(
         "etl.bank_earnings_report.section_complete",
@@ -853,13 +746,6 @@ async def extract_all_sections(
     )
 
     segment_entries = []
-    segment_debug = {
-        "available_platforms": available_platforms,
-        "monitored_platforms": MONITORED_PLATFORMS,
-        "matched_platforms": found_platforms,
-        "missing_platforms": missing_platforms,
-        "segment_selections": {},
-    }
 
     all_segment_drivers = await get_all_segment_drivers_from_rts(
         bank=db_symbol,  # e.g., "RY-CA"
@@ -896,13 +782,7 @@ async def extract_all_sections(
                 if core_name in metrics_by_name:
                     core_metrics_data.append(metrics_by_name[core_name])
 
-            segment_debug["segment_selections"][platform] = {
-                "available_metrics": len(segment_metrics),
-                "core_metrics": [m["parameter"] for m in core_metrics_data],
-            }
-
             description = all_segment_drivers.get(platform, "")
-            segment_debug["segment_selections"][platform]["rts_drivers"] = bool(description)
 
             segment_entry = format_segment_json(
                 segment_name=platform,
@@ -942,7 +822,6 @@ async def extract_all_sections(
             )
 
     sections["4_segments"] = {"entries": segment_entries}
-    llm_debug_log["sections"]["4_segments"] = segment_debug
 
     logger.info(
         "etl.bank_earnings_report.segments_complete",
@@ -957,11 +836,6 @@ async def extract_all_sections(
         quarter=quarter,
         context=context,
     )
-
-    llm_debug_log["sections"]["5_capital_risk"] = {
-        "capital_metrics": len(sections["5_capital_risk"].get("capital_metrics", [])),
-        "credit_metrics": len(sections["5_capital_risk"].get("credit_metrics", [])),
-    }
 
     logger.info(
         "etl.bank_earnings_report.capital_risk_complete",
@@ -1215,17 +1089,6 @@ async def generate_bank_earnings_report(bank_name: str, fiscal_year: int, quarte
         output_path = output_dir / filename
 
         render_report(sections, output_path)
-
-        if "llm_debug_log" in context:
-            debug_filename = f"{bank_info['bank_symbol']}_{fiscal_year}_{quarter}_llm_debug.json"
-            debug_path = output_dir / debug_filename
-            with open(debug_path, "w", encoding="utf-8") as f:
-                json.dump(context["llm_debug_log"], f, indent=2, default=str)
-            logger.info(
-                "etl.bank_earnings_report.debug_log_saved",
-                execution_id=execution_id,
-                debug_path=str(debug_path),
-            )
 
         logger.info(
             "etl.bank_earnings_report.rendered",
