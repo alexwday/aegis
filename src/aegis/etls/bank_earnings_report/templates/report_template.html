@@ -1066,100 +1066,64 @@
             <!-- ============================================
                  SECTION 5: Capital & Risk Metrics
                  DATA SOURCE: 5_capital_risk.json
-                 SUBSECTIONS:
-                   - regulatory_capital (4 ratio tiles)
-                   - rwa (total with QoQ/YoY)
-                   - credit_quality (3 metrics table)
+                 Simplified format: two lists of metrics (name + value)
+                   - capital_metrics: Capital ratios and RWA
+                   - credit_metrics: PCL, GIL, ACL, etc.
                  ============================================ -->
             <div class="card">
                 <div class="section-header" style="align-items: center;">
                     <h2 style="margin: 0; border-bottom: none; padding-bottom: 0;">Capital & Risk Metrics</h2>
+                    <span class="pill-soft">Source: RTS</span>
                 </div>
 
-                <!-- Regulatory Capital Ratios -->
-                <div class="qa-item">
-                    <div style="margin-bottom: 8px;">
-                        <div style="margin-bottom: 4px;">
-                            <span style="font-size: 11px; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;">Regulatory Capital</span>
+                <!-- Two-column layout for Capital and Credit metrics -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 12px;">
+                    <!-- Capital Metrics Column -->
+                    <div class="qa-item" style="padding: 12px;">
+                        <div style="margin-bottom: 10px;">
+                            <span style="font-size: 11px; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;">Capital Metrics</span>
                         </div>
+                        {% if _5_capital_risk.capital_metrics %}
+                        <div style="display: flex; flex-direction: column; gap: 6px;">
+                            {% for metric in _5_capital_risk.capital_metrics %}
+                            <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 8px; background: #f8fafc; border-radius: 4px;">
+                                <span style="font-size: 10px; color: #64748b; font-weight: 500;">{{ metric.name }}</span>
+                                <span style="font-size: 12px; font-weight: 700; color: var(--text-main); font-family: 'Consolas', monospace;">{{ metric.value }}</span>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% else %}
+                        <div style="padding: 12px; text-align: center; color: #94a3b8; font-size: 11px; font-style: italic;">
+                            No capital metrics found in RTS.
+                        </div>
+                        {% endif %}
                     </div>
 
-                    <!-- Capital Ratios 2x2 Grid -->
-                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;">
-                        {% for ratio in _5_capital_risk.regulatory_capital %}
-                        <div style="background: #f8fafc; border-radius: 6px; padding: 10px; border: 1px solid #e2e8f0;">
-                            <div style="text-align: center; margin-bottom: 6px;">
-                                <div style="font-size: 9px; color: #64748b; text-transform: uppercase; font-weight: 600; margin-bottom: 4px;">{{ ratio.label }}{% if ratio.min_requirement %} <span style="font-weight: 400; text-transform: none;">(min {{ ratio.min_requirement }})</span>{% endif %}</div>
-                                <div style="font-size: 14px; font-weight: 700; color: var(--text-main);">{{ ratio.value|safe }}</div>
-                            </div>
-                            <div style="display: flex; border-top: 1px solid #e2e8f0; padding-top: 6px;">
-                                <div style="flex: 1; text-align: center; border-right: 1px solid #e2e8f0;">
-                                    <div style="font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700; margin-bottom: 2px;">QoQ</div>
-                                    <span class="delta {{ ratio.qoq.direction }}" style="font-size: 10px;">{{ ratio.qoq.display }}</span>
-                                </div>
-                                <div style="flex: 1; text-align: center;">
-                                    <div style="font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700; margin-bottom: 2px;">YoY</div>
-                                    <span class="delta {{ ratio.yoy.direction }}" style="font-size: 10px;">{{ ratio.yoy.display }}</span>
-                                </div>
-                            </div>
-                        </div>
-                        {% endfor %}
-                    </div>
-                </div>
-
-                <!-- Total RWA -->
-                <div class="qa-item">
-                    <div style="margin-bottom: 8px;">
-                        <div style="margin-bottom: 4px;">
-                            <span style="font-size: 11px; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;">Risk-Weighted Assets</span>
-                        </div>
-                    </div>
-                    <div style="background: #f8fafc; border-radius: 6px; padding: 12px; border: 1px solid #e2e8f0;">
-                        <div style="display: flex; align-items: center; justify-content: space-between;">
-                            <div>
-                                <div style="font-size: 9px; color: #64748b; text-transform: uppercase; font-weight: 600; margin-bottom: 4px;">Total RWA</div>
-                                <div style="font-size: 18px; font-weight: 700; color: var(--text-main);">{{ _5_capital_risk.rwa.total|safe }}</div>
-                            </div>
-                            {% if _5_capital_risk.rwa.qoq and _5_capital_risk.rwa.yoy %}
-                            <div style="display: flex; gap: 16px;">
-                                <div style="text-align: center;">
-                                    <div style="font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700; margin-bottom: 2px;">QoQ</div>
-                                    <span class="delta {{ _5_capital_risk.rwa.qoq.direction }}" style="font-size: 11px;">{{ _5_capital_risk.rwa.qoq.display }}</span>
-                                </div>
-                                <div style="text-align: center;">
-                                    <div style="font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700; margin-bottom: 2px;">YoY</div>
-                                    <span class="delta {{ _5_capital_risk.rwa.yoy.direction }}" style="font-size: 11px;">{{ _5_capital_risk.rwa.yoy.display }}</span>
-                                </div>
-                            </div>
-                            {% endif %}
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Credit Quality -->
-                <div class="qa-item">
-                    <div style="margin-bottom: 8px;">
-                        <div style="margin-bottom: 4px;">
+                    <!-- Credit Metrics Column -->
+                    <div class="qa-item" style="padding: 12px;">
+                        <div style="margin-bottom: 10px;">
                             <span style="font-size: 11px; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;">Credit Quality</span>
                         </div>
-                    </div>
-                    <div style="display: flex; flex-direction: column; gap: 6px;">
-                        <!-- Header row -->
-                        <div style="display: flex; align-items: center; padding-bottom: 4px; border-bottom: 1px solid #e2e8f0;">
-                            <span style="font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700; width: 65px;">Metric</span>
-                            <span style="font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700; flex: 1; text-align: center;">Value</span>
-                            <span style="font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700; flex: 1; text-align: center;">QoQ</span>
-                            <span style="font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700; flex: 1; text-align: center;">YoY</span>
+                        {% if _5_capital_risk.credit_metrics %}
+                        <div style="display: flex; flex-direction: column; gap: 6px;">
+                            {% for metric in _5_capital_risk.credit_metrics %}
+                            <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 8px; background: #f8fafc; border-radius: 4px;">
+                                <span style="font-size: 10px; color: #64748b; font-weight: 500;">{{ metric.name }}</span>
+                                <span style="font-size: 12px; font-weight: 700; color: var(--text-main); font-family: 'Consolas', monospace;">{{ metric.value }}</span>
+                            </div>
+                            {% endfor %}
                         </div>
-                        {% for metric in _5_capital_risk.credit_quality %}
-                        <div style="display: flex; align-items: center;">
-                            <span style="font-size: 10px; color: #64748b; font-weight: 600; width: 65px;">{{ metric.label }}</span>
-                            <span style="font-size: 11px; font-weight: 700; color: var(--text-main); flex: 1; text-align: center;">{{ metric.value|safe }}</span>
-                            <span class="delta {{ metric.qoq.direction }}" style="font-size: 10px; flex: 1; text-align: center;">{{ metric.qoq.display }}</span>
-                            <span class="delta {{ metric.yoy.direction }}" style="font-size: 10px; flex: 1; text-align: center;">{{ metric.yoy.display }}</span>
+                        {% else %}
+                        <div style="padding: 12px; text-align: center; color: #94a3b8; font-size: 11px; font-style: italic;">
+                            No credit metrics found in RTS.
                         </div>
-                        {% endfor %}
+                        {% endif %}
                     </div>
+                </div>
+
+                <!-- Source disclaimer -->
+                <div style="margin-top: 12px; padding-top: 8px; border-top: 1px solid #e2e8f0;">
+                    <div style="font-size: 9px; color: #94a3b8; font-style: italic;">* Metrics extracted from Report to Shareholders (RTS) regulatory filing.</div>
                 </div>
             </div>
         </div>

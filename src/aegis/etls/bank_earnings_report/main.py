@@ -952,17 +952,15 @@ async def extract_all_sections(
     )
 
     llm_debug_log["sections"]["5_capital_risk"] = {
-        "capital_ratios": len(sections["5_capital_risk"].get("regulatory_capital", [])),
-        "has_rwa": sections["5_capital_risk"].get("rwa", {}).get("total", "—") != "—",
-        "credit_metrics": len(sections["5_capital_risk"].get("credit_quality", [])),
+        "capital_metrics": len(sections["5_capital_risk"].get("capital_metrics", [])),
+        "credit_metrics": len(sections["5_capital_risk"].get("credit_metrics", [])),
     }
 
     logger.info(
         "etl.bank_earnings_report.capital_risk_complete",
         execution_id=execution_id,
-        capital_ratios=len(sections["5_capital_risk"].get("regulatory_capital", [])),
-        has_rwa=sections["5_capital_risk"].get("rwa", {}).get("total", "—") != "—",
-        credit_metrics=len(sections["5_capital_risk"].get("credit_quality", [])),
+        capital_metrics=len(sections["5_capital_risk"].get("capital_metrics", [])),
+        credit_metrics=len(sections["5_capital_risk"].get("credit_metrics", [])),
     )
 
     logger.info(
