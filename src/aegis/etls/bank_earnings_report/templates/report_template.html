@@ -556,11 +556,6 @@
                 </div>
             </div>
             <div class="hero-right" style="display: flex; align-items: center; gap: 20px; width: fit-content; margin-left: auto; padding: 8px 16px;">
-                {% if _0_header_params.logo_base64 %}
-                <img src="data:image/png;base64,{{ _0_header_params.logo_base64 }}"
-                     alt="{{ _0_header_params.bank_name }} Logo"
-                     class="bank-logo">
-                {% endif %}
                 <div>
                     <div class="hero-label" style="font-size: 10px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 2px;">Quarterly Dividend</div>
                     <span class="dividend-amount" style="font-size: 24px; font-family: 'Inter', sans-serif; font-weight: 600;">{{ _0_header_dividend.dividend.amount }}</span>
@@ -575,6 +570,12 @@
                         <span style="font-size: 12px; font-weight: 700;" class="delta-{{ _0_header_dividend.dividend.yoy.direction }}">{{ _0_header_dividend.dividend.yoy.display }}</span>
                     </div>
                 </div>
+                {% if _0_header_params.logo_base64 %}
+                <img src="data:image/png;base64,{{ _0_header_params.logo_base64 }}"
+                     alt="{{ _0_header_params.bank_name }} Logo"
+                     class="bank-logo"
+                     style="padding-left: 14px; border-left: 1px solid rgba(255,255,255,0.1);">
+                {% endif %}
             </div>
         </div>
 
