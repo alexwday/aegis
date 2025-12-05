@@ -84,7 +84,7 @@ def build_capital_risk_tool_definition() -> Dict[str, Any]:
     """
     Build the tool definition for extracting capital and risk metrics.
 
-    Simplified to focus on metrics commonly available in RTS filings.
+    Uses a flat schema (like narrative extraction) for better LLM compliance.
 
     Returns:
         OpenAI-compatible tool definition dict
@@ -94,151 +94,129 @@ def build_capital_risk_tool_definition() -> Dict[str, Any]:
         "function": {
             "name": "extract_capital_risk_metrics",
             "description": (
-                "Extract capital ratios and credit quality metrics from RTS regulatory filings"
+                "Extract capital ratios and credit quality metrics from RTS regulatory filings. "
+                "All values should be extracted exactly as shown in the document."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
-                    # Regulatory Capital Ratios
-                    "cet1_ratio": {
-                        "type": "object",
-                        "description": "Common Equity Tier 1 (CET1) ratio",
-                        "properties": {
-                            "value": {
-                                "type": "number",
-                                "description": "Current CET1 ratio as percentage (e.g., 12.5)",
-                            },
-                            "qoq_change": {
-                                "type": "number",
-                                "description": (
-                                    "Quarter-over-quarter change in percentage points "
-                                    "(e.g., 0.2 for 20 bps increase). Null if not available."
-                                ),
-                            },
-                            "yoy_change": {
-                                "type": "number",
-                                "description": (
-                                    "Year-over-year change in percentage points. "
-                                    "Null if not available."
-                                ),
-                            },
-                        },
-                        "required": ["value"],
+                    # CET1 Ratio
+                    "cet1_value": {
+                        "type": "number",
+                        "description": "CET1 ratio as percentage (e.g., 13.2 for 13.2%)",
                     },
-                    "tier1_ratio": {
-                        "type": "object",
-                        "description": "Tier 1 Capital ratio",
-                        "properties": {
-                            "value": {
-                                "type": "number",
-                                "description": "Current Tier 1 ratio as percentage",
-                            },
-                            "qoq_change": {"type": "number"},
-                            "yoy_change": {"type": "number"},
-                        },
-                        "required": ["value"],
-                    },
-                    "total_capital_ratio": {
-                        "type": "object",
-                        "description": "Total Capital ratio",
-                        "properties": {
-                            "value": {
-                                "type": "number",
-                                "description": "Current Total Capital ratio as percentage",
-                            },
-                            "qoq_change": {"type": "number"},
-                            "yoy_change": {"type": "number"},
-                        },
-                        "required": ["value"],
-                    },
-                    "leverage_ratio": {
-                        "type": "object",
-                        "description": "Leverage ratio",
-                        "properties": {
-                            "value": {
-                                "type": "number",
-                                "description": "Current Leverage ratio as percentage",
-                            },
-                            "qoq_change": {"type": "number"},
-                            "yoy_change": {"type": "number"},
-                        },
-                        "required": ["value"],
-                    },
-                    # Total RWA only (no breakdown)
-                    "rwa_total": {
-                        "type": "object",
-                        "description": "Total Risk-Weighted Assets",
-                        "properties": {
-                            "value_billions": {
-                                "type": "number",
-                                "description": "Total RWA in billions CAD",
-                            },
-                            "qoq_change_pct": {
-                                "type": "number",
-                                "description": "QoQ percentage change in Total RWA",
-                            },
-                            "yoy_change_pct": {
-                                "type": "number",
-                                "description": "YoY percentage change in Total RWA",
-                            },
-                        },
-                        "required": ["value_billions"],
-                    },
-                    # Credit Quality Metrics
-                    "pcl": {
-                        "type": "object",
-                        "description": "Provision for Credit Losses (PCL)",
-                        "properties": {
-                            "value_millions": {
-                                "type": "number",
-                                "description": "PCL in millions CAD for the quarter",
-                            },
-                            "qoq_change_pct": {
-                                "type": "number",
-                                "description": "QoQ percentage change in PCL",
-                            },
-                            "yoy_change_pct": {
-                                "type": "number",
-                                "description": "YoY percentage change in PCL",
-                            },
-                        },
-                        "required": ["value_millions"],
-                    },
-                    "gil": {
-                        "type": "object",
-                        "description": "Gross Impaired Loans (GIL)",
-                        "properties": {
-                            "value_millions": {
-                                "type": "number",
-                                "description": "GIL in millions CAD",
-                            },
-                            "qoq_change_pct": {"type": "number"},
-                            "yoy_change_pct": {"type": "number"},
-                        },
-                        "required": ["value_millions"],
-                    },
-                    "acl": {
-                        "type": "object",
-                        "description": "Allowance for Credit Losses (ACL)",
-                        "properties": {
-                            "value_millions": {
-                                "type": "number",
-                                "description": "Total ACL in millions CAD",
-                            },
-                            "qoq_change_pct": {"type": "number"},
-                            "yoy_change_pct": {"type": "number"},
-                        },
-                        "required": ["value_millions"],
-                    },
-                    "extraction_notes": {
-                        "type": "string",
+                    "cet1_qoq": {
+                        "type": "number",
                         "description": (
-                            "Brief notes on data availability and any metrics that "
-                            "could not be found in the filing"
+                            "CET1 QoQ change in percentage points (e.g., 0.2 for +20bps)"
                         ),
                     },
+                    "cet1_yoy": {
+                        "type": "number",
+                        "description": "CET1 YoY change in percentage points",
+                    },
+                    # Tier 1 Ratio
+                    "tier1_value": {
+                        "type": "number",
+                        "description": "Tier 1 Capital ratio as percentage",
+                    },
+                    "tier1_qoq": {
+                        "type": "number",
+                        "description": "Tier 1 QoQ change in percentage points",
+                    },
+                    "tier1_yoy": {
+                        "type": "number",
+                        "description": "Tier 1 YoY change in percentage points",
+                    },
+                    # Total Capital Ratio
+                    "total_capital_value": {
+                        "type": "number",
+                        "description": "Total Capital ratio as percentage",
+                    },
+                    "total_capital_qoq": {
+                        "type": "number",
+                        "description": "Total Capital QoQ change in percentage points",
+                    },
+                    "total_capital_yoy": {
+                        "type": "number",
+                        "description": "Total Capital YoY change in percentage points",
+                    },
+                    # Leverage Ratio
+                    "leverage_value": {
+                        "type": "number",
+                        "description": "Leverage ratio as percentage",
+                    },
+                    "leverage_qoq": {
+                        "type": "number",
+                        "description": "Leverage ratio QoQ change in percentage points",
+                    },
+                    "leverage_yoy": {
+                        "type": "number",
+                        "description": "Leverage ratio YoY change in percentage points",
+                    },
+                    # Total RWA
+                    "rwa_value": {
+                        "type": "number",
+                        "description": "Total RWA in billions CAD (e.g., 612.4 for $612.4B)",
+                    },
+                    "rwa_qoq": {
+                        "type": "number",
+                        "description": "RWA QoQ percentage change",
+                    },
+                    "rwa_yoy": {
+                        "type": "number",
+                        "description": "RWA YoY percentage change",
+                    },
+                    # PCL
+                    "pcl_value": {
+                        "type": "number",
+                        "description": "PCL in millions CAD for the quarter",
+                    },
+                    "pcl_qoq": {
+                        "type": "number",
+                        "description": "PCL QoQ percentage change",
+                    },
+                    "pcl_yoy": {
+                        "type": "number",
+                        "description": "PCL YoY percentage change",
+                    },
+                    # GIL
+                    "gil_value": {
+                        "type": "number",
+                        "description": "Gross Impaired Loans in millions CAD",
+                    },
+                    "gil_qoq": {
+                        "type": "number",
+                        "description": "GIL QoQ percentage change",
+                    },
+                    "gil_yoy": {
+                        "type": "number",
+                        "description": "GIL YoY percentage change",
+                    },
+                    # ACL
+                    "acl_value": {
+                        "type": "number",
+                        "description": "Allowance for Credit Losses in millions CAD",
+                    },
+                    "acl_qoq": {
+                        "type": "number",
+                        "description": "ACL QoQ percentage change",
+                    },
+                    "acl_yoy": {
+                        "type": "number",
+                        "description": "ACL YoY percentage change",
+                    },
+                    # Notes
+                    "extraction_notes": {
+                        "type": "string",
+                        "description": "Brief notes on which metrics were found vs not found",
+                    },
                 },
-                "required": ["extraction_notes"],
+                "required": [
+                    "cet1_value",
+                    "pcl_value",
+                    "extraction_notes",
+                ],
             },
         },
     }
@@ -260,70 +238,86 @@ def format_currency_value(value: Optional[float], in_billions: bool = True) -> s
     return f"${value:,.0f}M"
 
 
-# Mapping configurations for transformation
-RATIO_MAPPINGS = [
-    ("cet1_ratio", "CET1 Ratio"),
-    ("tier1_ratio", "Tier 1 Capital Ratio"),
-    ("total_capital_ratio", "Total Capital Ratio"),
-    ("leverage_ratio", "Leverage Ratio"),
-]
+def _build_ratio_entry(
+    function_args: Dict[str, Any], prefix: str, label: str
+) -> Optional[Dict[str, Any]]:
+    """Build a single ratio entry from flat function args."""
+    value = function_args.get(f"{prefix}_value")
+    if value is None:
+        return None
 
-CREDIT_MAPPINGS = [
-    ("pcl", "PCL"),
-    ("gil", "GIL"),
-    ("acl", "ACL"),
-]
+    return {
+        "label": label,
+        "value": format_ratio_value(value),
+        "min_requirement": CAPITAL_MINIMUMS.get(label, ""),
+        "qoq": format_delta(function_args.get(f"{prefix}_qoq"), label, is_ratio=True),
+        "yoy": format_delta(function_args.get(f"{prefix}_yoy"), label, is_ratio=True),
+    }
 
 
 def _build_regulatory_capital(function_args: Dict[str, Any]) -> list:
-    """Build regulatory capital ratios list from LLM response."""
+    """Build regulatory capital ratios list from flat LLM response."""
     result = []
-    for key, label in RATIO_MAPPINGS:
-        ratio_data = function_args.get(key, {})
-        if ratio_data and ratio_data.get("value") is not None:
-            result.append(
-                {
-                    "label": label,
-                    "value": format_ratio_value(ratio_data.get("value")),
-                    "min_requirement": CAPITAL_MINIMUMS.get(label, ""),
-                    "qoq": format_delta(ratio_data.get("qoq_change"), label, is_ratio=True),
-                    "yoy": format_delta(ratio_data.get("yoy_change"), label, is_ratio=True),
-                }
-            )
+
+    ratio_configs = [
+        ("cet1", "CET1 Ratio"),
+        ("tier1", "Tier 1 Capital Ratio"),
+        ("total_capital", "Total Capital Ratio"),
+        ("leverage", "Leverage Ratio"),
+    ]
+
+    for prefix, label in ratio_configs:
+        entry = _build_ratio_entry(function_args, prefix, label)
+        if entry:
+            result.append(entry)
+
     return result
 
 
 def _build_rwa_section(function_args: Dict[str, Any]) -> Dict[str, Any]:
-    """Build RWA section from LLM response (total only, no breakdown)."""
-    rwa_data = function_args.get("rwa_total", {})
+    """Build RWA section from flat LLM response."""
+    rwa_value = function_args.get("rwa_value")
 
-    if not rwa_data or rwa_data.get("value_billions") is None:
+    if rwa_value is None:
         return {"total": "—", "qoq": None, "yoy": None}
 
     return {
-        "total": format_currency_value(rwa_data.get("value_billions"), in_billions=True),
-        "qoq": format_delta(rwa_data.get("qoq_change_pct"), "RWA", is_ratio=False),
-        "yoy": format_delta(rwa_data.get("yoy_change_pct"), "RWA", is_ratio=False),
+        "total": format_currency_value(rwa_value, in_billions=True),
+        "qoq": format_delta(function_args.get("rwa_qoq"), "RWA", is_ratio=False),
+        "yoy": format_delta(function_args.get("rwa_yoy"), "RWA", is_ratio=False),
+    }
+
+
+def _build_credit_entry(
+    function_args: Dict[str, Any], prefix: str, label: str
+) -> Optional[Dict[str, Any]]:
+    """Build a single credit quality entry from flat function args."""
+    value = function_args.get(f"{prefix}_value")
+    if value is None:
+        return None
+
+    return {
+        "label": label,
+        "value": format_currency_value(value, in_billions=False),
+        "qoq": format_delta(function_args.get(f"{prefix}_qoq"), label, is_ratio=False),
+        "yoy": format_delta(function_args.get(f"{prefix}_yoy"), label, is_ratio=False),
     }
 
 
 def _build_credit_quality(function_args: Dict[str, Any]) -> list:
-    """Build credit quality metrics list from LLM response."""
+    """Build credit quality metrics list from flat LLM response."""
     result = []
 
-    for key, label in CREDIT_MAPPINGS:
-        credit_data = function_args.get(key, {})
-        if credit_data and credit_data.get("value_millions") is not None:
-            result.append(
-                {
-                    "label": label,
-                    "value": format_currency_value(
-                        credit_data.get("value_millions"), in_billions=False
-                    ),
-                    "qoq": format_delta(credit_data.get("qoq_change_pct"), label, is_ratio=False),
-                    "yoy": format_delta(credit_data.get("yoy_change_pct"), label, is_ratio=False),
-                }
-            )
+    credit_configs = [
+        ("pcl", "PCL"),
+        ("gil", "GIL"),
+        ("acl", "ACL"),
+    ]
+
+    for prefix, label in credit_configs:
+        entry = _build_credit_entry(function_args, prefix, label)
+        if entry:
+            result.append(entry)
 
     return result
 
@@ -335,7 +329,7 @@ def transform_llm_response_to_section(
     Transform the LLM tool response into the template-ready section format.
 
     Args:
-        function_args: Parsed arguments from the LLM tool call
+        function_args: Parsed arguments from the LLM tool call (flat structure)
 
     Returns:
         Dict matching the 5_capital_risk template schema
@@ -360,87 +354,50 @@ def _get_empty_section() -> Dict[str, Any]:
 
 def _build_system_prompt(bank_name: str) -> str:
     """Build the system prompt for capital risk extraction."""
-    return f"""You are a senior financial analyst extracting regulatory capital and \
-credit quality metrics from {bank_name}'s quarterly Report to Shareholders (RTS).
+    return f"""You are extracting capital and credit metrics from {bank_name}'s quarterly RTS.
 
-## YOUR TASK
+## METRICS TO FIND
 
-Extract capital ratios, total RWA, and credit quality metrics from the quarterly filing.
-These metrics are typically found in the Capital Management and Credit Quality sections.
+**Capital Ratios** (as percentages, e.g., 13.2):
+- CET1 Ratio (Common Equity Tier 1)
+- Tier 1 Capital Ratio
+- Total Capital Ratio
+- Leverage Ratio
 
-## METRICS TO EXTRACT
+**RWA** (in billions CAD, e.g., 612.4):
+- Total Risk-Weighted Assets
 
-### 1. Regulatory Capital Ratios
-Extract these Basel III capital ratios (as percentages):
+**Credit Quality** (in millions CAD):
+- PCL: Provision for Credit Losses (quarterly amount)
+- GIL: Gross Impaired Loans
+- ACL: Allowance for Credit Losses
 
-| Metric | Also Known As | Example |
-|--------|---------------|---------|
-| CET1 Ratio | Common Equity Tier 1 ratio | 13.2% |
-| Tier 1 Capital Ratio | Tier 1 ratio | 14.5% |
-| Total Capital Ratio | Total capital ratio | 16.8% |
-| Leverage Ratio | Tier 1 leverage ratio | 4.3% |
+## WHERE TO LOOK
 
-For each ratio, also look for QoQ and YoY changes (in basis points or percentage points).
+- Capital ratios: "Capital Management", "Capital Position", "Key Metrics", "Financial Highlights"
+- RWA: Usually near capital ratios, "Risk-Weighted Assets"
+- Credit metrics: "Credit Quality", "Allowance for Credit Losses", "Risk Management"
 
-### 2. Total Risk-Weighted Assets (RWA)
-Extract total RWA in billions CAD. Look for:
-- "Risk-weighted assets" or "RWA"
-- Usually in Capital Management section
-- Example: $612.4 billion
+## RULES
 
-### 3. Credit Quality Metrics
-Extract these credit metrics in millions CAD:
-
-| Metric | Also Known As | What It Is |
-|--------|---------------|------------|
-| PCL | Provision for credit losses, Credit loss expense | Quarterly credit provision |
-| GIL | Gross impaired loans, Impaired loans | Total impaired loan balances |
-| ACL | Allowance for credit losses, Credit reserves | Total loan loss reserves |
-
-## WHERE TO FIND THESE METRICS
-
-**Capital Ratios**: Look in sections titled:
-- "Capital Management"
-- "Capital Position"
-- "Capital Strength"
-- "Key Performance Metrics" or "Financial Highlights"
-- Tables with "Regulatory Capital Ratios"
-
-**RWA**: Usually in same section as capital ratios, or:
-- "Risk-Weighted Assets"
-- "Capital Requirements"
-
-**Credit Quality**: Look in sections titled:
-- "Credit Quality"
-- "Allowance for Credit Losses"
-- "Provision for Credit Losses"
-- "Risk Management - Credit Risk"
-- "Asset Quality"
-
-## IMPORTANT GUIDELINES
-
-1. **Extract EXACT values** from the document - do not estimate or calculate
-2. **Use current quarter values** - not year-to-date or annual
-3. **Capital ratios** are percentages (e.g., 13.2 not 0.132)
-4. **RWA** should be in billions (e.g., 612.4 for $612.4B)
-5. **Credit metrics** should be in millions (e.g., 2100 for $2.1B)
-6. **If a metric is not found**, set to null - do not guess
-7. **Changes** - look for "increase/decrease of X bps" or comparison tables"""
+1. Extract EXACT values from the document
+2. Capital ratios are percentages (13.2 not 0.132)
+3. RWA in billions (612.4 for $612.4 billion)
+4. Credit metrics in millions (2100 for $2,100 million)
+5. For QoQ/YoY changes, use percentage points for ratios, percentages for others
+6. If you cannot find a metric, do not include it in the output"""
 
 
 def _build_user_prompt(bank_name: str, quarter: str, fiscal_year: int, content: str) -> str:
     """Build the user prompt for capital risk extraction."""
-    return f"""Extract capital and credit quality metrics from {bank_name}'s {quarter} \
-{fiscal_year} quarterly Report to Shareholders.
+    return f"""Extract capital and credit metrics from {bank_name}'s {quarter} {fiscal_year} RTS.
 
-Focus on finding:
-1. Capital ratios (CET1, Tier 1, Total Capital, Leverage) with any QoQ/YoY changes
-2. Total Risk-Weighted Assets (RWA) in billions
-3. Credit quality metrics (PCL, GIL, ACL) in millions with any changes
+Find and extract:
+- CET1, Tier 1, Total Capital, and Leverage ratios (with any QoQ/YoY changes)
+- Total RWA in billions
+- PCL, GIL, and ACL in millions (with any QoQ/YoY changes)
 
-Set any metric to null if not found - do not guess values.
-
----
+Document content:
 
 {content}"""
 
