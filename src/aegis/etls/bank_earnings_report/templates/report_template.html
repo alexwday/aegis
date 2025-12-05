@@ -1073,24 +1073,37 @@
             <div class="card">
                 <div class="section-header" style="align-items: center;">
                     <h2 style="margin: 0; border-bottom: none; padding-bottom: 0;">Capital & Risk Metrics</h2>
-                    <span class="pill-soft">Source: RTS</span>
                 </div>
 
-                <!-- Two-column layout for Capital and Credit metrics -->
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 12px;">
-                    <!-- Capital Metrics Column -->
-                    <div class="qa-item" style="padding: 12px;">
-                        <div style="margin-bottom: 10px;">
+                <!-- Stacked containers for Capital and Credit metrics -->
+                <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 12px;">
+                    <!-- Capital Metrics Container -->
+                    <div class="qa-item" style="padding: 10px 12px;">
+                        <div style="margin-bottom: 6px;">
                             <span style="font-size: 11px; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;">Capital Metrics</span>
                         </div>
                         {% if _5_capital_risk.capital_metrics %}
-                        <div style="display: flex; flex-direction: column; gap: 6px;">
-                            {% for metric in _5_capital_risk.capital_metrics %}
-                            <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 8px; background: #f8fafc; border-radius: 4px;">
-                                <span style="font-size: 10px; color: #64748b; font-weight: 500;">{{ metric.name }}</span>
-                                <span style="font-size: 12px; font-weight: 700; color: var(--text-main); font-family: 'Consolas', monospace;">{{ metric.value }}</span>
-                            </div>
-                            {% endfor %}
+                        <div style="background: #f8fafc; border-radius: 4px; padding: 6px 8px;">
+                            <table style="width: 100%; border-collapse: collapse; font-size: 11px; table-layout: fixed;">
+                                <colgroup>
+                                    <col style="width: 70%;">
+                                    <col style="width: 30%;">
+                                </colgroup>
+                                <thead>
+                                    <tr>
+                                        <th style="text-align: left; font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700; padding: 2px 4px; border-bottom: 1px solid #e2e8f0;">Metric</th>
+                                        <th style="text-align: right; font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700; padding: 2px 4px; border-bottom: 1px solid #e2e8f0;">Value</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for metric in _5_capital_risk.capital_metrics %}
+                                    <tr>
+                                        <td style="padding: 2px 4px; color: #334155; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ metric.name }}</td>
+                                        <td class="value" style="padding: 2px 4px; text-align: right; font-size: 10px; white-space: nowrap;">{{ metric.value }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
                         </div>
                         {% else %}
                         <div style="padding: 12px; text-align: center; color: #94a3b8; font-size: 11px; font-style: italic;">
@@ -1099,19 +1112,33 @@
                         {% endif %}
                     </div>
 
-                    <!-- Credit Metrics Column -->
-                    <div class="qa-item" style="padding: 12px;">
-                        <div style="margin-bottom: 10px;">
+                    <!-- Credit Quality Container -->
+                    <div class="qa-item" style="padding: 10px 12px;">
+                        <div style="margin-bottom: 6px;">
                             <span style="font-size: 11px; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;">Credit Quality</span>
                         </div>
                         {% if _5_capital_risk.credit_metrics %}
-                        <div style="display: flex; flex-direction: column; gap: 6px;">
-                            {% for metric in _5_capital_risk.credit_metrics %}
-                            <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 8px; background: #f8fafc; border-radius: 4px;">
-                                <span style="font-size: 10px; color: #64748b; font-weight: 500;">{{ metric.name }}</span>
-                                <span style="font-size: 12px; font-weight: 700; color: var(--text-main); font-family: 'Consolas', monospace;">{{ metric.value }}</span>
-                            </div>
-                            {% endfor %}
+                        <div style="background: #f8fafc; border-radius: 4px; padding: 6px 8px;">
+                            <table style="width: 100%; border-collapse: collapse; font-size: 11px; table-layout: fixed;">
+                                <colgroup>
+                                    <col style="width: 70%;">
+                                    <col style="width: 30%;">
+                                </colgroup>
+                                <thead>
+                                    <tr>
+                                        <th style="text-align: left; font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700; padding: 2px 4px; border-bottom: 1px solid #e2e8f0;">Metric</th>
+                                        <th style="text-align: right; font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700; padding: 2px 4px; border-bottom: 1px solid #e2e8f0;">Value</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for metric in _5_capital_risk.credit_metrics %}
+                                    <tr>
+                                        <td style="padding: 2px 4px; color: #334155; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ metric.name }}</td>
+                                        <td class="value" style="padding: 2px 4px; text-align: right; font-size: 10px; white-space: nowrap;">{{ metric.value }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
                         </div>
                         {% else %}
                         <div style="padding: 12px; text-align: center; color: #94a3b8; font-size: 11px; font-style: italic;">
