@@ -250,12 +250,13 @@
         .sub-header { font-size: 14px; color: var(--text-muted); margin-bottom: 20px; }
         
         /* Enhanced Metric Badges */
-        .metric-box { 
-            flex: 1; 
-            background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%); 
+        .metric-box {
+            flex: 1;
+            min-width: 0;
+            background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
             padding: 14px 12px;
-            border-radius: 8px; 
-            text-align: center; 
+            border-radius: 8px;
+            text-align: center;
             border: 1px solid #e2e8f0;
             box-shadow: 0 2px 4px rgba(0,0,0,0.04);
             transition: all 0.3s ease;
@@ -278,6 +279,8 @@
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
+            max-width: 100%;
+            min-width: 0;
         }
         .metric-val { 
             font-size: 20px; 
