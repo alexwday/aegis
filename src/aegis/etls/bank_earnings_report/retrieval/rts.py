@@ -24,6 +24,7 @@ from aegis.connections.llm_connector import complete_with_tools
 from aegis.connections.postgres_connector import get_connection
 from aegis.etls.bank_earnings_report.config.etl_config import etl_config
 from aegis.utils.logging import get_logger
+from aegis.utils.prompt_loader import load_prompt_from_db
 
 
 async def retrieve_all_rts_chunks(
@@ -181,69 +182,22 @@ async def generate_all_segment_drivers_from_full_rts(
 
     segment_list = "\n".join(f"- {name}" for name in segment_names)
 
-    system_prompt = f"""You are a senior financial analyst writing a bank quarterly earnings report.
+    # Load prompt from database
+    prompt_data = load_prompt_from_db(
+        layer="bank_earnings_report_etl",
+        name="rts_4_segments_drivers",
+        compose_with_globals=False,
+        execution_id=execution_id,
+    )
 
-Your task is to extract performance driver statements for EACH of the following business segments:
+    # Format prompts with dynamic content
+    system_prompt = prompt_data["system_prompt"].format(segment_list=segment_list)
+    user_prompt = prompt_data["user_prompt"].format(
+        segment_list=segment_list,
+        full_rts=full_rts,
+    )
 
-{segment_list}
-
-For EACH segment, you will:
-1. FIND the section(s) in the regulatory filing that discuss that segment
-2. EXTRACT the key performance drivers mentioned
-3. WRITE a concise qualitative drivers statement (2-3 sentences)
-
-## CRITICAL REQUIREMENTS
-
-1. **NO METRICS OR NUMBERS**: Do NOT include specific dollar amounts, percentages, basis points, \
-or any numerical values. The metrics are shown separately in the report.
-2. **QUALITATIVE ONLY**: Focus on the business drivers, trends, and factors - not the numbers.
-3. **Length**: 2-3 sentences maximum per segment
-4. **Tone**: Professional, factual, analyst-style
-5. **Consistency**: Use similar style and depth across all segments
-
-## WHERE TO FIND SEGMENT INFORMATION
-
-Look for sections with headings like:
-- The segment name itself (e.g., "Canadian Banking", "Capital Markets")
-- "Business Segment Results"
-- "Segment Performance"
-- "Operating Results by Segment"
-- "Results by Business Segment"
-
-Each segment's discussion typically includes explanations of what drove performance changes.
-
-## WHAT TO INCLUDE IN EACH STATEMENT
-
-- Business drivers (e.g., "higher trading activity", "increased client demand")
-- Market conditions (e.g., "favorable rate environment", "challenging credit conditions")
-- Strategic factors (e.g., "expansion into new markets", "cost discipline initiatives")
-- Operational factors (e.g., "improved efficiency", "technology investments")
-
-## WHAT TO EXCLUDE
-
-- Specific dollar amounts (e.g., "$2.1B", "CAD 500 million")
-- Percentages (e.g., "8% growth", "up 12%")
-- Basis points (e.g., "expanded 15 bps")
-- Quarter-over-quarter or year-over-year comparisons with numbers
-- The segment name in the statement (it's already shown in the header)
-
-## IF A SEGMENT IS NOT FOUND
-
-If you cannot find content specifically about a segment, return an empty string for that segment.
-Do NOT make up information or use content from other segments."""
-
-    user_prompt = f"""Below is the complete regulatory filing document. For each of the \
-following segments, find the relevant section and write a 2-3 sentence QUALITATIVE \
-drivers statement:
-
-{segment_list}
-
-Remember: NO specific metrics, percentages, or dollar amounts. Focus only on the business drivers.
-
-{full_rts}
-
-Extract the qualitative drivers statement for each segment listed above."""
-
+    # Build tool definition with dynamic properties for each segment
     segment_properties = {}
     for name in segment_names:
         safe_key = name.lower().replace(" ", "_").replace("&", "and").replace(".", "")
@@ -266,7 +220,7 @@ Extract the qualitative drivers statement for each segment listed above."""
             "required": ["found", "drivers_statement"],
         }
 
-    tool_definition = {
+    tool_def = {
         "type": "function",
         "function": {
             "name": "all_segment_drivers",
@@ -289,7 +243,7 @@ Extract the qualitative drivers statement for each segment listed above."""
 
         response = await complete_with_tools(
             messages=messages,
-            tools=[tool_definition],
+            tools=[tool_def],
             context=context,
             llm_params={
                 "model": model,
@@ -457,162 +411,30 @@ async def extract_rts_items_of_note(
     if not full_rts.strip() or full_rts == "No RTS content available.":
         return {"source": "RTS", "items": []}
 
-    system_prompt = f"""You are a senior financial analyst identifying the KEY DEFINING ITEMS \
-for {bank_name}'s {quarter} {fiscal_year} quarter from their regulatory filing (RTS).
+    # Load prompt from database
+    prompt_data = load_prompt_from_db(
+        layer="bank_earnings_report_etl",
+        name="rts_1_keymetrics_items",
+        compose_with_globals=False,
+        execution_id=execution_id,
+    )
 
-## YOUR MISSION
+    # Format prompts with dynamic content
+    system_prompt = prompt_data["system_prompt"].format(
+        bank_name=bank_name,
+        quarter=quarter,
+        fiscal_year=fiscal_year,
+    )
+    user_prompt = prompt_data["user_prompt"].format(
+        bank_name=bank_name,
+        quarter=quarter,
+        fiscal_year=fiscal_year,
+        full_rts=full_rts,
+    )
 
-Find the items that MOST SIGNIFICANTLY DEFINED this quarter for the bank. Not just what's \
-mentioned in the filing, but what truly MATTERS - the events, decisions, and developments that \
-an analyst would point to when explaining "what happened this quarter" to investors.
-
-Think: "If I had to explain what defined {bank_name}'s {quarter} to an investor in 30 seconds, \
-which items from this filing would I mention?"
-
-## WHAT MAKES AN ITEM "DEFINING"
-
-A defining item has HIGH IMPACT on the bank through one or more of:
-
-1. **Financial Materiality**: Significant dollar impact on earnings, capital, or valuation
-   - Major acquisitions or divestitures (>$500M)
-   - Large impairments or write-downs
-   - Significant legal settlements or regulatory penalties
-
-2. **Strategic Significance**: Changes the bank's trajectory or market position
-   - Entry or exit from major business lines
-   - Transformational deals or partnerships
-   - Major restructuring programs
-
-3. **Investor Relevance**: Would be highlighted in analyst reports or earnings headlines
-   - Items that explain earnings beat/miss
-   - Risk events that affect outlook
-   - One-time items that distort comparisons
-
-## WHAT TO EXCLUDE
-
-**Routine Operations (NEVER extract):**
-- Capital note/debenture issuance or redemption
-- Preferred share activity
-- NCIB share repurchases
-- Regular dividend declarations
-- Normal PCL provisions
-- Routine debt refinancing
-
-**Performance Results (NOT items):**
-- "Revenue increased X%"
-- "NIM expanded Y bps"
-- "Expenses down Z%"
-These are RESULTS, not defining ITEMS.
-
-## SIGNIFICANCE SCORING (1-10)
-
-Score each item based on how much it DEFINED the quarter:
-
-- **9-10**: Quarter-defining event (major M&A close, significant impairment, transformational)
-- **7-8**: Highly significant (large one-time item, notable strategic move)
-- **5-6**: Moderately significant (meaningful but not headline-level)
-- **3-4**: Minor significance (worth noting but not quarter-defining)
-- **1-2**: Low significance (borderline whether to include)
-
-Be discriminating - not every item is highly significant. A quarter might have only 1-2 truly \
-defining items and several minor ones. That's fine.
-
-## OUTPUT FORMAT
-
-For each item:
-- **Description**: What happened (10-20 words, factual)
-- **Impact**: Dollar amount exactly as stated ('+$150M', '-$1.2B', 'TBD')
-- **Segment**: Affected business segment
-- **Timing**: When/duration
-- **Score**: Significance score (1-10)"""
-
-    user_prompt = f"""Review {bank_name}'s {quarter} {fiscal_year} regulatory filing and identify \
-the items that MOST SIGNIFICANTLY DEFINED this quarter for the bank.
-
-{full_rts}
-
-Extract items based on their IMPACT TO THE BANK, not just their presence in the filing. \
-Score each item by significance (1-10). Quality over quantity - it's better to return 3 truly \
-defining items than 8 marginal ones."""
-
-    tool_definition = {
-        "type": "function",
-        "function": {
-            "name": "extract_rts_items_of_note",
-            "description": (
-                "Extract key defining items from regulatory filing with significance scores"
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "items": {
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "description": {
-                                    "type": "string",
-                                    "description": (
-                                        "Brief description of the defining item (10-20 words). "
-                                        "What happened - factual, not commentary."
-                                    ),
-                                },
-                                "impact": {
-                                    "type": "string",
-                                    "description": (
-                                        "Dollar impact ONLY. "
-                                        "Format: '+$150M', '-$45M', '~$100M', '-$1.2B', 'TBD'. "
-                                        "No qualifiers or additional text."
-                                    ),
-                                },
-                                "segment": {
-                                    "type": "string",
-                                    "description": (
-                                        "Affected segment: 'Canadian Banking', 'Capital Markets', "
-                                        "'Wealth & Insurance', 'U.S. Banking', 'All', or 'N/A'"
-                                    ),
-                                },
-                                "timing": {
-                                    "type": "string",
-                                    "description": (
-                                        "Timing: 'One-time', 'Q3 2025', 'Through 2025', etc."
-                                    ),
-                                },
-                                "significance_score": {
-                                    "type": "integer",
-                                    "minimum": 1,
-                                    "maximum": 10,
-                                    "description": (
-                                        "How much this item DEFINED the quarter (1-10). "
-                                        "10=quarter-defining, 7-8=highly significant, "
-                                        "5-6=moderate, 3-4=minor, 1-2=low."
-                                    ),
-                                },
-                            },
-                            "required": [
-                                "description",
-                                "impact",
-                                "segment",
-                                "timing",
-                                "significance_score",
-                            ],
-                        },
-                        "description": (
-                            "Defining items with significance scores (quality over quantity)"
-                        ),
-                        "maxItems": max_items,
-                    },
-                    "extraction_notes": {
-                        "type": "string",
-                        "description": (
-                            "Brief note: what defined this quarter, or why few items found."
-                        ),
-                    },
-                },
-                "required": ["items", "extraction_notes"],
-            },
-        },
-    }
+    # Build tool definition with dynamic constraints
+    tool_def = prompt_data["tool_definition"]
+    tool_def["function"]["parameters"]["properties"]["items"]["maxItems"] = max_items
 
     messages = [
         {"role": "system", "content": system_prompt},
@@ -624,7 +446,7 @@ defining items than 8 marginal ones."""
 
         response = await complete_with_tools(
             messages=messages,
-            tools=[tool_definition],
+            tools=[tool_def],
             context=context,
             llm_params={
                 "model": model,
@@ -720,68 +542,24 @@ async def extract_rts_overview(
     if not full_rts.strip() or full_rts == "No RTS content available.":
         return {"source": "RTS", "narrative": ""}
 
-    system_prompt = """You are a senior financial analyst creating an executive summary from \
-bank regulatory filings (RTS - Report to Shareholders).
+    # Load prompt from database
+    prompt_data = load_prompt_from_db(
+        layer="bank_earnings_report_etl",
+        name="rts_1_keymetrics_overview",
+        compose_with_globals=False,
+        execution_id=execution_id,
+    )
 
-## YOUR TASK
-
-Write a single paragraph (3-5 sentences, 60-100 words) that captures the key themes from \
-the regulatory filing. This overview sets the stage for a quarterly earnings report.
-
-## WHAT TO INCLUDE
-
-- Overall quarter financial performance narrative
-- Key strategic developments or initiatives mentioned
-- Capital position and risk management highlights
-- Business segment performance themes
-- Any significant regulatory or operational developments
-
-## WHAT TO AVOID
-
-- Specific metrics or numbers (those are in other sections)
-- Detailed segment breakdowns with figures
-- Generic boilerplate language
-- Repetition of standard regulatory disclosures
-
-## STYLE
-
-- Executive summary tone - concise and insightful
-- Third person perspective ("The bank reported...", "Management highlighted...")
-- Focus on qualitative themes and strategic narrative
-- Should feel like the opening paragraph of an analyst report"""
-
-    user_prompt = f"""Write a brief overview paragraph summarizing the key themes from \
-{bank_name}'s {quarter} {fiscal_year} regulatory filing (RTS).
-
-{full_rts}
-
-Provide a 3-5 sentence overview that captures the quarter's performance narrative and \
-strategic themes as disclosed in the regulatory filing."""
-
-    tool_definition = {
-        "type": "function",
-        "function": {
-            "name": "create_rts_overview",
-            "description": "Create a high-level overview paragraph from regulatory filing",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "overview": {
-                        "type": "string",
-                        "description": (
-                            "Overview paragraph (3-5 sentences, 60-100 words). "
-                            "Captures key themes, performance narrative, and strategic direction. "
-                            "No specific metrics or quotes."
-                        ),
-                    },
-                },
-                "required": ["overview"],
-            },
-        },
-    }
+    # Format user prompt with dynamic content
+    user_prompt = prompt_data["user_prompt"].format(
+        bank_name=bank_name,
+        quarter=quarter,
+        fiscal_year=fiscal_year,
+        full_rts=full_rts,
+    )
 
     messages = [
-        {"role": "system", "content": system_prompt},
+        {"role": "system", "content": prompt_data["system_prompt"]},
         {"role": "user", "content": user_prompt},
     ]
 
@@ -790,7 +568,7 @@ strategic themes as disclosed in the regulatory filing."""
 
         response = await complete_with_tools(
             messages=messages,
-            tools=[tool_definition],
+            tools=[prompt_data["tool_definition"]],
             context=context,
             llm_params={
                 "model": model,
@@ -884,117 +662,22 @@ async def extract_rts_narrative_paragraphs(
     if not full_rts.strip() or full_rts == "No RTS content available.":
         return {"paragraphs": []}
 
-    system_prompt = f"""You are a senior financial analyst extracting MANAGEMENT'S NARRATIVE \
-from {bank_name}'s regulatory filing (RTS - Report to Shareholders).
+    # Load prompt from database
+    prompt_data = load_prompt_from_db(
+        layer="bank_earnings_report_etl",
+        name="rts_2_narrative_paragraphs",
+        compose_with_globals=False,
+        execution_id=execution_id,
+    )
 
-## WHAT THIS IS
-
-The RTS contains management's written narrative explaining the quarter - their perspective, \
-reasoning, and outlook. Your job is to extract this NARRATIVE VOICE, not summarize metrics.
-
-## WHAT WE WANT
-
-✓ Management's EXPLANATIONS for what drove performance
-✓ Their PERSPECTIVE on business conditions and trends
-✓ QUALITATIVE drivers - why things happened, not what the numbers were
-✓ OUTLOOK and forward-looking themes management emphasized
-✓ STRATEGIC context - priorities, initiatives, market positioning
-
-## WHAT WE DON'T WANT
-
-❌ Metric summaries ("Revenue was $X, up Y%")
-❌ Data recaps that belong in a metrics table
-❌ Generic descriptions of what the bank does
-❌ Boilerplate regulatory language
-
-## THE 4 PARAGRAPHS (in order)
-
-1. **Financial Performance** (3-4 sentences)
-   - How management characterized the quarter's performance
-   - The narrative around earnings drivers and trends
-   - What factors management highlighted as influential
-   - The tone and perspective on profitability
-
-2. **Business Segments** (3-4 sentences)
-   - Management's narrative on segment performance
-   - Which segments they emphasized and why
-   - The drivers behind segment results (qualitative)
-   - Business mix and strategic positioning themes
-
-3. **Risk & Capital** (3-4 sentences)
-   - Management's perspective on credit quality trajectory
-   - Their narrative around capital and risk management
-   - How they're thinking about provisions and reserves
-   - Liquidity and funding themes they highlighted
-
-4. **Strategic Outlook** (3-4 sentences)
-   - Management's forward-looking perspective
-   - Strategic priorities they emphasized
-   - How they see the path ahead
-   - Market opportunities and positioning
-
-## STYLE
-
-- Third person ("Management noted...", "The bank highlighted...")
-- NARRATIVE prose, not bullet points or data summaries
-- 60-100 words per paragraph
-- Should read like management's story, not an analyst's data recap"""
-
-    user_prompt = f"""Extract management's narrative voice from {bank_name}'s {quarter} \
-{fiscal_year} regulatory filing.
-
-{full_rts}
-
-Create 4 paragraphs capturing management's perspective, explanations, and outlook - \
-NOT metric summaries. Focus on the qualitative narrative: why things happened, \
-how management sees the business, and their forward-looking view."""
-
-    tool_definition = {
-        "type": "function",
-        "function": {
-            "name": "extract_narrative_paragraphs",
-            "description": "Extract 4 structured narrative paragraphs from regulatory filing",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "financial_performance": {
-                        "type": "string",
-                        "description": (
-                            "Paragraph 1: Financial Performance (3-4 sentences, 60-100 words). "
-                            "Overall quarter narrative, earnings drivers, profitability themes."
-                        ),
-                    },
-                    "business_segments": {
-                        "type": "string",
-                        "description": (
-                            "Paragraph 2: Business Segments (3-4 sentences, 60-100 words). "
-                            "Segment highlights, performance themes, business mix."
-                        ),
-                    },
-                    "risk_capital": {
-                        "type": "string",
-                        "description": (
-                            "Paragraph 3: Risk & Capital (3-4 sentences, 60-100 words). "
-                            "Credit quality, capital position, risk management themes."
-                        ),
-                    },
-                    "strategic_outlook": {
-                        "type": "string",
-                        "description": (
-                            "Paragraph 4: Strategic Outlook (3-4 sentences, 60-100 words). "
-                            "Forward-looking themes, priorities, market positioning."
-                        ),
-                    },
-                },
-                "required": [
-                    "financial_performance",
-                    "business_segments",
-                    "risk_capital",
-                    "strategic_outlook",
-                ],
-            },
-        },
-    }
+    # Format prompts with dynamic content
+    system_prompt = prompt_data["system_prompt"].format(bank_name=bank_name)
+    user_prompt = prompt_data["user_prompt"].format(
+        bank_name=bank_name,
+        quarter=quarter,
+        fiscal_year=fiscal_year,
+        full_rts=full_rts,
+    )
 
     messages = [
         {"role": "system", "content": system_prompt},
@@ -1006,7 +689,7 @@ how management sees the business, and their forward-looking view."""
 
         response = await complete_with_tools(
             messages=messages,
-            tools=[tool_definition],
+            tools=[prompt_data["tool_definition"]],
             context=context,
             llm_params={
                 "model": model,

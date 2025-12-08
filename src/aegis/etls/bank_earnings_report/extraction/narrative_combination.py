@@ -21,6 +21,7 @@ from typing import Any, Dict, List
 from aegis.connections.llm_connector import complete_with_tools
 from aegis.etls.bank_earnings_report.config.etl_config import etl_config
 from aegis.utils.logging import get_logger
+from aegis.utils.prompt_loader import load_prompt_from_db
 
 
 def format_content_for_combination(
@@ -141,95 +142,40 @@ async def combine_narrative_entries(
 
     formatted_content = format_content_for_combination(rts_paragraphs, transcript_quotes)
 
-    system_prompt = f"""You are a senior financial analyst creating a Management Narrative \
-section for {bank_name}'s {quarter} {fiscal_year} quarterly earnings report.
+    # Load prompt from database
+    prompt_data = load_prompt_from_db(
+        layer="bank_earnings_report_etl",
+        name="combined_2_narrative_interleave",
+        compose_with_globals=False,
+        execution_id=execution_id,
+    )
 
-## YOUR TASK
+    # Format prompts with dynamic content
+    system_prompt = prompt_data["system_prompt"].format(
+        bank_name=bank_name,
+        quarter=quarter,
+        fiscal_year=fiscal_year,
+        num_quotes=len(transcript_quotes),
+        num_quotes_to_place=num_quotes_to_place,
+    )
+    user_prompt = prompt_data["user_prompt"].format(
+        num_quotes_to_place=num_quotes_to_place,
+        formatted_content=formatted_content,
+    )
 
-You have 4 RTS paragraphs and {len(transcript_quotes)} transcript quotes. Select the \
-{num_quotes_to_place} most impactful quotes and place ONE quote after each of the first \
-{num_quotes_to_place} RTS paragraphs.
-
-## STRUCTURE
-
-The final narrative will flow like this:
-- RTS Paragraph 1 (Financial Performance)
-  └─ [Quote placed here - should complement financial themes]
-- RTS Paragraph 2 (Business Segments)
-  └─ [Quote placed here - should complement segment themes]
-- RTS Paragraph 3 (Risk & Capital)
-  └─ [Quote placed here - should complement risk/capital themes]
-- RTS Paragraph 4 (Strategic Outlook)
-  └─ [No quote after final paragraph]
-
-## SELECTION CRITERIA
-
-Choose quotes that:
-1. **Complement** the preceding RTS paragraph's theme
-2. **Add executive voice** - the "why" and conviction behind the facts
-3. **Flow naturally** - the quote should feel like a natural follow-up
-4. **Avoid redundancy** - don't repeat what the RTS paragraph already said
-
-## PLACEMENT LOGIC
-
-- Quote after Paragraph 1 should relate to financial performance
-- Quote after Paragraph 2 should relate to business segments
-- Quote after Paragraph 3 should relate to risk, capital, or forward outlook
-
-## OUTPUT
-
-Select exactly {num_quotes_to_place} quotes (by their quote number) and assign each to a \
-position (1, 2, or 3 = after which paragraph)."""
-
-    user_prompt = f"""Review the RTS paragraphs and transcript quotes below, then select the \
-{num_quotes_to_place} best quotes and determine their optimal placement.
-
-{formatted_content}
-
-Select quotes that best complement each RTS paragraph's theme."""
-
-    tool_definition = {
-        "type": "function",
-        "function": {
-            "name": "place_quotes_in_narrative",
-            "description": "Select and place quotes between RTS paragraphs",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "placements": {
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "quote_number": {
-                                    "type": "integer",
-                                    "enum": quote_indices,
-                                    "description": "Which quote to place (1-indexed)",
-                                },
-                                "after_paragraph": {
-                                    "type": "integer",
-                                    "enum": list(range(1, num_quotes_to_place + 1)),
-                                    "description": "Place after which paragraph (1, 2, or 3)",
-                                },
-                            },
-                            "required": ["quote_number", "after_paragraph"],
-                        },
-                        "description": f"Exactly {num_quotes_to_place} quote placements",
-                        "minItems": num_quotes_to_place,
-                        "maxItems": num_quotes_to_place,
-                    },
-                    "combination_notes": {
-                        "type": "string",
-                        "description": (
-                            "Brief explanation of why these quotes were selected "
-                            "and how they complement the RTS paragraphs."
-                        ),
-                    },
-                },
-                "required": ["placements", "combination_notes"],
-            },
-        },
-    }
+    # Build tool definition with dynamic constraints
+    tool_def = prompt_data["tool_definition"]
+    tool_def["function"]["parameters"]["properties"]["placements"]["items"]["properties"][
+        "quote_number"
+    ]["enum"] = quote_indices
+    tool_def["function"]["parameters"]["properties"]["placements"]["items"]["properties"][
+        "after_paragraph"
+    ]["enum"] = list(range(1, num_quotes_to_place + 1))
+    tool_def["function"]["parameters"]["properties"]["placements"][
+        "description"
+    ] = f"Exactly {num_quotes_to_place} quote placements"
+    tool_def["function"]["parameters"]["properties"]["placements"]["minItems"] = num_quotes_to_place
+    tool_def["function"]["parameters"]["properties"]["placements"]["maxItems"] = num_quotes_to_place
 
     messages = [
         {"role": "system", "content": system_prompt},
@@ -241,7 +187,7 @@ Select quotes that best complement each RTS paragraph's theme."""
 
         response = await complete_with_tools(
             messages=messages,
-            tools=[tool_definition],
+            tools=[tool_def],
             context=context,
             llm_params={
                 "model": model,

@@ -19,6 +19,7 @@ from typing import Any, Dict, List
 from aegis.connections.llm_connector import complete_with_tools
 from aegis.etls.bank_earnings_report.config.etl_config import etl_config
 from aegis.utils.logging import get_logger
+from aegis.utils.prompt_loader import load_prompt_from_db
 
 
 def _format_items_for_dedup(
@@ -124,129 +125,37 @@ async def deduplicate_and_merge_items(
     all_ids = list(rts_map.keys()) + list(transcript_map.keys())
     formatted_items = _format_items_for_dedup(rts_items, transcript_items)
 
-    system_prompt = f"""You are analyzing Items of Note from {bank_name}'s {quarter} \
-{fiscal_year} earnings report. Items come from two sources: RTS (regulatory filing) \
-and Transcript (earnings call).
+    # Load prompt from database
+    prompt_data = load_prompt_from_db(
+        layer="bank_earnings_report_etl",
+        name="combined_1_keymetrics_items_dedup",
+        compose_with_globals=False,
+        execution_id=execution_id,
+    )
 
-## YOUR TASK
+    # Format prompts with dynamic content
+    system_prompt = prompt_data["system_prompt"].format(
+        bank_name=bank_name,
+        quarter=quarter,
+        fiscal_year=fiscal_year,
+    )
+    user_prompt = prompt_data["user_prompt"].format(
+        formatted_items=formatted_items,
+    )
 
-1. **Identify Duplicates**: Find items from DIFFERENT sources describing the SAME event
-   - Same acquisition, divestiture, or deal
-   - Same impairment or write-down
-   - Same legal settlement or regulatory matter
-   - Same restructuring program
-
-2. **Merge Duplicates**: For each duplicate pair, create ONE merged item that:
-   - Combines the best details from both descriptions into a clear, comprehensive description
-   - Uses the RTS impact value (more authoritative than transcript)
-   - Uses the higher significance score of the two
-   - Sets segment and timing from whichever source has more detail
-
-3. **Keep Unique Items**: Items appearing in only one source remain unchanged
-
-## IMPORTANT RULES
-
-- Items are duplicates ONLY if they refer to the EXACT SAME event
-- Two items about similar topics (e.g., two different legal matters) are NOT duplicates
-- When merging descriptions, create a single cohesive statement (don't just concatenate)
-- Always prefer RTS for the dollar impact value
-- For significance score, take the MAX of the two scores
-
-## OUTPUT
-
-Return ALL items - both merged items and unique items that weren't duplicated."""
-
-    user_prompt = f"""Review these Items of Note and identify any duplicates to merge:
-
-{formatted_items}
-
-For each duplicate pair (same event in both sources), merge them into a single item.
-Keep all unique items unchanged. Return the complete list."""
-
-    # Build enum of valid IDs for merges
+    # Build tool definition with dynamic constraints
     rts_ids = list(rts_map.keys())
     transcript_ids = list(transcript_map.keys())
+    tool_def = prompt_data["tool_definition"]
 
-    tool_definition = {
-        "type": "function",
-        "function": {
-            "name": "process_items_of_note",
-            "description": "Process items: merge duplicates, keep unique items",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "merged_items": {
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "rts_id": {
-                                    "type": "string",
-                                    "enum": rts_ids,
-                                    "description": "ID of the RTS item being merged",
-                                },
-                                "transcript_id": {
-                                    "type": "string",
-                                    "enum": transcript_ids,
-                                    "description": "ID of the Transcript item being merged",
-                                },
-                                "merged_description": {
-                                    "type": "string",
-                                    "description": (
-                                        "Combined description using best details from both "
-                                        "sources. Single cohesive statement, 15-25 words."
-                                    ),
-                                },
-                                "impact": {
-                                    "type": "string",
-                                    "description": (
-                                        "Dollar impact from RTS (priority). "
-                                        "Format: '+$150M', '-$1.2B', 'TBD'"
-                                    ),
-                                },
-                                "segment": {
-                                    "type": "string",
-                                    "description": "Affected segment (use more detailed source)",
-                                },
-                                "timing": {
-                                    "type": "string",
-                                    "description": "Timing info (use more detailed source)",
-                                },
-                            },
-                            "required": [
-                                "rts_id",
-                                "transcript_id",
-                                "merged_description",
-                                "impact",
-                                "segment",
-                                "timing",
-                            ],
-                        },
-                        "description": "Items that appear in BOTH sources (merged)",
-                    },
-                    "unique_item_ids": {
-                        "type": "array",
-                        "items": {
-                            "type": "string",
-                            "enum": all_ids,
-                        },
-                        "description": (
-                            "IDs of items that appear in only ONE source (not duplicated). "
-                            "Include all R* and T* IDs that weren't merged."
-                        ),
-                    },
-                    "merge_notes": {
-                        "type": "string",
-                        "description": (
-                            "Brief explanation of merges. E.g., 'Merged R1+T2 (HSBC acquisition), "
-                            "R3+T1 (City National impairment). 4 unique items unchanged.'"
-                        ),
-                    },
-                },
-                "required": ["merged_items", "unique_item_ids", "merge_notes"],
-            },
-        },
-    }
+    # Update enums with dynamic values
+    tool_def["function"]["parameters"]["properties"]["merged_items"]["items"]["properties"][
+        "rts_id"
+    ]["enum"] = rts_ids
+    tool_def["function"]["parameters"]["properties"]["merged_items"]["items"]["properties"][
+        "transcript_id"
+    ]["enum"] = transcript_ids
+    tool_def["function"]["parameters"]["properties"]["unique_item_ids"]["items"]["enum"] = all_ids
 
     messages = [
         {"role": "system", "content": system_prompt},
@@ -258,7 +167,7 @@ Keep all unique items unchanged. Return the complete list."""
 
         response = await complete_with_tools(
             messages=messages,
-            tools=[tool_definition],
+            tools=[tool_def],
             context=context,
             llm_params={
                 "model": model,

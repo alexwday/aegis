@@ -20,6 +20,7 @@ from aegis.etls.bank_earnings_report.retrieval.transcripts import (
     retrieve_qa_chunks,
 )
 from aegis.utils.logging import get_logger
+from aegis.utils.prompt_loader import load_prompt_from_db
 
 
 async def extract_qa_entry(
@@ -58,101 +59,24 @@ async def extract_qa_entry(
         )
         return None
 
-    system_prompt = """You are a senior financial analyst extracting key information from bank \
-earnings call Q&A transcripts.
+    # Load prompt from database
+    prompt_data = load_prompt_from_db(
+        layer="bank_earnings_report_etl",
+        name="transcript_3_analystfocus_extraction",
+        compose_with_globals=False,
+        execution_id=execution_id,
+    )
 
-## YOUR TASK
-
-Analyze the Q&A exchange and extract:
-1. **Theme**: A short label (2-4 words) categorizing the topic (e.g., "NIM Outlook", \
-"Credit Quality", "Capital Allocation")
-2. **Question**: A concise summary of the analyst's question (1-2 sentences)
-3. **Answer**: A summary of management's response with key details and figures (2-4 sentences)
-
-## EXTRACTION GUIDELINES
-
-**For Theme:**
-- Use standard financial industry themes
-- Be specific but concise (e.g., "CRE Exposure" not "Commercial Real Estate")
-- Common themes include: NIM Outlook, Credit Quality, Capital Allocation, Expense Management, \
-Loan Growth, Deposit Trends, Fee Income, Trading Revenue, U.S. Strategy, Digital Banking, \
-M&A Strategy, Regulatory Capital, Dividend Policy
-
-**For Question:**
-- ONE sentence only (15-25 words)
-- Be direct: "What's your outlook on X?" or "How will Y impact Z?"
-- Cut preamble and pleasantries
-
-**For Answer:**
-- TWO sentences max (40-60 words total)
-- Lead with the key takeaway or number
-- Include specific figures (percentages, dollar amounts, basis points)
-- Identify speaker role briefly (CFO, CEO, CRO)
-- Cut generic commentary - keep only actionable insights
-
-## IMPORTANT
-
-- If the exchange is not financially meaningful (pleasantries, logistics), return should_skip=true
-- Preserve exact figures and percentages from the transcript
-- Focus on information investors would find valuable"""
-
-    user_prompt = f"""Analyze this Q&A exchange from {bank_name}'s {quarter} {fiscal_year} \
-earnings call and extract the key information.
-
-{qa_content}
-
-Extract the theme, question summary, and answer summary. If this exchange has no meaningful \
-financial content, indicate it should be skipped."""
-
-    tool_definition = {
-        "type": "function",
-        "function": {
-            "name": "extract_qa_summary",
-            "description": "Extract theme, question, and answer from an earnings call Q&A exchange",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "should_skip": {
-                        "type": "boolean",
-                        "description": (
-                            "True if this exchange should be skipped (no meaningful financial "
-                            "content, just pleasantries, or logistics). False if it contains "
-                            "valuable analyst insights."
-                        ),
-                    },
-                    "theme": {
-                        "type": "string",
-                        "description": (
-                            "Short theme label (2-4 words) categorizing the topic. "
-                            "Examples: 'NIM Outlook', 'Credit Quality', 'Capital Allocation', "
-                            "'CRE Exposure', 'U.S. Strategy'"
-                        ),
-                    },
-                    "question": {
-                        "type": "string",
-                        "description": (
-                            "One sentence (15-25 words) capturing the analyst's core question. "
-                            "Be direct and specific. Example: 'What's your NIM outlook given "
-                            "expected rate cuts in H2?'"
-                        ),
-                    },
-                    "answer": {
-                        "type": "string",
-                        "description": (
-                            "Two sentences max (40-60 words) with key takeaway and figures. "
-                            "Lead with the main point. Preserve specific numbers/guidance. "
-                            "Example: 'CFO expects NIM to stabilize at 2.45% through Q4. "
-                            "Deposit repricing largely complete; asset repricing provides offset.'"
-                        ),
-                    },
-                },
-                "required": ["should_skip", "theme", "question", "answer"],
-            },
-        },
-    }
+    # Format user prompt with dynamic content
+    user_prompt = prompt_data["user_prompt"].format(
+        bank_name=bank_name,
+        quarter=quarter,
+        fiscal_year=fiscal_year,
+        qa_content=qa_content,
+    )
 
     messages = [
-        {"role": "system", "content": system_prompt},
+        {"role": "system", "content": prompt_data["system_prompt"]},
         {"role": "user", "content": user_prompt},
     ]
 
@@ -161,7 +85,7 @@ financial content, indicate it should be skipped."""
 
         response = await complete_with_tools(
             messages=messages,
-            tools=[tool_definition],
+            tools=[prompt_data["tool_definition"]],
             context=context,
             llm_params={
                 "model": model,
@@ -250,6 +174,7 @@ async def rank_qa_entries(
     if len(entries) <= num_featured:
         return list(range(len(entries)))
 
+    # Format entries for ranking
     entries_text = ""
     for i, entry in enumerate(entries):
         entries_text += f"""
@@ -260,74 +185,35 @@ async def rank_qa_entries(
 ---
 """
 
-    system_prompt = f"""You are a senior financial analyst selecting the most important Q&A \
-exchanges from an earnings call for a quarterly report.
+    # Load prompt from database
+    prompt_data = load_prompt_from_db(
+        layer="bank_earnings_report_etl",
+        name="transcript_3_analystfocus_ranking",
+        compose_with_globals=False,
+        execution_id=execution_id,
+    )
 
-## YOUR TASK
+    # Format prompts with dynamic content
+    system_prompt = prompt_data["system_prompt"].format(
+        num_featured=num_featured,
+    )
+    user_prompt = prompt_data["user_prompt"].format(
+        bank_name=bank_name,
+        quarter=quarter,
+        fiscal_year=fiscal_year,
+        num_featured=num_featured,
+        entries_text=entries_text,
+    )
 
-Review all Q&A entries and select the {num_featured} MOST important ones to feature prominently.
-
-## SELECTION CRITERIA
-
-Prioritize Q&A exchanges that:
-1. **Forward Guidance**: Management's outlook on key metrics (NIM, credit, growth)
-2. **Risk Disclosure**: Discussion of risks, challenges, or problem areas
-3. **Strategic Initiatives**: Major business decisions, M&A, market expansion
-4. **Capital Allocation**: Dividend, buyback, or capital deployment plans
-5. **Material Changes**: Significant shifts from prior quarters or guidance
-
-## WHAT TO DEPRIORITIZE
-
-- Generic commentary without specific details
-- Routine operational updates
-- Repetitive themes (if similar topics, pick the most substantive)
-- Backward-looking discussion without forward implications
-
-## OUTPUT
-
-Return the entry numbers (1-indexed as shown) that should be featured."""
-
-    user_prompt = f"""Review these Q&A exchanges from {bank_name}'s {quarter} {fiscal_year} \
-earnings call and select the {num_featured} most important to feature.
-
-{entries_text}
-
-Select {num_featured} entry numbers that provide the most valuable insights for investors."""
-
-    tool_definition = {
-        "type": "function",
-        "function": {
-            "name": "select_featured_qa",
-            "description": f"Select the top {num_featured} Q&A entries to feature",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "featured_entries": {
-                        "type": "array",
-                        "items": {
-                            "type": "integer",
-                            "minimum": 1,
-                            "maximum": len(entries),
-                        },
-                        "description": (
-                            f"List of exactly {num_featured} entry numbers (1-indexed) to feature. "
-                            "Select based on importance to investors."
-                        ),
-                        "minItems": num_featured,
-                        "maxItems": num_featured,
-                    },
-                    "reasoning": {
-                        "type": "string",
-                        "description": (
-                            "Brief explanation of why these entries were selected "
-                            "as most important."
-                        ),
-                    },
-                },
-                "required": ["featured_entries", "reasoning"],
-            },
-        },
-    }
+    # Build tool definition with dynamic constraints
+    tool_def = prompt_data["tool_definition"]
+    # Update the array constraints based on num_featured and entries length
+    tool_def["function"]["parameters"]["properties"]["featured_entries"]["items"]["maximum"] = len(
+        entries
+    )
+    tool_def["function"]["parameters"]["properties"]["featured_entries"]["minItems"] = num_featured
+    tool_def["function"]["parameters"]["properties"]["featured_entries"]["maxItems"] = num_featured
+    tool_def["function"]["description"] = f"Select the top {num_featured} Q&A entries to feature"
 
     messages = [
         {"role": "system", "content": system_prompt},
@@ -335,11 +221,11 @@ Select {num_featured} entry numbers that provide the most valuable insights for 
     ]
 
     try:
-        model = etl_config.get_model("transcript_3_analystfocus_extraction")
+        model = etl_config.get_model("transcript_3_analystfocus_ranking")
 
         response = await complete_with_tools(
             messages=messages,
-            tools=[tool_definition],
+            tools=[tool_def],
             context=context,
             llm_params={
                 "model": model,

@@ -5,13 +5,13 @@
 # Tiers: small, medium, large
 models:
   outlook_extraction:
-    tier: large  # Uses config.llm.large.model (32768 token support)
+    tier: medium  # Uses config.llm.large.model (32768 token support)
   qa_extraction:
-    tier: large  # Uses config.llm.large.model (32768 token support)
+    tier: medium  # Uses config.llm.large.model (32768 token support)
   subtitle_generation:
-    tier: large  # Uses config.llm.large.model (tool calling support)
+    tier: medium  # Uses config.llm.large.model (tool calling support)
   batch_formatting:
-    tier: large  # Uses config.llm.large.model
+    tier: medium  # Uses config.llm.large.model
 
 # LLM Parameters
 llm:
