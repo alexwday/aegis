@@ -157,7 +157,7 @@ financial content, indicate it should be skipped."""
     ]
 
     try:
-        model = etl_config.get_model("analyst_focus_extraction")
+        model = etl_config.get_model("transcript_3_analystfocus_extraction")
 
         response = await complete_with_tools(
             messages=messages,
@@ -335,7 +335,7 @@ Select {num_featured} entry numbers that provide the most valuable insights for 
     ]
 
     try:
-        model = etl_config.get_model("analyst_focus_extraction")
+        model = etl_config.get_model("transcript_3_analystfocus_extraction")
 
         response = await complete_with_tools(
             messages=messages,

@@ -1,9 +1,9 @@
-# Key Metrics Selection Prompt - v1.0.0
+# Supplementary - Key Metrics Selection Prompt - v1.0.0
 
 ## Metadata
 - **Model**: aegis
 - **Layer**: bank_earnings_report_etl
-- **Name**: key_metrics_selection
+- **Name**: supplementary_1_keymetrics_selection
 - **Version**: 1.0.0
 - **Description**: Select metrics for tile display, dynamic section, and trend chart
 

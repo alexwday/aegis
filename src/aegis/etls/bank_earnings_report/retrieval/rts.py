@@ -285,7 +285,7 @@ Extract the qualitative drivers statement for each segment listed above."""
     ]
 
     try:
-        model = etl_config.get_model("segment_drivers_extraction")
+        model = etl_config.get_model("rts_4_segments_drivers")
 
         response = await complete_with_tools(
             messages=messages,
@@ -620,7 +620,7 @@ defining items than 8 marginal ones."""
     ]
 
     try:
-        model = etl_config.get_model("rts_items_extraction")
+        model = etl_config.get_model("rts_1_keymetrics_items")
 
         response = await complete_with_tools(
             messages=messages,
@@ -786,7 +786,7 @@ strategic themes as disclosed in the regulatory filing."""
     ]
 
     try:
-        model = etl_config.get_model("rts_overview_extraction")
+        model = etl_config.get_model("rts_1_keymetrics_overview")
 
         response = await complete_with_tools(
             messages=messages,
@@ -1002,7 +1002,7 @@ how management sees the business, and their forward-looking view."""
     ]
 
     try:
-        model = etl_config.get_model("rts_narrative_extraction")
+        model = etl_config.get_model("rts_2_narrative_paragraphs")
 
         response = await complete_with_tools(
             messages=messages,

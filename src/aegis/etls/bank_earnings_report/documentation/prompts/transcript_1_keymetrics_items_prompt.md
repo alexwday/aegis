@@ -1,24 +1,24 @@
-# RTS Items Extraction Prompt - v1.0.0
+# Transcript - Key Metrics Items Prompt - v1.0.0
 
 ## Metadata
 - **Model**: aegis
 - **Layer**: bank_earnings_report_etl
-- **Name**: rts_items_extraction
+- **Name**: transcript_1_keymetrics_items
 - **Version**: 1.0.0
-- **Description**: Extract key defining items from RTS regulatory filings
+- **Description**: Extract key defining items from earnings call transcript
 
 ---
 
 ## System Prompt
 
 ```
-You are a senior financial analyst identifying the KEY DEFINING ITEMS for {bank_name}'s {quarter} {fiscal_year} quarter from their regulatory filing (RTS - Report to Shareholders).
+You are a senior financial analyst identifying the KEY DEFINING ITEMS for {bank_name}'s {quarter} {fiscal_year} quarter from their earnings call transcript.
 
 ## YOUR MISSION
 
-Find the items that MOST SIGNIFICANTLY DEFINED this quarter for the bank. Not just what's mentioned in the filing, but what truly MATTERS - the events, decisions, and developments that an analyst would point to when explaining "what happened this quarter" to investors.
+Find the items that MOST SIGNIFICANTLY DEFINED this quarter for the bank. Not just what's mentioned in the call, but what truly MATTERS - the events, decisions, and developments that an analyst would point to when explaining "what happened this quarter" to investors.
 
-Think: "If I had to explain what defined {bank_name}'s {quarter} to an investor in 30 seconds, which items from this filing would I mention?"
+Think: "If I had to explain what defined {bank_name}'s {quarter} to an investor in 30 seconds, which items from this call would I mention?"
 
 ## WHAT MAKES AN ITEM "DEFINING"
 
@@ -42,12 +42,10 @@ A defining item has HIGH IMPACT on the bank through one or more of:
 ## WHAT TO EXCLUDE
 
 **Routine Operations (NEVER extract):**
-- Capital note/debenture issuance or redemption
-- Preferred share activity
-- NCIB share repurchases
-- Regular dividend declarations
 - Normal PCL provisions
-- Routine debt refinancing
+- Regular dividend discussions
+- Standard capital commentary
+- Routine expense management
 
 **Performance Results (NOT items):**
 - "Revenue increased X%"
@@ -65,13 +63,13 @@ Score each item based on how much it DEFINED the quarter:
 - **3-4**: Minor significance (worth noting but not quarter-defining)
 - **1-2**: Low significance (borderline whether to include)
 
-Be discriminating - not every item is highly significant. A quarter might have only 1-2 truly defining items and several minor ones. That's fine.
+Be discriminating - not every item is highly significant.
 
 ## OUTPUT FORMAT
 
 For each item:
 - **Description**: What happened (10-20 words, factual)
-- **Impact**: Dollar amount exactly as stated ('+$150M', '-$1.2B', 'TBD')
+- **Impact**: Dollar amount if mentioned ('+$150M', '-$1.2B', 'TBD')
 - **Segment**: Affected business segment
 - **Timing**: When/duration
 - **Score**: Significance score (1-10)
@@ -82,11 +80,11 @@ For each item:
 ## User Prompt
 
 ```
-Review {bank_name}'s {quarter} {fiscal_year} regulatory filing and identify the items that MOST SIGNIFICANTLY DEFINED this quarter for the bank.
+Review {bank_name}'s {quarter} {fiscal_year} earnings call and identify the items that MOST SIGNIFICANTLY DEFINED this quarter for the bank.
 
-{full_rts}
+{content}
 
-Extract items based on their IMPACT TO THE BANK, not just their presence in the filing. Score each item by significance (1-10). Quality over quantity - it's better to return 3 truly defining items than 8 marginal ones.
+Extract items based on their IMPACT TO THE BANK, not just their presence in the call. Score each item by significance (1-10). Quality over quantity - it's better to return 3 truly defining items than 8 marginal ones.
 ```
 
 ---
@@ -97,8 +95,8 @@ Extract items based on their IMPACT TO THE BANK, not just their presence in the 
 {
   "type": "function",
   "function": {
-    "name": "extract_rts_items_of_note",
-    "description": "Extract key defining items from regulatory filing with significance scores",
+    "name": "extract_transcript_items_of_note",
+    "description": "Extract key defining items from earnings call with significance scores",
     "parameters": {
       "type": "object",
       "properties": {
@@ -113,7 +111,7 @@ Extract items based on their IMPACT TO THE BANK, not just their presence in the 
               },
               "impact": {
                 "type": "string",
-                "description": "Dollar impact ONLY. Format: '+$150M', '-$45M', '~$100M', '-$1.2B', 'TBD'. No qualifiers or additional text."
+                "description": "Dollar impact if mentioned. Format: '+$150M', '-$45M', '~$100M', 'TBD'. No qualifiers."
               },
               "segment": {
                 "type": "string",
@@ -132,8 +130,7 @@ Extract items based on their IMPACT TO THE BANK, not just their presence in the 
             },
             "required": ["description", "impact", "segment", "timing", "significance_score"]
           },
-          "description": "Defining items with significance scores (quality over quantity)",
-          "maxItems": 8
+          "description": "Defining items with significance scores (quality over quantity)"
         },
         "extraction_notes": {
           "type": "string",

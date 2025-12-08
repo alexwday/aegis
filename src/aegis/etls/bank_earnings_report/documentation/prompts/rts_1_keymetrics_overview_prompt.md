@@ -1,9 +1,9 @@
-# RTS Overview Extraction Prompt - v1.0.0
+# RTS - Key Metrics Overview Prompt - v1.0.0
 
 ## Metadata
 - **Model**: aegis
 - **Layer**: bank_earnings_report_etl
-- **Name**: rts_overview_extraction
+- **Name**: rts_1_keymetrics_overview
 - **Version**: 1.0.0
 - **Description**: Extract high-level overview summary from RTS regulatory filings
 

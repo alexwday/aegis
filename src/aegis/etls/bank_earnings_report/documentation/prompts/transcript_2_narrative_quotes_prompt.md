@@ -1,9 +1,9 @@
-# Management Narrative Extraction Prompt - v1.0.0
+# Transcript - Narrative Quotes Prompt - v1.0.0
 
 ## Metadata
 - **Model**: aegis
 - **Layer**: bank_earnings_report_etl
-- **Name**: management_narrative_extraction
+- **Name**: transcript_2_narrative_quotes
 - **Version**: 1.0.0
 - **Description**: Extract impactful management quotes from earnings call transcripts
 

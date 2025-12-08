@@ -3,57 +3,55 @@
 # LLM Model Configuration
 # Models are referenced by tier from aegis.utils.settings.config
 # Tiers: small, medium, large
+#
+# Naming Convention: {source}_{section}_{subsection}
+# Sources: supplementary, transcript, rts, combined
+# Sections: 1_keymetrics, 2_narrative, 3_analystfocus, 4_segments, 5_capitalrisk
 models:
-  # Key metrics selection (chart, tiles, dynamic)
-  key_metrics_selection:
+  # Supplementary data source prompts
+  supplementary_1_keymetrics_selection:
     tier: medium
 
-  # Analyst focus Q&A extraction - one call per Q&A exchange
-  analyst_focus_extraction:
+  # Transcript data source prompts
+  transcript_1_keymetrics_overview:
     tier: medium
 
-  # Management narrative transcript quote extraction - single call for full MD section
-  management_narrative_extraction:
+  transcript_1_keymetrics_items:
     tier: medium
 
-  # RTS narrative paragraphs extraction - 4 themed paragraphs from regulatory filing
-  rts_narrative_extraction:
+  transcript_2_narrative_quotes:
     tier: medium
 
-  # Narrative combination - interleave RTS paragraphs with transcript quotes
-  narrative_combination:
+  transcript_3_analystfocus_extraction:
     tier: medium
 
-  # Transcript overview summary extraction
-  transcript_overview_extraction:
+  transcript_3_analystfocus_ranking:
     tier: medium
 
-  # RTS overview summary extraction
-  rts_overview_extraction:
+  # RTS data source prompts
+  rts_1_keymetrics_overview:
     tier: medium
 
-  # Overview combination - synthesize RTS and transcript overviews
-  overview_combination:
+  rts_1_keymetrics_items:
     tier: medium
 
-  # Transcript items of note extraction
-  transcript_items_extraction:
+  rts_2_narrative_paragraphs:
     tier: medium
 
-  # RTS items of note extraction - extract $ impact items from regulatory filing
-  rts_items_extraction:
+  rts_4_segments_drivers:
     tier: medium
 
-  # Items deduplication - dedupe and rank items from RTS and transcript
-  items_deduplication:
+  rts_5_capitalrisk_extraction:
     tier: medium
 
-  # RTS segment drivers extraction - synthesize drivers from regulatory filings
-  segment_drivers_extraction:
+  # Combined source prompts (merge RTS + transcript)
+  combined_1_keymetrics_overview:
     tier: medium
 
-  # Capital & risk metrics extraction - extract from RTS regulatory filings
-  capital_risk_extraction:
+  combined_1_keymetrics_items_dedup:
+    tier: medium
+
+  combined_2_narrative_interleave:
     tier: medium
 
 # LLM Parameters (applied to all calls)

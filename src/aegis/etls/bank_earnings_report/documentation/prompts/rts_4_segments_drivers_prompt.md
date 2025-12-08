@@ -1,9 +1,9 @@
-# Segment Drivers Extraction Prompt - v1.0.0
+# RTS - Segment Drivers Prompt - v1.0.0
 
 ## Metadata
 - **Model**: aegis
 - **Layer**: bank_earnings_report_etl
-- **Name**: segment_drivers_extraction
+- **Name**: rts_4_segments_drivers
 - **Version**: 1.0.0
 - **Description**: Extract qualitative performance drivers for all business segments from RTS
 

@@ -1,9 +1,9 @@
-# Items Deduplication Prompt - v1.0.0
+# Combined - Key Metrics Items Dedup Prompt - v1.0.0
 
 ## Metadata
 - **Model**: aegis
 - **Layer**: bank_earnings_report_etl
-- **Name**: items_deduplication
+- **Name**: combined_1_keymetrics_items_dedup
 - **Version**: 1.0.0
 - **Description**: Deduplicate and merge items of note from RTS and transcript sources
 

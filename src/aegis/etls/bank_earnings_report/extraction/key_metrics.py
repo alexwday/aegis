@@ -407,7 +407,7 @@ Return exact metric names from the tables above."""
     ]
 
     try:
-        model = etl_config.get_model("key_metrics_selection")
+        model = etl_config.get_model("supplementary_1_keymetrics_selection")
 
         response = await complete_with_tools(
             messages=messages,

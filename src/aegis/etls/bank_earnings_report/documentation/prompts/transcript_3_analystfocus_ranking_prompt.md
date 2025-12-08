@@ -1,9 +1,9 @@
-# Analyst Focus Ranking Prompt - v1.0.0
+# Transcript - Analyst Focus Ranking Prompt - v1.0.0
 
 ## Metadata
 - **Model**: aegis
 - **Layer**: bank_earnings_report_etl
-- **Name**: analyst_focus_ranking
+- **Name**: transcript_3_analystfocus_ranking
 - **Version**: 1.0.0
 - **Description**: Rank Q&A entries to select the most insightful for featured display
 

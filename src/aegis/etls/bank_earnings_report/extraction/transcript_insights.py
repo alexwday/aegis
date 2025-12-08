@@ -147,7 +147,7 @@ Provide a 3-5 sentence overview that captures the quarter's tone and strategic t
     ]
 
     try:
-        model = etl_config.get_model("transcript_overview_extraction")
+        model = etl_config.get_model("transcript_1_keymetrics_overview")
 
         response = await complete_with_tools(
             messages=messages,
@@ -420,7 +420,7 @@ defining items than 8 marginal ones."""
     ]
 
     try:
-        model = etl_config.get_model("transcript_items_extraction")
+        model = etl_config.get_model("transcript_1_keymetrics_items")
 
         response = await complete_with_tools(
             messages=messages,

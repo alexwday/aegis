@@ -41,12 +41,12 @@ DB_URL = (
 
 PROMPTS: List[Dict[str, Any]] = [
     # -------------------------------------------------------------------------
-    # 1. Analyst Focus Extraction
+    # 1. Transcript - Analyst Focus Extraction
     # -------------------------------------------------------------------------
     {
         "model": "aegis",
         "layer": "bank_earnings_report_etl",
-        "name": "analyst_focus_extraction",
+        "name": "transcript_3_analystfocus_extraction",
         "description": "Extract individual Q&A entries from earnings call transcripts",
         "version": "1.0.0",
         "system_prompt": """You are a senior financial analyst extracting key information from bank earnings call Q&A transcripts.
@@ -130,7 +130,7 @@ Return the most valuable Q&A exchange from the segment.""",
     {
         "model": "aegis",
         "layer": "bank_earnings_report_etl",
-        "name": "analyst_focus_ranking",
+        "name": "transcript_3_analystfocus_ranking",
         "description": "Rank Q&A entries to select the most insightful for display",
         "version": "1.0.0",
         "system_prompt": """You are a senior financial analyst selecting the most insightful Q&A exchanges from {bank_name}'s {quarter} {fiscal_year} earnings call for a quarterly report.
@@ -201,7 +201,7 @@ Select the {num_featured} most insightful entries for the Analyst Focus section.
     {
         "model": "aegis",
         "layer": "bank_earnings_report_etl",
-        "name": "key_metrics_selection",
+        "name": "supplementary_1_keymetrics_selection",
         "description": "Select metrics for tile display, dynamic section, and trend chart",
         "version": "1.0.0",
         "system_prompt": """You are a senior financial analyst selecting key metrics for {bank_name}'s {quarter} {fiscal_year} quarterly earnings report.
@@ -312,7 +312,7 @@ Explain your rationale for each selection.""",
     {
         "model": "aegis",
         "layer": "bank_earnings_report_etl",
-        "name": "management_narrative_extraction",
+        "name": "transcript_2_narrative_quotes",
         "description": "Extract impactful management quotes from earnings call transcripts",
         "version": "1.0.0",
         "system_prompt": """You are a senior financial analyst extracting key management quotes from {bank_name}'s {quarter} {fiscal_year} earnings call transcript for a quarterly report.
@@ -408,7 +408,7 @@ Focus on forward-looking, strategic statements that reveal management's perspect
     {
         "model": "aegis",
         "layer": "bank_earnings_report_etl",
-        "name": "transcript_overview_extraction",
+        "name": "transcript_1_keymetrics_overview",
         "description": "Extract high-level overview summary from earnings call transcript",
         "version": "1.0.0",
         "system_prompt": """You are a senior financial analyst creating an executive summary from bank earnings call transcripts.
@@ -469,7 +469,7 @@ Provide a 3-5 sentence overview that captures the call's key messages, strategic
     {
         "model": "aegis",
         "layer": "bank_earnings_report_etl",
-        "name": "transcript_items_extraction",
+        "name": "transcript_1_keymetrics_items",
         "description": "Extract key defining items from earnings call transcript",
         "version": "1.0.0",
         "system_prompt": """You are a senior financial analyst identifying the KEY DEFINING ITEMS for {bank_name}'s {quarter} {fiscal_year} quarter from their earnings call transcript.
@@ -566,7 +566,7 @@ Extract items based on IMPACT, not just presence. Score by significance (1-10). 
     {
         "model": "aegis",
         "layer": "bank_earnings_report_etl",
-        "name": "items_deduplication",
+        "name": "combined_1_keymetrics_items_dedup",
         "description": "Deduplicate and merge items of note from RTS and transcript",
         "version": "1.0.0",
         "system_prompt": """You are analyzing Items of Note from {bank_name}'s {quarter} {fiscal_year} earnings report. Items come from two sources: RTS (regulatory filing) and Transcript (earnings call).
@@ -651,7 +651,7 @@ Keep all unique items unchanged. Return the complete list.""",
     {
         "model": "aegis",
         "layer": "bank_earnings_report_etl",
-        "name": "overview_combination",
+        "name": "combined_1_keymetrics_overview",
         "description": "Synthesize RTS and transcript overviews into unified summary",
         "version": "1.0.0",
         "system_prompt": """You are a senior financial analyst creating an executive summary for {bank_name}'s {quarter} {fiscal_year} quarterly earnings report.
@@ -723,7 +723,7 @@ Create a unified 4-6 sentence overview that combines the best elements from both
     {
         "model": "aegis",
         "layer": "bank_earnings_report_etl",
-        "name": "narrative_combination",
+        "name": "combined_2_narrative_interleave",
         "description": "Select and place transcript quotes between RTS paragraphs",
         "version": "1.0.0",
         "system_prompt": """You are a senior financial analyst creating a Management Narrative section for {bank_name}'s {quarter} {fiscal_year} quarterly earnings report.
@@ -793,7 +793,7 @@ Select quotes that best complement each RTS paragraph's theme.""",
     {
         "model": "aegis",
         "layer": "bank_earnings_report_etl",
-        "name": "capital_risk_extraction",
+        "name": "rts_5_capitalrisk_extraction",
         "description": "Extract enterprise-level capital and credit metrics from RTS",
         "version": "1.0.0",
         "system_prompt": """You are extracting capital and credit quality metrics from {bank_name}'s quarterly Report to Shareholders (RTS).
@@ -891,7 +891,7 @@ In the reasoning field, explain:
     {
         "model": "aegis",
         "layer": "bank_earnings_report_etl",
-        "name": "segment_drivers_extraction",
+        "name": "rts_4_segments_drivers",
         "description": "Extract qualitative performance drivers for all business segments",
         "version": "1.0.0",
         "system_prompt": """You are a senior financial analyst writing a bank quarterly earnings report.
@@ -957,7 +957,7 @@ Extract the qualitative drivers statement for each segment.""",
     {
         "model": "aegis",
         "layer": "bank_earnings_report_etl",
-        "name": "rts_items_extraction",
+        "name": "rts_1_keymetrics_items",
         "description": "Extract key defining items from RTS regulatory filings",
         "version": "1.0.0",
         "system_prompt": """You are a senior financial analyst identifying the KEY DEFINING ITEMS for {bank_name}'s {quarter} {fiscal_year} quarter from their regulatory filing (RTS).
@@ -1047,7 +1047,7 @@ Extract items based on IMPACT. Score by significance (1-10). Quality over quanti
     {
         "model": "aegis",
         "layer": "bank_earnings_report_etl",
-        "name": "rts_overview_extraction",
+        "name": "rts_1_keymetrics_overview",
         "description": "Extract high-level overview summary from RTS regulatory filings",
         "version": "1.0.0",
         "system_prompt": """You are a senior financial analyst creating an executive summary from bank regulatory filings (RTS - Report to Shareholders).
@@ -1107,7 +1107,7 @@ Provide a 3-5 sentence overview.""",
     {
         "model": "aegis",
         "layer": "bank_earnings_report_etl",
-        "name": "rts_narrative_extraction",
+        "name": "rts_2_narrative_paragraphs",
         "description": "Extract 4 structured narrative paragraphs from RTS",
         "version": "1.0.0",
         "system_prompt": """You are a senior financial analyst extracting MANAGEMENT'S NARRATIVE from {bank_name}'s regulatory filing (RTS - Report to Shareholders).

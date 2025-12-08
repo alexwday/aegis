@@ -153,7 +153,7 @@ Create a unified 4-6 sentence overview that combines the best elements from both
     ]
 
     try:
-        model = etl_config.get_model("overview_combination")
+        model = etl_config.get_model("combined_1_keymetrics_overview")
 
         response = await complete_with_tools(
             messages=messages,

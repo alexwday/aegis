@@ -254,7 +254,7 @@ Keep all unique items unchanged. Return the complete list."""
     ]
 
     try:
-        model = etl_config.get_model("items_deduplication")
+        model = etl_config.get_model("combined_1_keymetrics_items_dedup")
 
         response = await complete_with_tools(
             messages=messages,

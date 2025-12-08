@@ -1,9 +1,9 @@
-# Overview Combination Prompt - v1.0.0
+# Combined - Key Metrics Overview Prompt - v1.0.0
 
 ## Metadata
 - **Model**: aegis
 - **Layer**: bank_earnings_report_etl
-- **Name**: overview_combination
+- **Name**: combined_1_keymetrics_overview
 - **Version**: 1.0.0
 - **Description**: Synthesize RTS and transcript overviews into unified executive summary
 

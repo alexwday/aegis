@@ -273,7 +273,7 @@ async def extract_capital_risk_section(
             tools=[build_capital_risk_tool_definition()],
             context=context,
             llm_params={
-                "model": etl_config.get_model("capital_risk_extraction"),
+                "model": etl_config.get_model("rts_5_capitalrisk_extraction"),
                 "temperature": etl_config.temperature,
                 "max_tokens": etl_config.max_tokens,
             },

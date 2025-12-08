@@ -1,9 +1,9 @@
-# Transcript Overview Extraction Prompt - v1.0.0
+# Transcript - Key Metrics Overview Prompt - v1.0.0
 
 ## Metadata
 - **Model**: aegis
 - **Layer**: bank_earnings_report_etl
-- **Name**: transcript_overview_extraction
+- **Name**: transcript_1_keymetrics_overview
 - **Version**: 1.0.0
 - **Description**: Extract high-level overview summary from earnings call transcript
 

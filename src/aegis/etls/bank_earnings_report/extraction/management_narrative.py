@@ -214,7 +214,7 @@ Select {num_quotes} quotes that best capture management's key messages for this 
     ]
 
     try:
-        model = etl_config.get_model("management_narrative_extraction")
+        model = etl_config.get_model("transcript_2_narrative_quotes")
 
         response = await complete_with_tools(
             messages=messages,

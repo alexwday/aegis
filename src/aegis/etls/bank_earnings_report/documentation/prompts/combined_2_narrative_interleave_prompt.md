@@ -1,9 +1,9 @@
-# Narrative Combination Prompt - v1.0.0
+# Combined - Narrative Interleave Prompt - v1.0.0
 
 ## Metadata
 - **Model**: aegis
 - **Layer**: bank_earnings_report_etl
-- **Name**: narrative_combination
+- **Name**: combined_2_narrative_interleave
 - **Version**: 1.0.0
 - **Description**: Select and place transcript quotes between RTS narrative paragraphs
 

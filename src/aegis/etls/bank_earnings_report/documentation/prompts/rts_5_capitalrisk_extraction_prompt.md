@@ -1,9 +1,9 @@
-# Capital Risk Extraction Prompt - v1.0.0
+# RTS - Capital Risk Extraction Prompt - v1.0.0
 
 ## Metadata
 - **Model**: aegis
 - **Layer**: bank_earnings_report_etl
-- **Name**: capital_risk_extraction
+- **Name**: rts_5_capitalrisk_extraction
 - **Version**: 1.0.0
 - **Description**: Extract enterprise-level capital and credit metrics from RTS regulatory filings
 

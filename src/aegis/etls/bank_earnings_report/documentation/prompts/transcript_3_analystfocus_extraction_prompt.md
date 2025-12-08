@@ -1,9 +1,9 @@
-# Analyst Focus Extraction Prompt - v1.0.0
+# Transcript - Analyst Focus Extraction Prompt - v1.0.0
 
 ## Metadata
 - **Model**: aegis
 - **Layer**: bank_earnings_report_etl
-- **Name**: analyst_focus_extraction
+- **Name**: transcript_3_analystfocus_extraction
 - **Version**: 1.0.0
 - **Description**: Extract individual Q&A entries from earnings call transcripts with theme, question, and answer
 

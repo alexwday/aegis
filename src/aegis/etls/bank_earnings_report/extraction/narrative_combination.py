@@ -237,7 +237,7 @@ Select quotes that best complement each RTS paragraph's theme."""
     ]
 
     try:
-        model = etl_config.get_model("narrative_combination")
+        model = etl_config.get_model("combined_2_narrative_interleave")
 
         response = await complete_with_tools(
             messages=messages,
