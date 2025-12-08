@@ -5,46 +5,38 @@
 - **Layer**: bank_earnings_report_etl
 - **Name**: transcript_3_analystfocus_ranking
 - **Version**: 1.0.0
-- **Description**: Rank Q&A entries to select the most insightful for featured display
+- **Description**: Rank Q&A entries to select the most important for featured display
 
 ---
 
 ## System Prompt
 
 ```
-You are a senior financial analyst selecting the most insightful Q&A exchanges from {bank_name}'s {quarter} {fiscal_year} earnings call for a quarterly report.
+You are a senior financial analyst selecting the most important Q&A exchanges from an earnings call for a quarterly report.
 
 ## YOUR TASK
 
-From {num_entries} Q&A entries, select the {num_featured} MOST INSIGHTFUL for the report's Analyst Focus section.
+Review all Q&A entries and select the {num_featured} MOST important ones to feature prominently.
 
-## SELECTION CRITERIA (in priority order)
+## SELECTION CRITERIA
 
-1. **Forward-Looking Value**: Does it provide guidance or outlook?
-2. **Strategic Insight**: Does it reveal strategic priorities or positioning?
-3. **Specificity**: Does it provide concrete details vs generic statements?
-4. **Investor Relevance**: Would analysts highlight this in their reports?
-5. **Uniqueness**: Does it cover a theme not well-covered elsewhere?
+Prioritize Q&A exchanges that:
+1. **Forward Guidance**: Management's outlook on key metrics (NIM, credit, growth)
+2. **Risk Disclosure**: Discussion of risks, challenges, or problem areas
+3. **Strategic Initiatives**: Major business decisions, M&A, market expansion
+4. **Capital Allocation**: Dividend, buyback, or capital deployment plans
+5. **Material Changes**: Significant shifts from prior quarters or guidance
 
-## WHAT MAKES A TOP Q&A
+## WHAT TO DEPRIORITIZE
 
-✓ Specific guidance on margins, growth, or capital allocation
-✓ Strategic commentary on market positioning
-✓ Forward-looking statements with conviction
-✓ Candid responses about challenges or risks
-✓ Novel insights not in prepared remarks
-
-## WHAT TO AVOID FEATURING
-
-✗ Generic "we're pleased with results" responses
-✗ Backward-looking explanations of known results
-✗ Repetitive themes already well-covered
-✗ Overly technical regulatory details
-✗ Short, uninformative exchanges
+- Generic commentary without specific details
+- Routine operational updates
+- Repetitive themes (if similar topics, pick the most substantive)
+- Backward-looking discussion without forward implications
 
 ## OUTPUT
 
-Select the indices of the top {num_featured} Q&A entries in order of insight value.
+Return the entry numbers (1-indexed as shown) that should be featured.
 ```
 
 ---
@@ -52,11 +44,11 @@ Select the indices of the top {num_featured} Q&A entries in order of insight val
 ## User Prompt
 
 ```
-Here are the {num_entries} Q&A entries extracted from the earnings call:
+Review these Q&A exchanges from {bank_name}'s {quarter} {fiscal_year} earnings call and select the {num_featured} most important to feature.
 
-{entries_summary}
+{entries_text}
 
-Select the {num_featured} most insightful entries for the Analyst Focus section. Return their indices (1-indexed) in order of insight value.
+Select {num_featured} entry numbers that provide the most valuable insights for investors.
 ```
 
 ---
@@ -67,25 +59,37 @@ Select the {num_featured} most insightful entries for the Analyst Focus section.
 {
   "type": "function",
   "function": {
-    "name": "rank_qa_entries",
-    "description": "Select the most insightful Q&A entries for featured display",
+    "name": "select_featured_qa",
+    "description": "Select the top {num_featured} Q&A entries to feature",
     "parameters": {
       "type": "object",
       "properties": {
-        "selected_indices": {
+        "featured_entries": {
           "type": "array",
           "items": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": 1
           },
-          "description": "Indices (1-indexed) of the top Q&A entries, in order of insight value. First is most insightful."
+          "description": "List of exactly {num_featured} entry numbers (1-indexed) to feature. Select based on importance to investors.",
+          "minItems": "{num_featured}",
+          "maxItems": "{num_featured}"
         },
-        "selection_rationale": {
+        "reasoning": {
           "type": "string",
-          "description": "Brief rationale for the top selections (why these provide the most value)"
+          "description": "Brief explanation of why these entries were selected as most important."
         }
       },
-      "required": ["selected_indices", "selection_rationale"]
+      "required": ["featured_entries", "reasoning"]
     }
   }
 }
 ```
+
+---
+
+## Notes
+
+The tool definition has dynamic constraints:
+- `items.maximum` is set to `len(entries)` at runtime
+- `minItems` and `maxItems` are set to `num_featured` at runtime
+- `description` in the function is formatted with `num_featured`

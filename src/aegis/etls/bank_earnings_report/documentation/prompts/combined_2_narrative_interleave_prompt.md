@@ -90,7 +90,9 @@ Select quotes that best complement each RTS paragraph's theme.
             },
             "required": ["quote_number", "after_paragraph"]
           },
-          "description": "Quote placements - one quote per paragraph gap"
+          "description": "Exactly {num_quotes_to_place} quote placements",
+          "minItems": "{num_quotes_to_place}",
+          "maxItems": "{num_quotes_to_place}"
         },
         "combination_notes": {
           "type": "string",
@@ -102,3 +104,13 @@ Select quotes that best complement each RTS paragraph's theme.
   }
 }
 ```
+
+---
+
+## Notes
+
+The tool definition has dynamic constraints:
+- `quote_number` enum is set to the available quote indices at runtime
+- `after_paragraph` enum is set to `[1, 2, ..., num_quotes_to_place]` at runtime
+- `minItems` and `maxItems` are set to `num_quotes_to_place` at runtime
+- `num_quotes_to_place` = min(3, len(transcript_quotes), len(rts_paragraphs) - 1)

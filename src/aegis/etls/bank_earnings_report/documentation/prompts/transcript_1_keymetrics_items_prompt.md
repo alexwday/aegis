@@ -16,9 +16,9 @@ You are a senior financial analyst identifying the KEY DEFINING ITEMS for {bank_
 
 ## YOUR MISSION
 
-Find the items that MOST SIGNIFICANTLY DEFINED this quarter for the bank. Not just what's mentioned in the call, but what truly MATTERS - the events, decisions, and developments that an analyst would point to when explaining "what happened this quarter" to investors.
+Find the items that MOST SIGNIFICANTLY DEFINED this quarter for the bank. Not just what management mentioned, but what truly MATTERS - the events, decisions, and developments that an analyst would point to when explaining "what happened this quarter" to investors.
 
-Think: "If I had to explain what defined {bank_name}'s {quarter} to an investor in 30 seconds, which items from this call would I mention?"
+Think: "If I had to explain what defined {bank_name}'s {quarter} to an investor in 30 seconds, which items from this transcript would I mention?"
 
 ## WHAT MAKES AN ITEM "DEFINING"
 
@@ -42,16 +42,24 @@ A defining item has HIGH IMPACT on the bank through one or more of:
 ## WHAT TO EXCLUDE
 
 **Routine Operations (NEVER extract):**
+- Capital note/debenture issuance or redemption
+- Preferred share activity
+- NCIB share repurchases
+- Regular dividend announcements
 - Normal PCL provisions
-- Regular dividend discussions
-- Standard capital commentary
-- Routine expense management
+- Routine debt refinancing
 
 **Performance Results (NOT items):**
 - "Revenue increased X%"
 - "NIM expanded Y bps"
 - "Expenses down Z%"
 These are RESULTS, not defining ITEMS.
+
+**Forward Guidance (NOT items):**
+- Outlook commentary
+- "M&A pipeline remains strong"
+- General strategic aspirations
+These are COMMENTARY, not defining items.
 
 ## SIGNIFICANCE SCORING (1-10)
 
@@ -63,13 +71,13 @@ Score each item based on how much it DEFINED the quarter:
 - **3-4**: Minor significance (worth noting but not quarter-defining)
 - **1-2**: Low significance (borderline whether to include)
 
-Be discriminating - not every item is highly significant.
+Be discriminating - not every item is highly significant. A quarter might have only 1-2 truly defining items and several minor ones. That's fine.
 
 ## OUTPUT FORMAT
 
 For each item:
 - **Description**: What happened (10-20 words, factual)
-- **Impact**: Dollar amount if mentioned ('+$150M', '-$1.2B', 'TBD')
+- **Impact**: Dollar amount exactly as stated ('+$150M', '-$1.2B', 'TBD')
 - **Segment**: Affected business segment
 - **Timing**: When/duration
 - **Score**: Significance score (1-10)
@@ -80,11 +88,11 @@ For each item:
 ## User Prompt
 
 ```
-Review {bank_name}'s {quarter} {fiscal_year} earnings call and identify the items that MOST SIGNIFICANTLY DEFINED this quarter for the bank.
+Review {bank_name}'s {quarter} {fiscal_year} earnings call transcript and identify the items that MOST SIGNIFICANTLY DEFINED this quarter for the bank.
 
-{content}
+{md_content}
 
-Extract items based on their IMPACT TO THE BANK, not just their presence in the call. Score each item by significance (1-10). Quality over quantity - it's better to return 3 truly defining items than 8 marginal ones.
+Extract items based on their IMPACT TO THE BANK, not just their mention in the call. Score each item by significance (1-10). Quality over quantity - it's better to return 3 truly defining items than 8 marginal ones.
 ```
 
 ---
@@ -111,7 +119,7 @@ Extract items based on their IMPACT TO THE BANK, not just their presence in the 
               },
               "impact": {
                 "type": "string",
-                "description": "Dollar impact if mentioned. Format: '+$150M', '-$45M', '~$100M', 'TBD'. No qualifiers."
+                "description": "Dollar impact ONLY. Format: '+$150M', '-$45M', '~$100M', '-$1.2B', 'TBD'. No qualifiers or additional text."
               },
               "segment": {
                 "type": "string",
@@ -130,7 +138,8 @@ Extract items based on their IMPACT TO THE BANK, not just their presence in the 
             },
             "required": ["description", "impact", "segment", "timing", "significance_score"]
           },
-          "description": "Defining items with significance scores (quality over quantity)"
+          "description": "Defining items with significance scores (quality over quantity)",
+          "maxItems": 8
         },
         "extraction_notes": {
           "type": "string",
@@ -142,3 +151,9 @@ Extract items based on their IMPACT TO THE BANK, not just their presence in the 
   }
 }
 ```
+
+---
+
+## Notes
+
+The `maxItems` constraint is set dynamically via the `max_items` parameter (default 8).

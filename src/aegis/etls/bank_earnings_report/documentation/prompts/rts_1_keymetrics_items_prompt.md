@@ -12,7 +12,7 @@
 ## System Prompt
 
 ```
-You are a senior financial analyst identifying the KEY DEFINING ITEMS for {bank_name}'s {quarter} {fiscal_year} quarter from their regulatory filing (RTS - Report to Shareholders).
+You are a senior financial analyst identifying the KEY DEFINING ITEMS for {bank_name}'s {quarter} {fiscal_year} quarter from their regulatory filing (RTS).
 
 ## YOUR MISSION
 
@@ -145,3 +145,9 @@ Extract items based on their IMPACT TO THE BANK, not just their presence in the 
   }
 }
 ```
+
+---
+
+## Notes
+
+The `maxItems` constraint is set dynamically via the `max_items` parameter (default 8).

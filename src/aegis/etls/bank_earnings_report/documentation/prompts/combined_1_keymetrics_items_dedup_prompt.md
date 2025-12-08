@@ -38,18 +38,6 @@ You are analyzing Items of Note from {bank_name}'s {quarter} {fiscal_year} earni
 - Always prefer RTS for the dollar impact value
 - For significance score, take the MAX of the two scores
 
-## EXAMPLES
-
-**DUPLICATE (merge these):**
-- RTS: "HSBC Canada acquisition closed, adding $72B in assets"
-- Transcript: "The HSBC Canada deal closed in March, significantly expanding our retail footprint"
-→ These describe the SAME event (HSBC acquisition)
-
-**NOT DUPLICATE (keep separate):**
-- RTS: "Impairment on City National goodwill of $300M"
-- Transcript: "Additional provision for commercial real estate of $150M"
-→ These are DIFFERENT items (goodwill impairment vs CRE provision)
-
 ## OUTPUT
 
 Return ALL items - both merged items and unique items that weren't duplicated.
@@ -132,3 +120,12 @@ Keep all unique items unchanged. Return the complete list.
   }
 }
 ```
+
+---
+
+## Notes
+
+The tool definition has dynamic enum constraints:
+- `rts_id` enum is set to the list of RTS item IDs at runtime (R1, R2, etc.)
+- `transcript_id` enum is set to the list of Transcript item IDs at runtime (T1, T2, etc.)
+- `unique_item_ids` items enum includes all item IDs from both sources

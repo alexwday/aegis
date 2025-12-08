@@ -85,7 +85,7 @@ Include the value exactly as shown in the document with appropriate units.
 
 Document content:
 
-{content}
+{rts_content}
 ```
 
 ---

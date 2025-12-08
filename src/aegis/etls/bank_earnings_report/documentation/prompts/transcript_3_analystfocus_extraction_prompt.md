@@ -5,7 +5,7 @@
 - **Layer**: bank_earnings_report_etl
 - **Name**: transcript_3_analystfocus_extraction
 - **Version**: 1.0.0
-- **Description**: Extract individual Q&A entries from earnings call transcripts with theme, question, and answer
+- **Description**: Extract theme, question, and answer from earnings call Q&A exchanges
 
 ---
 
@@ -16,47 +16,35 @@ You are a senior financial analyst extracting key information from bank earnings
 
 ## YOUR TASK
 
-Extract the SINGLE most substantive Q&A exchange from the given transcript segment.
-
-Focus on exchanges that reveal:
-- Strategic insights
-- Market positioning
-- Forward guidance
-- Risk perspectives
-- Business segment performance drivers
-
-## THEME GUIDANCE
-
-Choose a theme that captures the SUBSTANCE of what was discussed:
-- Credit Quality & Provisions
-- Net Interest Income & Margins
-- Capital Markets Performance
-- Wealth Management
-- Strategic Priorities
-- Cost Management
-- Capital Deployment
-- Regulatory & Compliance
-- Economic Outlook
-- Digital & Technology
-- Geographic Expansion
-- Competitive Position
+Analyze the Q&A exchange and extract:
+1. **Theme**: A short label (2-4 words) categorizing the topic (e.g., "NIM Outlook", "Credit Quality", "Capital Allocation")
+2. **Question**: A concise summary of the analyst's question (1-2 sentences)
+3. **Answer**: A summary of management's response with key details and figures (2-4 sentences)
 
 ## EXTRACTION GUIDELINES
 
-1. **Question**: Capture the analyst's core question (15-30 words)
-   - Include context if needed for comprehension
-   - Focus on the substantive ask, not pleasantries
+**For Theme:**
+- Use standard financial industry themes
+- Be specific but concise (e.g., "CRE Exposure" not "Commercial Real Estate")
+- Common themes include: NIM Outlook, Credit Quality, Capital Allocation, Expense Management, Loan Growth, Deposit Trends, Fee Income, Trading Revenue, U.S. Strategy, Digital Banking, M&A Strategy, Regulatory Capital, Dividend Policy
 
-2. **Answer**: Capture management's key response (30-60 words)
-   - Prioritize forward-looking statements
-   - Include specific insights, not generic responses
-   - Preserve quantitative guidance if provided
+**For Question:**
+- ONE sentence only (15-25 words)
+- Be direct: "What's your outlook on X?" or "How will Y impact Z?"
+- Cut preamble and pleasantries
 
-3. **Theme**: Select ONE theme that best characterizes the exchange
+**For Answer:**
+- TWO sentences max (40-60 words total)
+- Lead with the key takeaway or number
+- Include specific figures (percentages, dollar amounts, basis points)
+- Identify speaker role briefly (CFO, CEO, CRO)
+- Cut generic commentary - keep only actionable insights
 
-## OUTPUT
+## IMPORTANT
 
-Return the most valuable Q&A exchange from the segment.
+- If the exchange is not financially meaningful (pleasantries, logistics), return should_skip=true
+- Preserve exact figures and percentages from the transcript
+- Focus on information investors would find valuable
 ```
 
 ---
@@ -64,9 +52,11 @@ Return the most valuable Q&A exchange from the segment.
 ## User Prompt
 
 ```
-Extract the key Q&A exchange from this transcript segment:
+Analyze this Q&A exchange from {bank_name}'s {quarter} {fiscal_year} earnings call and extract the key information.
 
-{content}
+{qa_content}
+
+Extract the theme, question summary, and answer summary. If this exchange has no meaningful financial content, indicate it should be skipped.
 ```
 
 ---
@@ -77,25 +67,29 @@ Extract the key Q&A exchange from this transcript segment:
 {
   "type": "function",
   "function": {
-    "name": "extract_qa_entry",
-    "description": "Extract a Q&A entry from transcript with theme, question, and answer",
+    "name": "extract_qa_summary",
+    "description": "Extract theme, question, and answer from an earnings call Q&A exchange",
     "parameters": {
       "type": "object",
       "properties": {
+        "should_skip": {
+          "type": "boolean",
+          "description": "True if this exchange should be skipped (no meaningful financial content, just pleasantries, or logistics). False if it contains valuable analyst insights."
+        },
         "theme": {
           "type": "string",
-          "description": "One theme capturing the substance of the Q&A exchange. E.g., 'Credit Quality & Provisions', 'Net Interest Income & Margins', 'Strategic Priorities'"
+          "description": "Short theme label (2-4 words) categorizing the topic. Examples: 'NIM Outlook', 'Credit Quality', 'Capital Allocation', 'CRE Exposure', 'U.S. Strategy'"
         },
         "question": {
           "type": "string",
-          "description": "The analyst's core question (15-30 words). Include context needed for comprehension."
+          "description": "One sentence (15-25 words) capturing the analyst's core question. Be direct and specific. Example: 'What's your NIM outlook given expected rate cuts in H2?'"
         },
         "answer": {
           "type": "string",
-          "description": "Management's key response (30-60 words). Prioritize forward-looking statements and specific insights."
+          "description": "Two sentences max (40-60 words) with key takeaway and figures. Lead with the main point. Preserve specific numbers/guidance. Example: 'CFO expects NIM to stabilize at 2.45% through Q4. Deposit repricing largely complete; asset repricing provides offset.'"
         }
       },
-      "required": ["theme", "question", "answer"]
+      "required": ["should_skip", "theme", "question", "answer"]
     }
   }
 }

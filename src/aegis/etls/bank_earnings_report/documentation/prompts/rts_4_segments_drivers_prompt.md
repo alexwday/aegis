@@ -92,78 +92,22 @@ Extract the qualitative drivers statement for each segment listed above.
     "parameters": {
       "type": "object",
       "properties": {
-        "canadian_banking": {
+        "{segment_key}": {
           "type": "object",
           "properties": {
             "found": {
               "type": "boolean",
-              "description": "Whether content for Canadian Banking was found in the document"
+              "description": "Whether content for {segment_name} was found in the document"
             },
             "drivers_statement": {
               "type": "string",
-              "description": "2-3 sentence qualitative drivers statement. No numbers, percentages, or dollar amounts. Empty string if segment not found."
-            }
-          },
-          "required": ["found", "drivers_statement"]
-        },
-        "us_and_international_banking": {
-          "type": "object",
-          "properties": {
-            "found": {
-              "type": "boolean",
-              "description": "Whether content for U.S. & International Banking was found"
-            },
-            "drivers_statement": {
-              "type": "string",
-              "description": "2-3 sentence qualitative drivers statement. No numbers. Empty if not found."
-            }
-          },
-          "required": ["found", "drivers_statement"]
-        },
-        "capital_markets": {
-          "type": "object",
-          "properties": {
-            "found": {
-              "type": "boolean",
-              "description": "Whether content for Capital Markets was found"
-            },
-            "drivers_statement": {
-              "type": "string",
-              "description": "2-3 sentence qualitative drivers statement. No numbers. Empty if not found."
-            }
-          },
-          "required": ["found", "drivers_statement"]
-        },
-        "canadian_wealth_and_insurance": {
-          "type": "object",
-          "properties": {
-            "found": {
-              "type": "boolean",
-              "description": "Whether content for Canadian Wealth & Insurance was found"
-            },
-            "drivers_statement": {
-              "type": "string",
-              "description": "2-3 sentence qualitative drivers statement. No numbers. Empty if not found."
-            }
-          },
-          "required": ["found", "drivers_statement"]
-        },
-        "corporate_support": {
-          "type": "object",
-          "properties": {
-            "found": {
-              "type": "boolean",
-              "description": "Whether content for Corporate Support was found"
-            },
-            "drivers_statement": {
-              "type": "string",
-              "description": "2-3 sentence qualitative drivers statement. No numbers. Empty if not found."
+              "description": "2-3 sentence qualitative drivers statement for {segment_name}. No numbers, percentages, or dollar amounts. Empty string if segment not found."
             }
           },
           "required": ["found", "drivers_statement"]
         }
       },
-      "required": ["canadian_banking", "us_and_international_banking", "capital_markets", "canadian_wealth_and_insurance", "corporate_support"]
+      "required": ["{segment_keys}"]
     }
   }
 }
@@ -173,4 +117,13 @@ Extract the qualitative drivers statement for each segment listed above.
 
 ## Notes
 
-The tool definition properties are dynamically generated based on the segment names provided at runtime. The example above shows the standard RBC segments. The actual implementation converts segment names to safe property keys (e.g., "Canadian Wealth & Insurance" → "canadian_wealth_and_insurance").
+The tool definition properties are dynamically generated based on the segment names provided at runtime:
+- Each segment name is converted to a safe property key (e.g., "Canadian Wealth & Insurance" → "canadian_wealth_and_insurance")
+- The `required` array contains all segment keys
+
+Example segments for RBC:
+- Canadian Banking → `canadian_banking`
+- U.S. & International Banking → `us_and_international_banking`
+- Capital Markets → `capital_markets`
+- Canadian Wealth & Insurance → `canadian_wealth_and_insurance`
+- Corporate Support → `corporate_support`
