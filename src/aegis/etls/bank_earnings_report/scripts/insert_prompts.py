@@ -1268,7 +1268,7 @@ def insert_or_update_prompt(
                         description = :description,
                         system_prompt = :system_prompt,
                         user_prompt = :user_prompt,
-                        tool_definition = :tool_definition::jsonb,
+                        tool_definition = CAST(:tool_definition AS jsonb),
                         uses_global = :uses_global,
                         version = :version,
                         updated_at = :updated_at
@@ -1300,7 +1300,7 @@ def insert_or_update_prompt(
                         uses_global, version, created_at, updated_at
                     ) VALUES (
                         :model, :layer, :name, :description,
-                        :system_prompt, :user_prompt, :tool_definition::jsonb,
+                        :system_prompt, :user_prompt, CAST(:tool_definition AS jsonb),
                         :uses_global, :version, :created_at, :updated_at
                     )
                 """)
