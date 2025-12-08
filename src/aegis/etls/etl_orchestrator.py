@@ -62,7 +62,7 @@ MAX_RETRIES = 3
 INITIAL_RETRY_DELAY = 5  # seconds
 MAX_RETRY_DELAY = 300  # 5 minutes
 MAX_PARALLEL_ETLS = 4  # Number of banks to process in parallel
-QUARTERLY_SCHEDULE_PATH = "src/aegis/etls/config/quarterly_schedule.yaml"
+QUARTERLY_SCHEDULE_PATH = "src/aegis/etls/cm_readthrough/config/quarterly_schedule.yaml"
 
 # ETL configurations
 # - Gap-based ETLs: Run when transcript data is available but report doesn't exist
