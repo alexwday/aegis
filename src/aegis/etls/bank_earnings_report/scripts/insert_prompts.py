@@ -1331,6 +1331,59 @@ def insert_or_update_prompt(
         return False
 
 
+def verify_connection(engine) -> bool:
+    """
+    Verify database connection and show existing prompt counts.
+
+    Args:
+        engine: SQLAlchemy engine
+
+    Returns:
+        True if connection successful, False otherwise
+    """
+    try:
+        with engine.connect() as conn:
+            # Get total prompt count
+            result = conn.execute(text("SELECT COUNT(*) FROM prompts"))
+            total_count = result.scalar()
+
+            # Get count by layer
+            result = conn.execute(
+                text("""
+                    SELECT layer, COUNT(*) as count
+                    FROM prompts
+                    GROUP BY layer
+                    ORDER BY layer
+                """)
+            )
+            layer_counts = result.fetchall()
+
+            # Check for existing bank_earnings_report_etl prompts
+            result = conn.execute(
+                text("""
+                    SELECT COUNT(*) FROM prompts
+                    WHERE layer = 'bank_earnings_report_etl'
+                """)
+            )
+            etl_count = result.scalar()
+
+            logger.info("")
+            logger.info("DATABASE CONNECTION VERIFIED")
+            logger.info(f"  Total prompts in table: {total_count}")
+            logger.info(f"  Existing bank_earnings_report_etl prompts: {etl_count}")
+            if layer_counts:
+                logger.info("  Prompts by layer:")
+                for layer, count in layer_counts:
+                    logger.info(f"    - {layer}: {count}")
+            logger.info("")
+
+            return True
+
+    except SQLAlchemyError as e:
+        logger.error(f"Database connection failed: {e}")
+        return False
+
+
 def main(dry_run: bool = False):
     """
     Main function to insert all prompts into the database.
@@ -1347,10 +1400,14 @@ def main(dry_run: bool = False):
 
     logger.info(f"Database: {config.postgres_host}:{config.postgres_port}/{config.postgres_database}")
     logger.info(f"Total prompts to process: {len(PROMPTS)}")
-    logger.info("")
 
     # Create engine
     engine = create_engine(DB_URL)
+
+    # Verify connection and show existing counts
+    if not verify_connection(engine):
+        logger.error("Failed to connect to database. Aborting.")
+        return 1
 
     # Process each prompt
     success_count = 0
