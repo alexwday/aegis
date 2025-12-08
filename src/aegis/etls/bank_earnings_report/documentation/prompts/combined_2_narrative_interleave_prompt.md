@@ -4,7 +4,7 @@
 - **Model**: aegis
 - **Layer**: bank_earnings_report_etl
 - **Name**: combined_2_narrative_interleave
-- **Version**: 1.0.0
+- **Version**: 2.0.0
 - **Description**: Select and place transcript quotes between RTS narrative paragraphs
 
 ---

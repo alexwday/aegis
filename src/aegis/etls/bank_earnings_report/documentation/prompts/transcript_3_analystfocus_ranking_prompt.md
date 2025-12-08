@@ -4,7 +4,7 @@
 - **Model**: aegis
 - **Layer**: bank_earnings_report_etl
 - **Name**: transcript_3_analystfocus_ranking
-- **Version**: 1.0.0
+- **Version**: 2.0.0
 - **Description**: Rank Q&A entries to select the most important for featured display
 
 ---

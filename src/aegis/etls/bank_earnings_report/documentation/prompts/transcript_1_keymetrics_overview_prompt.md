@@ -4,7 +4,7 @@
 - **Model**: aegis
 - **Layer**: bank_earnings_report_etl
 - **Name**: transcript_1_keymetrics_overview
-- **Version**: 1.0.0
+- **Version**: 2.0.0
 - **Description**: Extract high-level overview summary from earnings call transcript
 
 ---

@@ -4,7 +4,7 @@
 - **Model**: aegis
 - **Layer**: bank_earnings_report_etl
 - **Name**: rts_5_capitalrisk_extraction
-- **Version**: 1.0.0
+- **Version**: 2.0.0
 - **Description**: Extract enterprise-level capital and credit metrics from RTS regulatory filings
 
 ---

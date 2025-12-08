@@ -4,7 +4,7 @@
 - **Model**: aegis
 - **Layer**: bank_earnings_report_etl
 - **Name**: transcript_2_narrative_quotes
-- **Version**: 1.0.0
+- **Version**: 2.0.0
 - **Description**: Extract impactful management quotes from earnings call transcripts
 
 ---

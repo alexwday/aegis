@@ -4,7 +4,7 @@
 - **Model**: aegis
 - **Layer**: bank_earnings_report_etl
 - **Name**: supplementary_1_keymetrics_selection
-- **Version**: 1.0.0
+- **Version**: 2.0.0
 - **Description**: Select metrics for tile display, dynamic section, and trend chart
 
 ---

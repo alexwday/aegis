@@ -4,7 +4,7 @@
 - **Model**: aegis
 - **Layer**: bank_earnings_report_etl
 - **Name**: rts_2_narrative_paragraphs
-- **Version**: 1.0.0
+- **Version**: 2.0.0
 - **Description**: Extract 4 structured narrative paragraphs from RTS regulatory filings
 
 ---

@@ -4,7 +4,7 @@
 - **Model**: aegis
 - **Layer**: bank_earnings_report_etl
 - **Name**: transcript_1_keymetrics_items
-- **Version**: 1.0.0
+- **Version**: 2.0.0
 - **Description**: Extract key defining items from earnings call transcript
 
 ---

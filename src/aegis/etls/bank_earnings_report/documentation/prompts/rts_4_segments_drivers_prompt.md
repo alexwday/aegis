@@ -4,7 +4,7 @@
 - **Model**: aegis
 - **Layer**: bank_earnings_report_etl
 - **Name**: rts_4_segments_drivers
-- **Version**: 1.0.0
+- **Version**: 2.0.0
 - **Description**: Extract qualitative performance drivers for all business segments from RTS
 
 ---

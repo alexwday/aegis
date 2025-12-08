@@ -4,7 +4,7 @@
 - **Model**: aegis
 - **Layer**: bank_earnings_report_etl
 - **Name**: transcript_3_analystfocus_extraction
-- **Version**: 1.0.0
+- **Version**: 2.0.0
 - **Description**: Extract theme, question, and answer from earnings call Q&A exchanges
 
 ---
