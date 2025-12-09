@@ -672,6 +672,32 @@
             }
         }
 
+        /* Thinking/analyzing placeholder text */
+        .thinking-text {
+            color: #888;
+            font-style: italic;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .thinking-text::after {
+            content: '';
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border: 2px solid #ccc;
+            border-top-color: #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
         @media (max-width: 768px) {
             .chat-container {
                 height: 100vh;
@@ -1028,7 +1054,7 @@
                 sendButton.disabled = false;
             } else if (data.type === 'agent') {
                 if (!currentAssistantMessage) {
-                    // Create new assistant message
+                    // Create new assistant message (fallback if not already created)
                     const result = addAssistantMessageContainer();
                     currentAssistantMessage = result;
                     assistantContent = '';
@@ -1036,7 +1062,7 @@
                     subagentContent = {};
                 }
 
-                // Update main content
+                // Update main content (replaces "Analyzing your query..." placeholder)
                 assistantContent += data.content || '';
                 currentAssistantMessage.mainContentDiv.innerHTML = marked.parse(assistantContent);
                 chatMessages.scrollTop = chatMessages.scrollHeight;
@@ -1135,7 +1161,17 @@
 
             isProcessing = true;
             sendButton.disabled = true;
-            showTypingIndicator();
+
+            // Create assistant message bubble immediately with placeholder
+            const result = addAssistantMessageContainer();
+            currentAssistantMessage = result;
+            assistantContent = '';
+            subagentContainers = {};
+            subagentContent = {};
+
+            // Show initial "thinking" message
+            currentAssistantMessage.mainContentDiv.innerHTML = '<span class="thinking-text">Analyzing your query...</span>';
+            chatMessages.scrollTop = chatMessages.scrollHeight;
 
             // Get selected databases
             const selectedDatabases = getSelectedDatabases();
