@@ -23,9 +23,39 @@ def create_excel():
         bottom=Side(style='thin')
     )
 
-    # ============ SHEET 1: Landing Page Questions ============
+    # ============ SHEET 1: Landing Page Description ============
     ws1 = wb.active
-    ws1.title = "Landing Page"
+    ws1.title = "Landing Page Description"
+
+    # Landing page description
+    description = (
+        "Aegis serves finance professionals across RBC by providing a one-stop platform "
+        "for financial insights and analysis on Canadian and US banks, enabling users to "
+        "access comprehensive data through natural language conversations at their fingertips. "
+        "It generates detailed responses drawing from Report to Shareholders (RTS), "
+        "supplementary financial metrics, Pillar 3 capital disclosures, and earnings call "
+        "transcripts covering 81 financial institutions globally, supporting both "
+        "straightforward metric lookups and complex multi-bank comparisons. Users can focus "
+        "on specific banks and time periods or ask broadly to get synthesized answers from "
+        "multiple data sources, while pre-formatted reports help streamline monthly and "
+        "quarterly deliverables for Investor Relations, Capital Markets, and Wealth "
+        "Management teams."
+    )
+
+    ws1.cell(row=1, column=1, value="Landing Page Description")
+    ws1.cell(row=1, column=1).font = header_font_white
+    ws1.cell(row=1, column=1).fill = header_fill
+    ws1.cell(row=1, column=1).border = thin_border
+
+    desc_cell = ws1.cell(row=2, column=1, value=description)
+    desc_cell.alignment = Alignment(wrap_text=True, vertical='top')
+    desc_cell.border = thin_border
+
+    ws1.column_dimensions['A'].width = 100
+    ws1.row_dimensions[2].height = 120
+
+    # ============ SHEET 2: Landing Page Questions ============
+    ws2 = wb.create_sheet("Landing Page Questions")
 
     landing_data = [
         ["Database", "Question"],
@@ -41,7 +71,7 @@ def create_excel():
 
     for row_idx, row_data in enumerate(landing_data, 1):
         for col_idx, value in enumerate(row_data, 1):
-            cell = ws1.cell(row=row_idx, column=col_idx, value=value)
+            cell = ws2.cell(row=row_idx, column=col_idx, value=value)
             cell.border = thin_border
             if row_idx == 1:
                 cell.font = header_font_white
@@ -50,11 +80,11 @@ def create_excel():
             else:
                 cell.alignment = Alignment(wrap_text=True, vertical='top')
 
-    ws1.column_dimensions['A'].width = 15
-    ws1.column_dimensions['B'].width = 80
+    ws2.column_dimensions['A'].width = 15
+    ws2.column_dimensions['B'].width = 80
 
-    # ============ SHEET 2: Popup Questions ============
-    ws2 = wb.create_sheet("Popup Questions")
+    # ============ SHEET 3: Popup Questions ============
+    ws3 = wb.create_sheet("Popup Questions")
 
     popup_data = [
         ["Database", "#", "Question"],
@@ -82,7 +112,7 @@ def create_excel():
 
     for row_idx, row_data in enumerate(popup_data, 1):
         for col_idx, value in enumerate(row_data, 1):
-            cell = ws2.cell(row=row_idx, column=col_idx, value=value)
+            cell = ws3.cell(row=row_idx, column=col_idx, value=value)
             cell.border = thin_border
             if row_idx == 1:
                 cell.font = header_font_white
@@ -91,12 +121,12 @@ def create_excel():
             else:
                 cell.alignment = Alignment(wrap_text=True, vertical='top')
 
-    ws2.column_dimensions['A'].width = 15
-    ws2.column_dimensions['B'].width = 5
-    ws2.column_dimensions['C'].width = 90
+    ws3.column_dimensions['A'].width = 15
+    ws3.column_dimensions['B'].width = 5
+    ws3.column_dimensions['C'].width = 90
 
-    # ============ SHEET 3: Dropdown - What is ============
-    ws3 = wb.create_sheet("Dropdown - What is")
+    # ============ SHEET 4: Dropdown - What is ============
+    ws4 = wb.create_sheet("Dropdown - What is")
 
     what_is_data = [
         ["#", "Question", "Database"],
@@ -108,33 +138,6 @@ def create_excel():
     ]
 
     for row_idx, row_data in enumerate(what_is_data, 1):
-        for col_idx, value in enumerate(row_data, 1):
-            cell = ws3.cell(row=row_idx, column=col_idx, value=value)
-            cell.border = thin_border
-            if row_idx == 1:
-                cell.font = header_font_white
-                cell.fill = header_fill
-                cell.alignment = Alignment(horizontal='center')
-            else:
-                cell.alignment = Alignment(wrap_text=True, vertical='top')
-
-    ws3.column_dimensions['A'].width = 5
-    ws3.column_dimensions['B'].width = 80
-    ws3.column_dimensions['C'].width = 15
-
-    # ============ SHEET 4: Dropdown - Compare ============
-    ws4 = wb.create_sheet("Dropdown - Compare")
-
-    compare_data = [
-        ["#", "Question", "Database"],
-        [1, "Compare the efficiency ratio and ROE for TD and RBC in the latest quarter.", "Supplementary"],
-        [2, "Compare the management outlook from RBC and TD in Q3 2025.", "Transcripts"],
-        [3, "Compare the liquidity coverage ratio and leverage ratio across the Big Six banks for 2025.", "Pillar3"],
-        [4, "Compare investment fees and FICC revenue for RBC and BMO in Q3 2025.", "Supplementary"],
-        [5, "Compare the key risk factors disclosed by TD and Scotiabank in Q2 2025.", "RTS"],
-    ]
-
-    for row_idx, row_data in enumerate(compare_data, 1):
         for col_idx, value in enumerate(row_data, 1):
             cell = ws4.cell(row=row_idx, column=col_idx, value=value)
             cell.border = thin_border
@@ -149,19 +152,19 @@ def create_excel():
     ws4.column_dimensions['B'].width = 80
     ws4.column_dimensions['C'].width = 15
 
-    # ============ SHEET 5: Dropdown - How did ============
-    ws5 = wb.create_sheet("Dropdown - How did")
+    # ============ SHEET 5: Dropdown - Compare ============
+    ws5 = wb.create_sheet("Dropdown - Compare")
 
-    how_did_data = [
+    compare_data = [
         ["#", "Question", "Database"],
-        [1, "How did TD management describe performance and outlook in Q2 2025?", "Transcripts"],
-        [2, "How did RBC management respond to analyst concerns in Q3 2025?", "Transcripts"],
-        [3, "How did BMO management describe their strategic priorities in Q3 2025?", "Transcripts"],
-        [4, "How did TD's risk-weighted assets change from Q1 to Q2 2025?", "Pillar3"],
-        [5, "How did CIBC describe their risk management strategy in Q2 2025?", "RTS"],
+        [1, "Compare the efficiency ratio and ROE for TD and RBC in the latest quarter.", "Supplementary"],
+        [2, "Compare the management outlook from RBC and TD in Q3 2025.", "Transcripts"],
+        [3, "Compare the liquidity coverage ratio and leverage ratio across the Big Six banks for 2025.", "Pillar3"],
+        [4, "Compare investment fees and FICC revenue for RBC and BMO in Q3 2025.", "Supplementary"],
+        [5, "Compare the key risk factors disclosed by TD and Scotiabank in Q2 2025.", "RTS"],
     ]
 
-    for row_idx, row_data in enumerate(how_did_data, 1):
+    for row_idx, row_data in enumerate(compare_data, 1):
         for col_idx, value in enumerate(row_data, 1):
             cell = ws5.cell(row=row_idx, column=col_idx, value=value)
             cell.border = thin_border
@@ -176,19 +179,19 @@ def create_excel():
     ws5.column_dimensions['B'].width = 80
     ws5.column_dimensions['C'].width = 15
 
-    # ============ SHEET 6: Dropdown - Summarize ============
-    ws6 = wb.create_sheet("Dropdown - Summarize")
+    # ============ SHEET 6: Dropdown - How did ============
+    ws6 = wb.create_sheet("Dropdown - How did")
 
-    summarize_data = [
+    how_did_data = [
         ["#", "Question", "Database"],
-        [1, "Summarize BMO's Management Discussion and Analysis for Q2 2025 in five key points.", "RTS"],
-        [2, "Summarize the key themes from Scotiabank's Q3 2025 earnings call.", "Transcripts"],
-        [3, "Summarize TD's capital adequacy metrics from their latest Pillar 3 disclosure.", "Pillar3"],
-        [4, "Summarize RBC's strategy, risks, and outlook from Q3 2025 filings.", "RTS"],
-        [5, "Summarize the analyst Q&A session from RBC's Q3 2025 earnings call.", "Transcripts"],
+        [1, "How did TD management describe performance and outlook in Q2 2025?", "Transcripts"],
+        [2, "How did RBC management respond to analyst concerns in Q3 2025?", "Transcripts"],
+        [3, "How did BMO management describe their strategic priorities in Q3 2025?", "Transcripts"],
+        [4, "How did TD's risk-weighted assets change from Q1 to Q2 2025?", "Pillar3"],
+        [5, "How did CIBC describe their risk management strategy in Q2 2025?", "RTS"],
     ]
 
-    for row_idx, row_data in enumerate(summarize_data, 1):
+    for row_idx, row_data in enumerate(how_did_data, 1):
         for col_idx, value in enumerate(row_data, 1):
             cell = ws6.cell(row=row_idx, column=col_idx, value=value)
             cell.border = thin_border
@@ -202,6 +205,33 @@ def create_excel():
     ws6.column_dimensions['A'].width = 5
     ws6.column_dimensions['B'].width = 80
     ws6.column_dimensions['C'].width = 15
+
+    # ============ SHEET 7: Dropdown - Summarize ============
+    ws7 = wb.create_sheet("Dropdown - Summarize")
+
+    summarize_data = [
+        ["#", "Question", "Database"],
+        [1, "Summarize BMO's Management Discussion and Analysis for Q2 2025 in five key points.", "RTS"],
+        [2, "Summarize the key themes from Scotiabank's Q3 2025 earnings call.", "Transcripts"],
+        [3, "Summarize TD's capital adequacy metrics from their latest Pillar 3 disclosure.", "Pillar3"],
+        [4, "Summarize RBC's strategy, risks, and outlook from Q3 2025 filings.", "RTS"],
+        [5, "Summarize the analyst Q&A session from RBC's Q3 2025 earnings call.", "Transcripts"],
+    ]
+
+    for row_idx, row_data in enumerate(summarize_data, 1):
+        for col_idx, value in enumerate(row_data, 1):
+            cell = ws7.cell(row=row_idx, column=col_idx, value=value)
+            cell.border = thin_border
+            if row_idx == 1:
+                cell.font = header_font_white
+                cell.fill = header_fill
+                cell.alignment = Alignment(horizontal='center')
+            else:
+                cell.alignment = Alignment(wrap_text=True, vertical='top')
+
+    ws7.column_dimensions['A'].width = 5
+    ws7.column_dimensions['B'].width = 80
+    ws7.column_dimensions['C'].width = 15
 
     # Save workbook
     output_path = "/Users/alexwday/Projects/aegis/aegis_try_a_prompt_questions.xlsx"
