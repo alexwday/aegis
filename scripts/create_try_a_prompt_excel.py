@@ -35,8 +35,8 @@ def create_excel():
         ["RTS", "What is CIBC's diluted EPS, both reported and adjusted, for Q3 2025?"],
         ["Pillar3", "What is the CET1 ratio for RBC and National Bank in Q2 2025?"],
         ["Pillar3", "What is the leverage ratio for RBC and National Bank in Q2 2025?"],
-        ["Transcripts", "What did RBC's CEO say about capital deployment priorities in Q3 2025?"],
-        ["Transcripts", "How did TD management explain the increase in credit provisions in Q2 2025?"],
+        ["Transcripts", "What were the key themes from RBC's Q3 2025 earnings call?"],
+        ["Transcripts", "Summarize the management discussion from TD's Q2 2025 earnings call."],
     ]
 
     for row_idx, row_data in enumerate(landing_data, 1):
@@ -73,11 +73,11 @@ def create_excel():
         ["Pillar3", 3, "What are TD's risk-weighted assets and capital adequacy ratio from their latest Pillar 3 disclosure?"],
         ["Pillar3", 4, "Compare the liquidity coverage ratio and leverage ratio across the Big Six banks for 2025."],
         ["Pillar3", 5, "When was RBC's Pillar 3 disclosure last updated, and what were the significant changes?"],
-        ["Transcripts", 1, "What outlook did RBC management provide on credit quality for 2025?"],
-        ["Transcripts", 2, "What did analysts ask about TD's Capital Markets performance in Q2 2025?"],
-        ["Transcripts", 3, "How did BMO's CEO describe the Bank of the West integration progress in Q3 2025?"],
-        ["Transcripts", 4, "Summarize what Scotiabank management said about International Banking in Q2 2025."],
-        ["Transcripts", 5, "Compare how RBC and TD management discussed dividend policy in Q3 2025."],
+        ["Transcripts", 1, "What outlook and guidance did RBC management provide in Q3 2025?"],
+        ["Transcripts", 2, "What were the main topics analysts asked about in TD's Q2 2025 earnings call?"],
+        ["Transcripts", 3, "What strategic initiatives did BMO management highlight in Q3 2025?"],
+        ["Transcripts", 4, "Summarize the key points from Scotiabank's Q2 2025 management discussion."],
+        ["Transcripts", 5, "Compare the key themes from RBC and TD's Q3 2025 earnings calls."],
     ]
 
     for row_idx, row_data in enumerate(popup_data, 1):
@@ -104,7 +104,7 @@ def create_excel():
         [2, "What is the CET1 ratio for RBC and National Bank in Q2 2025?", "Pillar3"],
         [3, "What is the AUA and net income for RBC's Wealth Management segment in Q3 2025?", "Supplementary"],
         [4, "What is CIBC's diluted EPS, both reported and adjusted, for Q3 2025?", "RTS"],
-        [5, "What is RBC management's outlook on net interest margin for 2025?", "Transcripts"],
+        [5, "What is the key guidance RBC management provided in Q3 2025?", "Transcripts"],
     ]
 
     for row_idx, row_data in enumerate(what_is_data, 1):
@@ -128,7 +128,7 @@ def create_excel():
     compare_data = [
         ["#", "Question", "Database"],
         [1, "Compare the efficiency ratio and ROE for TD and RBC in the latest quarter.", "Supplementary"],
-        [2, "Compare how RBC and TD management discussed credit quality in Q3 2025.", "Transcripts"],
+        [2, "Compare the management outlook from RBC and TD in Q3 2025.", "Transcripts"],
         [3, "Compare the liquidity coverage ratio and leverage ratio across the Big Six banks for 2025.", "Pillar3"],
         [4, "Compare investment fees and FICC revenue for RBC and BMO in Q3 2025.", "Supplementary"],
         [5, "Compare the key risk factors disclosed by TD and Scotiabank in Q2 2025.", "RTS"],
@@ -154,9 +154,9 @@ def create_excel():
 
     how_did_data = [
         ["#", "Question", "Database"],
-        [1, "How did TD management explain the increase in credit provisions in Q2 2025?", "Transcripts"],
-        [2, "How did RBC's CFO address analyst questions about expenses in Q3 2025?", "Transcripts"],
-        [3, "How did BMO's CEO describe the rationale for recent acquisitions?", "Transcripts"],
+        [1, "How did TD management describe performance and outlook in Q2 2025?", "Transcripts"],
+        [2, "How did RBC management respond to analyst concerns in Q3 2025?", "Transcripts"],
+        [3, "How did BMO management describe their strategic priorities in Q3 2025?", "Transcripts"],
         [4, "How did TD's risk-weighted assets change from Q1 to Q2 2025?", "Pillar3"],
         [5, "How did CIBC describe their risk management strategy in Q2 2025?", "RTS"],
     ]
@@ -182,10 +182,10 @@ def create_excel():
     summarize_data = [
         ["#", "Question", "Database"],
         [1, "Summarize BMO's Management Discussion and Analysis for Q2 2025 in five key points.", "RTS"],
-        [2, "Summarize what Scotiabank management said about International Banking in Q3 2025.", "Transcripts"],
+        [2, "Summarize the key themes from Scotiabank's Q3 2025 earnings call.", "Transcripts"],
         [3, "Summarize TD's capital adequacy metrics from their latest Pillar 3 disclosure.", "Pillar3"],
         [4, "Summarize RBC's strategy, risks, and outlook from Q3 2025 filings.", "RTS"],
-        [5, "Summarize the key themes from RBC's Q3 2025 analyst Q&A session.", "Transcripts"],
+        [5, "Summarize the analyst Q&A session from RBC's Q3 2025 earnings call.", "Transcripts"],
     ]
 
     for row_idx, row_data in enumerate(summarize_data, 1):
@@ -204,7 +204,7 @@ def create_excel():
     ws6.column_dimensions['C'].width = 15
 
     # Save workbook
-    output_path = "/Users/alexwday/Projects/aegis/docs/aegis_try_a_prompt_questions.xlsx"
+    output_path = "/Users/alexwday/Projects/aegis/aegis_try_a_prompt_questions.xlsx"
     wb.save(output_path)
     print(f"Excel file saved to: {output_path}")
     return output_path
