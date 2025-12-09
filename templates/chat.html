@@ -1014,7 +1014,11 @@
         let subagentContent = {};
 
         function handleWebSocketMessage(data) {
-            hideTypingIndicator();
+            // Only hide typing indicator when we have actual content to show
+            // Keep it visible during status updates while agents are processing
+            if (data.type === 'agent' || data.type === 'subagent_start' || data.type === 'subagent' || data.type === 'error') {
+                hideTypingIndicator();
+            }
 
             if (data.type === 'status') {
                 setStatus(true, data.content);
