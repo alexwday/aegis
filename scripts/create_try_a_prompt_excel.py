@@ -38,8 +38,7 @@ def create_excel():
         "straightforward metric lookups and complex multi-bank comparisons. Users can focus "
         "on specific banks and time periods or ask broadly to get synthesized answers from "
         "multiple data sources, while pre-formatted reports help streamline monthly and "
-        "quarterly deliverables for Investor Relations, Capital Markets, and Wealth "
-        "Management teams."
+        "quarterly deliverables for CFO groups."
     )
 
     ws1.cell(row=1, column=1, value="Landing Page Description")
