@@ -1,0 +1,27 @@
+[
+  {
+    "type": "function",
+    "function": {
+      "name": "databases_selected",
+      "description": "Return the list of databases to query",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "databases": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "description": "The database ID (e.g., 'transcripts', 'supplementary', 'pillar3', 'reports', 'rts')"
+            },
+            "description": "List of database IDs to query"
+          },
+          "rationale": {
+            "type": "string",
+            "description": "Brief explanation of why these databases were selected"
+          }
+        },
+        "required": ["databases"]
+      }
+    }
+  }
+]

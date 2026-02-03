@@ -1,0 +1,8 @@
+I'm analyzing a user query to determine the optimal routing path.
+
+Here's the recent conversation history:
+{conversation_history}
+
+The user just asked: "{current_query}"
+
+Based on this conversation context and the current query, should I route this to direct response (0) or research workflow (1)?

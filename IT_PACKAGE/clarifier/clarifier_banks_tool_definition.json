@@ -1,0 +1,50 @@
+[
+  {
+    "type": "function",
+    "function": {
+      "name": "banks_found",
+      "description": "Return the list of bank IDs found and what the user is asking for",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "bank_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            },
+            "description": "List of bank ID numbers from the index"
+          },
+          "query_intent": {
+            "type": "string",
+            "description": "A comprehensive, self-contained description of what the user wants (including banks, periods if mentioned, and metrics/data requested)"
+          }
+        },
+        "required": ["bank_ids", "query_intent"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "clarification_needed",
+      "description": "Request clarification when banks are ambiguous, unclear, or not specified",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "question": {
+            "type": "string",
+            "description": "Clear question for the user about which banks they mean"
+          },
+          "possible_banks": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            },
+            "description": "Possible bank IDs if you have candidates (can be empty)"
+          }
+        },
+        "required": ["question", "possible_banks"]
+      }
+    }
+  }
+]

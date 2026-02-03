@@ -1,0 +1,97 @@
+[
+  {
+    "type": "function",
+    "function": {
+      "name": "periods_all",
+      "description": "Apply the same period to all banks",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "fiscal_year": {
+            "type": "integer",
+            "description": "Fiscal year (e.g., 2024)"
+          },
+          "quarters": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": ["Q1", "Q2", "Q3", "Q4"]
+            },
+            "description": "List of quarters"
+          }
+        },
+        "required": ["fiscal_year", "quarters"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "periods_specific",
+      "description": "Different periods for different banks",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "bank_periods": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "bank_id": {
+                  "type": "integer"
+                },
+                "fiscal_year": {
+                  "type": "integer"
+                },
+                "quarters": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": ["Q1", "Q2", "Q3", "Q4"]
+                  }
+                }
+              },
+              "required": ["bank_id", "fiscal_year", "quarters"]
+            },
+            "description": "List of bank-specific periods"
+          }
+        },
+        "required": ["bank_periods"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "periods_valid",
+      "description": "Periods mentioned in query are clear and valid",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "periods_clear": {
+            "type": "boolean",
+            "description": "Whether periods mentioned are clear"
+          }
+        },
+        "required": ["periods_clear"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "period_clarification",
+      "description": "Request clarification about time periods",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "question": {
+            "type": "string",
+            "description": "Clarification question about periods"
+          }
+        },
+        "required": ["question"]
+      }
+    }
+  }
+]
