@@ -624,7 +624,17 @@ async def model(
                 databases = planner_result.get("databases", [])
 
                 # Send initial status message BEFORE subagents start
-                if databases:
+                if not databases:
+                    # All selected databases were rejected - nothing to query
+                    yield {
+                        "type": "agent",
+                        "name": "aegis",
+                        "content": (
+                            "\n⚠️ The requested data is not available for the selected time period. "
+                            "Please try a different quarter or check data availability.\n"
+                        ),
+                    }
+                elif databases:
                     # Extract unique periods from combinations
                     unique_periods = set()
                     for combo in bank_period_combinations:

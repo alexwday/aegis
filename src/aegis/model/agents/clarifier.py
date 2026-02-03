@@ -613,7 +613,8 @@ async def extract_periods(
             if period_availability.get("availability"):
                 availability_text += "Available periods in the system:\n"
                 availability_text += (
-                    "VALIDATION RULE: If a period exists in ANY database, it is AVAILABLE.\n\n"
+                    "VALIDATION RULE: ONLY periods shown in the table below are available. "
+                    "If a requested period is NOT in this table, use period_clarification.\n\n"
                 )
                 availability_text += (
                     "Bank | Name                         | Year | Quarter | Databases\n"

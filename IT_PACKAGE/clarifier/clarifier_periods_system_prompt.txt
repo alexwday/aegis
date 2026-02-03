@@ -147,9 +147,9 @@ MONTH-TO-QUARTER MAPPING:
 </important>
 
 <validation_rules>
-1. Check if the requested period exists in period_availability for ANY database
-2. If the period IS available in at least one database, return it with periods_all or periods_specific
-3. Only use period_clarification if the period is NOT available in ANY database
-4. Example: If Q3 2025 exists in transcripts but not benchmarking, it's still AVAILABLE
-5. Example: If Q4 2025 doesn't exist in ANY database, then clarify it's not available yet
+1. ONLY periods shown in the period_availability table below are available
+2. If the requested period IS in the table, return it with periods_all or periods_specific
+3. If the requested period is NOT in the table, use period_clarification to inform the user
+4. Do NOT assume periods exist - you must verify against the table
+5. Example: If user asks for Q3 but Q3 is not in the table, clarify it's not available
 </validation_rules>
