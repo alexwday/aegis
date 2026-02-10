@@ -1,0 +1,1583 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ _0_header_params.bank_name }} - {{ _0_header_params.fiscal_quarter }} {{ _0_header_params.fiscal_year }} Earnings Report</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #f0f2f5;
+            --card: #ffffff;
+            --text-main: #1a202c;
+            --text-muted: #64748b;
+            --border: #e2e8f0;
+            --accent: #005587; /* Static Blue - unchanged across banks */
+            --accent-2: #0ea5e9;
+            --pos: #16a34a; /* Green */
+            --neg: #dc2626; /* Red */
+            --warning: #f59e0b;
+            --shadow: 0 12px 30px rgba(0, 40, 80, 0.08);
+        }
+        body { 
+            font-family: 'Manrope', 'Segoe UI', sans-serif; 
+            background: radial-gradient(120% 120% at 20% 20%, #f1f6ff 0%, #eef2f7 35%, #e7edf4 100%); 
+            color: var(--text-main); 
+            margin: 24px; 
+        }
+        .page-shell {
+            position: relative;
+            z-index: 1;
+        }
+        .page-shell::after {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background: radial-gradient(600px at 10% 10%, rgba(14, 165, 233, 0.08), transparent 45%),
+                        radial-gradient(500px at 90% 20%, rgba(0, 85, 135, 0.08), transparent 45%);
+            z-index: -1;
+            pointer-events: none;
+        }
+        
+        /* Hero - V5 Dark Elegant with Gradient Mesh */
+        .hero {
+            display: grid;
+            grid-template-columns: 2fr 1.05fr;
+            gap: 20px;
+            align-items: center;
+            background: #0a0a0c;
+            color: #f8fafc;
+            padding: 6px 40px;
+            border-radius: 4px;
+            box-shadow:
+                0 1px 0 rgba(255,255,255,0.03),
+                0 20px 50px rgba(0, 0, 0, 0.5);
+            position: relative;
+            overflow: hidden;
+            border: 1px solid #2a2a2a;
+        }
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background:
+                radial-gradient(circle at 0% 0%, rgba(59, 130, 246, 0.35) 0%, transparent 45%),
+                radial-gradient(circle at 100% 100%, rgba(139, 92, 246, 0.3) 0%, transparent 45%),
+                radial-gradient(circle at 80% 20%, rgba(14, 165, 233, 0.25) 0%, transparent 40%),
+                radial-gradient(circle at 20% 80%, rgba(16, 185, 129, 0.2) 0%, transparent 40%);
+            pointer-events: none;
+        }
+        .hero::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background:
+                radial-gradient(ellipse 60% 40% at 50% -10%, rgba(255,255,255,0.04) 0%, transparent 60%),
+                linear-gradient(180deg, rgba(255,255,255,0.02) 0%, transparent 30%);
+            pointer-events: none;
+        }
+        .hero h1 {
+            color: #ffffff;
+            font-size: 38px;
+            margin: 6px 0 6px 0;
+            font-weight: 500;
+            letter-spacing: 0.5px;
+        }
+        .hero .sub-header {
+            color: #a0a0a0;
+            margin-bottom: 12px;
+            letter-spacing: 0.3px;
+            font-size: 16px;
+        }
+        .hero-title-group {
+            display: flex;
+            align-items: center;
+            position: relative;
+            z-index: 1;
+        }
+        .bank-logo {
+            height: 48px;
+            width: auto;
+            object-fit: contain;
+            flex-shrink: 0;
+        }
+        .pill-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 6px;
+        }
+        .pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 10px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.12);
+            color: #f8fafc;
+            font-size: 11px;
+            letter-spacing: 0.2px;
+        }
+        .pill-muted {
+            background: rgba(255, 255, 255, 0.08);
+            color: #dce5f2;
+        }
+        .hero-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
+        }
+        .hero-stat {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 10px;
+            padding: 10px 12px;
+        }
+        .hero-stat-label {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #d7e3f2;
+            margin-bottom: 4px;
+            font-weight: 600;
+        }
+        .hero-stat-value {
+            font-size: 18px;
+            font-weight: 700;
+            color: #ffffff;
+            margin-bottom: 4px;
+        }
+        .hero-stat-delta {
+            font-size: 12px;
+            font-weight: 600;
+            color: #d7e3f2;
+        }
+        .hero-right {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid #2a2a2a;
+            border-radius: 4px;
+            padding: 18px 20px;
+        }
+        .hero-label {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: #808080;
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+        .hero-footnote {
+            font-size: 11px;
+            color: #d7e3f2;
+            margin-top: 8px;
+            display: block;
+        }
+        .hero .dividend-amount {
+            color: #ffffff;
+            font-weight: 500;
+        }
+        .hero .dividend-change span {
+            color: #808080;
+        }
+        .hero .dividend-change .pos {
+            color: #4ade80;
+        }
+        
+        /* Grid Layout */
+        .grid-container {
+            display: grid;
+            gap: 20px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        .full-row { grid-column: 1 / -1; }
+        .half-half { 
+            display: grid; 
+            grid-template-columns: 1fr 1fr; 
+            gap: 20px; 
+        }
+
+        /* Cards */
+        .card { 
+            background: var(--card); 
+            padding: 20px; 
+            border-radius: 10px; 
+            border: 1px solid #dce2ec; 
+            box-shadow: 0 6px 20px rgba(15, 41, 76, 0.07); 
+        }
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 12px;
+            margin-bottom: 10px;
+        }
+        .section-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+        .pill-soft {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 10px;
+            border-radius: 8px;
+            background: #f1f5f9;
+            color: #334155;
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.2px;
+        }
+        .pill-soft.accent {
+            background: rgba(0, 85, 135, 0.12);
+            color: #004a7f;
+            border: 1px solid rgba(0, 85, 135, 0.2);
+        }
+        
+        /* Typography */
+        h1 { font-size: 24px; margin: 0 0 5px 0; color: var(--accent); }
+        h2 { font-size: 16px; text-transform: uppercase; color: var(--text-muted); margin-top: 0; border-bottom: 1px solid var(--border); padding-bottom: 10px; letter-spacing: 0.5px; }
+        .sub-header { font-size: 14px; color: var(--text-muted); margin-bottom: 20px; }
+        
+        /* Enhanced Metric Badges */
+        .metric-box {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+            padding: 14px 12px;
+            border-radius: 8px;
+            text-align: center;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.04);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        .metric-box:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.08);
+            background: linear-gradient(135deg, #ffffff 0%, #ffffff 100%);
+        }
+        .metric-label {
+            display: block;
+            font-size: 11px;
+            color: var(--accent);
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            font-weight: 700;
+            flex-shrink: 0;
+        }
+        .metric-content {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            justify-content: flex-end;
+        }
+        .metric-val {
+            font-size: 20px;
+            font-weight: 700;
+            color: #1a202c;
+            margin-bottom: 6px;
+            display: block;
+        }
+        .metric-changes-container {
+            display: flex;
+            justify-content: center;
+            gap: 0;
+            margin-top: 6px;
+            padding-top: 6px;
+            border-top: 1px solid #f0f4f8;
+        }
+        .metric-change-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 0 22px;
+        }
+        .metric-change-item:first-child {
+            border-right: 1px solid #e2e8f0;
+        }
+        .change-label {
+            font-size: 8px;
+            color: #94a3b8;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 2px;
+            font-weight: 700;
+        }
+        .delta {
+            font-size: 12px;
+            font-weight: 700;
+        }
+        /* Value class - matches delta style but in black */
+        .value {
+            font-size: 12px;
+            font-weight: 700;
+            color: #1e293b;
+            font-family: 'Consolas', monospace;
+        }
+        /* Unit suffix styling (M, B, %) - distinguishes from numbers */
+        .unit {
+            font-weight: 600;
+            color: #64748b;
+        }
+        /* Legacy delta classes (for any hardcoded content) */
+        .pos { color: var(--pos); }
+        .neg { color: var(--neg); }
+        .neutral { color: var(--text-muted); }
+
+        /* Dynamic delta classes for template rendering - use direction from JSON */
+        .positive { color: var(--pos); }
+        .negative { color: var(--neg); }
+        .delta-positive { color: #4ade80; }
+        .delta-negative { color: #f87171; }
+        .delta-neutral { color: #808080; }
+
+        /* Dividend Section */
+        .dividend-display {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        .dividend-amount {
+            font-size: 22px;
+            font-weight: bold;
+            color: var(--accent);
+        }
+        .dividend-change {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 14px;
+        }
+
+        /* Items of Note Table */
+        .items-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+            background: #fafbfc;
+            border-radius: 6px;
+            overflow: hidden;
+        }
+        .items-table th {
+            text-align: left;
+            color: var(--text-muted);
+            font-weight: 600;
+            padding: 10px;
+            background: #f1f5f9;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .items-table td {
+            padding: 10px;
+            border-bottom: 1px solid var(--border);
+        }
+        .items-table tr:last-child td {
+            border-bottom: none;
+        }
+        .item-description {
+            font-weight: 500;
+            color: var(--text-main);
+        }
+        .impact-value {
+            text-align: right;
+            font-size: 12px;
+            font-weight: 700;
+        }
+        .change-col {
+            text-align: right;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        /* Tables */
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th { text-align: left; color: var(--text-muted); font-weight: 600; padding: 8px; border-bottom: 2px solid var(--border); font-size: 11px; }
+        td { padding: 8px; border-bottom: 1px solid var(--border); }
+        .num { text-align: right; font-family: 'Consolas', monospace; }
+
+        /* Quotes Section */
+        .quote-box { 
+            background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); 
+            border-left: 3px solid var(--accent); 
+            padding: 12px 15px; 
+            margin-bottom: 12px; 
+            border-radius: 0 6px 6px 0;
+            font-size: 13px;
+        }
+        .quote-source { 
+            font-size: 10px; 
+            color: var(--accent); 
+            text-transform: uppercase; 
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+            font-weight: 600;
+        }
+        .quote-text {
+            color: #2d3748;
+            line-height: 1.5;
+        }
+
+        /* Q&A Section */
+        .qa-item {
+            background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+            border-radius: 8px;
+            padding: 14px 12px;
+            margin-bottom: 10px;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.04);
+            transition: all 0.3s ease;
+        }
+        .qa-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.08);
+            background: linear-gradient(135deg, #ffffff 0%, #ffffff 100%);
+        }
+        .qa-theme {
+            font-weight: 600;
+            font-size: 12px;
+            color: var(--accent);
+            text-transform: uppercase;
+            margin-bottom: 6px;
+            letter-spacing: 0.3px;
+        }
+        .qa-content {
+            font-size: 12px;
+            color: #4a5568;
+            line-height: 1.5;
+        }
+
+        /* Source Tag */
+        .source-tag { 
+            font-size: 9px; 
+            color: #66798d; 
+            display: inline-flex; 
+            align-items: center;
+            gap: 4px;
+            text-transform: uppercase; 
+            letter-spacing: 0.5px;
+            background: #eef2f7;
+            padding: 3px 8px;
+            border-radius: 6px;
+            border: 1px solid #dce2ec;
+        }
+
+        /* Risk Metrics */
+        .risk-category {
+            margin-bottom: 20px;
+            background: #fafbfc;
+            padding: 15px;
+            border-radius: 6px;
+        }
+        .risk-category-title {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--accent);
+            text-transform: uppercase;
+            margin-bottom: 12px;
+            letter-spacing: 0.5px;
+        }
+        .risk-metric {
+            display: flex;
+            justify-content: space-between;
+            padding: 6px 0;
+            border-bottom: 1px solid #f0f0f0;
+            font-size: 12px;
+        }
+        .risk-metric:last-child {
+            border-bottom: none;
+        }
+        .risk-label {
+            color: var(--text-muted);
+        }
+        .risk-value {
+            font-weight: 600;
+            font-family: 'Consolas', monospace;
+        }
+
+        /* Progress Bars */
+        .progress-bar {
+            height: 10px;
+            background: #e0e0e0;
+            border-radius: 5px;
+            overflow: hidden;
+            margin: 8px 0;
+        }
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(to right, var(--accent), #0080d5);
+            position: relative;
+            transition: width 0.3s;
+        }
+        .progress-marker {
+            position: absolute;
+            right: -1px;
+            top: 0;
+            width: 2px;
+            height: 100%;
+            background: white;
+        }
+
+        /* Enhanced Segment Table */
+        .segment-table th {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .segment-table td {
+            font-size: 12px;
+        }
+        .segment-name {
+            font-weight: 500;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="page-shell">
+    <div class="grid-container">
+        
+        <!-- ============================================
+             SECTION 0: Header/Hero
+             DATA SOURCES:
+               - 0_header_params.json (bank_name, fiscal_quarter, fiscal_year, period_ending, logo_base64, brand)
+               - 0_header_dividend.json (dividend.amount, dividend.qoq, dividend.yoy)
+             ============================================ -->
+        <div class="hero full-row" style="background: linear-gradient(135deg, {{ _0_header_params.brand.secondary }} 0%, #0a0a0c 50%);">
+            <div class="hero-title-group">
+                <div>
+                    <h1 style="font-size: 36px; font-family: 'Inter', sans-serif; font-weight: 600;">{{ _0_header_params.bank_name }}</h1>
+                    <div class="sub-header">Fiscal {{ _0_header_params.fiscal_quarter }} {{ _0_header_params.fiscal_year }} Report • Period Ending {{ _0_header_params.period_ending }}</div>
+                </div>
+            </div>
+            <div class="hero-right" style="display: flex; align-items: center; gap: 20px; width: fit-content; margin-left: auto; padding: 8px 16px;">
+                <div>
+                    <div class="hero-label" style="font-size: 10px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 2px;">Quarterly Dividend</div>
+                    <span class="dividend-amount" style="font-size: 24px; font-family: 'Inter', sans-serif; font-weight: 600;">{{ _0_header_dividend.dividend.amount }}</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 6px; padding-left: 14px; border-left: 1px solid rgba(255,255,255,0.1);">
+                    <span style="font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700;">YoY</span>
+                    <span style="font-size: 12px; font-weight: 700;" class="delta-{{ _0_header_dividend.dividend.yoy.direction }}">{{ _0_header_dividend.dividend.yoy.display }}</span>
+                </div>
+                {% if _0_header_params.logo_base64 %}
+                <img src="data:image/png;base64,{{ _0_header_params.logo_base64 }}"
+                     alt="{{ _0_header_params.bank_name }} Logo"
+                     class="bank-logo"
+                     style="padding-left: 14px; border-left: 1px solid rgba(255,255,255,0.1);">
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- ============================================
+             SECTION 1: Key Financial Metrics
+             SUBSECTIONS:
+               - 1a: Overview (1_keymetrics_overview.json)
+               - 1b: Metric Tiles (1_keymetrics_tiles.json)
+               - 1c: NIM Trend Chart (1_keymetrics_chart.json)
+               - 1d: Items of Note (1_keymetrics_items.json)
+             ============================================ -->
+        <div class="card full-row">
+            <!-- -------- Subsection 1a: Overview --------
+                 DATA SOURCE: 1_keymetrics_overview.json (narrative)
+                 SOURCE: Combined from RTS and Transcript
+            -->
+            <div style="margin-bottom: 20px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <h3 style="font-size: 14px; color: var(--text-muted); margin: 0;">OVERVIEW</h3>
+                </div>
+                <p style="font-size: 12px; color: var(--text-main); line-height: 1.5; margin: 0;">
+                    {{ _1_keymetrics_overview.narrative }}
+                </p>
+            </div>
+
+            <!-- -------- Subsection 1b: Key Metric Tiles --------
+                 DATA SOURCE: 1_keymetrics_tiles.json (metrics array)
+                 SOURCE: Supp Pack
+            -->
+            <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--border);">
+            <div class="section-header" style="align-items: center;">
+                <h3 style="font-size: 14px; color: var(--text-muted); margin: 0;">KEY METRICS</h3>
+                <div class="section-actions" style="align-items: center;">
+                    <span class="pill-soft">Adjusted figures</span>
+                    <span class="pill-soft">Currency: {{ _0_header_params.currency }}</span>
+                </div>
+            </div>
+
+            <!-- Unified 5-column grid for main tiles, chart, and slim tiles
+                 Row 1: Main tile 1, Main tile 2, Main tile 3, Chart (spans 2 cols, 2 rows)
+                 Row 2: Main tile 4, Main tile 5, Main tile 6, (chart continues)
+                 Row 3: Slim tile 1, Slim tile 2, Slim tile 3, Slim tile 4, Slim tile 5
+            -->
+            <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px;">
+                <!-- Main tiles row 1 (positions 1-3) -->
+                {% for metric in _1_keymetrics_tiles.metrics[:3] %}
+                <div class="metric-box">
+                    <span class="metric-label">{{ metric.label }}</span>
+                    <div class="metric-content">
+                        <span class="metric-val">{{ metric.value|safe }}</span>
+                        <div class="metric-changes-container">
+                            <div class="metric-change-item">
+                                <span class="change-label">QoQ</span>
+                                <span class="delta {{ metric.qoq.direction }}">{{ metric.qoq.display }}</span>
+                            </div>
+                            <div class="metric-change-item">
+                                <span class="change-label">YoY</span>
+                                <span class="delta {{ metric.yoy.direction }}">{{ metric.yoy.display }}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+                {% for _ in range(_1_keymetrics_tiles.metrics[:3]|length, 3) %}
+                <div class="metric-box" style="opacity: 0.4;">
+                    <span class="metric-label">No Data</span>
+                    <div class="metric-content">
+                        <span class="metric-val">—</span>
+                    </div>
+                </div>
+                {% endfor %}
+
+                <!-- -------- Trend Chart (always rendered, spans 2 cols, 2 rows) --------
+                     DATA SOURCE: 1_keymetrics_chart.json (metrics array with initial_index)
+                     SOURCE: Supp Pack
+                -->
+                <div id="trend-chart-container" style="grid-column: span 2; grid-row: span 2; background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%); border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.04); display: flex; flex-direction: column;">
+                    <!-- Navigation header with arrows and clickable title -->
+                    <div id="chart-nav" style="display: flex; align-items: center; justify-content: center; margin-bottom: 8px; position: relative;">
+                        <button id="chart-prev" style="background: none; border: none; cursor: pointer; padding: 4px 8px; font-size: 16px; color: #94a3b8; transition: color 0.2s;" title="Previous metric">◀</button>
+                        <div style="position: relative; flex: 1; text-align: center;">
+                            <span id="chart-title" class="metric-label" style="cursor: pointer; padding: 4px 8px; border-radius: 4px; transition: background 0.2s;" title="Click to select metric"></span>
+                            <!-- Dropdown menu (hidden by default) -->
+                            <div id="chart-dropdown" style="display: none; position: absolute; top: 100%; left: 50%; transform: translateX(-50%); background: white; border: 1px solid #e2e8f0; border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 100; min-width: 200px; max-height: 240px; overflow-y: auto; margin-top: 4px;">
+                                <!-- Dropdown items populated by JavaScript -->
+                            </div>
+                        </div>
+                        <button id="chart-next" style="background: none; border: none; cursor: pointer; padding: 4px 8px; font-size: 16px; color: #94a3b8; transition: color 0.2s;" title="Next metric">▶</button>
+                    </div>
+                    <!-- Chart content area -->
+                    <div id="chart-content" style="flex: 1; display: flex; flex-direction: column;">
+                        <!-- Chart will be rendered here by JavaScript -->
+                    </div>
+                </div>
+
+                <!-- Main tiles row 2 (positions 4-6) -->
+                {% for metric in _1_keymetrics_tiles.metrics[3:6] %}
+                <div class="metric-box">
+                    <span class="metric-label">{{ metric.label }}</span>
+                    <div class="metric-content">
+                        <span class="metric-val">{{ metric.value|safe }}</span>
+                        <div class="metric-changes-container">
+                            <div class="metric-change-item">
+                                <span class="change-label">QoQ</span>
+                                <span class="delta {{ metric.qoq.direction }}">{{ metric.qoq.display }}</span>
+                            </div>
+                            <div class="metric-change-item">
+                                <span class="change-label">YoY</span>
+                                <span class="delta {{ metric.yoy.direction }}">{{ metric.yoy.display }}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+                {% for _ in range(_1_keymetrics_tiles.metrics[3:6]|length, 3) %}
+                <div class="metric-box" style="opacity: 0.4;">
+                    <span class="metric-label">No Data</span>
+                    <div class="metric-content">
+                        <span class="metric-val">—</span>
+                    </div>
+                </div>
+                {% endfor %}
+
+                <!-- Chart data embedded for JavaScript -->
+                <script id="trend-chart-data" type="application/json">
+                {{ _1_keymetrics_chart | tojson }}
+                </script>
+
+                <!-- Slim tiles (5 tiles spanning full row 3) -->
+                {% for metric in _1_keymetrics_dynamic.metrics %}
+                <div style="background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%); border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.04); display: flex; flex-direction: column;">
+                    <!-- Metric name centered - fixed height area to handle wrapping consistently -->
+                    <div style="font-size: 10px; color: var(--accent); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700; text-align: center; min-height: 28px; display: flex; align-items: center; justify-content: center; line-height: 1.3;">{{ metric.label }}</div>
+                    <!-- Grid layout: 3 columns for Current/QoQ/YoY - pushed to bottom with margin-top: auto -->
+                    <div style="display: grid; grid-template-columns: 1fr auto auto; gap: 4px 8px; align-items: center; margin-top: auto;">
+                        <!-- Label row -->
+                        <span style="font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700; text-align: center;">Current</span>
+                        <span style="font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700; text-align: center;">QoQ</span>
+                        <span style="font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700; text-align: center;">YoY</span>
+                        <!-- Value row -->
+                        <span style="font-size: 14px; font-weight: 700; color: var(--text-main); text-align: center;">{{ metric.value|safe }}</span>
+                        <span class="delta {{ metric.qoq.direction }}" style="font-size: 10px; font-weight: 600; text-align: center;">{{ metric.qoq.display }}</span>
+                        <span class="delta {{ metric.yoy.direction }}" style="font-size: 10px; font-weight: 600; text-align: center;">{{ metric.yoy.display }}</span>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+
+            <!-- -------- Expandable Raw Metrics Table --------
+                 DATA SOURCE: 1_keymetrics_raw (headers, rows, tsv)
+                 SOURCE: Supp Pack
+                 NOTE: All enterprise metrics with 8Q history, copy-paste friendly
+            -->
+            {% if _1_keymetrics_raw.rows %}
+            <div style="margin-top: 16px; text-align: center;">
+                <button id="raw-metrics-toggle" onclick="toggleRawMetrics()" style="background: none; border: 1px solid #e2e8f0; border-radius: 6px; padding: 6px 12px; cursor: pointer; font-size: 9px; color: #64748b; transition: all 0.2s;">
+                    <span id="toggle-icon">▶</span> View All Enterprise Metrics ({{ _1_keymetrics_raw.rows|length }} metrics, 8Q history)
+                </button>
+            </div>
+
+            <div id="raw-metrics-container" style="display: none; margin-top: 12px; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; max-width: 100%;">
+                <!-- Copy button bar -->
+                <div style="background: #f8fafc; padding: 6px 10px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: flex-end; align-items: center;">
+                    <button onclick="copyRawMetrics()" style="background: #005587; color: white; border: none; border-radius: 4px; padding: 4px 10px; cursor: pointer; font-size: 9px; font-weight: 600;">
+                        Copy to Clipboard
+                    </button>
+                </div>
+
+                <!-- Scrollable table container (both vertical and horizontal) -->
+                <div style="max-height: 350px; overflow: auto;">
+                    <table id="raw-metrics-table" style="border-collapse: collapse; font-size: 9px; font-family: 'Consolas', 'Monaco', monospace; min-width: 100%;">
+                        <thead style="position: sticky; top: 0; background: #f1f5f9; z-index: 10;">
+                            <tr>
+                                {% for header in _1_keymetrics_raw.headers %}
+                                <th style="padding: 5px 6px; text-align: {% if loop.index == 1 %}left{% else %}right{% endif %}; border-bottom: 1px solid #e2e8f0; font-weight: 700; color: #64748b; white-space: nowrap; font-size: 8px; text-transform: uppercase;">{{ header }}</th>
+                                {% endfor %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in _1_keymetrics_raw.rows %}
+                            <tr style="background: {% if loop.index is odd %}#ffffff{% else %}#f8fafc{% endif %};">
+                                <td style="padding: 4px 6px; border-bottom: 1px solid #f0f4f8; font-weight: 600; color: #1e293b; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ row.metric }}">{{ row.metric }}</td>
+                                {% for val in row['values'] %}
+                                <td style="padding: 4px 6px; border-bottom: 1px solid #f0f4f8; text-align: right; color: #334155;">{{ val }}</td>
+                                {% endfor %}
+                                <td style="padding: 4px 6px; border-bottom: 1px solid #f0f4f8; color: #94a3b8; text-align: center;">{{ row.type }}</td>
+                                <td style="padding: 4px 6px; border-bottom: 1px solid #f0f4f8; text-align: right;" class="{{ row.qoq_direction }}">{{ row.qoq }}</td>
+                                <td style="padding: 4px 6px; border-bottom: 1px solid #f0f4f8; text-align: right;" class="{{ row.yoy_direction }}">{{ row.yoy }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Hidden textarea for TSV copy -->
+            <textarea id="raw-metrics-tsv" style="position: absolute; left: -9999px;">{{ _1_keymetrics_raw.tsv }}</textarea>
+            {% endif %}
+            </div>
+
+            <!-- -------- Subsection 1d: Items of Note --------
+                 DATA SOURCE: 1_keymetrics_items.json
+                 Structured items with: description, impact, segment, timing, source
+                 SOURCE: Combined from RTS and Transcript with deduplication
+                 NOTE: Shows top 5 items, expandable for more
+            -->
+            <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--border);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <h3 style="font-size: 14px; color: var(--text-muted); margin: 0;">ITEMS OF NOTE</h3>
+                </div>
+
+                {% if _1_keymetrics_items.entries|length > 0 %}
+                <!-- Items of Note table -->
+                <table class="items-table" style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr style="border-bottom: 2px solid #e2e8f0;">
+                            <th style="width: 50%; text-align: left; padding: 8px 4px; font-size: 10px; color: #64748b; font-weight: 600;">Description</th>
+                            <th style="width: 15%; text-align: right; padding: 8px 4px; font-size: 10px; color: #64748b; font-weight: 600;">Impact</th>
+                            <th style="width: 20%; text-align: center; padding: 8px 4px; font-size: 10px; color: #64748b; font-weight: 600;">Segment</th>
+                            <th style="width: 15%; text-align: center; padding: 8px 4px; font-size: 10px; color: #64748b; font-weight: 600;">Timing</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in _1_keymetrics_items.entries[:4] %}
+                        <tr style="border-bottom: 1px solid #f1f5f9;">
+                            <td style="padding: 10px 4px; font-size: 12px; color: var(--text-main);">{{ item.description }}</td>
+                            <td style="padding: 10px 4px; font-size: 12px; font-weight: 600; text-align: right; {% if item.impact.startswith('+') %}color: #16a34a;{% elif item.impact.startswith('-') %}color: #dc2626;{% else %}color: var(--text-main);{% endif %}">{{ item.impact }}</td>
+                            <td style="padding: 10px 4px; font-size: 11px; text-align: center; color: #64748b;">{{ item.segment }}</td>
+                            <td style="padding: 10px 4px; font-size: 11px; text-align: center; color: #64748b;">{{ item.timing }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+
+                <!-- Expandable section for additional items -->
+                {% if _1_keymetrics_items.entries|length > 4 %}
+                <div style="margin-top: 12px; text-align: center;">
+                    <button id="items-toggle" onclick="toggleItems()" style="background: none; border: 1px solid #e2e8f0; border-radius: 6px; padding: 6px 12px; cursor: pointer; font-size: 9px; color: #64748b; transition: all 0.2s;">
+                        <span id="items-icon">▶</span> Show {{ _1_keymetrics_items.entries|length - 4 }} More Items
+                    </button>
+                </div>
+
+                <div id="items-container" style="display: none; margin-top: 12px;">
+                    <table class="items-table" style="width: 100%; border-collapse: collapse;">
+                        <tbody>
+                            {% for item in _1_keymetrics_items.entries[4:] %}
+                            <tr style="border-bottom: 1px solid #f1f5f9; background: #fafbfc;">
+                                <td style="width: 50%; padding: 8px 4px; font-size: 11px; color: var(--text-main);">{{ item.description }}</td>
+                                <td style="width: 15%; padding: 8px 4px; font-size: 11px; font-weight: 600; text-align: right; {% if item.impact.startswith('+') %}color: #16a34a;{% elif item.impact.startswith('-') %}color: #dc2626;{% else %}color: var(--text-main);{% endif %}">{{ item.impact }}</td>
+                                <td style="width: 20%; padding: 8px 4px; font-size: 10px; text-align: center; color: #64748b;">{{ item.segment }}</td>
+                                <td style="width: 15%; padding: 8px 4px; font-size: 10px; text-align: center; color: #64748b;">{{ item.timing }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% endif %}
+
+                {% else %}
+                <!-- No items found -->
+                <div style="padding: 20px; text-align: center; color: #94a3b8; font-size: 12px; font-style: italic;">
+                    No significant impact items identified in regulatory filings or transcript.
+                </div>
+                {% endif %}
+
+                <!-- Disclaimer -->
+                <div style="margin-top: 12px; padding-top: 8px; border-top: 1px solid #e2e8f0;">
+                    <div style="font-size: 9px; color: #94a3b8; font-style: italic;">* Content extracted from RTS regulatory filing and earnings call transcript. Verify all metrics against source documents.</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============================================
+             SECTION 2: Management Narrative
+             DATA SOURCE: 2_narrative.json (entries array with type: rts|transcript)
+             NOTE: Variable-length, ordered list. RTS = plain text, Transcript = quoted style
+             ============================================ -->
+        <div class="half-half">
+            <div class="card">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <h2 style="margin: 0; border-bottom: none; padding-bottom: 0;">Management Narrative</h2>
+                </div>
+
+                {% for entry in _2_narrative.entries %}
+                {% if entry.type == 'rts' %}
+                <!-- RTS item -->
+                <div style="padding: 0 0 20px 0;">
+                    <div style="font-size: 12px; color: var(--text-main); line-height: 1.5;">{{ entry.content }}</div>
+                </div>
+                {% elif entry.type == 'transcript' %}
+                <!-- Transcript quote -->
+                <div style="padding: 8px 0 20px 0; margin: 0 24px; position: relative;">
+                    <span style="position: absolute; top: 0; left: -8px; font-size: 36px; color: #cbd5e1; font-family: Georgia, serif; line-height: 1;">"</span>
+                    <div style="font-size: 12px; color: var(--text-main); line-height: 1.5; font-style: italic; padding-left: 16px; padding-right: 16px;">{{ entry.content }}</div>
+                    <span style="position: absolute; bottom: 28px; right: -4px; font-size: 36px; color: #cbd5e1; font-family: Georgia, serif; line-height: 1;">"</span>
+                    <div style="font-size: 10px; color: var(--text-muted); margin-top: 6px; font-weight: 600; text-align: right; padding-right: 16px;">— {{ entry.speaker }}, {{ entry.title }}*</div>
+                </div>
+                {% endif %}
+                {% endfor %}
+
+                <!-- Disclaimer for AI-summarized quotes -->
+                {% if _2_narrative.entries|selectattr('type', 'equalto', 'transcript')|list|length > 0 %}
+                <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #e2e8f0;">
+                    <div style="font-size: 9px; color: #94a3b8; font-style: italic;">* Content extracted from RTS regulatory filing and earnings call transcript. Verify all metrics against source documents.</div>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- ============================================
+                 SECTION 3: Analyst Focus
+                 DATA SOURCE: 3_analyst_focus.json
+                   - featured: Top 4 Q&A entries selected by LLM
+                   - entries: All extracted Q&A entries
+                 NOTE: Featured entries shown by default, expand to see all
+                 ============================================ -->
+            <div class="card">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <h2 style="margin: 0; border-bottom: none; padding-bottom: 0;">Analyst Focus</h2>
+                </div>
+
+                <!-- Featured Q&A entries (top 4 selected by LLM) -->
+                {% for qa in _3_analyst_focus.featured %}
+                <div class="qa-item">
+                    <div style="margin-bottom: 8px;">
+                        <span style="font-size: 11px; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;">{{ qa.theme }}</span>
+                    </div>
+                    <div style="position: relative; margin-bottom: 6px; padding-left: 16px; padding-right: 12px;">
+                        <span style="position: absolute; top: -4px; left: 0; font-size: 20px; color: #cbd5e1; font-family: Georgia, serif; line-height: 1;">"</span>
+                        <div style="font-size: 11px; color: #475569; font-style: italic;">{{ qa.question }}</div>
+                        <span style="position: absolute; bottom: -8px; right: 4px; font-size: 20px; color: #cbd5e1; font-family: Georgia, serif; line-height: 1;">"</span>
+                    </div>
+                    <div style="font-size: 12px; color: var(--text-main); line-height: 1.5;">
+                        {{ qa.answer }}
+                    </div>
+                </div>
+                {% endfor %}
+
+                <!-- Expandable section for remaining Q&A entries (not featured) -->
+                {% if _3_analyst_focus.remaining|length > 0 %}
+                <div style="margin-top: 12px; text-align: center;">
+                    <button id="analyst-focus-toggle" onclick="toggleAnalystFocus()" style="background: none; border: 1px solid #e2e8f0; border-radius: 6px; padding: 6px 12px; cursor: pointer; font-size: 9px; color: #64748b; transition: all 0.2s;">
+                        <span id="analyst-focus-icon">▶</span> Show {{ _3_analyst_focus.remaining|length }} More Q&A
+                    </button>
+                </div>
+
+                <div id="analyst-focus-container" style="display: none; margin-top: 12px; padding-top: 12px; border-top: 1px solid #e2e8f0;">
+                    {% for qa in _3_analyst_focus.remaining %}
+                    <div class="qa-item" style="background: #fafbfc;">
+                        <div style="margin-bottom: 8px;">
+                            <span style="font-size: 10px; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;">{{ qa.theme }}</span>
+                        </div>
+                        <div style="position: relative; margin-bottom: 6px; padding-left: 14px; padding-right: 10px;">
+                            <span style="position: absolute; top: -3px; left: 0; font-size: 16px; color: #cbd5e1; font-family: Georgia, serif; line-height: 1;">"</span>
+                            <div style="font-size: 10px; color: #475569; font-style: italic;">{{ qa.question }}</div>
+                            <span style="position: absolute; bottom: -6px; right: 2px; font-size: 16px; color: #cbd5e1; font-family: Georgia, serif; line-height: 1;">"</span>
+                        </div>
+                        <div style="font-size: 11px; color: var(--text-main); line-height: 1.5;">
+                            {{ qa.answer }}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+
+                <!-- Disclaimer for summarized Q&A -->
+                <div style="margin-top: 12px; padding-top: 8px; border-top: 1px solid #e2e8f0;">
+                    <div style="font-size: 9px; color: #94a3b8; font-style: italic;">* Content summarized from earnings call transcript. Verify all metrics against source documents.</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============================================
+             SECTION 4: Segment Performance
+             DATA SOURCE: 4_segments.json (entries array with name, description, core_metrics)
+             NOTE: Variable-length list of business segments with driver text and core metrics
+             ============================================ -->
+        <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px;">
+            <div class="card">
+                <div class="section-header" style="align-items: center;">
+                    <h2 style="margin: 0; border-bottom: none; padding-bottom: 0;">Segment Performance</h2>
+                    <div class="section-actions" style="align-items: center;">
+                        <span class="pill-soft">Adjusted figures</span>
+                        <span class="pill-soft">Currency: {{ _0_header_params.currency }}</span>
+                    </div>
+                </div>
+
+                <div style="display: flex; flex-direction: column; margin-top: 10px;">
+                    {% for segment in _4_segments.entries %}
+                    <div class="qa-item" style="padding: 10px 12px; margin-bottom: 8px;">
+                        <!-- Segment header -->
+                        <div style="margin-bottom: 6px;">
+                            <span style="font-size: 11px; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;">{{ segment.name }}</span>
+                        </div>
+                        <!-- Two-column layout: Driver description (left) + Core metrics & expand button (right) -->
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: start;">
+                            <!-- Left column: Driver Description -->
+                            <div style="background: #f8fafc; border-radius: 4px; padding: 8px 10px; min-height: 60px; display: flex; align-items: center;">
+                                {% if segment.description %}
+                                <div style="font-size: 11px; color: var(--text-main); line-height: 1.5;">{{ segment.description }}</div>
+                                {% else %}
+                                <div style="font-size: 11px; color: #94a3b8; font-style: italic;">No driver information available.</div>
+                                {% endif %}
+                            </div>
+                            <!-- Right column: Core Metrics + Expand Button -->
+                            <div style="display: flex; flex-direction: column; gap: 6px;">
+                                <div style="background: #f8fafc; border-radius: 4px; padding: 6px 8px;">
+                                    <table style="width: 100%; border-collapse: collapse; font-size: 11px; table-layout: fixed;">
+                                        <colgroup>
+                                            <col style="width: 44%;">
+                                            <col style="width: 22%;">
+                                            <col style="width: 17%;">
+                                            <col style="width: 17%;">
+                                        </colgroup>
+                                        <thead>
+                                            <tr>
+                                                <th style="text-align: left; font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700; padding: 2px 4px; border-bottom: 1px solid #e2e8f0;">Metric</th>
+                                                <th style="text-align: right; font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700; padding: 2px 4px; border-bottom: 1px solid #e2e8f0;">Current</th>
+                                                <th style="text-align: right; font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700; padding: 2px 4px; border-bottom: 1px solid #e2e8f0;">QoQ</th>
+                                                <th style="text-align: right; font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700; padding: 2px 4px; border-bottom: 1px solid #e2e8f0;">YoY</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for metric in segment.core_metrics %}
+                                            <tr>
+                                                <td style="padding: 2px 4px; color: #334155; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ metric.label }}</td>
+                                                <td class="value" style="padding: 2px 4px; text-align: right; font-size: 10px; white-space: nowrap;">{{ metric.value|safe }}</td>
+                                                <td class="delta {{ metric.qoq.direction }}" style="padding: 2px 4px; text-align: right; font-size: 10px; white-space: nowrap;">{{ metric.qoq.display }}</td>
+                                                <td class="delta {{ metric.yoy.direction }}" style="padding: 2px 4px; text-align: right; font-size: 10px; white-space: nowrap;">{{ metric.yoy.display }}</td>
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <!-- Expand button directly beneath metrics table -->
+                                {% if segment.raw_table.rows %}
+                                <div style="text-align: center;">
+                                    <button id="segment-toggle-{{ loop.index }}" onclick="toggleSegmentRaw({{ loop.index }})" style="background: none; border: 1px solid #e2e8f0; border-radius: 6px; padding: 4px 10px; cursor: pointer; font-size: 8px; color: #64748b; transition: all 0.2s;">
+                                        <span id="segment-icon-{{ loop.index }}">▶</span> View All {{ segment.name }} Metrics ({{ segment.raw_table.rows|length }} metrics)
+                                    </button>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <!-- Expandable Raw Metrics Table for this segment -->
+                        {% if segment.raw_table.rows %}
+                        <div id="segment-container-{{ loop.index }}" style="display: none; margin-top: 8px; border: 1px solid #e2e8f0; border-radius: 6px; overflow: hidden; max-width: 100%;">
+                            <!-- Copy button bar -->
+                            <div style="background: #f8fafc; padding: 4px 8px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: flex-end; align-items: center;">
+                                <button onclick="copySegmentRaw({{ loop.index }})" style="background: #005587; color: white; border: none; border-radius: 4px; padding: 3px 8px; cursor: pointer; font-size: 8px; font-weight: 600;">
+                                    Copy to Clipboard
+                                </button>
+                            </div>
+
+                            <!-- Scrollable table container -->
+                            <div style="max-height: 250px; overflow: auto;">
+                                <table style="border-collapse: collapse; font-size: 8px; font-family: 'Consolas', 'Monaco', monospace; min-width: 100%;">
+                                    <thead style="position: sticky; top: 0; background: #f1f5f9; z-index: 10;">
+                                        <tr>
+                                            {% for header in segment.raw_table.headers %}
+                                            <th style="padding: 4px 5px; text-align: {% if loop.index == 1 %}left{% else %}right{% endif %}; border-bottom: 1px solid #e2e8f0; font-weight: 700; color: #64748b; white-space: nowrap; font-size: 7px; text-transform: uppercase;">{{ header }}</th>
+                                            {% endfor %}
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for row in segment.raw_table.rows %}
+                                        <tr style="background: {% if loop.index is odd %}#ffffff{% else %}#f8fafc{% endif %};">
+                                            <td style="padding: 3px 5px; border-bottom: 1px solid #f0f4f8; font-weight: 600; color: #1e293b; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ row.metric }}">{{ row.metric }}</td>
+                                            {% for val in row['values'] %}
+                                            <td style="padding: 3px 5px; border-bottom: 1px solid #f0f4f8; text-align: right; color: #334155;">{{ val }}</td>
+                                            {% endfor %}
+                                            <td style="padding: 3px 5px; border-bottom: 1px solid #f0f4f8; color: #94a3b8; text-align: center;">{{ row.type }}</td>
+                                            <td style="padding: 3px 5px; border-bottom: 1px solid #f0f4f8; text-align: right;" class="{{ row.qoq_direction }}">{{ row.qoq }}</td>
+                                            <td style="padding: 3px 5px; border-bottom: 1px solid #f0f4f8; text-align: right;" class="{{ row.yoy_direction }}">{{ row.yoy }}</td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Hidden textarea for TSV copy -->
+                        <textarea id="segment-tsv-{{ loop.index }}" style="position: absolute; left: -9999px;">{{ segment.raw_table.tsv }}</textarea>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+
+                <!-- Disclaimer -->
+                <div style="margin-top: 12px; padding-top: 8px; border-top: 1px solid #e2e8f0;">
+                    <div style="font-size: 9px; color: #94a3b8; font-style: italic;">* Segment drivers extracted from RTS regulatory filing. Verify all metrics against source documents.</div>
+                </div>
+            </div>
+
+            <!-- ============================================
+                 SECTION 5: Capital & Risk Metrics
+                 DATA SOURCE: 5_capital_risk.json
+                 Simplified format: two lists of metrics (name + value)
+                   - capital_metrics: Capital ratios and RWA
+                   - credit_metrics: PCL, GIL, ACL, etc.
+                 ============================================ -->
+            <div class="card">
+                <div class="section-header" style="align-items: center;">
+                    <h2 style="margin: 0; border-bottom: none; padding-bottom: 0;">Capital & Risk Metrics</h2>
+                </div>
+
+                <!-- Stacked containers for Capital and Credit metrics -->
+                <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 12px;">
+                    <!-- Capital Metrics Container -->
+                    <div class="qa-item" style="padding: 10px 12px;">
+                        <div style="margin-bottom: 6px;">
+                            <span style="font-size: 11px; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;">Capital Metrics</span>
+                        </div>
+                        {% if _5_capital_risk.capital_metrics %}
+                        <div style="background: #f8fafc; border-radius: 4px; padding: 6px 8px;">
+                            <table style="width: 100%; border-collapse: collapse; font-size: 11px; table-layout: fixed;">
+                                <colgroup>
+                                    <col style="width: 70%;">
+                                    <col style="width: 30%;">
+                                </colgroup>
+                                <thead>
+                                    <tr>
+                                        <th style="text-align: left; font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700; padding: 2px 4px; border-bottom: 1px solid #e2e8f0;">Metric</th>
+                                        <th style="text-align: right; font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700; padding: 2px 4px; border-bottom: 1px solid #e2e8f0;">Value</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for metric in _5_capital_risk.capital_metrics %}
+                                    <tr>
+                                        <td style="padding: 2px 4px; color: #334155;">{{ metric.name }}</td>
+                                        <td class="value" style="padding: 2px 4px; text-align: right; font-size: 10px; word-break: break-word;">{{ metric.value }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% else %}
+                        <div style="padding: 12px; text-align: center; color: #94a3b8; font-size: 11px; font-style: italic;">
+                            No capital metrics found in RTS.
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Credit Quality Container -->
+                    <div class="qa-item" style="padding: 10px 12px;">
+                        <div style="margin-bottom: 6px;">
+                            <span style="font-size: 11px; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;">Credit Quality</span>
+                        </div>
+                        {% if _5_capital_risk.credit_metrics %}
+                        <div style="background: #f8fafc; border-radius: 4px; padding: 6px 8px;">
+                            <table style="width: 100%; border-collapse: collapse; font-size: 11px; table-layout: fixed;">
+                                <colgroup>
+                                    <col style="width: 70%;">
+                                    <col style="width: 30%;">
+                                </colgroup>
+                                <thead>
+                                    <tr>
+                                        <th style="text-align: left; font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700; padding: 2px 4px; border-bottom: 1px solid #e2e8f0;">Metric</th>
+                                        <th style="text-align: right; font-size: 8px; color: #94a3b8; text-transform: uppercase; font-weight: 700; padding: 2px 4px; border-bottom: 1px solid #e2e8f0;">Value</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for metric in _5_capital_risk.credit_metrics %}
+                                    <tr>
+                                        <td style="padding: 2px 4px; color: #334155;">{{ metric.name }}</td>
+                                        <td class="value" style="padding: 2px 4px; text-align: right; font-size: 10px; word-break: break-word;">{{ metric.value }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% else %}
+                        <div style="padding: 12px; text-align: center; color: #94a3b8; font-size: 11px; font-style: italic;">
+                            No credit metrics found in RTS.
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Disclaimer -->
+                <div style="margin-top: 12px; padding-top: 8px; border-top: 1px solid #e2e8f0;">
+                    <div style="font-size: 9px; color: #94a3b8; font-style: italic;">* Content extracted from RTS regulatory filing. Verify all metrics against source documents.</div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+    </div>
+
+    <!-- ============================================
+         JavaScript for Dynamic Chart Rendering
+         ============================================ -->
+    <script>
+    (function() {
+        // Global state for multi-metric chart
+        let chartData = null;
+        let currentMetricIndex = 0;
+
+        // Initialize chart system
+        function initChart() {
+            const dataEl = document.getElementById('trend-chart-data');
+            if (!dataEl) return;
+
+            chartData = JSON.parse(dataEl.textContent);
+            if (!chartData.metrics || chartData.metrics.length === 0) {
+                document.getElementById('chart-content').innerHTML =
+                    '<div style="display: flex; align-items: center; justify-content: center; height: 100%; color: #94a3b8;">No chart data available</div>';
+                return;
+            }
+
+            currentMetricIndex = chartData.initial_index || 0;
+
+            // Setup event handlers
+            setupNavigation();
+            setupDropdown();
+
+            // Render initial chart
+            renderChart(currentMetricIndex);
+        }
+
+        // Setup navigation arrow buttons
+        function setupNavigation() {
+            const prevBtn = document.getElementById('chart-prev');
+            const nextBtn = document.getElementById('chart-next');
+
+            prevBtn.addEventListener('click', () => {
+                currentMetricIndex = (currentMetricIndex - 1 + chartData.metrics.length) % chartData.metrics.length;
+                renderChart(currentMetricIndex);
+                closeDropdown();
+            });
+
+            nextBtn.addEventListener('click', () => {
+                currentMetricIndex = (currentMetricIndex + 1) % chartData.metrics.length;
+                renderChart(currentMetricIndex);
+                closeDropdown();
+            });
+
+            // Hover effects
+            [prevBtn, nextBtn].forEach(btn => {
+                btn.addEventListener('mouseenter', () => btn.style.color = '#005587');
+                btn.addEventListener('mouseleave', () => btn.style.color = '#94a3b8');
+            });
+        }
+
+        // Setup dropdown menu
+        function setupDropdown() {
+            const title = document.getElementById('chart-title');
+            const dropdown = document.getElementById('chart-dropdown');
+
+            // Populate dropdown items
+            dropdown.innerHTML = chartData.metrics.map((m, i) => `
+                <div class="dropdown-item" data-index="${i}" style="padding: 8px 12px; cursor: pointer; font-size: 11px; color: #334155; transition: background 0.2s; border-bottom: 1px solid #f0f4f8;">
+                    ${m.name}
+                </div>
+            `).join('');
+
+            // Title click toggles dropdown
+            title.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const isVisible = dropdown.style.display === 'block';
+                dropdown.style.display = isVisible ? 'none' : 'block';
+                if (!isVisible) highlightCurrentItem();
+            });
+
+            // Dropdown item clicks
+            dropdown.querySelectorAll('.dropdown-item').forEach(item => {
+                item.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    currentMetricIndex = parseInt(item.dataset.index);
+                    renderChart(currentMetricIndex);
+                    closeDropdown();
+                });
+                item.addEventListener('mouseenter', () => item.style.background = '#f1f5f9');
+                item.addEventListener('mouseleave', () => item.style.background = 'white');
+            });
+
+            // Close dropdown when clicking outside
+            document.addEventListener('click', closeDropdown);
+
+            // Title hover effect
+            title.addEventListener('mouseenter', () => title.style.background = '#f1f5f9');
+            title.addEventListener('mouseleave', () => title.style.background = 'transparent');
+        }
+
+        function closeDropdown() {
+            document.getElementById('chart-dropdown').style.display = 'none';
+        }
+
+        function highlightCurrentItem() {
+            const dropdown = document.getElementById('chart-dropdown');
+            dropdown.querySelectorAll('.dropdown-item').forEach((item, i) => {
+                item.style.background = (i === currentMetricIndex) ? '#e0f2fe' : 'white';
+                item.style.fontWeight = (i === currentMetricIndex) ? '600' : 'normal';
+            });
+        }
+
+        // Render chart for a specific metric index
+        function renderChart(index) {
+            const metric = chartData.metrics[index];
+            const { label, unit, decimal_places, quarters, values } = metric;
+
+            // Update title
+            document.getElementById('chart-title').textContent = label;
+
+            // Calculate stats
+            const min = Math.min(...values);
+            const max = Math.max(...values);
+            const avg = values.reduce((a, b) => a + b, 0) / values.length;
+            const current = values[values.length - 1];
+            const minIdx = values.indexOf(min);
+            const maxIdx = values.indexOf(max);
+
+            // Calculate Y-axis range with padding
+            const range = max - min || 1; // Avoid division by zero
+            const padding = range * 0.15;
+            const yMin = min - padding;
+            const yMax = max + padding;
+
+            // Format value for display
+            const stripTrailingZeros = (s) => s.replace(/\.?0+$/, '');
+
+            const formatValue = (v) => {
+                if (unit === '%') {
+                    return v.toFixed(decimal_places) + '%';
+                } else if (unit === '$M') {
+                    if (Math.abs(v) >= 1000) {
+                        return '$' + stripTrailingZeros((v / 1000).toFixed(2)) + ' B';
+                    } else {
+                        return '$' + stripTrailingZeros(v.toFixed(2)) + ' M';
+                    }
+                } else {
+                    if (Math.abs(v) >= 1000) {
+                        return v.toLocaleString('en-US', {maximumFractionDigits: decimal_places});
+                    } else {
+                        return v.toFixed(decimal_places);
+                    }
+                }
+            };
+
+            const formatChartLabel = (v) => {
+                if (unit === '%') {
+                    return v.toFixed(decimal_places);
+                } else if (unit === '$M') {
+                    if (Math.abs(v) >= 1000) {
+                        return stripTrailingZeros((v / 1000).toFixed(2)) + 'B';
+                    } else {
+                        return stripTrailingZeros(v.toFixed(2)) + 'M';
+                    }
+                } else {
+                    return v.toLocaleString('en-US', {maximumFractionDigits: decimal_places});
+                }
+            };
+
+            // Calculate Y coordinate (inverted because SVG y=0 is top)
+            const yCoord = (v) => 100 - ((v - yMin) / (yMax - yMin)) * 100;
+
+            // X positions for data points (up to 8 points)
+            const xPositions = [30, 70, 110, 150, 190, 230, 270, 310].slice(0, values.length);
+            const xPercents = xPositions.map(x => (x / 320) * 100);
+
+            // Build SVG elements
+            const points = values.map((v, i) => `${xPositions[i]},${yCoord(v)}`).join(' ');
+            const polygonPoints = points + ` ${xPositions[xPositions.length-1]},100 ${xPositions[0]},100`;
+
+            const guideLines = values.map((v, i) =>
+                `<line x1="${xPositions[i]}" y1="100" x2="${xPositions[i]}" y2="${yCoord(v)}" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,2" />`
+            ).join('');
+
+            const circles = values.map((v, i) => {
+                let fill = '#005587';
+                let r = 3;
+                let strokeWidth = 1.5;
+                if (i === minIdx) fill = '#dc2626';
+                if (i === maxIdx) fill = '#16a34a';
+                if (i === values.length - 1) { r = 4; strokeWidth = 2; }
+                return `<circle cx="${xPositions[i]}" cy="${yCoord(v)}" r="${r}" fill="${fill}" stroke="white" stroke-width="${strokeWidth}" />`;
+            }).join('');
+
+            const valueLabels = values.map((v, i) => {
+                let color = '#64748b';
+                let fontSize = '9px';
+                let fontWeight = 'normal';
+                if (i === minIdx) { color = '#dc2626'; fontSize = '10px'; fontWeight = '700'; }
+                if (i === maxIdx) { color = '#16a34a'; fontSize = '10px'; fontWeight = '700'; }
+                if (i === values.length - 1) { color = '#005587'; fontSize = '10px'; fontWeight = '700'; }
+                const topPercent = yCoord(v) - 18;
+                return `<div style="position: absolute; left: ${xPercents[i]}%; top: ${topPercent}%; transform: translateX(-50%); font-size: ${fontSize}; color: ${color}; font-weight: ${fontWeight}; white-space: nowrap;">${formatChartLabel(v)}</div>`;
+            }).join('');
+
+            const quarterLabels = quarters.map((q, i) =>
+                `<span style="position: absolute; left: ${xPercents[i]}%; transform: translateX(-50%); font-size: 9px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.3px; font-weight: 700; white-space: nowrap;">${q}</span>`
+            ).join('');
+
+            const yAxisTop = formatValue(yMax);
+            const yAxisMid = formatValue((yMin + yMax) / 2);
+            const yAxisBottom = formatValue(yMin);
+            const avgY = yCoord(avg);
+
+            document.getElementById('chart-content').innerHTML = `
+                <div style="position: relative; flex: 1; min-height: 80px;">
+                    <!-- Y-axis labels -->
+                    <div style="position: absolute; left: -5px; top: 0; font-size: 8px; color: #94a3b8; letter-spacing: 0.3px; font-weight: 600; white-space: nowrap;">${yAxisTop}</div>
+                    <div style="position: absolute; left: -5px; top: 45%; font-size: 8px; color: #94a3b8; letter-spacing: 0.3px; font-weight: 600; white-space: nowrap;">${yAxisMid}</div>
+                    <div style="position: absolute; left: -5px; bottom: 0; font-size: 8px; color: #94a3b8; letter-spacing: 0.3px; font-weight: 600; white-space: nowrap;">${yAxisBottom}</div>
+
+                    <!-- Grid lines -->
+                    <div style="position: absolute; width: 100%; height: 100%; left: 0; top: 0;">
+                        <div style="position: absolute; width: 100%; height: 1px; background: #f0f4f8; top: 0;"></div>
+                        <div style="position: absolute; width: 100%; height: 1px; background: #f0f4f8; top: 50%;"></div>
+                        <div style="position: absolute; width: 100%; height: 1px; background: #f0f4f8; bottom: 0;"></div>
+                    </div>
+
+                    <!-- Chart SVG -->
+                    <svg style="position: absolute; width: 100%; height: 100%; left: 0; top: 0;" viewBox="0 0 320 100" preserveAspectRatio="none">
+                        <defs>
+                            <linearGradient id="chartGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                                <stop offset="0%" style="stop-color:#005587;stop-opacity:0.2" />
+                                <stop offset="100%" style="stop-color:#005587;stop-opacity:0.02" />
+                            </linearGradient>
+                        </defs>
+                        ${guideLines}
+                        <polygon points="${polygonPoints}" fill="url(#chartGradient)" />
+                        <line x1="20" y1="${avgY}" x2="320" y2="${avgY}" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="4,3" />
+                        <polyline points="${points}" fill="none" stroke="#005587" stroke-width="2.5" />
+                        ${circles}
+                    </svg>
+
+                    <!-- Value labels -->
+                    ${valueLabels}
+                </div>
+
+                <!-- X-axis labels -->
+                <div style="position: relative; margin: 5px 0; height: 14px; overflow: visible;">
+                    ${quarterLabels}
+                </div>
+
+                <!-- Bottom summary stats -->
+                <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #f0f4f8;">
+                    <div style="display: flex; justify-content: center; gap: 0;">
+                        <div style="text-align: center; padding: 0 16px; border-right: 1px solid #e2e8f0;">
+                            <span class="change-label">Low</span>
+                            <span class="delta neg" style="white-space: nowrap;">${formatValue(min)}</span>
+                        </div>
+                        <div style="text-align: center; padding: 0 16px; border-right: 1px solid #e2e8f0;">
+                            <span class="change-label">Avg</span>
+                            <span class="delta" style="color: #f59e0b; white-space: nowrap;">${formatValue(avg)}</span>
+                        </div>
+                        <div style="text-align: center; padding: 0 16px; border-right: 1px solid #e2e8f0;">
+                            <span class="change-label">High</span>
+                            <span class="delta pos" style="white-space: nowrap;">${formatValue(max)}</span>
+                        </div>
+                        <div style="text-align: center; padding: 0 16px;">
+                            <span class="change-label">Current</span>
+                            <span class="delta" style="color: #005587; white-space: nowrap;">${formatValue(current)}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Run on DOM ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initChart);
+        } else {
+            initChart();
+        }
+    })();
+    </script>
+
+    <!-- ============================================
+         JavaScript for Raw Metrics Table
+         ============================================ -->
+    <script>
+    // Toggle raw metrics table visibility
+    function toggleRawMetrics() {
+        const container = document.getElementById('raw-metrics-container');
+        const icon = document.getElementById('toggle-icon');
+        const button = document.getElementById('raw-metrics-toggle');
+
+        if (container.style.display === 'none') {
+            container.style.display = 'block';
+            icon.textContent = '▼';
+            button.style.background = '#f1f5f9';
+            button.style.borderColor = '#cbd5e1';
+        } else {
+            container.style.display = 'none';
+            icon.textContent = '▶';
+            button.style.background = 'none';
+            button.style.borderColor = '#e2e8f0';
+        }
+    }
+
+    // Toggle analyst focus Q&A section visibility
+    function toggleAnalystFocus() {
+        const container = document.getElementById('analyst-focus-container');
+        const icon = document.getElementById('analyst-focus-icon');
+        const button = document.getElementById('analyst-focus-toggle');
+
+        if (container.style.display === 'none') {
+            container.style.display = 'block';
+            icon.textContent = '▼';
+            button.style.background = '#f1f5f9';
+            button.style.borderColor = '#cbd5e1';
+        } else {
+            container.style.display = 'none';
+            icon.textContent = '▶';
+            button.style.background = 'none';
+            button.style.borderColor = '#e2e8f0';
+        }
+    }
+
+    // Toggle items of note section visibility
+    function toggleItems() {
+        const container = document.getElementById('items-container');
+        const icon = document.getElementById('items-icon');
+        const button = document.getElementById('items-toggle');
+
+        if (container.style.display === 'none') {
+            container.style.display = 'block';
+            icon.textContent = '▼';
+            button.style.background = '#f1f5f9';
+            button.style.borderColor = '#cbd5e1';
+        } else {
+            container.style.display = 'none';
+            icon.textContent = '▶';
+            button.style.background = 'none';
+            button.style.borderColor = '#e2e8f0';
+        }
+    }
+
+    // Copy TSV data to clipboard
+    function copyRawMetrics() {
+        const textarea = document.getElementById('raw-metrics-tsv');
+        const button = event.target;
+        const originalText = button.textContent;
+
+        // Copy to clipboard
+        textarea.select();
+        document.execCommand('copy');
+
+        // Also try modern clipboard API
+        if (navigator.clipboard) {
+            navigator.clipboard.writeText(textarea.value);
+        }
+
+        // Visual feedback
+        button.textContent = 'Copied!';
+        button.style.background = '#16a34a';
+
+        setTimeout(() => {
+            button.textContent = originalText;
+            button.style.background = '#005587';
+        }, 2000);
+    }
+
+    // Toggle segment raw metrics table visibility
+    function toggleSegmentRaw(segmentIndex) {
+        const container = document.getElementById('segment-container-' + segmentIndex);
+        const icon = document.getElementById('segment-icon-' + segmentIndex);
+        const button = document.getElementById('segment-toggle-' + segmentIndex);
+
+        if (container.style.display === 'none') {
+            container.style.display = 'block';
+            icon.textContent = '▼';
+            button.style.background = '#f1f5f9';
+            button.style.borderColor = '#cbd5e1';
+        } else {
+            container.style.display = 'none';
+            icon.textContent = '▶';
+            button.style.background = 'none';
+            button.style.borderColor = '#e2e8f0';
+        }
+    }
+
+    // Copy segment TSV data to clipboard
+    function copySegmentRaw(segmentIndex) {
+        const textarea = document.getElementById('segment-tsv-' + segmentIndex);
+        const button = event.target;
+        const originalText = button.textContent;
+
+        // Copy to clipboard
+        textarea.select();
+        document.execCommand('copy');
+
+        // Also try modern clipboard API
+        if (navigator.clipboard) {
+            navigator.clipboard.writeText(textarea.value);
+        }
+
+        // Visual feedback
+        button.textContent = 'Copied!';
+        button.style.background = '#16a34a';
+
+        setTimeout(() => {
+            button.textContent = originalText;
+            button.style.background = '#005587';
+        }, 2000);
+    }
+    </script>
+
+</body>
+</html> 
