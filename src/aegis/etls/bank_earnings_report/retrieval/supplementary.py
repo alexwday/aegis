@@ -5,7 +5,9 @@ This module provides functions to query the benchmarking_report table
 for financial metrics like dividends, key metrics, etc.
 """
 
+import math
 from typing import Any, Dict, List, Optional
+
 from sqlalchemy import text
 
 from aegis.connections.postgres_connector import get_connection
@@ -145,7 +147,7 @@ def format_dividend_json(dividend_data: Optional[Dict[str, Any]]) -> Dict[str, A
         qoq = {"value": 0, "direction": "neutral", "display": "—"}
 
     yoy_value = dividend_data.get("yoy")
-    if yoy_value is not None:
+    if yoy_value is not None and not (isinstance(yoy_value, float) and math.isnan(yoy_value)):
         yoy_direction = "positive" if yoy_value > 0 else "negative" if yoy_value < 0 else "neutral"
         yoy_arrow = "▲" if yoy_value > 0 else "▼" if yoy_value < 0 else "—"
         yoy_display = f"{yoy_arrow} {abs(yoy_value):.1f}%" if yoy_value != 0 else "—"
@@ -468,7 +470,7 @@ def format_delta(value: Optional[float], units: str, is_bps: bool = False) -> Di
         For bps values >= 100 (1%), automatically converts to percentage
         display for better readability.
     """
-    if value is None:
+    if value is None or (isinstance(value, float) and math.isnan(value)):
         return {"value": 0, "direction": "neutral", "display": "—"}
 
     direction = "positive" if value > 0 else "negative" if value < 0 else "neutral"
@@ -509,7 +511,7 @@ def format_delta_for_llm(value: Optional[float], units: str, is_bps: bool = Fals
         Formatted string like "+2.3%" or "+15bps" or "—". For bps values >= 100
         (1%), automatically converts to percentage display for better readability.
     """
-    if value is None:
+    if value is None or (isinstance(value, float) and math.isnan(value)):
         return "—"
 
     sign = "+" if value > 0 else ""
