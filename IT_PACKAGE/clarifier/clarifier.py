@@ -825,19 +825,27 @@ async def extract_periods(
                             bank_periods = function_args.get("bank_periods", [])
 
                             # Convert to dictionary format
-                            # FIX: Use composite key (bank_id + fiscal_year) to prevent
-                            # multiple years for same bank from overwriting each other
+                            # Use composite key (bank_id + fiscal_year) to prevent
+                            # multiple years for same bank from overwriting each other.
+                            # Merge quarters when LLM sends separate entries for
+                            # the same bank_id + fiscal_year.
                             periods = {}
                             for bp in bank_periods:
                                 bank_id = str(bp["bank_id"])
                                 fiscal_year = bp["fiscal_year"]
-                                # Create composite key to support multiple years per bank
                                 composite_key = f"{bank_id}_{fiscal_year}"
-                                periods[composite_key] = {
-                                    "bank_id": bank_id,
-                                    "fiscal_year": fiscal_year,
-                                    "quarters": bp["quarters"],
-                                }
+                                if composite_key in periods:
+                                    # Merge quarters, deduplicating
+                                    existing = periods[composite_key]["quarters"]
+                                    for q in bp["quarters"]:
+                                        if q not in existing:
+                                            existing.append(q)
+                                else:
+                                    periods[composite_key] = {
+                                        "bank_id": bank_id,
+                                        "fiscal_year": fiscal_year,
+                                        "quarters": list(bp["quarters"]),
+                                    }
 
                             logger.info(
                                 "clarifier.periods.bank_specific",
@@ -996,31 +1004,32 @@ def _create_bank_period_combinations(
 
         for bank_id in bank_ids:
             bank_info = banks_detail.get(bank_id, {})
-            # Period data is stored directly under bank_id as key
-            period_data = periods_data.get(str(bank_id))
+            # Period data uses composite keys (bank_id_fiscal_year)
+            # Iterate all entries and match by bank_id field
+            bank_id_str = str(bank_id)
+            for _key, period_data in periods_data.items():
+                if period_data.get("bank_id") == bank_id_str:
+                    fiscal_year = period_data.get("fiscal_year")
+                    quarters = period_data.get("quarters", [])
 
-            if period_data:
-                fiscal_year = period_data.get("fiscal_year")
-                quarters = period_data.get("quarters", [])
-
-                logger.debug(
-                    "clarifier.transformation.bank_periods",
-                    bank_symbol=bank_info.get("symbol", ""),
-                    fiscal_year=fiscal_year,
-                    quarters=quarters,
-                )
-
-                for quarter in quarters:
-                    combinations.append(
-                        {
-                            "bank_id": bank_id,
-                            "bank_name": bank_info.get("name", ""),
-                            "bank_symbol": bank_info.get("symbol", ""),
-                            "fiscal_year": fiscal_year,
-                            "quarter": quarter,
-                            "query_intent": query_intent,
-                        }
+                    logger.debug(
+                        "clarifier.transformation.bank_periods",
+                        bank_symbol=bank_info.get("symbol", ""),
+                        fiscal_year=fiscal_year,
+                        quarters=quarters,
                     )
+
+                    for quarter in quarters:
+                        combinations.append(
+                            {
+                                "bank_id": bank_id,
+                                "bank_name": bank_info.get("name", ""),
+                                "bank_symbol": bank_info.get("symbol", ""),
+                                "fiscal_year": fiscal_year,
+                                "quarter": quarter,
+                                "query_intent": query_intent,
+                            }
+                        )
 
     # Log the final transformation result with clear individual combinations
     logger.info(
