@@ -1,10 +1,10 @@
-# Category Extraction Prompt - v2.2.1
+# Category Extraction Prompt - v3.0.0
 
 ## Metadata
 - **Model**: aegis
 - **Layer**: call_summary_etl
 - **Name**: category_extraction
-- **Version**: 2.2.1
+- **Version**: 3.0.0
 
 ---
 
@@ -30,30 +30,54 @@ Deduplication notes from research phase:
 {cross_category_notes}
 </research_guidance>
 
-<previous_categories_context>
-Categories already processed (avoid duplication):
-{previous_sections}
-
-Key themes already covered:
-{extracted_themes}
-</previous_categories_context>
 </context>
 
+<financial_formatting>
+MANDATORY financial formatting conventions for ALL output:
+
+CURRENCY:
+- Always prefix dollar amounts with $
+- Millions: use $XXX MM (e.g., $450 MM, $1,200 MM)
+- Billions: use $X.X BN (e.g., $1.2 BN, $14.5 BN)
+- Trillions: use $X.X TN (e.g., $2.1 TN)
+- Sub-million: use exact dollar amounts (e.g., $500K, $250K)
+- NEVER write "billion dollars", "million dollars", or "dollars" - always use $ prefix with MM/BN/TN
+
+BASIS POINTS:
+- Use "bps" abbreviation (e.g., 15 bps, 200 bps)
+- "basis points" written out is acceptable for first reference only
+
+PERCENTAGES:
+- Use % symbol, not "percent" (e.g., 12.3%, not "12.3 percent")
+
+RATIOS:
+- Use standard notation (e.g., CET1 ratio of 13.2%, efficiency ratio of 54.1%)
+
+FORMATTING EXAMPLES:
+- CORRECT: "Revenue increased **$1.2 BN** or **8%** year-over-year"
+- WRONG: "Revenue increased 1.2 billion dollars or 8 percent year-over-year"
+- CORRECT: "NIM expanded **15 bps** to **1.72%**"
+- WRONG: "NIM expanded 15 basis points to 1.72 percent"
+- CORRECT: "PCL of **$450 MM** compared to **$380 MM** in prior quarter"
+- WRONG: "PCL of 450 million compared to 380 million in prior quarter"
+</financial_formatting>
+
 <objective>
-Extract comprehensive, high-quality insights for this specific category from the earnings call transcript.
+Extract high-quality, concise insights for this specific category from the earnings call transcript.
 Focus on:
-1. Capturing ALL material content relevant to this category
-2. Providing rich context and evidence for each finding
-3. Maintaining analytical depth while avoiding duplication
+1. Synthesizing the most important insights for this category
+2. Providing targeted evidence for key findings
+3. Maintaining analytical depth while being concise
 4. Including emerging topics that fit the category's analytical purpose
-5. Ensuring exhaustive coverage without artificial limits
+5. Prioritizing quality and conciseness - synthesize rather than transcribe
 6. Using markup for emphasis: **bold** for numbers/metrics, __underline__ for key phrases in quotes
+7. Applying financial formatting conventions: $ prefix, MM/BN for amounts, bps for basis points
 </objective>
 
 <style>
-- Analytical and comprehensive
+- Analytical and concise
 - Specific with exact numbers and details
-- Evidence-rich with strategic quote selection
+- Selective evidence - only the most impactful quotes
 - Professional financial analysis tone
 - Strategic use of emphasis: **numbers/metrics**, __key phrases in quotes__
 </style>
@@ -67,8 +91,8 @@ Focus on:
 
 <audience>
 Senior finance professionals expecting:
-- Comprehensive coverage of all material points
-- Rich supporting evidence
+- Concise coverage of the most material points
+- Selective, high-impact supporting evidence
 - Clear, well-structured insights
 - Strategic emphasis on critical information
 </audience>
@@ -77,11 +101,20 @@ Senior finance professionals expecting:
 EXTRACTION REQUIREMENTS:
 
 1. REJECTION DECISIONS:
-   Set rejected=true ONLY if the category genuinely lacks ANY material content.
+   Set rejected=true ONLY when BOTH conditions are met:
+   a) Fewer than 2 substantive statements can be made about this category
+   b) No Q&A exchanges directly address the category's topic
+
    Examples of valid rejection:
-   - "No geographic expansion discussions" for International Growth
+   - "No geographic expansion discussions in either MD or Q&A" for International Growth
    - "Sustainability not mentioned in this call" for ESG
-   If even minor relevant content exists, extract it - don't reject.
+
+   Examples of INVALID rejection (must extract instead):
+   - Category has a single Q&A exchange → EXTRACT (Q&A is always valuable)
+   - Category has 2+ relevant mentions → EXTRACT even if not heavily discussed
+   - Category topic was briefly addressed in passing → EXTRACT the brief content
+
+   When in doubt, extract — a short section is better than a missing one.
 
 2. TITLE CREATION:
    Format: "Category Name: Brief Context"
@@ -93,58 +126,69 @@ EXTRACTION REQUIREMENTS:
    Capture the ESSENCE of what was discussed in this category
 
 3. STATEMENT CONSTRUCTION:
+   TARGET: 3-5 statements per category (max 7 only for heavily-discussed topics)
    Each statement should:
    - Synthesize a specific insight or finding
    - Be clear and concise (1-2 sentences)
    - Use **bold** for ALL numbers, metrics, percentages (e.g., "Revenue grew **12%**")
    - Stand alone as a complete insight
-   - Have ALL relevant supporting evidence attached
+   - Combine related sub-points rather than listing them separately
 
 4. EVIDENCE SELECTION:
-   When providing evidence (per selective quote strategy in Section 5), include FULL CONTEXT:
-   - Direct quotes should include BOTH the punchline AND relevant background commentary
-   - Start quotes earlier to capture the setup and context of the discussion
-   - Include explanatory phrases that precede the key insight
-   - Paraphrases of complex explanations when quotes would be too long
-   - Multiple perspectives if available
+   Keep evidence concise and targeted:
+   - Direct quotes: 1-2 sentences maximum, capturing the key insight
+   - Paraphrases: Brief summaries when full quotes aren't needed
+   - Only include evidence that adds analytical value beyond the statement itself
+   - Omit evidence for straightforward metrics already stated in the statement
    - Speaker attribution for credibility
    - Use __underline__ for critical phrases within quotes
 
-   CRITICAL: When you DO use direct quotes (per Section 5 priorities), prefer longer quotes
-   with context over short punchlines. This doesn't mean quote everything - it means make the
-   quotes you do use comprehensive and contextual (3-4 sentences with background).
-   Evidence should be rich enough to stand alone without the full transcript
+   DEFAULT TO PARAPHRASING. Reserve direct quotes for:
+   - Forward-looking guidance or outlook statements
+   - Surprising or contrarian management commentary
+   - Specific commitments or targets
+   For routine results and standard metrics, the statement itself is sufficient.
 
 5. QUOTE SELECTION STRATEGY:
-   Use direct quotes STRATEGICALLY, not uniformly:
+   Most statements need 0-1 evidence items. Use quotes SPARINGLY:
 
-   PRIORITIZE QUOTES FOR:
-   - Key drivers and root causes of performance ("driven by X, Y, Z")
-   - Strategic initiatives and forward-looking plans
-   - Management outlook, guidance, and expectations
-   - Risk factors and challenges discussed
-   - Novel insights or unique perspectives
-   - Qualitative context that explains "why" behind results
+   WORTH QUOTING (1-2 sentences max):
+   - Forward-looking guidance and strategic plans
+   - Management outlook and expectations
+   - Novel insights or surprising commentary
+   - Risk factors and key challenges
 
-   PARAPHRASE INSTEAD FOR:
-   - Basic performance numbers ("Revenue was $X billion")
-   - Simple quarter-over-quarter comparisons without explanation
-   - Routine definitions or straightforward metrics
-   - Standard regulatory or accounting explanations
+   DON'T QUOTE - PARAPHRASE OR OMIT:
+   - Performance numbers (state in the insight itself)
+   - Quarter-over-quarter comparisons
+   - Routine explanations or standard metrics
+   - Anything already captured in the statement text
 
-   RULE OF THUMB: Quote the "why" and "what's next", paraphrase the "what happened"
+   RULE OF THUMB: If the statement captures the point, evidence is optional.
 
-6. MARKUP USAGE:
-   - **Bold**: Numbers, metrics, percentages, financial figures
-     Example: "NIM expanded **15 basis points** to **1.72%**"
-   - __Underline__: Key phrases or critical statements within quotes
-     Example: "CFO noted __'unprecedented growth'__ in wealth management"
+6. MARKUP AND FORMATTING:
+   Bold (**text**):
+   - ALL numbers, metrics, percentages, financial figures MUST be bolded
+   - ALL dollar amounts (e.g., **$1.2 BN**, **$450 MM**)
+   - ALL percentages (e.g., **12.3%**, **15 bps**)
+   - ALL key ratios (e.g., **CET1 of 13.2%**)
+   - If a number appears in text, it MUST be wrapped in **bold markers**
 
-7. COMPLETENESS:
-   - Include ALL material points discussed for this category
-   - Don't artificially limit the number of statements
-   - If a topic was discussed extensively, reflect that in your extraction
-   - Better to be thorough than to arbitrarily truncate
+   Underline (__text__):
+   - Key phrases or critical statements within quotes
+   - Forward-looking commitments or strategic language
+   - Example: CFO noted __"unprecedented growth"__ in wealth management
+
+   Examples of correct formatting:
+   - "NIM expanded **15 bps** to **1.72%**, driven by asset repricing"
+   - "Revenue grew **$1.2 BN** or **8%** year-over-year to **$14.5 BN**"
+   - "PCL ratio of **28 bps** reflected **$450 MM** in provisions"
+
+7. CONCISENESS:
+   - Target 3-5 statements per category (max 7 for heavily-discussed topics)
+   - Combine related insights into single comprehensive statements
+   - Omit minor or tangential points - focus on what moves the needle
+   - A concise synthesis is more valuable than an exhaustive extraction
 
 8. QUALITY OVER QUANTITY:
    Each statement should add value:
@@ -156,51 +200,43 @@ EXTRACTION REQUIREMENTS:
 <deduplication_strategy>
 MANDATORY deduplication - violations will be rejected:
 
-1. BEFORE EXTRACTING - CHECK ALL PREVIOUS THEMES:
-   The extracted_themes field contains EVERYTHING already extracted
-   Read through ALL statements from prior categories
-   If you find similar/related content, you MUST either:
-   a) Skip it entirely if already covered, OR
-   b) Extract ONLY the novel aspect not yet mentioned
+1. FOLLOW RESEARCH PLAN BOUNDARIES:
+   The research_plan field specifies what THIS category should extract.
+   The cross_category_notes specify PRIMARY ownership of cross-cutting themes.
+   Stay strictly within the boundaries defined for this category.
+   If a theme belongs primarily in another category, skip it here.
 
-2. FOLLOW CROSS-CATEGORY BOUNDARIES:
-   The cross_category_notes specify PRIMARY ownership of cross-cutting themes
-   If a theme belongs primarily in another category, skip it here
-   Only extract if this category is designated as primary owner
+2. EXTRACT ONLY CATEGORY-SPECIFIC CONTENT:
+   Focus narrowly on themes, metrics, and insights that belong to THIS category.
+   Do not capture general or cross-cutting content unless the research plan
+   explicitly assigns it here.
 
-3. VERIFY NO SEMANTIC OVERLAP:
-   Even if wording differs, check if the MEANING was already captured.
+3. AVOID COMMON CROSS-CATEGORY OVERLAPS:
+   Financial metrics often appear in multiple transcript sections. Apply these rules:
+   - Revenue/income metrics → only in the revenue analysis category
+   - Capital ratios (CET1, etc.) → only in the capital/liquidity category
+   - Credit metrics (PCL, provisions) → only in the credit quality category
+   - Expense metrics → only in the expense/efficiency category
+   If cross_category_notes assign a metric elsewhere, skip it here.
 
-   Common semantic duplicates to avoid:
-   - "NIM expanded 15bps" ≈ "Net interest margin grew 15 basis points" → DUPLICATE
-   - "CET1 ratio of 13.2%" ≈ "Strong capital position above 13%" → DUPLICATE
-   - "Revenue growth drivers" ≈ "Factors contributing to revenue increase" → DUPLICATE
-   - "PCL normalized" ≈ "Provisions returned to historical levels" → DUPLICATE
-   - "Expense discipline" ≈ "Cost management initiatives" → DUPLICATE
-
-   Check MEANING not just WORDING. Different phrasing of same concept = duplicate
-
-4. WHEN IN DOUBT - SKIP IT:
-   If uncertain whether content overlaps, err on side of skipping
-   Better to have one strong instance than duplicate weak ones
-   Duplication is worse than minor gaps
+4. PREFER DEPTH OVER BREADTH:
+   Better to have 3-5 deeply relevant statements than to cast a wide net.
+   If content is tangentially related, skip it — the primary category will cover it.
 
 5. SECTION SPECIFICITY:
-   Only extract from the specified transcripts_section (MD or QA)
-   Don't pull content from other sections
-
-ZERO TOLERANCE: If you extract content already in extracted_themes, the category will be rejected
+   Only extract from the specified transcripts_section (MD or QA).
 </deduplication_strategy>
 
 <quality_standards>
-- COMPREHENSIVENESS: Capture all material content - no artificial limits
+- CONCISENESS: Focus on the most material insights - target 3-5 statements per category
 - SPECIFICITY: Use exact figures, precise quotes, actual names
-- EVIDENCE-RICH: Provide comprehensive supporting quotes and paraphrases
-- NON-DUPLICATIVE: Respect category boundaries and previous extractions
+- EVIDENCE-SELECTIVE: Include only high-impact quotes and paraphrases; omit when the statement is self-sufficient
+- NON-DUPLICATIVE: Respect category boundaries defined by research plan and cross_category_notes
 - STRATEGIC EMPHASIS: Use markup to highlight key information
 - ANALYTICAL: Synthesize insights, don't just report facts
 - PROFESSIONAL: Maintain analytical rigor and objectivity
-- COMPLETENESS: Better to have 8-10 rich statements than 3-4 thin ones
+- SYNTHESIS: Better to have 3-5 insightful statements than 8-10 verbose ones
+- FINANCIAL FORMATTING: All dollar amounts use $ prefix with MM/BN/TN suffixes; all numbers are **bolded**
 </quality_standards>
 
 <response_format>
@@ -209,10 +245,10 @@ Use the provided tool to return structured category content.
 IMPORTANT:
 - Only set rejected=true if there's genuinely no relevant content
 - Provide a detailed rejection_reason if rejected
-- For non-rejected categories, ensure title and summary_statements are comprehensive
-- Include ALL relevant evidence for each statement - be exhaustive
+- For non-rejected categories, ensure title and summary_statements are focused and concise
+- Target 3-5 statements per category - prioritize the most important insights
+- Include only the most impactful evidence; omit evidence for self-explanatory statements
 - Use **bold** for metrics and __underline__ for emphasis strategically
-- Let the content dictate the number of statements - don't limit artificially
 </response_format>
 ```
 
@@ -235,7 +271,7 @@ Extract content from this transcript section:
   "type": "function",
   "function": {
     "name": "extract_category_content",
-    "description": "Extracts comprehensive, high-quality content for each category",
+    "description": "Extracts concise, high-quality content for each category",
     "parameters": {
       "type": "object",
       "properties": {
@@ -255,8 +291,8 @@ Extract content from this transcript section:
         },
         "summary_statements": {
           "type": "array",
-          "maxItems": 20,
-          "description": "ALL key findings with rich supporting evidence - be exhaustive.\nCRITICAL: Each statement must be verified against extracted_themes to ensure no duplication.\nStatements overlapping with prior categories will result in rejection.",
+          "maxItems": 8,
+          "description": "Key findings - target 3-5 statements (max 7-8 for heavily-discussed topics).\nCRITICAL: Each statement must stay within research plan boundaries for this category.\nStatements outside this category's designated scope will result in rejection.",
           "minItems": 1,
           "items": {
             "type": "object",
@@ -264,12 +300,12 @@ Extract content from this transcript section:
               "statement": {
                 "type": "string",
                 "maxLength": 500,
-                "description": "Synthesized insight that captures a material theme or trend.\nUse **text** to bold key metrics, numbers, percentages (e.g., \"Revenue grew **12%** year-over-year\")"
+                "description": "Synthesized insight that captures a material theme or trend.\nUse **text** to bold key metrics, numbers, percentages (e.g., \"Revenue grew **12%** year-over-year\")\nApply financial formatting: $ prefix, MM/BN for amounts. Bold ALL numbers with **markers**."
               },
               "evidence": {
                 "type": "array",
-                "maxItems": 5,
-                "description": "Strategic supporting evidence when appropriate - use per Section 5 guidance.\nFor strategic content (drivers, outlook, risks): Provide rich contextual quotes.\nFor basic metrics: Evidence may be omitted if paraphrased in statement.\nAll evidence should add analytical value beyond just stating results.",
+                "maxItems": 3,
+                "description": "Concise supporting evidence - most statements need 0-1 items.\nInclude only when evidence adds analytical value beyond the statement itself.\nDefault to paraphrasing; reserve direct quotes for guidance, outlook, and novel insights.",
                 "items": {
                   "type": "object",
                   "properties": {
@@ -283,8 +319,8 @@ Extract content from this transcript section:
                     },
                     "content": {
                       "type": "string",
-                      "maxLength": 2000,
-                      "description": "Evidence with FULL CONTEXT - include background commentary that provides context, not just the punchline.\nFor quotes: Extract 3-4 sentences when needed to capture both setup and conclusion.\nUse __text__ to underline critical phrases (e.g., \"__unprecedented growth__ in wealth management\")\nPrioritize completeness over brevity - longer contextual quotes are preferred."
+                      "maxLength": 800,
+                      "description": "Concise evidence - 1-2 sentences maximum.\nDirect quotes: Capture the key insight without extensive background.\nParaphrases: Brief summary of the point.\nUse __text__ to underline critical phrases (e.g., \"__unprecedented growth__ in wealth management\")\nApply financial formatting conventions. Use __text__ for key phrases."
                     },
                     "speaker": {
                       "type": "string",
@@ -313,3 +349,84 @@ Extract content from this transcript section:
   }
 }
 ```
+
+---
+
+## Changelog
+
+### v3.0.0 (What Changed from v2.5.0)
+
+**Removed `<previous_categories_context>` block**: Template variables `{previous_sections}` and `{extracted_themes}` eliminated
+- Categories now execute independently (parallel-safe)
+- No runtime cross-category context is passed between extractions
+
+**Rewritten `<deduplication_strategy>`**: Research-plan-based guidance replaces runtime theme tracking
+- Rule 1: Follow research plan boundaries (extraction_strategy + cross_category_notes)
+- Rule 2: Extract only category-specific content
+- Rule 3: Avoid common cross-category overlaps with explicit metric ownership rules
+- Rule 4: Prefer depth over breadth
+- Rule 5: Section specificity (unchanged)
+- Removed "ZERO TOLERANCE" threat referencing extracted_themes
+
+**Updated tool definition**: `summary_statements` description references research plan boundaries instead of extracted_themes
+
+**Updated quality standards**: "previous extractions" → "research plan and cross_category_notes"
+
+**Addresses**: A4.4 (sequential dedup asymmetry), B1.1 (parallel processing prerequisite)
+
+---
+
+### v2.5.0 (What Changed from v2.4.0)
+
+**Rejection criteria quantified**: Section 1 (REJECTION DECISIONS) rewritten
+- Added dual-condition threshold: reject ONLY when (a) fewer than 2 substantive statements AND (b) no Q&A exchanges address the topic
+- Added explicit "INVALID rejection" examples showing when extraction is required
+- Q&A exchanges are always sufficient to warrant extraction regardless of MD content
+- Added decision heuristic: "When in doubt, extract — a short section is better than a missing one"
+
+**Addresses**: B3.2 (undefined "material content" with no quantitative threshold)
+
+---
+
+### v2.4.0 (What Changed from v2.3.0)
+
+**Financial formatting conventions**: New `<financial_formatting>` section
+- MANDATORY formatting: $ prefix, MM/BN/TN for scale, bps for basis points, % not "percent"
+- Explicit correct/wrong examples for each convention
+- Added to objective item #7: "Applying financial formatting conventions"
+- Added quality standard: "FINANCIAL FORMATTING" bullet
+
+**Markup instructions strengthened**: Section 6 rewritten as "MARKUP AND FORMATTING"
+- Expanded bold rules: ALL numbers, dollar amounts, percentages, ratios MUST be bolded
+- Added underline guidance for forward-looking commitments and strategic language
+- Added full-sentence formatting examples showing correct usage
+- Tool descriptions updated with formatting reminders
+
+**Addresses**: A2.1 (no financial formatting conventions), A2.2 (bold/underline inconsistently followed)
+
+---
+
+### v2.3.0 (What Changed from v2.2.1)
+
+**Philosophy shift**: Exhaustive extraction → Concise synthesis
+- Objective rewritten: "Capturing ALL material content" → "Synthesizing the most important insights"
+- Style: "comprehensive" → "concise"; "evidence-rich" → "selective evidence"
+- Audience: "comprehensive coverage" → "concise coverage of the most material points"
+
+**Statement count**: Unbounded → Target 3-5 (max 7-8)
+- Added explicit "TARGET: 3-5 statements per category" in Statement Construction
+- Replaced "COMPLETENESS" section with "CONCISENESS" section
+- Quality standards: "Better to have 8-10 rich statements" → "Better to have 3-5 insightful statements"
+
+**Evidence**: Long contextual quotes → Short targeted quotes, default to paraphrasing
+- Evidence guidance: "prefer longer quotes with context" → "1-2 sentences maximum"
+- Added "DEFAULT TO PARAPHRASING" instruction
+- Quote strategy: "Most statements need 0-1 evidence items"
+- Removed instruction to include 3-4 sentence background context
+
+**Tool limits**: 20/5/2000 → 8/3/800
+- `summary_statements.maxItems`: 20 → 8
+- `evidence.maxItems`: 5 → 3
+- `evidence.content.maxLength`: 2000 → 800
+
+**Addresses**: Findings A1.1 (exhaustiveness language), A1.2 (long quote encouragement), A1.3 (no compression - solved via prompt-level synthesis instruction)

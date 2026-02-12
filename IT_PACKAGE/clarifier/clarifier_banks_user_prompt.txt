@@ -1,5 +1,0 @@
-I'm analyzing a query to identify which banks the user is asking about and what they want to know.
-
-The user asked: "{query}"
-
-Based on the conversation context above, which banks are being discussed and what is the comprehensive intent of this request?

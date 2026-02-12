@@ -299,9 +299,7 @@ async def expand_speaker_blocks(
             # Fetch all chunks for these speaker blocks
             try:
                 async with get_connection() as conn:
-                    bank_id_filter = (
-                        "(institution_id = :bank_id_str " "OR institution_id::text = :bank_id_str)"
-                    )
+                    bank_id_filter = "institution_id::text = :bank_id_str"
                     query = text(
                         f"""
                         SELECT
@@ -437,7 +435,7 @@ async def fill_gaps_in_speaker_blocks(
                         classification_names,
                         title
                     FROM aegis_transcripts
-                    WHERE (institution_id = :bank_id_str OR institution_id::text = :bank_id_str)
+                    WHERE institution_id::text = :bank_id_str
                         AND fiscal_year = :fiscal_year
                         AND fiscal_quarter = :quarter
                         AND section_name = 'MANAGEMENT DISCUSSION SECTION'

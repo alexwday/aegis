@@ -198,7 +198,7 @@ async def get_filter_diagnostics(combo: Dict[str, Any], context: Dict[str, Any])
 
             # Records matching bank_id
             result = await conn.execute(
-                text("SELECT COUNT(*) FROM aegis_transcripts WHERE institution_id = :bank_id_str OR institution_id::text = :bank_id_str"),
+                text("SELECT COUNT(*) FROM aegis_transcripts WHERE institution_id::text = :bank_id_str"),
                 {"bank_id_str": str(combo["bank_id"])}
             )
             diagnostics['matching_bank_id'] = result.scalar()
@@ -221,7 +221,7 @@ async def get_filter_diagnostics(combo: Dict[str, Any], context: Dict[str, Any])
             result = await conn.execute(
                 text("""
                     SELECT COUNT(*) FROM aegis_transcripts
-                    WHERE (institution_id = :bank_id_str OR institution_id::text = :bank_id_str)
+                    WHERE institution_id::text = :bank_id_str
                     AND fiscal_year = :fiscal_year
                 """),
                 {"bank_id_str": str(combo["bank_id"]), "fiscal_year": combo["fiscal_year"]}
@@ -232,7 +232,7 @@ async def get_filter_diagnostics(combo: Dict[str, Any], context: Dict[str, Any])
             result = await conn.execute(
                 text("""
                     SELECT COUNT(*) FROM aegis_transcripts
-                    WHERE (institution_id = :bank_id_str OR institution_id::text = :bank_id_str)
+                    WHERE institution_id::text = :bank_id_str
                     AND fiscal_quarter = :quarter
                 """),
                 {"bank_id_str": str(combo["bank_id"]), "quarter": combo["quarter"]}
@@ -254,7 +254,7 @@ async def get_filter_diagnostics(combo: Dict[str, Any], context: Dict[str, Any])
             result = await conn.execute(
                 text("""
                     SELECT COUNT(*) FROM aegis_transcripts
-                    WHERE (institution_id = :bank_id_str OR institution_id::text = :bank_id_str)
+                    WHERE institution_id::text = :bank_id_str
                     AND fiscal_year = :fiscal_year
                     AND fiscal_quarter = :quarter
                 """),

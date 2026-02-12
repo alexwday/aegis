@@ -1,5 +1,0 @@
-I'm analyzing a query to identify which fiscal periods (years and quarters) the user is referring to.
-
-The user asked: "{query}"
-
-Based on the conversation context above and the fiscal period availability shown, which periods should be extracted for these banks?

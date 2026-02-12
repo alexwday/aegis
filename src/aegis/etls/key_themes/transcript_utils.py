@@ -37,8 +37,7 @@ async def get_filter_diagnostics(combo: Dict[str, Any], context: Dict[str, Any])
                 text(
                     """
                     SELECT COUNT(*) FROM aegis_transcripts
-                    WHERE institution_id = :bank_id_str
-                       OR institution_id::text = :bank_id_str
+                    WHERE institution_id::text = :bank_id_str
                     """
                 ),
                 {"bank_id_str": str(combo["bank_id"])},
@@ -64,7 +63,7 @@ async def get_filter_diagnostics(combo: Dict[str, Any], context: Dict[str, Any])
                 text(
                     """
                     SELECT COUNT(*) FROM aegis_transcripts
-                    WHERE (institution_id = :bank_id_str OR institution_id::text = :bank_id_str)
+                    WHERE institution_id::text = :bank_id_str
                     AND fiscal_year = :fiscal_year
                 """
                 ),
@@ -77,7 +76,7 @@ async def get_filter_diagnostics(combo: Dict[str, Any], context: Dict[str, Any])
                 text(
                     """
                     SELECT COUNT(*) FROM aegis_transcripts
-                    WHERE (institution_id = :bank_id_str OR institution_id::text = :bank_id_str)
+                    WHERE institution_id::text = :bank_id_str
                     AND fiscal_quarter = :quarter
                 """
                 ),
@@ -103,7 +102,7 @@ async def get_filter_diagnostics(combo: Dict[str, Any], context: Dict[str, Any])
                 text(
                     """
                     SELECT COUNT(*) FROM aegis_transcripts
-                    WHERE (institution_id = :bank_id_str OR institution_id::text = :bank_id_str)
+                    WHERE institution_id::text = :bank_id_str
                     AND fiscal_year = :fiscal_year
                     AND fiscal_quarter = :quarter
                 """
@@ -200,7 +199,7 @@ async def retrieve_full_section(
                     classification_names,
                     title
                 FROM aegis_transcripts
-                WHERE (institution_id = :bank_id_str OR institution_id::text = :bank_id_str)
+                WHERE institution_id::text = :bank_id_str
                     AND fiscal_year = :fiscal_year
                     AND fiscal_quarter = :quarter
                     AND section_name = ANY(:sections)

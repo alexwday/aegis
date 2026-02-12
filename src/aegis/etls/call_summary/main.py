@@ -10,12 +10,19 @@ Usage:
 import argparse
 import asyncio
 import json
+import random
+import re
+import time
 import uuid
 import os
 import sys
+from dataclasses import dataclass
 from datetime import datetime
+from difflib import SequenceMatcher
+from functools import lru_cache
 from itertools import groupby
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
+from pydantic import BaseModel, Field, ValidationError
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 import pandas as pd
@@ -32,10 +39,18 @@ from aegis.etls.call_summary.document_converter import (
     add_table_of_contents,
     mark_document_for_update,
     add_structured_content_to_doc,
+    validate_document_content,
 )
 from aegis.etls.call_summary.transcript_utils import (
     retrieve_full_section,
     format_full_section_chunks,
+    SECTION_MD,
+    SECTION_QA,
+    SECTIONS_KEY_MD,
+    SECTIONS_KEY_QA,
+    SECTIONS_KEY_ALL,
+    VALID_SECTION_KEYS,
+    SECTION_FILTER,
 )
 from aegis.utils.ssl import setup_ssl
 from aegis.connections.oauth_connector import setup_authentication
@@ -48,6 +63,44 @@ from aegis.utils.settings import config
 
 setup_logging()
 logger = get_logger()
+
+# --- Retry Configuration ---
+MAX_RETRIES = 3
+RETRY_BASE_DELAY = 1.0
+RETRY_MAX_DELAY = 10.0
+
+# --- Display / Logging Configuration ---
+LOG_SNIPPET_LENGTH = 80
+
+# --- Concurrency Configuration ---
+MAX_CONCURRENT_EXTRACTIONS = 5
+
+# --- Deduplication Configuration ---
+SIMILARITY_THRESHOLD = 0.75
+
+
+# --- ETL Exception Hierarchy ---
+
+
+class CallSummaryError(Exception):
+    """Base exception for call summary ETL errors."""
+
+
+class CallSummarySystemError(CallSummaryError):
+    """Unexpected system/infrastructure error."""
+
+
+class CallSummaryUserError(CallSummaryError):
+    """Expected user-facing error (bad input, no data, etc.)."""
+
+
+@dataclass
+class CallSummaryResult:
+    """Successful call summary generation result."""
+
+    filepath: str
+    total_categories: int
+    included_categories: int
 
 
 class ETLConfig:
@@ -105,38 +158,133 @@ class ETLConfig:
         """Get the LLM temperature parameter."""
         return self._config.get("llm", {}).get("temperature", 0.1)
 
+    def get_max_tokens(self, task_key: str) -> int:
+        """
+        Get max_tokens for a specific task, falling back to default.
+
+        Supports both legacy (flat int) and per-task (dict) config formats.
+
+        Args:
+            task_key: Task identifier (e.g., "research_plan", "category_extraction")
+
+        Returns:
+            max_tokens value for the task
+        """
+        max_tokens_config = self._config.get("llm", {}).get("max_tokens", {})
+        if isinstance(max_tokens_config, int):
+            return max_tokens_config
+        return max_tokens_config.get(task_key, max_tokens_config.get("default", 32768))
+
     @property
-    def max_tokens(self) -> int:
-        """Get the LLM max_tokens parameter."""
-        return self._config.get("llm", {}).get("max_tokens", 32768)
+    def max_concurrent_extractions(self) -> int:
+        """Get the maximum number of concurrent category extractions."""
+        return self._config.get("concurrency", {}).get(
+            "max_concurrent_extractions", MAX_CONCURRENT_EXTRACTIONS
+        )
+
+    @property
+    def max_retries(self) -> int:
+        """Get the maximum number of LLM call retries."""
+        return self._config.get("retry", {}).get("max_retries", MAX_RETRIES)
+
+    @property
+    def retry_base_delay(self) -> float:
+        """Get the base delay in seconds for retry backoff."""
+        return self._config.get("retry", {}).get("base_delay", RETRY_BASE_DELAY)
+
+    @property
+    def retry_max_delay(self) -> float:
+        """Get the maximum delay in seconds for retry backoff."""
+        return self._config.get("retry", {}).get("max_delay", RETRY_MAX_DELAY)
+
+    @property
+    def similarity_threshold(self) -> float:
+        """Get the similarity threshold for deduplication."""
+        return self._config.get("deduplication", {}).get(
+            "similarity_threshold", SIMILARITY_THRESHOLD
+        )
 
 
 etl_config = ETLConfig(os.path.join(os.path.dirname(__file__), "config", "config.yaml"))
 
-_MONITORED_INSTITUTIONS = None
+
+# --- Pydantic Models for LLM Response Validation ---
 
 
+class CategoryPlan(BaseModel):
+    """A single category's research plan from the LLM."""
+
+    index: int
+    name: str
+    extraction_strategy: str
+    cross_category_notes: str = ""
+    relevant_qa_groups: List[int] = Field(default_factory=list)
+
+
+class ResearchPlanResponse(BaseModel):
+    """Top-level research plan response from the LLM."""
+
+    category_plans: List[CategoryPlan]
+
+
+class Evidence(BaseModel):
+    """A single piece of supporting evidence for a statement."""
+
+    type: str
+    content: str
+    speaker: str = ""
+
+
+class SummaryStatement(BaseModel):
+    """A single summary statement with optional evidence."""
+
+    statement: str
+    evidence: List[Evidence] = Field(default_factory=list)
+
+
+class CategoryExtractionResponse(BaseModel):
+    """Category extraction response from the LLM."""
+
+    rejected: bool
+    rejection_reason: Optional[str] = None
+    title: Optional[str] = None
+    summary_statements: List[SummaryStatement] = Field(default_factory=list)
+
+
+@lru_cache(maxsize=1)
 def _load_monitored_institutions() -> Dict[int, Dict[str, Any]]:
     """
     Load and cache monitored institutions configuration.
 
+    Uses @lru_cache for thread-safe, testable caching (clear via .cache_clear()).
+
     Returns:
         Dictionary mapping bank_id to institution details (id, name, symbol, type, path_safe_name)
     """
-    global _MONITORED_INSTITUTIONS
-    if _MONITORED_INSTITUTIONS is None:
-        config_path = os.path.join(
-            os.path.dirname(__file__), "config", "monitored_institutions.yaml"
-        )
-        with open(config_path, "r", encoding="utf-8") as f:
-            yaml_data = yaml.safe_load(f)
+    config_path = os.path.join(os.path.dirname(__file__), "config", "monitored_institutions.yaml")
+    with open(config_path, "r", encoding="utf-8") as f:
+        yaml_data = yaml.safe_load(f)
 
-        # Build dict with bank_id as key, adding symbol from YAML key
-        _MONITORED_INSTITUTIONS = {}
-        for key, value in yaml_data.items():
-            symbol = key.split("-")[0]  # Extract symbol from "RY-CA" -> "RY"
-            _MONITORED_INSTITUTIONS[value["id"]] = {**value, "symbol": symbol}
-    return _MONITORED_INSTITUTIONS
+    institutions = {}
+    for key, value in yaml_data.items():
+        symbol = key.split("-")[0]  # Extract symbol from "RY-CA" -> "RY"
+        institutions[value["id"]] = {**value, "symbol": symbol}
+    return institutions
+
+
+def _sanitize_for_prompt(text: str) -> str:
+    """
+    Escape curly braces in text for safe use in .format() templates.
+
+    Prevents KeyError/IndexError when XLSX-sourced content contains { or }.
+
+    Args:
+        text: Raw text string
+
+    Returns:
+        Text with { and } escaped as {{ and }}
+    """
+    return text.replace("{", "{{").replace("}", "}}")
 
 
 def format_categories_for_prompt(categories: List[Dict[str, Any]]) -> str:
@@ -157,27 +305,33 @@ def format_categories_for_prompt(categories: List[Dict[str, Any]]) -> str:
     for cat in categories:
         # Map transcript_sections to human-readable description
         section_desc = {
-            "MD": "Management Discussion section only",
-            "QA": "Q&A section only",
-            "ALL": "Both Management Discussion and Q&A sections",
-        }.get(cat.get("transcript_sections", "ALL"), "ALL sections")
+            SECTIONS_KEY_MD: "Management Discussion section only",
+            SECTIONS_KEY_QA: "Q&A section only",
+            SECTIONS_KEY_ALL: "Both Management Discussion and Q&A sections",
+        }.get(cat.get("transcript_sections", SECTIONS_KEY_ALL), "ALL sections")
 
         section = "<category>\n"
-        section += f"<name>{cat['category_name']}</name>\n"
+        section += f"<name>{_sanitize_for_prompt(cat['category_name'])}</name>\n"
         section += f"<section>{section_desc}</section>\n"
-        section += f"<description>{cat['category_description']}</description>\n"
+        section += (
+            f"<description>{_sanitize_for_prompt(cat['category_description'])}</description>\n"
+        )
 
         # Collect non-empty examples
         examples = []
         for i in range(1, 4):
             example_key = f"example_{i}"
-            if cat.get(example_key) and cat[example_key].strip():
+            if (
+                cat.get(example_key)
+                and isinstance(cat[example_key], str)
+                and cat[example_key].strip()
+            ):
                 examples.append(cat[example_key])
 
         if examples:
             section += "<examples>\n"
             for example in examples:
-                section += f"  <example>{example}</example>\n"
+                section += f"  <example>{_sanitize_for_prompt(example)}</example>\n"
             section += "</examples>\n"
 
         section += "</category>"
@@ -234,12 +388,18 @@ def load_categories_from_xlsx(bank_type: str, execution_id: str) -> List[Dict[st
         for idx, row in df.iterrows():
             for field in required_columns:
                 if pd.isna(row[field]) or str(row[field]).strip() == "":
-                    raise ValueError(
-                        f"Missing value for '{field}' in {file_name} (row {idx + 2})"
-                    )
+                    raise ValueError(f"Missing value for '{field}' in {file_name} (row {idx + 2})")
+
+            transcript_sections = str(row["transcript_sections"]).strip()
+            valid_sections = VALID_SECTION_KEYS
+            if transcript_sections not in valid_sections:
+                raise ValueError(
+                    f"Invalid transcript_sections '{transcript_sections}' "
+                    f"in {file_name} (row {idx + 2}). Must be one of: {valid_sections}"
+                )
 
             category = {
-                "transcript_sections": str(row["transcript_sections"]).strip(),
+                "transcript_sections": transcript_sections,
                 "report_section": (
                     str(row["report_section"]).strip()
                     if pd.notna(row["report_section"])
@@ -374,14 +534,16 @@ async def _generate_research_plan(
 ) -> dict:
     """Generate research plan using LLM."""
     system_prompt = research_prompts["system_prompt"]
-    user_prompt = research_prompts["user_prompt_template"].format(transcript_text=transcript_text)
+    user_prompt = research_prompts["user_prompt_template"].format(
+        transcript_text=_sanitize_for_prompt(transcript_text)
+    )
 
     messages = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_prompt},
     ]
 
-    max_retries = 3
+    max_retries = etl_config.max_retries
     for attempt in range(max_retries):
         try:
             response = await complete_with_tools(
@@ -391,12 +553,25 @@ async def _generate_research_plan(
                 llm_params={
                     "model": etl_config.get_model("research_plan"),
                     "temperature": etl_config.temperature,
-                    "max_tokens": etl_config.max_tokens,
+                    "max_tokens": etl_config.get_max_tokens("research_plan"),
                 },
             )
 
             tool_call = response["choices"][0]["message"]["tool_calls"][0]
-            research_plan_data = json.loads(tool_call["function"]["arguments"])
+            raw_data = json.loads(tool_call["function"]["arguments"])
+            validated = ResearchPlanResponse.model_validate(raw_data)
+            research_plan_data = validated.model_dump()
+
+            metrics = response.get("metrics", {})
+            logger.info(
+                "etl.call_summary.llm_usage",
+                execution_id=execution_id,
+                stage="research_plan",
+                prompt_tokens=metrics.get("prompt_tokens", 0),
+                completion_tokens=metrics.get("completion_tokens", 0),
+                total_cost=metrics.get("total_cost", 0),
+                response_time=metrics.get("response_time", 0),
+            )
 
             logger.info(
                 "etl.call_summary.research_plan_generated",
@@ -405,7 +580,7 @@ async def _generate_research_plan(
             )
             return research_plan_data
 
-        except (KeyError, IndexError, json.JSONDecodeError, TypeError) as e:
+        except (KeyError, IndexError, json.JSONDecodeError, TypeError, ValidationError) as e:
             logger.error(
                 "etl.call_summary.research_plan_error",
                 execution_id=execution_id,
@@ -425,6 +600,11 @@ async def _generate_research_plan(
                 attempt=attempt + 1,
             )
             if attempt < max_retries - 1:
+                delay = min(
+                    etl_config.retry_base_delay * (2**attempt), etl_config.retry_max_delay
+                )
+                delay += random.uniform(0, 0.5 * delay)
+                await asyncio.sleep(delay)
                 continue
             raise RuntimeError(
                 f"Error generating research plan after {max_retries} attempts: {str(e)}"
@@ -433,164 +613,413 @@ async def _generate_research_plan(
     raise RuntimeError(f"Failed to generate research plan after {max_retries} attempts")
 
 
-def _format_quote_snippet(evidence: dict, index: int) -> str:
-    """Format a single piece of evidence into a quote snippet."""
-    if evidence.get("type") != "quote" or not evidence.get("content"):
-        return ""
+def _build_rejection_result(index: int, category: dict, reason: str) -> dict:
+    """
+    Build a standardized rejection result for a category.
 
-    snippet = evidence["content"][:80]
-    if len(evidence["content"]) > 80:
-        snippet += "..."
-    return f'Q{index+1}: "{snippet}"'
+    Args:
+        index: 1-based category index
+        category: Category configuration dict
+        reason: Human-readable rejection reason
 
-
-def _build_statement_text(result: dict, stmt: dict) -> str:
-    """Build formatted statement text with evidence quotes."""
-    statement_text = f"[{result['name']}] {stmt['statement']}"
-
-    if "evidence" not in stmt or not stmt["evidence"]:
-        return statement_text
-
-    quote_snippets = [_format_quote_snippet(ev, idx) for idx, ev in enumerate(stmt["evidence"][:3])]
-    quote_snippets = [q for q in quote_snippets if q]  # Filter empty strings
-
-    if quote_snippets:
-        statement_text += f"\n  → Quotes: {' | '.join(quote_snippets)}"
-
-    return statement_text
+    Returns:
+        Rejection result dict with index, name, report_section, rejected, rejection_reason
+    """
+    return {
+        "index": index,
+        "name": category["category_name"],
+        "report_section": category.get("report_section", "Results Summary"),
+        "rejected": True,
+        "rejection_reason": reason,
+    }
 
 
-def _build_extracted_themes(category_results: list) -> str:
-    """Build extracted themes summary from completed category results."""
-    if not category_results:
-        return "Starting extraction - no prior themes"
+def _normalize_text(raw_text: str) -> str:
+    """
+    Normalize text for similarity comparison.
 
-    completed_results = [r for r in category_results if not r.get("rejected", False)]
-    if not completed_results:
-        return "No themes extracted yet"
+    Strips markdown bold/underline markers, lowercases, and collapses whitespace.
 
-    all_statements = []
-    for result in completed_results:
-        if "summary_statements" not in result:
+    Args:
+        raw_text: Raw text string
+
+    Returns:
+        Normalized lowercase text with collapsed whitespace
+    """
+    # Remove **bold** and __underline__ markers
+    normalized = re.sub(r"\*\*(.+?)\*\*", r"\1", raw_text)
+    normalized = re.sub(r"__(.+?)__", r"\1", normalized)
+    # Lowercase and collapse whitespace
+    normalized = normalized.lower()
+    normalized = re.sub(r"\s+", " ", normalized).strip()
+    return normalized
+
+
+def _texts_are_similar(text_a: str, text_b: str) -> bool:
+    """
+    Check if two texts are similar using SequenceMatcher.
+
+    Args:
+        text_a: First text
+        text_b: Second text
+
+    Returns:
+        True if normalized similarity ratio >= configured similarity threshold
+    """
+    norm_a = _normalize_text(text_a)
+    norm_b = _normalize_text(text_b)
+    return SequenceMatcher(None, norm_a, norm_b).ratio() >= etl_config.similarity_threshold
+
+
+def _dedup_evidence_across_categories(category_results: list, execution_id: str) -> int:
+    """
+    Remove duplicate evidence across categories (first occurrence wins).
+
+    Args:
+        category_results: List of category result dicts (modified in-place)
+        execution_id: Execution ID for logging
+
+    Returns:
+        Number of evidence items removed
+    """
+    seen_evidence = []  # List of (category_name, evidence_content) tuples
+    removed_count = 0
+
+    for result in category_results:
+        if result.get("rejected", False) or "summary_statements" not in result:
             continue
 
         for stmt in result["summary_statements"]:
-            statement_text = _build_statement_text(result, stmt)
-            all_statements.append(statement_text)
+            if not stmt.get("evidence"):
+                continue
 
-    if all_statements:
-        return "\n".join(all_statements)
-    return "No specific themes extracted yet"
+            filtered = []
+            for ev in stmt["evidence"]:
+                content = ev.get("content", "")
+                if not content:
+                    filtered.append(ev)
+                    continue
+
+                match = next(
+                    (cat for cat, seen in seen_evidence if _texts_are_similar(content, seen)),
+                    None,
+                )
+                if match:
+                    logger.debug(
+                        "etl.call_summary.dedup.evidence_removed",
+                        execution_id=execution_id,
+                        category=result["name"],
+                        duplicate_of_category=match,
+                        snippet=content[:LOG_SNIPPET_LENGTH],
+                    )
+                    removed_count += 1
+                else:
+                    seen_evidence.append((result["name"], content))
+                    filtered.append(ev)
+
+            stmt["evidence"] = filtered
+
+    return removed_count
 
 
-def _build_previous_summary(category_results: list) -> str:
-    """Build previous sections summary from completed category results."""
-    if not category_results:
-        return ""
-
-    completed_results = [r for r in category_results if not r.get("rejected", False)]
-    if not completed_results:
-        return "No previous sections completed yet"
-
-    completed_names = [r["name"] for r in completed_results]
-    return f"Already completed: {', '.join(completed_names)}"
-
-
-async def _process_categories(
-    categories: list, research_plan_data: dict, extraction_prompts: dict, etl_context: dict
-) -> list:
+def _dedup_statements_within_categories(category_results: list, execution_id: str) -> int:
     """
-    Process all categories and extract data from transcripts.
+    Remove duplicate statements within each category.
 
     Args:
-        categories: List of category configurations
-        research_plan_data: Research plan from LLM
-        extraction_prompts: Prompts for extraction
-        etl_context: Dict with keys: retrieval_params, bank_info, quarter,
-            fiscal_year, context, execution_id
+        category_results: List of category result dicts (modified in-place)
+        execution_id: Execution ID for logging
 
     Returns:
-        List of category results (both accepted and rejected)
+        Number of statements removed
     """
-    retrieval_params = etl_context["retrieval_params"]
-    bank_info = etl_context["bank_info"]
-    quarter = etl_context["quarter"]
-    fiscal_year = etl_context["fiscal_year"]
-    context = etl_context["context"]
-    execution_id = etl_context["execution_id"]
-    category_results = []
+    removed_count = 0
 
-    for i, category in enumerate(categories, 1):
+    for result in category_results:
+        if result.get("rejected", False) or "summary_statements" not in result:
+            continue
+
+        unique = []
+        for stmt in result["summary_statements"]:
+            stmt_text = stmt.get("statement", "")
+            if not stmt_text:
+                unique.append(stmt)
+                continue
+
+            match = next(
+                (True for ex in unique if _texts_are_similar(stmt_text, ex.get("statement", ""))),
+                False,
+            )
+            if match:
+                logger.debug(
+                    "etl.call_summary.dedup.statement_removed",
+                    execution_id=execution_id,
+                    category=result["name"],
+                    statement=stmt_text[:LOG_SNIPPET_LENGTH],
+                )
+                removed_count += 1
+            else:
+                unique.append(stmt)
+
+        result["summary_statements"] = unique
+
+    return removed_count
+
+
+def _dedup_statements_across_categories(category_results: list, execution_id: str) -> int:
+    """
+    Remove duplicate statements across different categories (first occurrence wins).
+
+    Args:
+        category_results: List of category result dicts (modified in-place)
+        execution_id: Execution ID for logging
+
+    Returns:
+        Number of statements removed
+    """
+    seen_statements = []  # List of (category_name, statement_text) tuples
+    removed_count = 0
+
+    for result in category_results:
+        if result.get("rejected", False) or "summary_statements" not in result:
+            continue
+
+        unique = []
+        for stmt in result["summary_statements"]:
+            stmt_text = stmt.get("statement", "")
+            if not stmt_text:
+                unique.append(stmt)
+                continue
+
+            match = next(
+                (cat for cat, seen in seen_statements if _texts_are_similar(stmt_text, seen)),
+                None,
+            )
+            if match:
+                logger.debug(
+                    "etl.call_summary.dedup.cross_category_statement_removed",
+                    execution_id=execution_id,
+                    category=result["name"],
+                    duplicate_of_category=match,
+                    statement=stmt_text[:LOG_SNIPPET_LENGTH],
+                )
+                removed_count += 1
+            else:
+                seen_statements.append((result["name"], stmt_text))
+                unique.append(stmt)
+
+        result["summary_statements"] = unique
+
+    return removed_count
+
+
+def _deduplicate_results(category_results: list, execution_id: str) -> list:
+    """
+    Post-extraction deduplication of evidence and statements.
+
+    Three-pass dedup:
+    1. Cross-category evidence dedup: Remove evidence items that are >75% similar
+       to previously-seen evidence in earlier categories (first occurrence wins).
+    2. Within-category statement dedup: Remove later statements within the same
+       category that are >75% similar to earlier statements.
+    3. Cross-category statement dedup: Remove statements that are >75% similar
+       to previously-seen statements in earlier categories (first occurrence wins).
+
+    Args:
+        category_results: List of category result dicts from extraction
+        execution_id: Execution ID for logging
+
+    Returns:
+        Modified category_results with duplicates removed
+    """
+    evidence_removed = _dedup_evidence_across_categories(category_results, execution_id)
+    statements_within_removed = _dedup_statements_within_categories(category_results, execution_id)
+    statements_across_removed = _dedup_statements_across_categories(category_results, execution_id)
+
+    total_statements_removed = statements_within_removed + statements_across_removed
+    if evidence_removed > 0 or total_statements_removed > 0:
+        logger.info(
+            "etl.call_summary.dedup.summary",
+            execution_id=execution_id,
+            evidence_removed=evidence_removed,
+            statements_within_removed=statements_within_removed,
+            statements_across_removed=statements_across_removed,
+        )
+
+    return category_results
+
+
+def _filter_chunks_for_category(
+    section_cache: dict,
+    transcript_sections: str,
+    relevant_qa_groups: list,
+) -> list:
+    """
+    Filter cached transcript chunks for a specific category.
+
+    MD chunks are always included in full (no visible block IDs for filtering).
+    QA chunks are filtered to only those whose qa_group_id is in relevant_qa_groups.
+    If relevant_qa_groups is empty/None, all QA chunks are included as a safety fallback.
+
+    Args:
+        section_cache: Dict with keys "MD", "QA", "ALL" mapping to chunk lists
+        transcript_sections: "MD", "QA", or "ALL" — which sections this category uses
+        relevant_qa_groups: List of Q&A group IDs relevant to this category
+
+    Returns:
+        Filtered list of chunks for the category
+    """
+    md_chunks = section_cache.get(SECTIONS_KEY_MD, [])
+    qa_chunks = section_cache.get(SECTIONS_KEY_QA, [])
+
+    # Filter QA chunks if we have a non-empty relevance list
+    if relevant_qa_groups:
+        qa_group_set = set(relevant_qa_groups)
+        filtered_qa = [c for c in qa_chunks if c.get("qa_group_id") in qa_group_set]
+    else:
+        # Safety fallback: no filtering when list is empty/None
+        filtered_qa = qa_chunks
+
+    # Combine based on transcript_sections
+    if transcript_sections == SECTIONS_KEY_MD:
+        return list(md_chunks)
+    if transcript_sections == SECTIONS_KEY_QA:
+        return list(filtered_qa)
+    # SECTIONS_KEY_ALL or any other value
+    return list(md_chunks) + list(filtered_qa)
+
+
+async def _extract_single_category(  # noqa: E501  pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals
+    index: int,
+    category: dict,
+    research_plan_data: dict,
+    extraction_prompts: dict,
+    etl_context: dict,
+    semaphore: asyncio.Semaphore,
+    total_categories: int,
+) -> dict:
+    """
+    Extract data for a single category (parallel-safe coroutine).
+
+    Acquires the semaphore to limit concurrency, then performs chunk filtering,
+    transcript formatting, and LLM extraction with retry logic. Never raises;
+    returns a rejection result on unrecoverable errors.
+
+    Args:
+        index: 1-based category index
+        category: Category configuration dict
+        research_plan_data: Research plan from LLM
+        extraction_prompts: Prompts for extraction
+        etl_context: Shared read-only context dict
+        semaphore: Concurrency-limiting semaphore
+        total_categories: Total number of categories being processed
+
+    Returns:
+        Extraction result dict (accepted or rejected)
+    """
+    async with semaphore:
+        retrieval_params = etl_context["retrieval_params"]
+        bank_info = etl_context["bank_info"]
+        quarter = etl_context["quarter"]
+        fiscal_year = etl_context["fiscal_year"]
+        context = etl_context["context"]
+        execution_id = etl_context["execution_id"]
+
         category_plan = next(
-            (p for p in research_plan_data["category_plans"] if p.get("index") == i), None
+            (p for p in research_plan_data["category_plans"] if p.get("index") == index),
+            None,
         )
 
         if not category_plan:
-            category_results.append(
-                {
-                    "index": i,
-                    "name": category["category_name"],
-                    "report_section": category.get("report_section", "Results Summary"),
-                    "rejected": True,
-                    "rejection_reason": (
-                        "Category not applicable to this transcript based on "
-                        "research plan analysis"
-                    ),
-                }
+            logger.warning(
+                "etl.call_summary.category_fallback",
+                execution_id=execution_id,
+                category_name=category["category_name"],
+                category_index=index,
+                reason="Not in research plan, attempting fallback extraction",
             )
-            continue
+            category_plan = {
+                "index": index,
+                "name": category["category_name"],
+                "extraction_strategy": (
+                    "This category was not identified in the research plan. "
+                    "Apply conservative extraction: only extract genuinely "
+                    "relevant material with strong evidence. If no substantive "
+                    "content exists for this category, set rejected=true. "
+                    "Do not force content that belongs in other categories."
+                ),
+                "cross_category_notes": "",
+            }
 
-        chunks = await retrieve_full_section(
-            combo=retrieval_params, sections=category["transcript_sections"], context=context
+        # Extract Q&A group filter from research plan
+        relevant_qa_groups = category_plan.get("relevant_qa_groups", [])
+
+        # Filter chunks to relevant content; fallback categories get full transcript
+        cache = etl_context.get("section_cache", {})
+        chunks = _filter_chunks_for_category(
+            section_cache=cache,
+            transcript_sections=category["transcript_sections"],
+            relevant_qa_groups=relevant_qa_groups,
+        )
+
+        # Fallback if section_cache missed this section type entirely
+        if not chunks and not cache.get(category["transcript_sections"]):
+            chunks = await retrieve_full_section(
+                combo=retrieval_params,
+                sections=category["transcript_sections"],
+                context=context,
+            )
+
+        # Log chunk filtering results
+        total_section_chunks = len(cache.get(category["transcript_sections"], []))
+        logger.debug(
+            "etl.call_summary.chunk_filtering",
+            execution_id=execution_id,
+            category_name=category["category_name"],
+            transcript_sections=category["transcript_sections"],
+            relevant_qa_groups=relevant_qa_groups,
+            total_chunks=total_section_chunks,
+            filtered_chunks=len(chunks),
         )
 
         if not chunks:
-            category_results.append(
-                {
-                    "index": i,
-                    "name": category["category_name"],
-                    "report_section": category.get("report_section", "Results Summary"),
-                    "rejected": True,
-                    "rejection_reason": (
-                        f"No {category['transcript_sections']} section data available"
-                    ),
-                }
+            return _build_rejection_result(
+                index,
+                category,
+                f"No {category['transcript_sections']} section data available",
             )
-            continue
 
-        formatted_section = await format_full_section_chunks(
+        formatted_section = format_full_section_chunks(
             chunks=chunks, combo=retrieval_params, context=context
         )
 
-        previous_summary = _build_previous_summary(category_results)
-        extracted_themes = _build_extracted_themes(category_results)
-
         system_prompt = extraction_prompts["system_prompt"].format(
-            category_index=i,
-            total_categories=len(categories),
+            category_index=index,
+            total_categories=total_categories,
             bank_name=bank_info["bank_name"],
             bank_symbol=bank_info["bank_symbol"],
             quarter=quarter,
             fiscal_year=fiscal_year,
-            category_name=category["category_name"],
-            category_description=category["category_description"],
+            category_name=_sanitize_for_prompt(category["category_name"]),
+            category_description=_sanitize_for_prompt(category["category_description"]),
             transcripts_section=category["transcript_sections"],
-            research_plan=category_plan["extraction_strategy"],
-            cross_category_notes=category_plan.get("cross_category_notes", ""),
-            previous_sections=previous_summary,
-            extracted_themes=extracted_themes,
+            research_plan=_sanitize_for_prompt(category_plan["extraction_strategy"]),
+            cross_category_notes=_sanitize_for_prompt(
+                category_plan.get("cross_category_notes", "")
+            ),
         )
 
-        user_prompt = extraction_prompts["user_prompt"].format(formatted_section=formatted_section)
+        user_prompt = extraction_prompts["user_prompt"].format(
+            formatted_section=_sanitize_for_prompt(formatted_section)
+        )
 
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ]
 
-        max_extraction_retries = 3
-
-        for attempt in range(max_extraction_retries):
+        max_retries = etl_config.max_retries
+        for attempt in range(max_retries):
             try:
                 response = await complete_with_tools(
                     messages=messages,
@@ -599,20 +1028,31 @@ async def _process_categories(
                     llm_params={
                         "model": etl_config.get_model("category_extraction"),
                         "temperature": etl_config.temperature,
-                        "max_tokens": etl_config.max_tokens,
+                        "max_tokens": etl_config.get_max_tokens("category_extraction"),
                     },
                 )
 
                 tool_call = response["choices"][0]["message"]["tool_calls"][0]
-                extracted_data = json.loads(tool_call["function"]["arguments"])
+                raw_data = json.loads(tool_call["function"]["arguments"])
+                validated = CategoryExtractionResponse.model_validate(raw_data)
+                extracted_data = validated.model_dump()
 
-                extracted_data["index"] = i
+                extracted_data["index"] = index
                 extracted_data["name"] = category["category_name"]
                 extracted_data["report_section"] = category.get("report_section", "Results Summary")
-                if "title" not in extracted_data or not extracted_data.get("title"):
+                if not extracted_data.get("title"):
                     extracted_data["title"] = category["category_name"]
 
-                category_results.append(extracted_data)
+                metrics = response.get("metrics", {})
+                logger.info(
+                    "etl.call_summary.llm_usage",
+                    execution_id=execution_id,
+                    stage=f"extraction:{category['category_name']}",
+                    prompt_tokens=metrics.get("prompt_tokens", 0),
+                    completion_tokens=metrics.get("completion_tokens", 0),
+                    total_cost=metrics.get("total_cost", 0),
+                    response_time=metrics.get("response_time", 0),
+                )
 
                 logger.info(
                     "etl.call_summary.category_completed",
@@ -621,9 +1061,11 @@ async def _process_categories(
                     rejected=extracted_data.get("rejected", False),
                 )
 
-                break
+                return extracted_data
 
-            except (KeyError, IndexError, json.JSONDecodeError, TypeError) as e:
+            except (
+                KeyError, IndexError, json.JSONDecodeError, TypeError, ValidationError
+            ) as e:
                 logger.error(
                     "etl.call_summary.category_extraction_error",
                     execution_id=execution_id,
@@ -632,18 +1074,10 @@ async def _process_categories(
                     attempt=attempt + 1,
                 )
 
-                if attempt < max_extraction_retries - 1:
+                if attempt < max_retries - 1:
                     continue
-                category_results.append(
-                    {
-                        "index": i,
-                        "name": category["category_name"],
-                        "report_section": category.get("report_section", "Results Summary"),
-                        "rejected": True,
-                        "rejection_reason": (
-                            f"Error after {max_extraction_retries} attempts: {str(e)}"
-                        ),
-                    }
+                return _build_rejection_result(
+                    index, category, f"Error after {max_retries} attempts: {str(e)}"
                 )
             except Exception as e:
                 logger.error(
@@ -654,26 +1088,127 @@ async def _process_categories(
                     attempt=attempt + 1,
                 )
 
-                if attempt < max_extraction_retries - 1:
+                if attempt < max_retries - 1:
+                    delay = min(
+                        etl_config.retry_base_delay * (2**attempt),
+                        etl_config.retry_max_delay,
+                    )
+                    delay += random.uniform(0, 0.5 * delay)
+                    await asyncio.sleep(delay)
                     continue
-                category_results.append(
-                    {
-                        "index": i,
-                        "name": category["category_name"],
-                        "report_section": category.get("report_section", "Results Summary"),
-                        "rejected": True,
-                        "rejection_reason": (
-                            f"Error after {max_extraction_retries} attempts: {str(e)}"
-                        ),
-                    }
+                return _build_rejection_result(
+                    index, category, f"Error after {max_retries} attempts: {str(e)}"
                 )
 
-    return category_results
+        # Unreachable in practice, but satisfies the return type contract
+        return _build_rejection_result(index, category, f"Failed after {max_retries} attempts")
+
+
+async def _process_categories(
+    categories: list, research_plan_data: dict, extraction_prompts: dict, etl_context: dict
+) -> list:
+    """
+    Process all categories concurrently and extract data from transcripts.
+
+    Uses asyncio.gather with a semaphore to limit concurrency. Each category
+    executes independently with no shared mutable state. Results are sorted
+    by index for deterministic ordering regardless of completion order.
+
+    Args:
+        categories: List of category configurations
+        research_plan_data: Research plan from LLM
+        extraction_prompts: Prompts for extraction
+        etl_context: Dict with keys: retrieval_params, bank_info, quarter,
+            fiscal_year, context, execution_id
+
+    Returns:
+        List of category results (both accepted and rejected), sorted by index
+    """
+    semaphore = asyncio.Semaphore(etl_config.max_concurrent_extractions)
+    total_categories = len(categories)
+
+    tasks = [
+        _extract_single_category(
+            index=i,
+            category=cat,
+            research_plan_data=research_plan_data,
+            extraction_prompts=extraction_prompts,
+            etl_context=etl_context,
+            semaphore=semaphore,
+            total_categories=total_categories,
+        )
+        for i, cat in enumerate(categories, 1)
+    ]
+
+    results = await asyncio.gather(*tasks)
+    return sorted(results, key=lambda r: r.get("index", 0))
+
+
+def _insert_toc_at_position(doc, toc_entries: list) -> bool:
+    """
+    Insert TOC paragraphs before the first Heading 1 in the document body.
+
+    Uses lxml addprevious() to position the TOC after banner/title but before
+    body content. Falls back to appending at the end if position detection fails.
+
+    Args:
+        doc: Word Document object
+        toc_entries: List of (title, heading_level) tuples
+
+    Returns:
+        True if TOC was inserted at the correct position, False if fallback needed
+    """
+    try:
+        body = doc.element.body
+        ns = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+
+        # Find the first Heading 1 paragraph element
+        first_h1 = None
+        for para_elem in body.iterchildren(f"{ns}p"):
+            for ppr in para_elem.iterchildren(f"{ns}pPr"):
+                for pstyle in ppr.iterchildren(f"{ns}pStyle"):
+                    if pstyle.get(f"{ns}val") == "Heading1":
+                        first_h1 = para_elem
+                        break
+                if first_h1:
+                    break
+            if first_h1:
+                break
+
+        if first_h1 is None:
+            return False
+
+        # Count paragraphs before adding TOC
+        paras_before = len(list(body.iterchildren(f"{ns}p")))
+
+        # Build TOC paragraphs and insert before first Heading 1
+        add_table_of_contents(doc, toc_entries)
+
+        # The TOC was appended at the end; move its paragraphs before first_h1
+        # Determine which paragraphs were added by comparing counts
+        all_paras = list(body.iterchildren(f"{ns}p"))
+        toc_paras = all_paras[paras_before:]
+
+        for toc_para in toc_paras:
+            body.remove(toc_para)
+            first_h1.addprevious(toc_para)
+
+        return True
+
+    except Exception as e:  # pylint: disable=broad-except
+        logger.warning(
+            "etl.call_summary.toc_insertion_failed",
+            error=str(e),
+        )
+        return False
 
 
 def _generate_document(valid_categories: list, etl_context: dict) -> tuple:
     """
     Generate Word document from category results.
+
+    Builds body content first (collecting TOC entries), then inserts the TOC
+    before the first section heading with real heading titles as fallback text.
 
     Args:
         valid_categories: List of accepted category results
@@ -694,17 +1229,15 @@ def _generate_document(valid_categories: list, etl_context: dict) -> tuple:
     add_banner_image(doc, config_dir)
 
     add_document_title(doc, quarter, fiscal_year, bank_info["bank_symbol"])
-    add_table_of_contents(doc)
 
-    try:
-        mark_document_for_update(doc)
-    except (AttributeError, ValueError):
-        pass
+    # Build body content, collecting TOC entries as we go
+    toc_entries = []
 
     sorted_categories = sorted(
         valid_categories,
         key=lambda x: (
             0 if x.get("report_section", "Results Summary") == "Results Summary" else 1,
+            x.get("report_section", "Results Summary"),
             x.get("index", 0),
         ),
     )
@@ -714,14 +1247,30 @@ def _generate_document(valid_categories: list, etl_context: dict) -> tuple:
     ):
         section_categories = list(section_categories)
         add_section_heading(doc, section_name, is_first_section=idx == 0)
+        toc_entries.append((section_name, 1))
 
         for i, category_data in enumerate(section_categories, 1):
+            title = category_data.get("title") or category_data.get("name") or "Untitled"
+            if not category_data.get("rejected", False):
+                toc_entries.append((title, 2))
+
             add_structured_content_to_doc(doc, category_data, heading_level=2)
 
             if i < len(section_categories):
                 spacer = doc.add_paragraph()
                 spacer.paragraph_format.space_after = Pt(6)
                 spacer.add_run()
+
+    # Insert TOC with real heading titles before the first section heading
+    if not _insert_toc_at_position(doc, toc_entries):
+        add_table_of_contents(doc, toc_entries)
+
+    try:
+        mark_document_for_update(doc)
+    except (AttributeError, ValueError):
+        pass
+
+    validate_document_content(doc)
 
     output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "output")
     os.makedirs(output_dir, exist_ok=True)
@@ -762,8 +1311,10 @@ async def _save_to_database(
     report_metadata = get_standard_report_metadata()
     generation_timestamp = datetime.now()
 
+    stage = "connecting"
     try:
         async with get_connection() as conn:
+            stage = "deleting existing report"
             delete_result = await conn.execute(
                 text(
                     """
@@ -784,6 +1335,7 @@ async def _save_to_database(
             )
             delete_result.fetchall()
 
+            stage = "inserting new report"
             result = await conn.execute(
                 text(
                     """
@@ -850,14 +1402,39 @@ async def _save_to_database(
             )
             result.fetchone()
 
-            await conn.commit()
-
     except SQLAlchemyError as e:
-        logger.error("etl.call_summary.database_error", execution_id=execution_id, error=str(e))
+        logger.error(
+            "etl.call_summary.database_error",
+            execution_id=execution_id,
+            stage=stage,
+            filepath=filepath,
+            error=str(e),
+        )
         raise
 
 
-async def generate_call_summary(bank_name: str, fiscal_year: int, quarter: str) -> str:
+def _timing_summary(marks: list) -> dict:
+    """
+    Convert timing marks to elapsed-seconds summary.
+
+    Args:
+        marks: List of (stage_name, timestamp) tuples
+
+    Returns:
+        Dict mapping "{stage}_s" to elapsed seconds, plus "total_s"
+    """
+    if len(marks) < 2:
+        return {}
+    summary = {}
+    for i in range(1, len(marks)):
+        summary[f"{marks[i][0]}_s"] = round(marks[i][1] - marks[i - 1][1], 2)
+    summary["total_s"] = round(marks[-1][1] - marks[0][1], 2)
+    return summary
+
+
+async def generate_call_summary(  # pylint: disable=too-many-statements
+    bank_name: str, fiscal_year: int, quarter: str
+) -> CallSummaryResult:
     """
     Generate a call summary by directly calling transcript functions.
 
@@ -867,8 +1444,13 @@ async def generate_call_summary(bank_name: str, fiscal_year: int, quarter: str) 
         quarter: Quarter (e.g., "Q3")
 
     Returns:
-        The generated call summary content
+        CallSummaryResult with filepath and category counts
+
+    Raises:
+        CallSummaryUserError: For expected errors (bad input, no data)
+        CallSummarySystemError: For unexpected system/infrastructure errors
     """
+    marks = [("start", time.monotonic())]
     execution_id = str(uuid.uuid4())
     logger.info(
         "etl.call_summary.started",
@@ -893,13 +1475,15 @@ async def generate_call_summary(bank_name: str, fiscal_year: int, quarter: str) 
         if not auth_config["success"]:
             error_msg = f"Authentication failed: {auth_config.get('error', 'Unknown error')}"
             logger.error("etl.call_summary.auth_failed", execution_id=execution_id, error=error_msg)
-            raise RuntimeError(error_msg)
+            raise CallSummarySystemError(error_msg)
 
         context = {
             "execution_id": execution_id,
             "auth_config": auth_config,
             "ssl_config": ssl_config,
         }
+
+        marks.append(("setup", time.monotonic()))
 
         categories = load_categories_from_xlsx(bank_info["bank_type"], execution_id)
 
@@ -913,18 +1497,20 @@ async def generate_call_summary(bank_name: str, fiscal_year: int, quarter: str) 
         }
 
         chunks = await retrieve_full_section(
-            combo=retrieval_params, sections="ALL", context=context
+            combo=retrieval_params, sections=SECTIONS_KEY_ALL, context=context
         )
 
         if not chunks:
-            raise ValueError(
+            raise CallSummaryUserError(
                 f"No transcript chunks found for {bank_info['bank_name']} "
                 f"{quarter} {fiscal_year}"
             )
 
-        formatted_transcript = await format_full_section_chunks(
+        formatted_transcript = format_full_section_chunks(
             chunks=chunks, combo=retrieval_params, context=context
         )
+
+        marks.append(("retrieval", time.monotonic()))
 
         research_prompts = load_prompt_from_db(
             layer="call_summary_etl",
@@ -951,6 +1537,47 @@ async def generate_call_summary(bank_name: str, fiscal_year: int, quarter: str) 
             context, research_prompts, formatted_transcript, execution_id
         )
 
+        # Check for coverage gaps in research plan
+        planned_indices = {p.get("index") for p in research_plan_data.get("category_plans", [])}
+        all_indices = set(range(1, len(categories) + 1))
+        skipped_indices = all_indices - planned_indices
+        if skipped_indices:
+            skipped_names = [
+                categories[idx - 1]["category_name"] for idx in sorted(skipped_indices)
+            ]
+            logger.warning(
+                "etl.call_summary.research_plan_coverage_gap",
+                execution_id=execution_id,
+                skipped_count=len(skipped_indices),
+                skipped_categories=skipped_names,
+            )
+
+        # Check Q&A group coverage across research plan
+        qa_chunks = [c for c in chunks if c.get("section_name") == SECTION_QA]
+        all_qa_ids = {c["qa_group_id"] for c in qa_chunks if c.get("qa_group_id") is not None}
+        referenced_qa_ids = set()
+        for plan in research_plan_data.get("category_plans", []):
+            for qa_id in plan.get("relevant_qa_groups", []):
+                referenced_qa_ids.add(qa_id)
+        unreferenced_qa_ids = all_qa_ids - referenced_qa_ids
+        if unreferenced_qa_ids:
+            logger.warning(
+                "etl.call_summary.qa_group_coverage_gap",
+                execution_id=execution_id,
+                total_qa_groups=len(all_qa_ids),
+                unreferenced_count=len(unreferenced_qa_ids),
+                unreferenced_qa_ids=sorted(unreferenced_qa_ids),
+            )
+        elif all_qa_ids:
+            logger.info(
+                "etl.call_summary.qa_group_coverage_complete",
+                execution_id=execution_id,
+                total_qa_groups=len(all_qa_ids),
+                referenced_qa_groups=len(referenced_qa_ids),
+            )
+
+        marks.append(("research_plan", time.monotonic()))
+
         extraction_prompts = load_prompt_from_db(
             layer="call_summary_etl",
             name="category_extraction",
@@ -959,6 +1586,7 @@ async def generate_call_summary(bank_name: str, fiscal_year: int, quarter: str) 
             execution_id=execution_id,
         )
 
+        # Cache sections to avoid redundant DB calls during category processing
         etl_context = {
             "retrieval_params": retrieval_params,
             "bank_info": bank_info,
@@ -967,6 +1595,11 @@ async def generate_call_summary(bank_name: str, fiscal_year: int, quarter: str) 
             "context": context,
             "execution_id": execution_id,
             "bank_type": bank_info["bank_type"],
+            "section_cache": {
+                SECTIONS_KEY_ALL: chunks,
+                SECTIONS_KEY_MD: [c for c in chunks if c["section_name"] == SECTION_MD],
+                SECTIONS_KEY_QA: [c for c in chunks if c["section_name"] == SECTION_QA],
+            },
         }
 
         category_results = await _process_categories(
@@ -976,14 +1609,22 @@ async def generate_call_summary(bank_name: str, fiscal_year: int, quarter: str) 
             etl_context=etl_context,
         )
 
+        category_results = _deduplicate_results(category_results, execution_id)
+
+        marks.append(("extraction", time.monotonic()))
+
         valid_categories = [c for c in category_results if not c.get("rejected", False)]
 
         if not valid_categories:
-            raise ValueError("All categories were rejected - no content to generate document")
+            raise CallSummaryUserError(
+                "All categories were rejected - no content to generate document"
+            )
 
         filepath, docx_filename = _generate_document(
             valid_categories=valid_categories, etl_context=etl_context
         )
+
+        marks.append(("document", time.monotonic()))
 
         await _save_to_database(
             category_results=category_results,
@@ -993,18 +1634,26 @@ async def generate_call_summary(bank_name: str, fiscal_year: int, quarter: str) 
             etl_context=etl_context,
         )
 
+        marks.append(("save", time.monotonic()))
+
         logger.info(
             "etl.call_summary.completed",
             execution_id=execution_id,
-            stage="full_report",
             num_categories=len(valid_categories),
+            **_timing_summary(marks),
         )
 
-        return (
-            f"✅ Complete: {filepath}\n   Categories: "
-            f"{len(valid_categories)}/{len(category_results)} included"
+        return CallSummaryResult(
+            filepath=filepath,
+            total_categories=len(category_results),
+            included_categories=len(valid_categories),
         )
 
+    except CallSummaryError:
+        raise
+    except (ValueError, RuntimeError) as e:
+        logger.error("etl.call_summary.error", execution_id=execution_id, error=str(e))
+        raise CallSummaryUserError(str(e)) from e
     except (
         KeyError,
         TypeError,
@@ -1013,22 +1662,17 @@ async def generate_call_summary(bank_name: str, fiscal_year: int, quarter: str) 
         SQLAlchemyError,
         FileNotFoundError,
     ) as e:
-        # System errors with ❌ prefix (unexpected errors)
         error_msg = f"Error generating call summary: {str(e)}"
         logger.error(
             "etl.call_summary.error", execution_id=execution_id, error=error_msg, exc_info=True
         )
-        return f"❌ {error_msg}"
-    except (ValueError, RuntimeError) as e:
-        # User-friendly errors with ⚠️ prefix (expected errors)
-        logger.error("etl.call_summary.error", execution_id=execution_id, error=str(e))
-        return f"⚠️ {str(e)}"
+        raise CallSummarySystemError(error_msg) from e
     except Exception as e:
         error_msg = f"Error generating call summary: {str(e)}"
         logger.error(
             "etl.call_summary.error", execution_id=execution_id, error=error_msg, exc_info=True
         )
-        return f"❌ {error_msg}"
+        raise CallSummarySystemError(error_msg) from e
 
 
 def main():
@@ -1050,15 +1694,19 @@ def main():
 
     print(f"\n🔄 Generating report for {args.bank} {args.quarter} {args.year}...\n")
 
-    result = asyncio.run(
-        generate_call_summary(bank_name=args.bank, fiscal_year=args.year, quarter=args.quarter)
-    )
-
-    is_success = isinstance(result, str) and result.strip().startswith("✅")
-    output_stream = sys.stdout if is_success else sys.stderr
-    print(result, file=output_stream)
-
-    if not is_success:
+    try:
+        result = asyncio.run(
+            generate_call_summary(bank_name=args.bank, fiscal_year=args.year, quarter=args.quarter)
+        )
+        print(
+            f"✅ Complete: {result.filepath}\n"
+            f"   Categories: {result.included_categories}/{result.total_categories} included"
+        )
+    except CallSummaryUserError as e:
+        print(f"⚠️ {e}", file=sys.stderr)
+        sys.exit(1)
+    except CallSummaryError as e:
+        print(f"❌ {e}", file=sys.stderr)
         sys.exit(1)
 
 

@@ -41,7 +41,7 @@ The ETL generates both a formatted Word document and a database record stored in
 
 | Output | Location | Description |
 |--------|----------|-------------|
-| **DOCX File** | `output/[SYMBOL]_[YEAR]_[QUARTER]_[HASH].docx` | Formatted Word document with banner, table of contents, and category sections organized by report section |
+| **DOCX File** | `output/[SYMBOL]_[YEAR]_[QUARTER].docx` | Formatted Word document with banner, table of contents, and category sections organized by report section |
 | **Database Record** | `aegis_reports` table | Full report metadata including bank info, generation timestamp, and JSON metadata (categories processed/included/rejected) |
 
 

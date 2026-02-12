@@ -72,7 +72,7 @@ async def retrieve_full_section(
                     classification_names,
                     title
                 FROM aegis_transcripts
-                WHERE (institution_id = :bank_id_str OR institution_id::text = :bank_id_str)
+                WHERE institution_id::text = :bank_id_str
                     AND fiscal_year = :fiscal_year
                     AND fiscal_quarter = :quarter
                     AND section_name = ANY(:sections)
@@ -198,7 +198,7 @@ async def retrieve_by_categories(
                     classification_names,
                     title
                 FROM aegis_transcripts
-                WHERE (institution_id = :bank_id_str OR institution_id::text = :bank_id_str)
+                WHERE institution_id::text = :bank_id_str
                     AND fiscal_year = :fiscal_year
                     AND fiscal_quarter = :quarter
                     AND classification_ids && :category_ids
@@ -335,7 +335,7 @@ async def retrieve_by_similarity(
                     title,
                     chunk_embedding <=> CAST(:embedding AS vector) AS distance
                 FROM aegis_transcripts
-                WHERE (institution_id = :bank_id_str OR institution_id::text = :bank_id_str)
+                WHERE institution_id::text = :bank_id_str
                     AND fiscal_year = :fiscal_year
                     AND fiscal_quarter = :quarter
                     AND chunk_embedding IS NOT NULL
@@ -486,7 +486,7 @@ async def expand_chunks_to_blocks(
                         classification_ids,
                         classification_names
                     FROM aegis_transcripts
-                    WHERE (institution_id = :bank_id_str OR institution_id::text = :bank_id_str)
+                    WHERE institution_id::text = :bank_id_str
                         AND fiscal_year = :fiscal_year
                         AND fiscal_quarter = :quarter
                         AND section_name = 'MANAGEMENT DISCUSSION SECTION'
@@ -543,7 +543,7 @@ async def expand_chunks_to_blocks(
                         classification_ids,
                         classification_names
                     FROM aegis_transcripts
-                    WHERE (institution_id = :bank_id_str OR institution_id::text = :bank_id_str)
+                    WHERE institution_id::text = :bank_id_str
                         AND fiscal_year = :fiscal_year
                         AND fiscal_quarter = :quarter
                         AND section_name = 'Q&A'

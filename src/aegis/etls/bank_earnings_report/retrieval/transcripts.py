@@ -45,8 +45,7 @@ async def get_transcript_diagnostics(
                 text(
                     """
                     SELECT COUNT(*) FROM aegis_transcripts
-                    WHERE institution_id = :bank_id_str
-                       OR institution_id::text = :bank_id_str
+                    WHERE institution_id::text = :bank_id_str
                     """
                 ),
                 {"bank_id_str": bank_id_str},
@@ -69,7 +68,7 @@ async def get_transcript_diagnostics(
                 text(
                     """
                     SELECT COUNT(*) FROM aegis_transcripts
-                    WHERE (institution_id = :bank_id_str OR institution_id::text = :bank_id_str)
+                    WHERE institution_id::text = :bank_id_str
                     AND fiscal_year = :fiscal_year
                     AND fiscal_quarter = :quarter
                     """
@@ -86,7 +85,7 @@ async def get_transcript_diagnostics(
                 text(
                     """
                     SELECT COUNT(*) FROM aegis_transcripts
-                    WHERE (institution_id = :bank_id_str OR institution_id::text = :bank_id_str)
+                    WHERE institution_id::text = :bank_id_str
                     AND fiscal_year = :fiscal_year
                     AND fiscal_quarter = :quarter
                     AND section_name = 'Q&A'
@@ -104,7 +103,7 @@ async def get_transcript_diagnostics(
                 text(
                     """
                     SELECT COUNT(DISTINCT qa_group_id) FROM aegis_transcripts
-                    WHERE (institution_id = :bank_id_str OR institution_id::text = :bank_id_str)
+                    WHERE institution_id::text = :bank_id_str
                     AND fiscal_year = :fiscal_year
                     AND fiscal_quarter = :quarter
                     AND section_name = 'Q&A'
@@ -175,7 +174,7 @@ async def retrieve_qa_chunks(
                     classification_names,
                     title
                 FROM aegis_transcripts
-                WHERE (institution_id = :bank_id_str OR institution_id::text = :bank_id_str)
+                WHERE institution_id::text = :bank_id_str
                     AND fiscal_year = :fiscal_year
                     AND fiscal_quarter = :quarter
                     AND section_name = 'Q&A'
@@ -356,7 +355,7 @@ async def retrieve_md_chunks(
             count_query = text(
                 """
                 SELECT COUNT(*) FROM aegis_transcripts
-                WHERE (institution_id = :bank_id_str OR institution_id::text = :bank_id_str)
+                WHERE institution_id::text = :bank_id_str
                     AND fiscal_year = :fiscal_year
                     AND fiscal_quarter = :quarter
                     AND section_name = 'MANAGEMENT DISCUSSION SECTION'
@@ -375,7 +374,7 @@ async def retrieve_md_chunks(
             block_count_query = text(
                 """
                 SELECT COUNT(DISTINCT speaker_block_id) FROM aegis_transcripts
-                WHERE (institution_id = :bank_id_str OR institution_id::text = :bank_id_str)
+                WHERE institution_id::text = :bank_id_str
                     AND fiscal_year = :fiscal_year
                     AND fiscal_quarter = :quarter
                     AND section_name = 'MANAGEMENT DISCUSSION SECTION'
@@ -416,7 +415,7 @@ async def retrieve_md_chunks(
                     classification_names,
                     title
                 FROM aegis_transcripts
-                WHERE (institution_id = :bank_id_str OR institution_id::text = :bank_id_str)
+                WHERE institution_id::text = :bank_id_str
                     AND fiscal_year = :fiscal_year
                     AND fiscal_quarter = :quarter
                     AND section_name = 'MANAGEMENT DISCUSSION SECTION'

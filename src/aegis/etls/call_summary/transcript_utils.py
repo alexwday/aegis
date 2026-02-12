@@ -10,6 +10,19 @@ from sqlalchemy import text
 from aegis.utils.logging import get_logger
 from aegis.connections.postgres_connector import get_connection
 
+# --- Transcript Section Constants ---
+SECTION_MD = "MANAGEMENT DISCUSSION SECTION"
+SECTION_QA = "Q&A"
+SECTIONS_KEY_MD = "MD"
+SECTIONS_KEY_QA = "QA"
+SECTIONS_KEY_ALL = "ALL"
+VALID_SECTION_KEYS = {SECTIONS_KEY_MD, SECTIONS_KEY_QA, SECTIONS_KEY_ALL}
+SECTION_FILTER = {
+    SECTIONS_KEY_MD: [SECTION_MD],
+    SECTIONS_KEY_QA: [SECTION_QA],
+    SECTIONS_KEY_ALL: [SECTION_MD, SECTION_QA],
+}
+
 
 async def get_filter_diagnostics(combo: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
     """
@@ -37,8 +50,7 @@ async def get_filter_diagnostics(combo: Dict[str, Any], context: Dict[str, Any])
                 text(
                     """
                     SELECT COUNT(*) FROM aegis_transcripts
-                    WHERE institution_id = :bank_id_str
-                       OR institution_id::text = :bank_id_str
+                    WHERE institution_id::text = :bank_id_str
                     """
                 ),
                 {"bank_id_str": str(combo["bank_id"])},
@@ -64,7 +76,7 @@ async def get_filter_diagnostics(combo: Dict[str, Any], context: Dict[str, Any])
                 text(
                     """
                     SELECT COUNT(*) FROM aegis_transcripts
-                    WHERE (institution_id = :bank_id_str OR institution_id::text = :bank_id_str)
+                    WHERE institution_id::text = :bank_id_str
                     AND fiscal_year = :fiscal_year
                 """
                 ),
@@ -77,7 +89,7 @@ async def get_filter_diagnostics(combo: Dict[str, Any], context: Dict[str, Any])
                 text(
                     """
                     SELECT COUNT(*) FROM aegis_transcripts
-                    WHERE (institution_id = :bank_id_str OR institution_id::text = :bank_id_str)
+                    WHERE institution_id::text = :bank_id_str
                     AND fiscal_quarter = :quarter
                 """
                 ),
@@ -103,7 +115,7 @@ async def get_filter_diagnostics(combo: Dict[str, Any], context: Dict[str, Any])
                 text(
                     """
                     SELECT COUNT(*) FROM aegis_transcripts
-                    WHERE (institution_id = :bank_id_str OR institution_id::text = :bank_id_str)
+                    WHERE institution_id::text = :bank_id_str
                     AND fiscal_year = :fiscal_year
                     AND fiscal_quarter = :quarter
                 """
@@ -157,35 +169,10 @@ async def retrieve_full_section(
     logger = get_logger()
     execution_id = context.get("execution_id")
 
-    # Map sections to database values
-    section_filter = {
-        "MD": ["MANAGEMENT DISCUSSION SECTION"],
-        "QA": ["Q&A"],
-        "ALL": ["MANAGEMENT DISCUSSION SECTION", "Q&A"],
-    }
-
-    sections_to_fetch = section_filter.get(sections, ["MANAGEMENT DISCUSSION SECTION", "Q&A"])
-
-    # Get diagnostics if no results expected
-    diagnostics = await get_filter_diagnostics(combo, context)
-
-    # Log the filter parameters and diagnostic counts
-    logger.info(
-        "etl.call_summary.filter_diagnostics",
-        execution_id=execution_id,
-        filters={
-            "bank_id": combo["bank_id"],
-            "fiscal_year": combo["fiscal_year"],
-            "quarter": combo["quarter"],
-            "sections": sections,
-        },
-        diagnostics=diagnostics,
-    )
+    sections_to_fetch = SECTION_FILTER.get(sections, SECTION_FILTER[SECTIONS_KEY_ALL])
 
     try:
         async with get_connection() as conn:
-            # Build query to fetch all chunks for specified sections
-            # Handle both TEXT and INTEGER institution_id columns
             query = text(
                 """
                 SELECT
@@ -200,7 +187,7 @@ async def retrieve_full_section(
                     classification_names,
                     title
                 FROM aegis_transcripts
-                WHERE (institution_id = :bank_id_str OR institution_id::text = :bank_id_str)
+                WHERE institution_id::text = :bank_id_str
                     AND fiscal_year = :fiscal_year
                     AND fiscal_quarter = :quarter
                     AND section_name = ANY(:sections)
@@ -237,8 +224,9 @@ async def retrieve_full_section(
                     }
                 )
 
-            # Enhanced logging with diagnostic info if no results
-            if len(chunks) == 0 and diagnostics.get("matching_all_filters", 0) == 0:
+            # Run diagnostics only when no results found
+            if len(chunks) == 0:
+                diagnostics = await get_filter_diagnostics(combo, context)
                 logger.warning(
                     "etl.call_summary.no_results_found",
                     execution_id=execution_id,
@@ -268,7 +256,7 @@ async def retrieve_full_section(
 
     except Exception as e:
         logger.error("etl.call_summary.full_section_error", execution_id=execution_id, error=str(e))
-        return []
+        raise RuntimeError(f"Database error retrieving transcripts: {e}") from e
 
 
 def format_priority_blocks_for_synthesis(blocks: List[Dict[str, Any]]) -> str:
@@ -336,7 +324,7 @@ while using the full content for additional context.
     return formatted
 
 
-async def format_full_section_chunks(
+def format_full_section_chunks(
     chunks: List[Dict[str, Any]],
     combo: Dict[str, Any],
     context: Dict[str, Any],
@@ -364,13 +352,13 @@ async def format_full_section_chunks(
     # Filter out chunks missing proper IDs
     valid_chunks = []
     for chunk in chunks:
-        if chunk.get("section_name") == "Q&A":
+        if chunk.get("section_name") == SECTION_QA:
             # Q&A chunks must have qa_group_id
             if chunk.get("qa_group_id") is not None:
                 valid_chunks.append(chunk)
             else:
                 logger.warning(f"Removed Q&A chunk missing qa_group_id: {chunk.get('id')}")
-        elif chunk.get("section_name") == "MANAGEMENT DISCUSSION SECTION":
+        elif chunk.get("section_name") == SECTION_MD:
             # MD chunks must have speaker_block_id
             if chunk.get("speaker_block_id") is not None:
                 valid_chunks.append(chunk)
@@ -409,10 +397,10 @@ async def format_full_section_chunks(
     sorted_chunks = sorted(
         chunks,
         key=lambda x: (
-            0 if x.get("section_name") == "MANAGEMENT DISCUSSION SECTION" else 1,
+            0 if x.get("section_name") == SECTION_MD else 1,
             (
                 x.get("qa_group_id", 0)
-                if x.get("section_name") == "Q&A"
+                if x.get("section_name") == SECTION_QA
                 else x.get("speaker_block_id", 0)
             ),
             x.get("chunk_id", 0),
@@ -429,7 +417,7 @@ async def format_full_section_chunks(
     qa_groups = set(
         chunk.get("qa_group_id")
         for chunk in sorted_chunks
-        if chunk.get("section_name") == "Q&A" and chunk.get("qa_group_id")
+        if chunk.get("section_name") == SECTION_QA and chunk.get("qa_group_id")
     )
     if qa_groups:
         logger.info(
@@ -450,7 +438,7 @@ async def format_full_section_chunks(
             qa_count = 0
 
         # Handle Q&A grouping
-        if section_name == "Q&A" and chunk.get("qa_group_id"):
+        if section_name == SECTION_QA and chunk.get("qa_group_id"):
             if chunk["qa_group_id"] != current_qa_group:
                 current_qa_group = chunk["qa_group_id"]
                 qa_count += 1

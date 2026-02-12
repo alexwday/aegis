@@ -13,6 +13,51 @@ from aegis.utils.logging import get_logger
 logger = get_logger()
 
 
+def validate_document_content(doc) -> None:
+    """
+    Validate generated document has meaningful content before saving.
+
+    Checks that the document contains at least one section heading (Heading 1),
+    at least one category heading (Heading 2), and at least one non-heading
+    paragraph with body text.
+
+    Args:
+        doc: Word Document object to validate
+
+    Raises:
+        ValueError: If document fails any validation check
+    """
+    if not doc.paragraphs:
+        raise ValueError("Document has no paragraphs")
+
+    has_heading1 = False
+    has_heading2 = False
+    has_body_text = False
+
+    for para in doc.paragraphs:
+        style_name = para.style.name if para.style else ""
+        text = para.text.strip()
+
+        if style_name == "Heading 1":
+            has_heading1 = True
+        elif style_name == "Heading 2":
+            has_heading2 = True
+        elif text and style_name not in ("Title", "Heading 1", "Heading 2"):
+            has_body_text = True
+
+        if has_heading1 and has_heading2 and has_body_text:
+            return
+
+    missing = []
+    if not has_heading1:
+        missing.append("section heading (Heading 1)")
+    if not has_heading2:
+        missing.append("category heading (Heading 2)")
+    if not has_body_text:
+        missing.append("body text")
+    raise ValueError(f"Document missing required content: {', '.join(missing)}")
+
+
 def get_standard_report_metadata() -> Dict[str, str]:
     """
     Get standard metadata for call summary reports.
@@ -81,8 +126,37 @@ def setup_toc_styles(doc):
     toc2_style.paragraph_format.line_spacing = 0.9
 
 
-def add_table_of_contents(doc):
-    """Add a real table of contents field to the document."""
+def build_toc_fallback_text(toc_entries: list) -> str:
+    """
+    Build plain-text TOC fallback from collected heading entries.
+
+    Level-1 entries appear flush-left; level-2 entries are indented with 4 spaces.
+
+    Args:
+        toc_entries: List of (title, heading_level) tuples
+
+    Returns:
+        Newline-separated string of heading titles
+    """
+    lines = []
+    for title, level in toc_entries:
+        prefix = "    " if level >= 2 else ""
+        lines.append(f"{prefix}{title}")
+    return "\n".join(lines)
+
+
+def add_table_of_contents(doc, toc_entries=None):
+    """
+    Add a table of contents field to the document.
+
+    When toc_entries are provided, the fallback text between the TOC field
+    separators contains the actual heading titles. This ensures macOS and
+    LibreOffice users see a readable TOC without needing to "Update Fields".
+
+    Args:
+        doc: Word Document object
+        toc_entries: Optional list of (title, heading_level) tuples for fallback text
+    """
     setup_toc_styles(doc)
 
     toc_title = doc.add_paragraph()
@@ -108,7 +182,10 @@ def add_table_of_contents(doc):
     fld_char2.set(qn("w:fldCharType"), "separate")
 
     fld_char3 = OxmlElement("w:t")
-    fld_char3.text = "[Table of Contents will be generated here]"
+    if toc_entries:
+        fld_char3.text = build_toc_fallback_text(toc_entries)
+    else:
+        fld_char3.text = "[Table of Contents will be generated here]"
 
     fld_char4 = OxmlElement("w:fldChar")
     fld_char4.set(qn("w:fldCharType"), "end")
@@ -157,6 +234,54 @@ def _find_next_format_match(text):
     if underline_match:
         return underline_match, "underline"
     return None, None
+
+
+# Patterns for financial metrics that should be bolded (most specific first)
+_METRIC_PATTERNS = [
+    r"-?\$[\d,]+(?:\.\d+)?\s*(?:MM|BN|TN|K|M|B)\b",  # Dollar with scale: $1.2 BN, -$1.2 BN
+    r"-?\$[\d,]+(?:\.\d+)?(?!\s*(?:MM|BN|TN|K|M|B))\b",  # Dollar without scale: $1,200, -$1,200
+    r"\d+(?:\.\d+)?\s*bps\b",  # Basis points: 15 bps
+    r"\d+(?:\.\d+)?%",  # Percentages: 12.3%
+]
+
+
+def auto_bold_metrics(text: str) -> str:
+    """
+    Auto-bold financial metrics not already wrapped in **bold** markers.
+
+    Catches dollar amounts, percentages, and basis point figures that
+    the LLM failed to bold. Does not modify text already inside **...**
+    markers.
+
+    Args:
+        text: Statement or evidence text potentially containing unbolded metrics
+
+    Returns:
+        Text with financial metrics wrapped in **bold** markers
+    """
+    if not text:
+        return text
+
+    for pattern in _METRIC_PATTERNS:
+        text = _bold_unbolded_matches(text, pattern)
+
+    return text
+
+
+def _bold_unbolded_matches(text: str, pattern: str) -> str:
+    """Bold regex matches that are not already inside **...** markers."""
+
+    def replacer(match):
+        start = match.start()
+        prefix = text[:start]
+        bold_markers = len(re.findall(r"\*\*", prefix))
+        if bold_markers % 2 == 1:
+            return match.group(0)
+        if start >= 2 and text[start - 2 : start] == "**":  # noqa: E203
+            return match.group(0)
+        return f"**{match.group(0)}**"
+
+    return re.sub(pattern, replacer, text)
 
 
 def parse_and_format_text(
@@ -232,7 +357,7 @@ def _add_evidence_paragraph(
 
     evidence_para.paragraph_format.widow_control = True
 
-    evidence_content = evidence["content"]
+    evidence_content = auto_bold_metrics(evidence["content"])
 
     if evidence["type"] == "quote":
         evidence_para.add_run('"').italic = True
@@ -337,7 +462,8 @@ def add_structured_content_to_doc(doc, category_data: dict, heading_level: int =
         statements = category_data.get("summary_statements", [])
         for idx, statement_data in enumerate(statements):
             statement_para = doc.add_paragraph(style="List Bullet")
-            parse_and_format_text(statement_para, statement_data["statement"], base_font_size=Pt(9))
+            bolded_statement = auto_bold_metrics(statement_data["statement"])
+            parse_and_format_text(statement_para, bolded_statement, base_font_size=Pt(9))
             statement_para.paragraph_format.space_after = Pt(2)
             statement_para.paragraph_format.line_spacing = 1.0
             statement_para.paragraph_format.keep_with_next = True
