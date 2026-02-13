@@ -221,8 +221,8 @@ class ResearchPlanResponse(BaseModel):
 class Evidence(BaseModel):
     """A single piece of supporting evidence for a statement."""
 
-    type: str
-    content: str
+    type: str = "quote"
+    content: str = ""
     speaker: str = ""
 
 
