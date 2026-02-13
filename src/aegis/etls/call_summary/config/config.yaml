@@ -5,7 +5,7 @@
 # Tiers: small, medium, large
 models:
   research_plan:
-    tier: medium  # Uses config.llm.medium.model
+    tier: large  # Uses config.llm.large.model
   category_extraction:
     tier: medium  # Uses config.llm.medium.model
   deduplication:
