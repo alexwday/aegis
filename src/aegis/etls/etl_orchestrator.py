@@ -69,7 +69,7 @@ QUARTERLY_SCHEDULE_PATH = "src/aegis/etls/cm_readthrough/config/quarterly_schedu
 # - Schedule-based ETLs: Run on specific dates per quarterly_schedule.yaml
 ETL_CONFIGS = {
     "call_summary": {
-        "module": "aegis.etls.call_summary.main",
+        "module": "aegis.etls.call_summary",
         "report_type": "call_summary",
         "description": "Earnings call summary by category",
         "monitored_institutions_path": (
@@ -79,7 +79,7 @@ ETL_CONFIGS = {
         "schedule_driven": False,
     },
     "key_themes": {
-        "module": "aegis.etls.key_themes.main",
+        "module": "aegis.etls.key_themes",
         "report_type": "key_themes",
         "description": "Q&A themes extraction and grouping",
         "monitored_institutions_path": (
@@ -89,7 +89,7 @@ ETL_CONFIGS = {
         "schedule_driven": False,
     },
     "cm_readthrough": {
-        "module": "aegis.etls.cm_readthrough.main",
+        "module": "aegis.etls.cm_readthrough",
         "report_type": "cm_readthrough",
         "description": "Capital markets readthrough across US/European banks",
         "monitored_institutions_path": (
@@ -99,7 +99,7 @@ ETL_CONFIGS = {
         "schedule_driven": True,
     },
     "bank_earnings_report": {
-        "module": "aegis.etls.bank_earnings_report.main",
+        "module": "aegis.etls.bank_earnings_report",
         "report_type": "bank_earnings_report",
         "description": "Quarterly bank earnings report with metrics and analysis",
         "monitored_institutions_path": (

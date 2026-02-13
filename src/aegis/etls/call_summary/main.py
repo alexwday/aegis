@@ -1062,25 +1062,18 @@ async def _extract_single_category(  # noqa: E501  pylint: disable=too-many-argu
         )
 
         if not category_plan:
-            logger.warning(
-                "etl.call_summary.category_fallback",
+            logger.info(
+                "etl.call_summary.category_skipped_by_plan",
                 execution_id=execution_id,
                 category_name=category["category_name"],
                 category_index=index,
-                reason="Not in research plan, attempting fallback extraction",
+                reason="Not in research plan — no relevant content identified",
             )
-            category_plan = {
-                "index": index,
-                "name": category["category_name"],
-                "extraction_strategy": (
-                    "This category was not identified in the research plan. "
-                    "Apply conservative extraction: only extract genuinely "
-                    "relevant material with strong evidence. If no substantive "
-                    "content exists for this category, set rejected=true. "
-                    "Do not force content that belongs in other categories."
-                ),
-                "cross_category_notes": "",
-            }
+            return _build_rejection_result(
+                index,
+                category,
+                "Research plan determined no relevant content for this category",
+            )
 
         # Extract Q&A group filter from research plan
         relevant_qa_groups = category_plan.get("relevant_qa_groups", [])
@@ -1683,8 +1676,8 @@ async def generate_call_summary(  # pylint: disable=too-many-statements
             skipped_names = [
                 categories[idx - 1]["category_name"] for idx in sorted(skipped_indices)
             ]
-            logger.warning(
-                "etl.call_summary.research_plan_coverage_gap",
+            logger.info(
+                "etl.call_summary.research_plan_skipped_categories",
                 execution_id=execution_id,
                 skipped_count=len(skipped_indices),
                 skipped_categories=skipped_names,
