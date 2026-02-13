@@ -7,6 +7,27 @@ The Call Summary ETL can be executed directly via command line for a specific ba
 | **Direct Command Line** | `python -m aegis.etls.call_summary.main --bank RY --year 2025 --quarter Q2` | Run the ETL for a specific bank and quarter directly from the command line. |
 | **Orchestrator Scheduling** | `python scripts/etl_orchestrator.py` | Automatically process all monitored institutions defined in `config/monitored_institutions.yaml`. |
 
+### CLI Options
+
+| Option | Required | Type | Description |
+|--------|----------|------|-------------|
+| `--bank` | Yes | string | Bank identifier — accepts bank ID, full name (e.g., `"Royal Bank of Canada"`), or symbol (e.g., `RY`) |
+| `--year` | Yes | int | Fiscal year |
+| `--quarter` | Yes | choice | Quarter: `Q1`, `Q2`, `Q3`, or `Q4` |
+
+### Examples
+
+```bash
+# Run by bank symbol
+python -m aegis.etls.call_summary.main --bank RY --year 2025 --quarter Q3
+
+# Run by full bank name
+python -m aegis.etls.call_summary.main --bank "Royal Bank of Canada" --year 2025 --quarter Q3
+
+# Run by bank ID
+python -m aegis.etls.call_summary.main --bank 1 --year 2025 --quarter Q3
+```
+
 
 ## Inputs
 

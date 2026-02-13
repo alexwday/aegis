@@ -256,7 +256,11 @@ async def retrieve_full_section(
 
     except Exception as e:
         logger.error("etl.call_summary.full_section_error", execution_id=execution_id, error=str(e))
-        raise RuntimeError(f"Database error retrieving transcripts: {e}") from e
+        raise RuntimeError(
+            f"Failed to retrieve transcript sections for "
+            f"{combo.get('bank_symbol', 'unknown')} "
+            f"{combo.get('quarter', '?')} {combo.get('fiscal_year', '?')}: {e}"
+        ) from e
 
 
 def format_priority_blocks_for_synthesis(blocks: List[Dict[str, Any]]) -> str:

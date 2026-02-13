@@ -2,18 +2,145 @@
 Document converter utilities for key themes ETL.
 
 This module provides helper functions for creating Word documents from themed Q&A data
-and utilities for markdown processing.
+and utilities for markdown processing, document validation, and HTML metric auto-bolding.
 """
 
+import os
+import re
 from typing import Dict
 from html.parser import HTMLParser
-from docx.shared import Pt, RGBColor
+from docx.shared import Inches, Pt, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_COLOR_INDEX
 from docx.oxml import OxmlElement, parse_xml
 from docx.oxml.ns import qn, nsdecls
 from aegis.utils.logging import get_logger
 
 logger = get_logger()
+
+# Patterns for financial metrics that should be bolded (most specific first)
+_METRIC_PATTERNS = [
+    r"-?\$[\d,]+(?:\.\d+)?\s*(?:MM|BN|TN|K|M|B)\b",  # Dollar with scale: $1.2 BN
+    r"-?\$[\d,]+(?:\.\d+)?(?!\s*(?:MM|BN|TN|K|M|B))\b",  # Dollar without scale: $1,200
+    r"\d+(?:\.\d+)?\s*bps\b",  # Basis points: 15 bps
+    r"\d+(?:\.\d+)?%",  # Percentages: 12.3%
+]
+
+
+def validate_document_content(doc) -> None:
+    """
+    Validate generated document has meaningful content before saving.
+
+    Checks that:
+    1. Document has at least one theme header
+    2. Every theme header has at least one body text paragraph following it
+    3. Document is not empty
+
+    Args:
+        doc: Word Document object to validate
+
+    Raises:
+        ValueError: If document fails any validation check
+    """
+    if not doc.paragraphs:
+        raise ValueError("Document has no paragraphs")
+
+    theme_count = 0
+    empty_themes = []
+    current_theme = None
+    current_theme_has_body = False
+
+    for para in doc.paragraphs:
+        text = para.text.strip()
+        if not text:
+            continue
+
+        # Check for theme headers (created by add_theme_header_with_background)
+        is_theme_header = False
+        if text.startswith("Theme ") and para.runs:
+            for run in para.runs:
+                if run.font.bold:
+                    is_theme_header = True
+                    break
+
+        if is_theme_header:
+            # Finalize previous theme
+            if current_theme is not None and not current_theme_has_body:
+                empty_themes.append(current_theme)
+
+            current_theme = text
+            current_theme_has_body = False
+            theme_count += 1
+
+        # Check for body text (non-header paragraphs with content)
+        elif current_theme is not None and len(text) > 20 and not text.startswith("_"):
+            current_theme_has_body = True
+
+    # Finalize last theme
+    if current_theme is not None and not current_theme_has_body:
+        empty_themes.append(current_theme)
+
+    missing = []
+    if theme_count == 0:
+        missing.append("theme header")
+    if theme_count > 0 and theme_count == len(empty_themes):
+        missing.append("body text")
+    if missing:
+        raise ValueError(f"Document missing required content: {', '.join(missing)}")
+
+    if empty_themes:
+        logger.warning(
+            "document.empty_themes",
+            empty_themes=empty_themes,
+            total_themes=theme_count,
+        )
+
+
+def auto_bold_html_metrics(text: str) -> str:
+    """
+    Auto-bold financial metrics not already wrapped in <b> tags.
+
+    HTML equivalent of call_summary's auto_bold_metrics(). Catches dollar amounts,
+    percentages, and basis point figures that the LLM failed to bold. Does not modify
+    text already inside <b>...</b> tags.
+
+    Args:
+        text: HTML-formatted text potentially containing unbolded metrics
+
+    Returns:
+        Text with financial metrics wrapped in <b>...</b> tags
+    """
+    if not text:
+        return text
+
+    for pattern in _METRIC_PATTERNS:
+        text = _bold_html_unbolded_matches(text, pattern)
+
+    return text
+
+
+def _bold_html_unbolded_matches(text: str, pattern: str) -> str:
+    """Bold regex matches that are not already inside <b>...</b> tags."""
+
+    def replacer(match):
+        start = match.start()
+        prefix = text[:start]
+
+        # Count unclosed <b> tags — if inside a <b> block, skip
+        open_count = len(re.findall(r"<b\b[^>]*>", prefix, re.IGNORECASE))
+        close_count = len(re.findall(r"</b>", prefix, re.IGNORECASE))
+        if open_count > close_count:
+            return match.group(0)
+
+        # Check if immediately preceded by <b> opening tag
+        stripped = prefix.rstrip()
+        if stripped.endswith(">"):
+            tag_match = re.search(r"<b\b[^>]*>\s*$", prefix, re.IGNORECASE)
+            if tag_match:
+                return match.group(0)
+
+        return f"<b>{match.group(0)}</b>"
+
+    return re.sub(pattern, replacer, text)
 
 
 class HTMLToDocx(HTMLParser):
@@ -48,6 +175,9 @@ class HTMLToDocx(HTMLParser):
         elif tag == "span":
             style_dict = self._parse_style(attrs)
             self.style_stack.append(style_dict if style_dict else {})
+        elif tag == "br":
+            # Line break — flush buffer and add a newline run
+            self.text_buffer += "\n"
 
     def handle_endtag(self, tag):
         self._flush_text()
@@ -174,7 +304,13 @@ def add_page_numbers_with_footer(doc, bank_symbol, quarter, fiscal_year):
         right_para = right_cell.paragraphs[0]
         right_para.alignment = WD_ALIGN_PARAGRAPH.RIGHT
 
+        run_label = right_para.add_run("Page ")
+        run_label.font.size = Pt(9)
+        run_label.font.color.rgb = RGBColor(68, 68, 68)
+
         run = right_para.add_run()
+        run.font.size = Pt(9)
+        run.font.color.rgb = RGBColor(68, 68, 68)
         fldChar1 = OxmlElement("w:fldChar")
         fldChar1.set(qn("w:fldCharType"), "begin")
         run._element.append(fldChar1)
@@ -186,10 +322,6 @@ def add_page_numbers_with_footer(doc, bank_symbol, quarter, fiscal_year):
         fldChar2 = OxmlElement("w:fldChar")
         fldChar2.set(qn("w:fldCharType"), "end")
         run._element.append(fldChar2)
-
-        run_page = right_para.add_run(" | Page")
-        run_page.font.size = Pt(9)
-        run_page.font.color.rgb = RGBColor(68, 68, 68)
 
 
 def add_theme_header_with_background(doc, theme_number, theme_title):
@@ -214,57 +346,23 @@ def add_theme_header_with_background(doc, theme_number, theme_title):
     return heading
 
 
-def theme_groups_to_markdown(
-    theme_groups, bank_info: Dict[str, str], quarter: str, fiscal_year: int
-) -> str:
-    """
-    Convert theme groups to markdown format matching the style of call_summary.
+def add_banner_image(doc, config_dir: str) -> None:
+    """Add banner image to document if found in config directory."""
+    banner_path = None
+    for ext in ["jpg", "jpeg", "png"]:
+        potential_banner = os.path.join(config_dir, f"banner.{ext}")
+        if os.path.exists(potential_banner):
+            banner_path = potential_banner
+            break
 
-    Args:
-        theme_groups: List of ThemeGroup objects with qa_blocks
-        bank_info: Dictionary with bank_name, bank_symbol, ticker
-        quarter: Quarter string (Q1-Q4)
-        fiscal_year: Year
-
-    Returns:
-        Markdown-formatted string
-    """
-
-    ticker = bank_info.get("ticker", bank_info.get("bank_symbol", "Unknown"))
-    markdown = f"# Key Themes Analysis - {ticker} {quarter} {fiscal_year}\n\n"
-
-    for i, group in enumerate(theme_groups, 1):
-
-        markdown += f"## Theme {i}: {group.group_title}\n\n"
-
-        sorted_blocks = sorted(group.qa_blocks, key=lambda x: x.position)
-
-        for j, qa_block in enumerate(sorted_blocks, 1):
-            markdown += f"### Conversation {j}\n\n"
-
-            content = qa_block.formatted_content or qa_block.original_content
-
-            for line in content.split("\n"):
-                if line.strip():
-
-                    if line.strip() in ["---", "***", "___", "<hr>", "<hr/>", "<hr />"]:
-                        continue
-
-                    import re
-
-                    clean_line = re.sub(r"<[^>]+>", "", line)
-
-                    clean_line = (
-                        clean_line.replace("&lt;", "<").replace("&gt;", ">").replace("&amp;", "&")
-                    )
-
-                    markdown += f"{clean_line}\n"
-
-            markdown += "\n"
-
-        markdown += "\n---\n\n"
-
-    return markdown
+    if banner_path:
+        try:
+            doc.add_picture(banner_path, width=Inches(7.4))
+            last_paragraph = doc.paragraphs[-1]
+            last_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            last_paragraph.paragraph_format.space_after = Pt(6)
+        except (FileNotFoundError, OSError, ValueError):
+            pass
 
 
 def get_standard_report_metadata() -> Dict[str, str]:

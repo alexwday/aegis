@@ -14,4 +14,18 @@ models:
 # LLM Parameters
 llm:
   temperature: 0.1
-  max_tokens: 32768
+  max_tokens:
+    theme_extraction: 32768
+    html_formatting: 32768
+    theme_grouping: 32768
+    default: 32768
+
+# Retry configuration for LLM calls
+retry:
+  max_retries: 3
+  base_delay: 1.0
+  max_delay: 10.0
+
+# Concurrency configuration
+concurrency:
+  max_concurrent_formatting: 5

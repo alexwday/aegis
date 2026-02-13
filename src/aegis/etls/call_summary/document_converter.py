@@ -413,7 +413,7 @@ def add_banner_image(doc, config_dir: str) -> None:
             doc.add_picture(banner_path, width=Inches(7.4))
             last_paragraph = doc.paragraphs[-1]
             last_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            last_paragraph.paragraph_format.space_after = Pt(3)
+            last_paragraph.paragraph_format.space_after = Pt(6)
         except (FileNotFoundError, OSError, ValueError):
             pass
 

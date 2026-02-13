@@ -1,14 +1,14 @@
-# Theme Grouping Prompt - v6.0
+# Theme Grouping Prompt - v7.0.0
 
 ## Metadata
 - **Model**: aegis
 - **Layer**: key_themes_etl
 - **Name**: theme_grouping
-- **Version**: 6.0
+- **Version**: 7.0.0
 - **Framework**: CO-STAR+XML
 - **Purpose**: Review category classifications, regroup if needed, and generate dynamic context-specific titles
 - **Token Target**: 32768
-- **Last Updated**: 2025-11-18
+- **Last Updated**: 2026-02-13
 
 ---
 
@@ -107,21 +107,21 @@ RULES:
 - If only one Q&A in category, context can be specific to that Q&A
 - If multiple Q&As, context should synthesize across them
 
-EXAMPLES:
-- "Credit Quality & Risk Outlook: Provisioning and macroeconomic scenarios"
-- "Capital Management & Liquidity Position: CET1 targets and buyback strategy"
-- "Revenue Trends & Net Interest Income: NIM compression and rate sensitivity"
-- "Expense Management & Efficiency: Managing inflationary pressures"
-- "Digital Transformation & Technology: Cloud migration and AI initiatives"
-- "Loan & Deposit Growth: Mortgage volumes and deposit mix"
-- "Economic Outlook & Market Conditions: Recession outlook and rate path"
-- "Forward Guidance & Outlook: Full-year earnings and growth targets"
+EXAMPLES (illustrative format — use the EXACT category names from <available_categories> above):
+- "[Capital Category]: CET1 targets and buyback strategy"
+- "[Credit Category]: Provisioning and macroeconomic scenarios"
+- "[Revenue Category]: NIM compression and rate sensitivity"
+- "[Expense Category]: Managing inflationary pressures"
+- "[Technology Category]: Cloud migration and AI initiatives"
 - "Other: Branch optimization and real estate strategy"
 
 The brief context should synthesize the key themes across all Q&As in that category.
+IMPORTANT: Always use the EXACT category name from <available_categories>, not these placeholder labels.
 </title_creation>
 
 <regrouping_examples>
+NOTE: These scenarios use illustrative category names. In practice, use the EXACT names from <available_categories>.
+
 SCENARIO 1: Appropriate merging
 INPUT:
 - qa_1: "Capital Management & Liquidity Position" - CET1 ratio discussion
@@ -235,6 +235,14 @@ IMPORTANT NOTES:
 
 ---
 
+## User Prompt
+
+```
+Review category assignments, regroup if needed, and create final titles.
+```
+
+---
+
 ## Tool Definition
 
 ```json
@@ -280,6 +288,19 @@ IMPORTANT NOTES:
   }}
 }}
 ```
+
+---
+
+## What Changed from v6.0
+
+Version 6.1 removes hardcoded category names from examples:
+
+### Changes:
+- **`<title_creation>` EXAMPLES**: Replaced hardcoded category names with placeholder labels + note to use exact names from `<available_categories>`
+- **`<regrouping_examples>`**: Added note that scenarios use illustrative names; real names come from `<available_categories>`
+
+### Why This Change:
+Same rationale as theme_extraction v4.2 — categories are loaded dynamically and hardcoded example names could mislead the model if categories change.
 
 ---
 

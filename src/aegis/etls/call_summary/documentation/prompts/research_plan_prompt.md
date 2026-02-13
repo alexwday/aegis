@@ -1,11 +1,10 @@
-# Research Plan Prompt - v2.5.0
+# Research Plan Prompt - v3.0.0
 
 ## Metadata
 - **Model**: aegis
 - **Layer**: call_summary_etl
 - **Name**: research_plan
-- **Version**: 2.5.0
-- **Updates**: Added Q&A group mapping (relevant_qa_groups) to filter transcript content per category during extraction
+- **Version**: 3.0.0
 
 ---
 
@@ -70,7 +69,7 @@ KEY THEMES & TOPICS (embed in extraction_strategy):
 - Include EVERY metric mentioned (e.g., "NIM expanded 15bps to 1.72%")
 - Document ALL unique angles, perspectives, or insights
 - Capture ALL forward-looking statements and guidance
-- Be EXHAUSTIVE - don't limit to top items
+- Be comprehensive - cover all material themes, not just the top items
 - Note: Focus on what IS discussed, not what's missing
 - Identify emerging topics that match the category's analytical purpose
 
@@ -95,12 +94,12 @@ Q&A GROUP MAPPING (populate relevant_qa_groups field):
 </analysis_framework>
 
 <extraction_strategy_guidance>
-The extraction_strategy field MUST be a comprehensive paragraph (150-250 words) that includes:
+The extraction_strategy field MUST be a comprehensive analysis that includes:
 
 1. THEMES & METRICS FOUND:
    Start with: "Key themes: [list ALL themes found with specific details]"
    Include EVERY metric mentioned with actual values
-   Don't summarize or limit - be comprehensive
+   Be comprehensive - include all material metrics, not just highlights
    Note which category-suggested metrics are present (internal use only)
    Highlight any novel/emerging metrics that fit the category's purpose
 
@@ -143,7 +142,7 @@ Examples:
 - SPECIFICITY: Use actual names, exact numbers, precise references — no generic statements
 - EMBED ALL ANALYSIS: Themes and speakers go IN the extraction_strategy, not separate fields
 - DEDUPLICATION: Use cross_category_notes to prevent content appearing in multiple categories
-- AVAILABILITY FOCUS: Track what's present; guide extraction to avoid mentioning absences
+- AVAILABILITY FOCUS: Track what's present; guide extraction to focus exclusively on what WAS said. Never write "X was not discussed" or "no mention of Y" — not discussing a topic on one call does not mean the bank lacks that capability or program. If a category has insufficient content, omit it rather than filling it with absence notes
 - CATEGORY SKIP: Only omit categories with genuinely zero content after checking both MD and Q&A
 - Q&A MAPPING: Every Q&A group ID must appear in at least one category's relevant_qa_groups list
 </quality_standards>
@@ -202,7 +201,7 @@ Analyze this transcript and create the research plan:
               },
               "extraction_strategy": {
                 "type": "string",
-                "description": "Comprehensive extraction guidance that MUST include:\n1. ALL themes and topics found relevant to this category\n2. ALL relevant speakers who discussed this topic and their roles\n3. ALL specific metrics or data points discovered\n4. Recommended approach for synthesis\n5. Any unique insights or notable discussions\n\nBe EXHAUSTIVE - include everything relevant, not just highlights.\nIf no relevant content exists, explain what was searched for and why nothing was found."
+                "description": "Comprehensive extraction guidance that MUST include:\n1. ALL themes and topics found relevant to this category\n2. ALL relevant speakers who discussed this topic and their roles\n3. ALL specific metrics or data points discovered\n4. Recommended approach for synthesis\n5. Any unique insights or notable discussions\n\nBe comprehensive - include everything relevant, not just highlights.\nIf no relevant content exists, explain what was searched for and why nothing was found."
               },
               "cross_category_notes": {
                 "type": "string",
@@ -231,6 +230,16 @@ Analyze this transcript and create the research plan:
   }
 }
 ```
+
+---
+
+## What Changed from v2.5.0
+
+### Removed word limit conflict from extraction_strategy:
+- **Removed**: "150-250 words" constraint from `<extraction_strategy_guidance>` — conflicted with exhaustiveness instruction
+- **Reframed**: "Be EXHAUSTIVE" → "Be comprehensive" throughout (analysis_framework, extraction_strategy_guidance, tool definition)
+- **Rationale**: The word limit was the binding constraint in practice, making the exhaustiveness instruction dead weight. Removing the limit lets the model scale extraction_strategy length to match transcript complexity.
+- **Addresses**: PROMPT_SOTA_REVIEW.md A1.1
 
 ---
 

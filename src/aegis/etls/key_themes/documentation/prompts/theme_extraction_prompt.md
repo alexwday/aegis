@@ -1,14 +1,14 @@
-# Theme Extraction Prompt - v4.1
+# Theme Extraction Prompt - v5.0.0
 
 ## Metadata
 - **Model**: aegis
 - **Layer**: key_themes_etl
 - **Name**: theme_extraction
-- **Version**: 4.1
+- **Version**: 5.0.0
 - **Framework**: CO-STAR+XML
 - **Purpose**: Validate Q&A content and classify into predefined categories with cumulative context
 - **Token Target**: 32768
-- **Last Updated**: 2025-11-19
+- **Last Updated**: 2026-02-13
 
 ---
 
@@ -157,6 +157,7 @@ Financial executives who need standardized, comparable earnings call analysis
 For VALID Q&As (is_valid=true):
 - is_valid: true
 - completion_status: "complete" | "question_only" | "answer_only"
+- reasoning: 1-3 sentences explaining the primary topic, which category best fits, and why
 - category_name: Exact category name from the predefined list (must match exactly)
 - summary: 2-3 sentence overview for final grouping/titling (NOT the final content):
   • For complete Q&As:
@@ -171,52 +172,31 @@ For VALID Q&As (is_valid=true):
 For INVALID Q&As (is_valid=false):
 - is_valid: false
 - completion_status: "" (empty string)
+- reasoning: 1-3 sentences explaining why the content lacks substance
 - category_name: "" (empty string)
 - summary: "" (empty string)
 - rejection_reason: "Brief explanation" (e.g., "Operator transition only", "No substantive Q&A content")
 </response_format>
 
 <classification_examples>
-Example Category Matching:
+Match each Q&A to the most relevant category from <available_categories> above.
 
-Q&A about CET1 ratio targets and capital deployment
-→ "Capital Management & Liquidity Position"
+Example matching logic (use the EXACT category names from the list above, not these descriptions):
+- Q&A about capital ratios, buybacks, dividends → the capital/liquidity category
+- Q&A about credit provisions, loan quality, risk outlook → the credit/risk category
+- Q&A about revenue, NIM, fee income, interest margins → the revenue/income category
+- Q&A about segment results, wealth management, business lines → the business segment category
+- Q&A about loan volumes, deposit growth, mortgage originations → the lending/deposit category
+- Q&A about efficiency ratio, cost savings, expense management → the expense/efficiency category
+- Q&A about digital strategy, technology investments, cloud → the technology category
+- Q&A about economic conditions, rate environment, recession → the macro/outlook category
+- Q&A about M&A, strategic initiatives, partnerships → the strategy category
+- Q&A about regulatory requirements, compliance, Basel → the regulatory category
+- Q&A about forward earnings guidance, targets, projections → the guidance/outlook category
+- Q&A about ESG, sustainability, climate → the ESG category
+- Q&A about unique topics not fitting any category above → "Other"
 
-Q&A about PCL provisions and credit quality outlook
-→ "Credit Quality & Risk Outlook"
-
-Q&A about NIM compression and rate sensitivity
-→ "Revenue Trends & Net Interest Income"
-
-Q&A about wealth management AUM growth
-→ "Business Segment Performance & Strategy"
-
-Q&A about mortgage origination volumes
-→ "Loan & Deposit Growth"
-
-Q&A about efficiency ratio and cost savings
-→ "Expense Management & Efficiency"
-
-Q&A about cloud migration progress
-→ "Digital Transformation & Technology"
-
-Q&A about recession scenarios and economic outlook
-→ "Economic Outlook & Market Conditions"
-
-Q&A about potential M&A opportunities
-→ "Strategic Initiatives & M&A"
-
-Q&A about Basel III requirements
-→ "Regulatory Updates & Compliance"
-
-Q&A about full-year earnings guidance
-→ "Forward Guidance & Outlook"
-
-Q&A about sustainability initiatives
-→ "ESG & Sustainability"
-
-Q&A about unique operational topic not covered above
-→ "Other"
+IMPORTANT: Always use the EXACT category name as it appears in <available_categories>. The descriptions above illustrate topic-to-category matching logic, not the actual category names.
 </classification_examples>
 
 <invalid_examples>
@@ -235,6 +215,16 @@ Output: is_valid=false, rejection_reason="Technical difficulty, no Q&A content"
 Input: "[Indiscernible] ...and that's why we believe..."
 Output: is_valid=false, rejection_reason="Incomplete exchange with audio issues"
 </invalid_examples>
+```
+
+---
+
+## User Prompt
+
+```
+Validate and classify this Q&A session:
+
+{qa_content}
 ```
 
 ---
@@ -259,6 +249,10 @@ Output: is_valid=false, rejection_reason="Incomplete exchange with audio issues"
           "enum": ["complete", "question_only", "answer_only", ""],
           "description": "Whether Q&A is complete (has both question and answer), question_only (has question but no answer), answer_only (has answer but no question), or empty string if is_valid=false"
         },
+        "reasoning": {
+          "type": "string",
+          "description": "Brief chain-of-thought explaining the classification decision: what is the primary topic, which category best fits, and why. For invalid Q&As, explain why the content lacks substance. 1-3 sentences."
+        },
         "category_name": {
           "type": "string",
           "description": "Exact category name from predefined list (must match exactly). Empty string if is_valid=false"
@@ -272,7 +266,7 @@ Output: is_valid=false, rejection_reason="Incomplete exchange with audio issues"
           "description": "Brief explanation if is_valid=false (e.g., 'Operator transition only', 'No substantive content'). Empty string if is_valid=true"
         }
       },
-      "required": ["is_valid", "completion_status", "category_name", "summary", "rejection_reason"]
+      "required": ["is_valid", "completion_status", "reasoning", "category_name", "summary", "rejection_reason"]
     }
   }
 }
@@ -280,9 +274,25 @@ Output: is_valid=false, rejection_reason="Incomplete exchange with audio issues"
 
 ---
 
-## What Changed from v4.0
+## What Changed from v4.1.0
 
-Version 4.1 relaxes validation criteria to preserve incomplete but valuable Q&A exchanges:
+Version 4.2.0 removes hardcoded category names and adds chain-of-thought reasoning:
+
+### Changes:
+- **`<classification_examples>`**: Replaced 13 hardcoded category names with generic topic-to-category matching guidance that references `<available_categories>`
+- Added `IMPORTANT` note directing the model to use exact category names from the injected list
+- **Tool definition**: Added `reasoning` field (required, placed before `category_name`) for chain-of-thought classification decisions
+- **`<response_format>`**: Updated both valid and invalid response formats to include `reasoning`
+
+### Why These Changes:
+- **Hardcoded names**: Categories are loaded dynamically from `key_themes_categories.xlsx` and injected via `{categories_list}`. Hardcoded example names could mislead the model if categories change.
+- **Reasoning field**: SOTA classification prompts benefit from chain-of-thought reasoning. Requiring the model to articulate its rationale before committing to a category name improves accuracy on ambiguous Q&As and makes classification decisions auditable.
+
+---
+
+## What Changed from v4.0.0
+
+Version 4.1.0 relaxes validation criteria to preserve incomplete but valuable Q&A exchanges:
 
 ### Major Changes:
 - **Relaxed Validation**: Changed from rejecting incomplete Q&As to accepting them with notation
@@ -332,6 +342,8 @@ This prompt is designed for sequential, NOT parallel processing:
 - Enables consistency in category selection
 
 ### Prompt Placeholders
+
+**System Prompt:**
 - `{bank_name}`, `{quarter}`, `{fiscal_year}`: Bank and period context
 - `{categories_list}`: Formatted list of predefined categories with descriptions
 - `{num_categories}`: Total count of categories (13)
@@ -341,6 +353,9 @@ This prompt is designed for sequential, NOT parallel processing:
   qa_2: Category Name - Brief summary
   ...
   ```
+
+**User Prompt:**
+- `{qa_content}`: The sanitized Q&A block content to validate and classify
 
 ### Category Loading
 Categories are loaded from `config/categories/key_themes_categories.xlsx`:

@@ -455,10 +455,10 @@ class TestExtractSingleCategory:
         assert "not identified in the research plan" in system_msg
 
     @pytest.mark.asyncio
-    async def test_returns_rejection_on_exhausted_retries(
+    async def test_raises_on_exhausted_retries(
         self, extraction_prompts, etl_context_for_extraction
     ):
-        """Returns rejection result (not exception) after exhausting retries."""
+        """Raises RuntimeError after exhausting retries."""
         category = {
             "category_name": "Revenue",
             "category_description": "Revenue analysis",
@@ -481,19 +481,16 @@ class TestExtractSingleCategory:
             patch("aegis.etls.call_summary.main.complete_with_tools", mock_llm),
             patch("aegis.etls.call_summary.main.asyncio.sleep", new_callable=AsyncMock),
         ):
-            result = await _extract_single_category(
-                index=1,
-                category=category,
-                research_plan_data=research_plan_data,
-                extraction_prompts=extraction_prompts,
-                etl_context=etl_context_for_extraction,
-                semaphore=asyncio.Semaphore(5),
-                total_categories=3,
-            )
-
-        # Should return rejection, not raise
-        assert result["rejected"] is True
-        assert "Error after" in result["rejection_reason"]
+            with pytest.raises(RuntimeError, match="Category extraction failed"):
+                await _extract_single_category(
+                    index=1,
+                    category=category,
+                    research_plan_data=research_plan_data,
+                    extraction_prompts=extraction_prompts,
+                    etl_context=etl_context_for_extraction,
+                    semaphore=asyncio.Semaphore(5),
+                    total_categories=3,
+                )
 
     @pytest.mark.asyncio
     async def test_title_defaults_to_category_name(

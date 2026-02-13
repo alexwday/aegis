@@ -15,12 +15,17 @@ Usage:
 import argparse
 import asyncio
 import json
+import random
+import time
 import uuid
 import os
 import sys
 from collections import Counter
+from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Dict, Any, List
+from functools import lru_cache
+from typing import Dict, Any, List, Optional
+from pydantic import BaseModel, ValidationError
 import pandas as pd
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
@@ -30,11 +35,20 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 
 from aegis.etls.key_themes.document_converter import (
     HTMLToDocx,
+    add_banner_image,
     add_page_numbers_with_footer,
     add_theme_header_with_background,
     get_standard_report_metadata,
+    validate_document_content,
+    auto_bold_html_metrics,
 )
-from aegis.etls.key_themes.transcript_utils import retrieve_full_section
+from aegis.etls.key_themes.transcript_utils import (
+    retrieve_full_section,
+    SECTIONS_KEY_MD,
+    SECTIONS_KEY_QA,
+    SECTIONS_KEY_ALL,
+    VALID_SECTION_KEYS,
+)
 from aegis.utils.ssl import setup_ssl
 from aegis.connections.oauth_connector import setup_authentication
 from aegis.connections.llm_connector import complete, complete_with_tools
@@ -48,6 +62,72 @@ import yaml
 
 setup_logging()
 logger = get_logger()
+
+# --- Module-level defaults (used as fallbacks if YAML config keys are missing) ---
+MAX_RETRIES = 3
+RETRY_BASE_DELAY = 1.0
+RETRY_MAX_DELAY = 10.0
+
+# --- Display / Logging Configuration ---
+LOG_SNIPPET_LENGTH = 80
+
+# --- Concurrency Configuration ---
+MAX_CONCURRENT_FORMATTING = 5
+
+
+# --- ETL Exception Hierarchy ---
+
+
+class KeyThemesError(Exception):
+    """Base exception for key themes ETL errors."""
+
+
+class KeyThemesSystemError(KeyThemesError):
+    """Unexpected system/infrastructure error."""
+
+
+class KeyThemesUserError(KeyThemesError):
+    """Expected user-facing error (bad input, no data, etc.)."""
+
+
+@dataclass
+class KeyThemesResult:
+    """Successful key themes generation result."""
+
+    filepath: str
+    theme_groups: int
+    valid_qa: int
+    invalid_qa_filtered: int
+    total_cost: float = 0.0
+    total_tokens: int = 0
+
+
+# --- Pydantic Models for LLM Response Validation ---
+
+
+class ThemeExtractionResponse(BaseModel):
+    """Validation model for theme extraction LLM response."""
+
+    is_valid: bool
+    completion_status: str = ""
+    reasoning: str = ""
+    category_name: str = ""
+    summary: str = ""
+    rejection_reason: str = ""
+
+
+class ThemeGroupItem(BaseModel):
+    """A single theme group from the grouping LLM response."""
+
+    group_title: str
+    qa_ids: List[str]
+    rationale: str = ""
+
+
+class ThemeGroupingResponse(BaseModel):
+    """Top-level theme grouping response from the LLM."""
+
+    theme_groups: List[ThemeGroupItem]
 
 
 class ETLConfig:
@@ -105,38 +185,144 @@ class ETLConfig:
         """Get the LLM temperature parameter."""
         return self._config.get("llm", {}).get("temperature", 0.1)
 
+    def get_max_tokens(self, task_key: str) -> int:
+        """
+        Get max_tokens for a specific task, falling back to default.
+
+        Supports both legacy (flat int) and per-task (dict) config formats.
+
+        Args:
+            task_key: Task identifier (e.g., "theme_extraction", "html_formatting")
+
+        Returns:
+            max_tokens value for the task
+        """
+        max_tokens_config = self._config.get("llm", {}).get("max_tokens", {})
+        if isinstance(max_tokens_config, int):
+            return max_tokens_config
+        return max_tokens_config.get(task_key, max_tokens_config.get("default", 32768))
+
     @property
-    def max_tokens(self) -> int:
-        """Get the LLM max_tokens parameter."""
-        return self._config.get("llm", {}).get("max_tokens", 32768)
+    def max_concurrent_formatting(self) -> int:
+        """Get the maximum number of concurrent HTML formatting tasks."""
+        return self._config.get("concurrency", {}).get(
+            "max_concurrent_formatting", MAX_CONCURRENT_FORMATTING
+        )
+
+    @property
+    def max_retries(self) -> int:
+        """Get the maximum number of LLM call retries."""
+        return self._config.get("retry", {}).get("max_retries", MAX_RETRIES)
+
+    @property
+    def retry_base_delay(self) -> float:
+        """Get the base delay in seconds for retry backoff."""
+        return self._config.get("retry", {}).get("base_delay", RETRY_BASE_DELAY)
+
+    @property
+    def retry_max_delay(self) -> float:
+        """Get the maximum delay in seconds for retry backoff."""
+        return self._config.get("retry", {}).get("max_delay", RETRY_MAX_DELAY)
 
 
 etl_config = ETLConfig(os.path.join(os.path.dirname(__file__), "config", "config.yaml"))
 
-_MONITORED_INSTITUTIONS = None
 
-
+@lru_cache(maxsize=1)
 def _load_monitored_institutions() -> Dict[int, Dict[str, Any]]:
     """
     Load and cache monitored institutions configuration.
 
+    Uses @lru_cache for thread-safe, testable caching (clear via .cache_clear()).
+
     Returns:
         Dictionary mapping bank_id to institution details (id, name, symbol, type, path_safe_name)
     """
-    global _MONITORED_INSTITUTIONS
-    if _MONITORED_INSTITUTIONS is None:
-        config_path = os.path.join(
-            os.path.dirname(__file__), "config", "monitored_institutions.yaml"
-        )
-        with open(config_path, "r", encoding="utf-8") as f:
-            yaml_data = yaml.safe_load(f)
+    config_path = os.path.join(os.path.dirname(__file__), "config", "monitored_institutions.yaml")
+    with open(config_path, "r", encoding="utf-8") as f:
+        yaml_data = yaml.safe_load(f)
 
-        # Build dict with bank_id as key, adding symbol from YAML key
-        _MONITORED_INSTITUTIONS = {}
-        for key, value in yaml_data.items():
-            symbol = key.split("-")[0]  # Extract symbol from "RY-CA" -> "RY"
-            _MONITORED_INSTITUTIONS[value["id"]] = {**value, "symbol": symbol}
-    return _MONITORED_INSTITUTIONS
+    institutions = {}
+    for key, value in yaml_data.items():
+        symbol = key.split("-")[0]  # Extract symbol from "RY-CA" -> "RY"
+        institutions[value["id"]] = {**value, "symbol": symbol}
+    return institutions
+
+
+def _sanitize_for_prompt(text_val: str) -> str:
+    """
+    Escape curly braces in text for safe use in .format() templates.
+
+    Prevents KeyError/IndexError when XLSX-sourced content contains { or }.
+
+    Args:
+        text_val: Raw text string
+
+    Returns:
+        Text with { and } escaped as {{ and }}
+    """
+    return text_val.replace("{", "{{").replace("}", "}}")
+
+
+def _timing_summary(marks: list) -> dict:
+    """
+    Convert timing marks to elapsed-seconds summary.
+
+    Args:
+        marks: List of (stage_name, timestamp) tuples
+
+    Returns:
+        Dict mapping "{stage}_s" to elapsed seconds, plus "total_s"
+    """
+    if len(marks) < 2:
+        return {}
+    summary = {}
+    for i in range(1, len(marks)):
+        summary[f"{marks[i][0]}_s"] = round(marks[i][1] - marks[i - 1][1], 2)
+    summary["total_s"] = round(marks[-1][1] - marks[0][1], 2)
+    return summary
+
+
+def _accumulate_llm_cost(context: Dict[str, Any], metrics: Dict[str, Any]) -> None:
+    """
+    Accumulate LLM cost and token usage from a response's metrics dict.
+
+    Appends to context["_llm_costs"] list for later aggregation.
+    Safe for asyncio concurrency (single-threaded event loop).
+
+    Args:
+        context: Execution context with _llm_costs list
+        metrics: Response metrics dict with prompt_tokens, completion_tokens, total_cost
+    """
+    if "_llm_costs" not in context:
+        context["_llm_costs"] = []
+    context["_llm_costs"].append(
+        {
+            "prompt_tokens": metrics.get("prompt_tokens", 0),
+            "completion_tokens": metrics.get("completion_tokens", 0),
+            "total_cost": metrics.get("total_cost", 0),
+        }
+    )
+
+
+def _get_total_llm_cost(context: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Aggregate all accumulated LLM costs from context.
+
+    Returns:
+        Dict with total_cost, total_prompt_tokens, total_completion_tokens, total_tokens
+    """
+    costs = context.get("_llm_costs", [])
+    total_cost = sum(c.get("total_cost", 0) for c in costs)
+    prompt_tokens = sum(c.get("prompt_tokens", 0) for c in costs)
+    completion_tokens = sum(c.get("completion_tokens", 0) for c in costs)
+    return {
+        "total_cost": round(total_cost, 4),
+        "total_prompt_tokens": prompt_tokens,
+        "total_completion_tokens": completion_tokens,
+        "total_tokens": prompt_tokens + completion_tokens,
+        "llm_calls": len(costs),
+    }
 
 
 def get_bank_info_from_config(bank_identifier: str) -> Dict[str, Any]:
@@ -232,7 +418,30 @@ async def verify_and_get_availability(
         if row and row[0] and "transcripts" in row[0]:
             return
 
-        raise ValueError(f"No transcript data available for {bank_name} {quarter} {fiscal_year}")
+        # Query available transcript periods for this bank to provide helpful context
+        available_result = await conn.execute(
+            text(
+                """
+                SELECT fiscal_year, quarter
+                FROM aegis_data_availability
+                WHERE bank_id = :bank_id
+                  AND 'transcripts' = ANY(database_names)
+                ORDER BY fiscal_year DESC, quarter DESC
+                """
+            ),
+            {"bank_id": bank_id},
+        )
+        available_periods = [f"{r[1]} {r[0]}" for r in available_result.fetchall()]
+
+        if available_periods:
+            raise ValueError(
+                f"No transcript data available for {bank_name} {quarter} {fiscal_year}. "
+                f"Available periods: {', '.join(available_periods)}"
+            )
+        raise ValueError(
+            f"No transcript data available for {bank_name} {quarter} {fiscal_year}. "
+            f"No transcript data found for this bank in any period."
+        )
 
 
 def format_categories_for_prompt(categories: List[Dict[str, Any]]) -> str:
@@ -253,27 +462,33 @@ def format_categories_for_prompt(categories: List[Dict[str, Any]]) -> str:
     for cat in categories:
         # Map transcript_sections to human-readable description
         section_desc = {
-            "MD": "Management Discussion section only",
-            "QA": "Q&A section only",
-            "ALL": "Both Management Discussion and Q&A sections",
-        }.get(cat.get("transcript_sections", "ALL"), "ALL sections")
+            SECTIONS_KEY_MD: "Management Discussion section only",
+            SECTIONS_KEY_QA: "Q&A section only",
+            SECTIONS_KEY_ALL: "Both Management Discussion and Q&A sections",
+        }.get(cat.get("transcript_sections", SECTIONS_KEY_ALL), "ALL sections")
 
         section = "<category>\n"
-        section += f"<name>{cat['category_name']}</name>\n"
+        section += f"<name>{_sanitize_for_prompt(cat['category_name'])}</name>\n"
         section += f"<section>{section_desc}</section>\n"
-        section += f"<description>{cat['category_description']}</description>\n"
+        section += (
+            f"<description>{_sanitize_for_prompt(cat['category_description'])}</description>\n"
+        )
 
         # Collect non-empty examples
         examples = []
         for i in range(1, 4):
             example_key = f"example_{i}"
-            if cat.get(example_key) and cat[example_key].strip():
+            if (
+                cat.get(example_key)
+                and isinstance(cat[example_key], str)
+                and cat[example_key].strip()
+            ):
                 examples.append(cat[example_key])
 
         if examples:
             section += "<examples>\n"
             for example in examples:
-                section += f"  <example>{example}</example>\n"
+                section += f"  <example>{_sanitize_for_prompt(example)}</example>\n"
             section += "</examples>\n"
 
         section += "</category>"
@@ -321,12 +536,17 @@ def load_categories_from_xlsx(execution_id: str) -> List[Dict[str, Any]]:
         for idx, row in df.iterrows():
             for field in required_columns:
                 if pd.isna(row[field]) or str(row[field]).strip() == "":
-                    raise ValueError(
-                        f"Missing value for '{field}' in {file_name} (row {idx + 2})"
-                    )
+                    raise ValueError(f"Missing value for '{field}' in {file_name} (row {idx + 2})")
+
+            transcript_sections = str(row["transcript_sections"]).strip()
+            if transcript_sections not in VALID_SECTION_KEYS:
+                raise ValueError(
+                    f"Invalid transcript_sections '{transcript_sections}' "
+                    f"in {file_name} (row {idx + 2}). Must be one of: {VALID_SECTION_KEYS}"
+                )
 
             category = {
-                "transcript_sections": str(row["transcript_sections"]).strip(),
+                "transcript_sections": transcript_sections,
                 "category_name": str(row["category_name"]).strip(),
                 "category_description": str(row["category_description"]).strip(),
                 "example_1": str(row["example_1"]).strip() if pd.notna(row["example_1"]) else "",
@@ -353,32 +573,32 @@ def load_categories_from_xlsx(execution_id: str) -> List[Dict[str, Any]]:
             xlsx_path=xlsx_path,
             error=str(e),
         )
-        raise ValueError(f"Failed to load categories from {xlsx_path}: {str(e)}") from e
+        raise RuntimeError(f"Failed to load categories from {xlsx_path}: {str(e)}") from e
 
 
+@dataclass
 class QABlock:
     """Represents a single Q&A block with its extracted information."""
 
-    def __init__(self, qa_id: str, position: int, original_content: str):
-        self.qa_id = qa_id
-        self.position = position
-        self.original_content = original_content
-        self.category_name = None  # Changed from theme_title to category_name
-        self.summary = None
-        self.formatted_content = None
-        self.assigned_group = None
-        self.is_valid = True
-        self.completion_status = "complete"  # "complete", "question_only", or "answer_only"
+    qa_id: str
+    position: int
+    original_content: str
+    category_name: Optional[str] = None
+    summary: Optional[str] = None
+    formatted_content: Optional[str] = None
+    assigned_group: Optional[str] = None
+    is_valid: bool = True
+    completion_status: str = "complete"
 
 
+@dataclass
 class ThemeGroup:
     """Represents a group of related Q&A blocks under a unified theme."""
 
-    def __init__(self, group_title: str, qa_ids: List[str], rationale: str = ""):
-        self.group_title = group_title
-        self.qa_ids = qa_ids
-        self.rationale = rationale
-        self.qa_blocks = []
+    group_title: str
+    qa_ids: List[str]
+    rationale: str = ""
+    qa_blocks: list = field(default_factory=list)
 
 
 async def load_qa_blocks(
@@ -391,8 +611,6 @@ async def load_qa_blocks(
     Returns:
         Dictionary indexed by qa_id containing QABlock objects
     """
-    logger = get_logger()
-
     bank_info = get_bank_info_from_config(bank_name)
 
     combo = {
@@ -404,7 +622,7 @@ async def load_qa_blocks(
     }
 
     # Use retrieve_full_section to get Q&A chunks
-    chunks = await retrieve_full_section(combo=combo, sections="QA", context=context)
+    chunks = await retrieve_full_section(combo=combo, sections=SECTIONS_KEY_QA, context=context)
 
     logger.debug(
         "load_qa_index.retrieved",
@@ -445,6 +663,7 @@ async def classify_qa_block(
     qa_block: QABlock,
     categories: List[Dict[str, str]],
     previous_classifications: List[Dict[str, str]],
+    extraction_prompts: Dict[str, Any],
     context: Dict[str, Any],
 ):
     """
@@ -455,6 +674,7 @@ async def classify_qa_block(
         qa_block: Q&A block to classify
         categories: List of predefined categories from xlsx
         previous_classifications: List of prior classifications for context
+        extraction_prompts: Prompt data loaded from DB (theme_extraction)
         context: Execution context
     """
     execution_id = context.get("execution_id")
@@ -467,13 +687,7 @@ async def classify_qa_block(
         num_previous_classifications=len(previous_classifications),
     )
 
-    prompt_data = load_prompt_from_db(
-        layer="key_themes_etl",
-        name="theme_extraction",
-        compose_with_globals=False,
-        available_databases=None,
-        execution_id=execution_id,
-    )
+    prompt_data = extraction_prompts
 
     # Format categories using standardized XML format
     categories_str = format_categories_for_prompt(categories)
@@ -489,8 +703,7 @@ async def classify_qa_block(
     else:
         prev_class_str = "No previous classifications yet (this is the first Q&A)."
 
-    # In-place modification of prompt (matches Call Summary pattern)
-    prompt_data["system_prompt"] = prompt_data["system_prompt"].format(
+    system_prompt = prompt_data["system_prompt"].format(
         bank_name=context.get("bank_name", "Bank"),
         quarter=context.get("quarter", "Q"),
         fiscal_year=context.get("fiscal_year", "Year"),
@@ -499,18 +712,18 @@ async def classify_qa_block(
         previous_classifications=prev_class_str,
     )
 
+    user_prompt = prompt_data["user_prompt"].format(
+        qa_content=_sanitize_for_prompt(qa_block.original_content)
+    )
+
     messages = [
-        {"role": "system", "content": prompt_data["system_prompt"]},
-        {
-            "role": "user",
-            "content": f"Validate and classify this Q&A session:\n\n{qa_block.original_content}",
-        },
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_prompt},
     ]
 
-    max_retries = 3
     result = None
 
-    for attempt in range(max_retries):
+    for attempt in range(etl_config.max_retries):
         try:
             response = await complete_with_tools(
                 messages=messages,
@@ -519,7 +732,7 @@ async def classify_qa_block(
                 llm_params={
                     "model": etl_config.get_model("theme_extraction"),
                     "temperature": etl_config.temperature,
-                    "max_tokens": etl_config.max_tokens,
+                    "max_tokens": etl_config.get_max_tokens("theme_extraction"),
                 },
             )
 
@@ -528,53 +741,99 @@ async def classify_qa_block(
                     response.get("choices", [{}])[0].get("message", {}).get("tool_calls", [])
                 )
                 if tool_calls:
-                    result = json.loads(tool_calls[0]["function"]["arguments"])
+                    raw_data = json.loads(tool_calls[0]["function"]["arguments"])
+                    result = ThemeExtractionResponse.model_validate(raw_data)
+
+                    # Log and accumulate LLM usage
+                    metrics = response.get("metrics", {})
+                    _accumulate_llm_cost(context, metrics)
+                    logger.info(
+                        "etl.key_themes.llm_usage",
+                        execution_id=execution_id,
+                        stage=f"classification:{qa_block.qa_id}",
+                        prompt_tokens=metrics.get("prompt_tokens", 0),
+                        completion_tokens=metrics.get("completion_tokens", 0),
+                        total_cost=metrics.get("total_cost", 0),
+                        response_time=metrics.get("response_time", 0),
+                    )
                     break
 
-        except Exception:
-            if attempt < max_retries - 1:
-                await asyncio.sleep(2**attempt)
-                continue
-            raise
-
-    if result:
-        is_valid = result.get("is_valid", True)
-
-        if not is_valid:
+        except (KeyError, IndexError, json.JSONDecodeError, TypeError, ValidationError) as e:
             logger.warning(
-                "category_classification.rejected",
+                "category_classification.parse_error",
                 execution_id=execution_id,
                 qa_id=qa_block.qa_id,
-                rejection_reason=result.get("rejection_reason", "No reason provided"),
+                attempt=attempt + 1,
+                error=str(e),
             )
-            qa_block.is_valid = False
-            qa_block.category_name = None
-            qa_block.summary = None
-            qa_block.completion_status = ""
-        else:
-            category_name = result.get("category_name", "")
-            summary = result.get("summary", "")
-            completion_status = result.get("completion_status", "complete")
-
-            logger.info(
-                "category_classification.accepted",
+            if attempt < etl_config.max_retries - 1:
+                continue
+            raise RuntimeError(
+                f"Failed to parse classification for {qa_block.qa_id} "
+                f"after {etl_config.max_retries} retries"
+            ) from e
+        except Exception as e:
+            logger.error(
+                "etl.key_themes.classification_error",
                 execution_id=execution_id,
                 qa_id=qa_block.qa_id,
-                category_name=category_name,
-                completion_status=completion_status,
-                summary_preview=summary[:100],
+                error=str(e),
+                attempt=attempt + 1,
             )
+            if attempt < etl_config.max_retries - 1:
+                delay = min(etl_config.retry_base_delay * (2**attempt), etl_config.retry_max_delay)
+                delay += random.uniform(0, 0.5 * delay)
+                await asyncio.sleep(delay)
+                continue
+            raise RuntimeError(
+                f"Classification failed for {qa_block.qa_id} "
+                f"after {etl_config.max_retries} retries: {e}"
+            ) from e
 
-            qa_block.is_valid = True
-            qa_block.category_name = category_name
-            qa_block.summary = summary
-            qa_block.completion_status = completion_status
+    if not result:
+        raise RuntimeError(
+            f"Classification failed for {qa_block.qa_id}: "
+            f"LLM returned no tool calls after {etl_config.max_retries} retries"
+        )
+
+    if not result.is_valid:
+        logger.warning(
+            "category_classification.rejected",
+            execution_id=execution_id,
+            qa_id=qa_block.qa_id,
+            rejection_reason=result.rejection_reason or "No reason provided",
+        )
+        qa_block.is_valid = False
+        qa_block.category_name = None
+        qa_block.summary = None
+        qa_block.completion_status = ""
+    else:
+        logger.info(
+            "category_classification.accepted",
+            execution_id=execution_id,
+            qa_id=qa_block.qa_id,
+            category_name=result.category_name,
+            completion_status=result.completion_status,
+            summary_preview=result.summary[:100],
+        )
+
+        qa_block.is_valid = True
+        qa_block.category_name = result.category_name
+        qa_block.summary = result.summary
+        qa_block.completion_status = result.completion_status or "complete"
 
 
-async def format_qa_html(qa_block: QABlock, context: Dict[str, Any]):
+async def format_qa_html(
+    qa_block: QABlock, formatting_prompts: Dict[str, Any], context: Dict[str, Any]
+):
     """
     Step 2B: Format Q&A block with HTML tags for emphasis.
     Only formats valid Q&A blocks that passed validation.
+
+    Args:
+        qa_block: Q&A block to format
+        formatting_prompts: Prompt data loaded from DB (html_formatting)
+        context: Execution context
     """
 
     if not qa_block.is_valid:
@@ -582,13 +841,7 @@ async def format_qa_html(qa_block: QABlock, context: Dict[str, Any]):
         return
 
     execution_id = context.get("execution_id")
-    prompt_data = load_prompt_from_db(
-        layer="key_themes_etl",
-        name="html_formatting",
-        compose_with_globals=False,
-        available_databases=None,
-        execution_id=execution_id,
-    )
+    prompt_data = formatting_prompts
 
     system_prompt = prompt_data["system_prompt"].format(
         bank_name=context.get("bank_name", "Bank"),
@@ -596,21 +849,30 @@ async def format_qa_html(qa_block: QABlock, context: Dict[str, Any]):
         fiscal_year=context.get("fiscal_year", "Year"),
     )
 
-    # Add completion status context for incomplete Q&As
-    user_content = f"Format this Q&A exchange with HTML tags for emphasis:\n\n"
+    # Build completion note for incomplete Q&As
+    completion_note = ""
     if qa_block.completion_status == "question_only":
-        user_content += "[NOTE: This block contains only the analyst question. Executive response may be in a separate block.]\n\n"
+        completion_note = (
+            "[NOTE: This block contains only the analyst question. "
+            "Executive response may be in a separate block.]\n\n"
+        )
     elif qa_block.completion_status == "answer_only":
-        user_content += "[NOTE: This block contains only the executive response. Analyst question may be in a separate block.]\n\n"
-    user_content += qa_block.original_content
+        completion_note = (
+            "[NOTE: This block contains only the executive response. "
+            "Analyst question may be in a separate block.]\n\n"
+        )
+
+    user_prompt = prompt_data["user_prompt"].format(
+        completion_note=completion_note,
+        qa_content=_sanitize_for_prompt(qa_block.original_content),
+    )
 
     messages = [
         {"role": "system", "content": system_prompt},
-        {"role": "user", "content": user_content},
+        {"role": "user", "content": user_prompt},
     ]
 
-    max_retries = 3
-    for attempt in range(max_retries):
+    for attempt in range(etl_config.max_retries):
         try:
             response = await complete(
                 messages,
@@ -618,7 +880,7 @@ async def format_qa_html(qa_block: QABlock, context: Dict[str, Any]):
                 {
                     "model": etl_config.get_model("html_formatting"),
                     "temperature": etl_config.temperature,
-                    "max_tokens": etl_config.max_tokens,
+                    "max_tokens": etl_config.get_max_tokens("html_formatting"),
                 },
             )
 
@@ -628,18 +890,38 @@ async def format_qa_html(qa_block: QABlock, context: Dict[str, Any]):
                 )
             else:
                 qa_block.formatted_content = str(response)
+
+            # Log and accumulate LLM usage
+            if isinstance(response, dict):
+                metrics = response.get("metrics", {})
+                _accumulate_llm_cost(context, metrics)
+                logger.info(
+                    "etl.key_themes.llm_usage",
+                    execution_id=execution_id,
+                    stage=f"formatting:{qa_block.qa_id}",
+                    prompt_tokens=metrics.get("prompt_tokens", 0),
+                    completion_tokens=metrics.get("completion_tokens", 0),
+                    total_cost=metrics.get("total_cost", 0),
+                    response_time=metrics.get("response_time", 0),
+                )
             break
 
-        except Exception:
-            if attempt < max_retries - 1:
-                await asyncio.sleep(2**attempt)
+        except Exception as e:
+            if attempt < etl_config.max_retries - 1:
+                delay = min(etl_config.retry_base_delay * (2**attempt), etl_config.retry_max_delay)
+                delay += random.uniform(0, 0.5 * delay)
+                await asyncio.sleep(delay)
             else:
-                qa_block.formatted_content = qa_block.original_content
+                raise RuntimeError(
+                    f"HTML formatting failed for {qa_block.qa_id} "
+                    f"after {etl_config.max_retries} retries: {e}"
+                ) from e
 
 
 async def classify_all_qa_blocks_sequential(
     qa_index: Dict[str, QABlock],
     categories: List[Dict[str, str]],
+    extraction_prompts: Dict[str, Any],
     context: Dict[str, Any],
 ):
     """
@@ -648,6 +930,7 @@ async def classify_all_qa_blocks_sequential(
     Args:
         qa_index: Dictionary of QA blocks indexed by qa_id
         categories: List of predefined categories from xlsx
+        extraction_prompts: Prompt data loaded from DB (theme_extraction)
         context: Execution context
     """
     previous_classifications = []
@@ -656,7 +939,9 @@ async def classify_all_qa_blocks_sequential(
     sorted_qa_blocks = sorted(qa_index.values(), key=lambda x: x.position)
 
     for qa_block in sorted_qa_blocks:
-        await classify_qa_block(qa_block, categories, previous_classifications, context)
+        await classify_qa_block(
+            qa_block, categories, previous_classifications, extraction_prompts, context
+        )
 
         # Add to cumulative context if valid
         if qa_block.is_valid:
@@ -676,12 +961,17 @@ async def classify_all_qa_blocks_sequential(
     )
 
 
-async def format_all_qa_blocks_parallel(qa_index: Dict[str, QABlock], context: Dict[str, Any]):
+async def format_all_qa_blocks_parallel(
+    qa_index: Dict[str, QABlock], formatting_prompts: Dict[str, Any], context: Dict[str, Any]
+):
     """
     Step 2: Format all valid Q&A blocks in parallel with HTML tags.
 
+    Uses semaphore for concurrency control.
+
     Args:
         qa_index: Dictionary of QA blocks indexed by qa_id
+        formatting_prompts: Prompt data loaded from DB (html_formatting)
         context: Execution context
     """
     # Only format valid Q&As
@@ -690,8 +980,14 @@ async def format_all_qa_blocks_parallel(qa_index: Dict[str, QABlock], context: D
     if not valid_qa_blocks:
         return
 
-    # Parallel formatting
-    tasks = [format_qa_html(qa_block, context) for qa_block in valid_qa_blocks]
+    semaphore = asyncio.Semaphore(etl_config.max_concurrent_formatting)
+
+    async def _format_with_semaphore(qa_block: QABlock):
+        async with semaphore:
+            await format_qa_html(qa_block, formatting_prompts, context)
+
+    # Parallel formatting with concurrency limit
+    tasks = [_format_with_semaphore(qa_block) for qa_block in valid_qa_blocks]
     await asyncio.gather(*tasks)
 
     logger.info(
@@ -702,8 +998,11 @@ async def format_all_qa_blocks_parallel(qa_index: Dict[str, QABlock], context: D
 
 
 async def determine_comprehensive_grouping(
-    qa_index: Dict[str, QABlock], categories: List[Dict[str, str]], context: Dict[str, Any]
-) -> List[ThemeGroup]:
+    qa_index: Dict[str, QABlock],
+    categories: List[Dict[str, str]],
+    grouping_prompts: Dict[str, Any],
+    context: Dict[str, Any],
+) -> tuple:
     """
     Step 3: Make ONE comprehensive grouping decision for all themes.
     Only processes valid Q&A blocks.
@@ -711,7 +1010,14 @@ async def determine_comprehensive_grouping(
     Args:
         qa_index: Dictionary of QA blocks indexed by qa_id
         categories: List of category definitions from xlsx
+        grouping_prompts: Prompt data loaded from DB (theme_grouping)
         context: Execution context with auth, ssl, bank info
+
+    Returns:
+        List of ThemeGroup objects
+
+    Raises:
+        RuntimeError: If grouping fails after all retries
     """
 
     valid_qa_blocks = {qa_id: qa_block for qa_id, qa_block in qa_index.items() if qa_block.is_valid}
@@ -720,13 +1026,7 @@ async def determine_comprehensive_grouping(
         return []
 
     execution_id = context.get("execution_id")
-    prompt_data = load_prompt_from_db(
-        layer="key_themes_etl",
-        name="theme_grouping",
-        compose_with_globals=False,
-        available_databases=None,
-        execution_id=execution_id,
-    )
+    prompt_data = grouping_prompts
 
     qa_blocks_info = []
     for qa_id, qa_block in sorted(valid_qa_blocks.items(), key=lambda x: x[1].position):
@@ -736,7 +1036,7 @@ async def determine_comprehensive_grouping(
             f"Summary: {qa_block.summary}\n"
         )
 
-    qa_blocks_str = "\n\n".join(qa_blocks_info)
+    qa_blocks_str = _sanitize_for_prompt("\n\n".join(qa_blocks_info))
 
     # Format categories using standardized XML format
     categories_str = format_categories_for_prompt(categories)
@@ -752,12 +1052,11 @@ async def determine_comprehensive_grouping(
         num_categories=len(categories),
     )
 
+    user_prompt = prompt_data["user_prompt"]
+
     messages = [
         {"role": "system", "content": system_prompt},
-        {
-            "role": "user",
-            "content": "Review category assignments, regroup if needed, and create final titles.",
-        },
+        {"role": "user", "content": user_prompt},
     ]
 
     logger.info(
@@ -767,10 +1066,9 @@ async def determine_comprehensive_grouping(
         system_prompt_length=len(system_prompt),
     )
 
-    max_retries = 3
     result = None
 
-    for attempt in range(max_retries):
+    for attempt in range(etl_config.max_retries):
         try:
             response = await complete_with_tools(
                 messages=messages,
@@ -779,17 +1077,8 @@ async def determine_comprehensive_grouping(
                 llm_params={
                     "model": etl_config.get_model("theme_grouping"),
                     "temperature": etl_config.temperature,
-                    "max_tokens": etl_config.max_tokens,
+                    "max_tokens": etl_config.get_max_tokens("theme_grouping"),
                 },
-            )
-
-            # Debug: Log raw response structure
-            logger.debug(
-                "regrouping.llm_response",
-                execution_id=execution_id,
-                response_type=type(response).__name__,
-                response_keys=list(response.keys()) if isinstance(response, dict) else None,
-                has_choices=bool(response.get("choices")) if isinstance(response, dict) else False,
             )
 
             if response:
@@ -797,109 +1086,45 @@ async def determine_comprehensive_grouping(
                     response.get("choices", [{}])[0].get("message", {}).get("tool_calls", [])
                 )
 
-                # Debug: Log tool_calls structure
-                logger.debug(
-                    "regrouping.tool_calls_structure",
-                    execution_id=execution_id,
-                    has_tool_calls=bool(tool_calls),
-                    num_tool_calls=len(tool_calls) if tool_calls else 0,
-                    tool_call_preview=str(tool_calls)[:300] if tool_calls else None,
-                )
-
                 if tool_calls:
-                    # Debug: Log the function name that was called
-                    function_name = tool_calls[0].get("function", {}).get("name")
-                    logger.debug(
-                        "regrouping.function_called",
+                    raw_args = tool_calls[0]["function"]["arguments"]
+                    if isinstance(raw_args, dict):
+                        raw_data = raw_args
+                    else:
+                        raw_data = json.loads(str(raw_args).strip())
+
+                    result = ThemeGroupingResponse.model_validate(raw_data)
+
+                    # Log and accumulate LLM usage
+                    metrics = response.get("metrics", {})
+                    _accumulate_llm_cost(context, metrics)
+                    logger.info(
+                        "etl.key_themes.llm_usage",
                         execution_id=execution_id,
-                        function_name=function_name,
+                        stage="grouping",
+                        prompt_tokens=metrics.get("prompt_tokens", 0),
+                        completion_tokens=metrics.get("completion_tokens", 0),
+                        total_cost=metrics.get("total_cost", 0),
+                        response_time=metrics.get("response_time", 0),
                     )
 
-                    try:
-                        # Get the arguments string and clean it
-                        arguments_str = tool_calls[0]["function"]["arguments"]
+                    logger.info(
+                        "regrouping.parsed_result",
+                        execution_id=execution_id,
+                        num_groups=len(result.theme_groups),
+                    )
+                    break
 
-                        # If it's already a dict, use it directly
-                        if isinstance(arguments_str, dict):
-                            result = arguments_str
-                            logger.debug(
-                                "regrouping.arguments_already_dict",
-                                execution_id=execution_id,
-                            )
-                        else:
-                            # Log what we received for debugging
-                            logger.debug(
-                                "regrouping.raw_arguments",
-                                execution_id=execution_id,
-                                arg_type=type(arguments_str).__name__,
-                                arg_length=len(str(arguments_str)),
-                                arg_preview=repr(str(arguments_str)[:200]),
-                            )
-
-                            # Clean the string by stripping whitespace and common issues
-                            arguments_str = str(arguments_str).strip()
-
-                            # Remove any markdown code block markers if present
-                            if arguments_str.startswith("```"):
-                                # Remove ```json or ``` at start
-                                arguments_str = arguments_str.split("\n", 1)[1] if "\n" in arguments_str else arguments_str[3:]
-                            if arguments_str.endswith("```"):
-                                arguments_str = arguments_str.rsplit("\n", 1)[0] if "\n" in arguments_str else arguments_str[:-3]
-
-                            arguments_str = arguments_str.strip()
-                            result = json.loads(arguments_str)
-
-                        # Validate the parsed result has the expected structure
-                        if not isinstance(result, dict):
-                            logger.error(
-                                "regrouping.invalid_result_type",
-                                execution_id=execution_id,
-                                result_type=type(result).__name__,
-                                result_repr=repr(result)[:200],
-                            )
-                            if attempt < max_retries - 1:
-                                await asyncio.sleep(2**attempt)
-                                continue
-                            raise ValueError(
-                                f"LLM returned invalid result type: {type(result).__name__}"
-                            )
-
-                        if "theme_groups" not in result:
-                            logger.error(
-                                "regrouping.missing_theme_groups",
-                                execution_id=execution_id,
-                                result_keys=list(result.keys()),
-                                result_repr=repr(result)[:300],
-                            )
-                            if attempt < max_retries - 1:
-                                await asyncio.sleep(2**attempt)
-                                continue
-                            raise KeyError(
-                                f"LLM response missing 'theme_groups' key. "
-                                f"Got keys: {list(result.keys())}"
-                            )
-
-                        logger.info(
-                            "regrouping.parsed_result",
-                            execution_id=execution_id,
-                            num_groups=len(result.get("theme_groups", [])),
-                        )
-
-                        break
-                    except json.JSONDecodeError as e:
-                        logger.error(
-                            "regrouping.json_decode_error",
-                            execution_id=execution_id,
-                            error=str(e),
-                            error_position=e.pos if hasattr(e, 'pos') else None,
-                            arguments_type=type(tool_calls[0]["function"]["arguments"]).__name__,
-                            arguments_repr=repr(str(tool_calls[0]["function"]["arguments"])[:300]),
-                        )
-                        if attempt < max_retries - 1:
-                            await asyncio.sleep(2**attempt)
-                            continue
-                        raise
-
+        except (KeyError, IndexError, json.JSONDecodeError, TypeError, ValidationError) as e:
+            logger.warning(
+                "regrouping.parse_error",
+                execution_id=execution_id,
+                error=str(e),
+                attempt=attempt + 1,
+            )
+            if attempt < etl_config.max_retries - 1:
+                continue
+            raise RuntimeError("Failed to parse theme regrouping after multiple retries.") from e
         except Exception as e:
             logger.error(
                 "regrouping.unexpected_error",
@@ -907,56 +1132,29 @@ async def determine_comprehensive_grouping(
                 error=str(e),
                 error_type=type(e).__name__,
                 attempt=attempt + 1,
-                max_retries=max_retries,
             )
-            if attempt < max_retries - 1:
-                await asyncio.sleep(2**attempt)
+            if attempt < etl_config.max_retries - 1:
+                delay = min(etl_config.retry_base_delay * (2**attempt), etl_config.retry_max_delay)
+                delay += random.uniform(0, 0.5 * delay)
+                await asyncio.sleep(delay)
                 continue
-            raise RuntimeError(
-                "Failed to complete theme regrouping after multiple retries."
-            ) from e
+            raise RuntimeError("Failed to complete theme regrouping after multiple retries.") from e
 
-    if result and "theme_groups" in result:
+    if result:
         theme_groups = []
-        for group_data in result["theme_groups"]:
-            group_title = group_data.get("group_title") or "Theme Group"
-            qa_ids = group_data.get("qa_ids") or []
-            if not isinstance(qa_ids, list):
-                qa_ids = list(qa_ids)
-
+        for group_item in result.theme_groups:
             group = ThemeGroup(
-                group_title=group_title,
-                qa_ids=qa_ids,
-                rationale=group_data.get("rationale", "Regrouped by category"),
+                group_title=group_item.group_title or "Theme Group",
+                qa_ids=group_item.qa_ids,
+                rationale=group_item.rationale or "Regrouped by category",
             )
             theme_groups.append(group)
 
         return theme_groups
 
-    # Fallback: Use initial category assignments
-    logger.warning(
-        "regrouping.fallback",
-        execution_id=execution_id,
-        message="Using initial category assignments as fallback",
+    raise RuntimeError(
+        "Theme grouping failed: LLM returned no tool calls after all retries"
     )
-
-    category_groups = {}
-    for qa_id, qa_block in valid_qa_blocks.items():
-        category = qa_block.category_name
-        if category not in category_groups:
-            category_groups[category] = []
-        category_groups[category].append(qa_id)
-
-    theme_groups = []
-    for category, qa_ids in category_groups.items():
-        group = ThemeGroup(
-            group_title=f"{category}",
-            qa_ids=qa_ids,
-            rationale="Fallback - grouped by initial classification",
-        )
-        theme_groups.append(group)
-
-    return theme_groups
 
 
 def validate_grouping_assignments(
@@ -1032,34 +1230,8 @@ def create_document(
 
     add_page_numbers_with_footer(doc, resolved_symbol, quarter, fiscal_year)
 
-    etl_dir = os.path.dirname(os.path.abspath(__file__))
-    banner_path = None
-
-    config_dir = os.path.join(etl_dir, "config")
-    for ext in ["jpg", "jpeg", "png"]:
-        potential_banner = os.path.join(config_dir, f"banner.{ext}")
-        if os.path.exists(potential_banner):
-            banner_path = potential_banner
-            break
-
-    if not banner_path:
-        call_summary_config_dir = os.path.join(os.path.dirname(etl_dir), "call_summary", "config")
-        for ext in ["jpg", "jpeg", "png"]:
-            potential_banner = os.path.join(call_summary_config_dir, f"banner.{ext}")
-            if os.path.exists(potential_banner):
-                banner_path = potential_banner
-                break
-
-    if banner_path:
-        try:
-
-            doc.add_picture(banner_path, width=Inches(7.4))
-            last_paragraph = doc.paragraphs[-1]
-            last_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            last_paragraph.paragraph_format.space_after = Pt(6)
-
-        except Exception:
-            pass
+    config_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config")
+    add_banner_image(doc, config_dir)
 
     for i, group in enumerate(theme_groups, 1):
 
@@ -1079,7 +1251,10 @@ def create_document(
             conv_run.font.size = Pt(11)
             conv_run.font.color.rgb = RGBColor(0, 0, 0)
 
+            # Apply auto_bold_html_metrics to formatted content
             content = qa_block.formatted_content or qa_block.original_content
+            content = auto_bold_html_metrics(content)
+
             for line in content.split("\n"):
                 if line.strip():
                     if line.strip() in ["---", "***", "___", "<hr>", "<hr/>", "<hr />"]:
@@ -1113,10 +1288,143 @@ def create_document(
             spacing.paragraph_format.space_before = Pt(12)
             spacing.paragraph_format.space_after = Pt(12)
 
+    validate_document_content(doc)
     doc.save(output_path)
 
 
-async def generate_key_themes(bank_name: str, fiscal_year: int, quarter: str) -> str:
+async def _save_to_database(
+    theme_groups: List[ThemeGroup],
+    qa_index: Dict[str, QABlock],
+    filepath: str,
+    docx_filename: str,
+    etl_context: dict,
+) -> None:
+    """
+    Save report metadata to database.
+
+    Args:
+        theme_groups: Final grouped themes
+        qa_index: All Q&A blocks (for invalid count)
+        filepath: Local file path
+        docx_filename: Document filename
+        etl_context: Dict with keys: bank_info, quarter, fiscal_year, execution_id,
+    """
+    bank_info = etl_context["bank_info"]
+    quarter = etl_context["quarter"]
+    fiscal_year = etl_context["fiscal_year"]
+    execution_id = etl_context["execution_id"]
+
+    report_metadata = get_standard_report_metadata()
+    generation_timestamp = datetime.now()
+
+    stage = "connecting"
+    try:
+        async with get_connection() as conn:
+            stage = "deleting existing report"
+            deleted = await conn.execute(
+                text(
+                    """
+                DELETE FROM aegis_reports
+                WHERE bank_id = :bank_id
+                  AND fiscal_year = :fiscal_year
+                  AND quarter = :quarter
+                  AND report_type = :report_type
+                RETURNING id
+                """
+                ),
+                {
+                    "bank_id": bank_info["bank_id"],
+                    "fiscal_year": fiscal_year,
+                    "quarter": quarter,
+                    "report_type": report_metadata["report_type"],
+                },
+            )
+            deleted.fetchall()
+
+            stage = "inserting new report"
+            result = await conn.execute(
+                text(
+                    """
+                INSERT INTO aegis_reports (
+                    report_name,
+                    report_description,
+                    report_type,
+                    bank_id,
+                    bank_name,
+                    bank_symbol,
+                    fiscal_year,
+                    quarter,
+                    local_filepath,
+                    s3_document_name,
+                    s3_pdf_name,
+                    generation_date,
+                    generated_by,
+                    execution_id,
+                    metadata
+                ) VALUES (
+                    :report_name,
+                    :report_description,
+                    :report_type,
+                    :bank_id,
+                    :bank_name,
+                    :bank_symbol,
+                    :fiscal_year,
+                    :quarter,
+                    :local_filepath,
+                    :s3_document_name,
+                    :s3_pdf_name,
+                    :generation_date,
+                    :generated_by,
+                    :execution_id,
+                    :metadata
+                )
+                RETURNING id
+                """
+                ),
+                {
+                    "report_name": report_metadata["report_name"],
+                    "report_description": report_metadata["report_description"],
+                    "report_type": report_metadata["report_type"],
+                    "bank_id": bank_info["bank_id"],
+                    "bank_name": bank_info["bank_name"],
+                    "bank_symbol": bank_info["bank_symbol"],
+                    "fiscal_year": fiscal_year,
+                    "quarter": quarter,
+                    "local_filepath": filepath,
+                    "s3_document_name": docx_filename,
+                    "s3_pdf_name": None,
+                    "generation_date": generation_timestamp,
+                    "generated_by": "key_themes_etl",
+                    "execution_id": execution_id,
+                    "metadata": json.dumps(
+                        {
+                            "theme_groups": len(theme_groups),
+                            "total_qa_blocks": sum(
+                                len(group.qa_blocks) for group in theme_groups
+                            ),
+                            "invalid_qa_filtered": sum(
+                                1 for qa in qa_index.values() if not qa.is_valid
+                            ),
+                        }
+                    ),
+                },
+            )
+            result.fetchone()
+
+            await conn.commit()
+
+    except SQLAlchemyError as e:
+        logger.error(
+            "etl.key_themes.database_error",
+            execution_id=execution_id,
+            stage=stage,
+            filepath=filepath,
+            error=str(e),
+        )
+        raise
+
+
+async def generate_key_themes(bank_name: str, fiscal_year: int, quarter: str) -> KeyThemesResult:
     """
     Generate key themes report from earnings call Q&A.
 
@@ -1126,8 +1434,13 @@ async def generate_key_themes(bank_name: str, fiscal_year: int, quarter: str) ->
         quarter: Quarter (e.g., "Q3")
 
     Returns:
-        Success or error message string
+        KeyThemesResult with filepath and counts
+
+    Raises:
+        KeyThemesUserError: For expected errors (bad input, no data)
+        KeyThemesSystemError: For unexpected system/infrastructure errors
     """
+    marks = [("start", time.monotonic())]
     execution_id = str(uuid.uuid4())
     logger.info(
         "etl.key_themes.started",
@@ -1150,18 +1463,19 @@ async def generate_key_themes(bank_name: str, fiscal_year: int, quarter: str) ->
         if not auth_config["success"]:
             error_msg = f"Authentication failed: {auth_config.get('error', 'Unknown error')}"
             logger.error("etl.key_themes.auth_failed", execution_id=execution_id, error=error_msg)
-            raise RuntimeError(error_msg)
+            raise KeyThemesSystemError(error_msg)
 
         context = {
             "execution_id": execution_id,
             "ssl_config": ssl_config,
             "auth_config": auth_config,
+            "bank_name": bank_info["bank_name"],
+            "bank_symbol": bank_info["bank_symbol"],
+            "quarter": quarter,
+            "fiscal_year": fiscal_year,
         }
 
-        context["bank_name"] = bank_info["bank_name"]
-        context["bank_symbol"] = bank_info["bank_symbol"]
-        context["quarter"] = quarter
-        context["fiscal_year"] = fiscal_year
+        marks.append(("setup", time.monotonic()))
 
         # Load categories from xlsx
         categories = load_categories_from_xlsx(execution_id)
@@ -1169,24 +1483,51 @@ async def generate_key_themes(bank_name: str, fiscal_year: int, quarter: str) ->
         qa_index = await load_qa_blocks(bank_info["bank_name"], fiscal_year, quarter, context)
 
         if not qa_index:
-            error_msg = f"No Q&A data found for {bank_info['bank_name']} {quarter} {fiscal_year}"
-            logger.error(
-                "etl.key_themes.no_data",
-                execution_id=execution_id,
-                bank_name=bank_info["bank_name"],
-                fiscal_year=fiscal_year,
-                quarter=quarter,
+            raise KeyThemesUserError(
+                f"No Q&A data found for {bank_info['bank_name']} {quarter} {fiscal_year}"
             )
-            raise ValueError(error_msg)
+
+        marks.append(("retrieval", time.monotonic()))
+
+        # Load all prompts once (matches Call Summary pattern)
+        extraction_prompts = load_prompt_from_db(
+            layer="key_themes_etl",
+            name="theme_extraction",
+            compose_with_globals=False,
+            available_databases=None,
+            execution_id=execution_id,
+        )
+        formatting_prompts = load_prompt_from_db(
+            layer="key_themes_etl",
+            name="html_formatting",
+            compose_with_globals=False,
+            available_databases=None,
+            execution_id=execution_id,
+        )
+        grouping_prompts = load_prompt_from_db(
+            layer="key_themes_etl",
+            name="theme_grouping",
+            compose_with_globals=False,
+            available_databases=None,
+            execution_id=execution_id,
+        )
 
         # Stage 1: Sequential classification with cumulative context
-        await classify_all_qa_blocks_sequential(qa_index, categories, context)
+        await classify_all_qa_blocks_sequential(
+            qa_index, categories, extraction_prompts, context
+        )
+
+        marks.append(("classification", time.monotonic()))
 
         # Stage 2: Parallel HTML formatting
-        await format_all_qa_blocks_parallel(qa_index, context)
+        await format_all_qa_blocks_parallel(qa_index, formatting_prompts, context)
+
+        marks.append(("formatting", time.monotonic()))
 
         # Stage 3: Review classifications, regroup if needed, generate final titles
-        theme_groups = await determine_comprehensive_grouping(qa_index, categories, context)
+        theme_groups = await determine_comprehensive_grouping(
+            qa_index, categories, grouping_prompts, context
+        )
 
         validate_grouping_assignments(qa_index, theme_groups, execution_id)
 
@@ -1195,6 +1536,8 @@ async def generate_key_themes(bank_name: str, fiscal_year: int, quarter: str) ->
             execution_id=execution_id,
             num_groups=len(theme_groups),
         )
+
+        marks.append(("grouping", time.monotonic()))
 
         apply_grouping_to_index(qa_index, theme_groups)
 
@@ -1214,171 +1557,28 @@ async def generate_key_themes(bank_name: str, fiscal_year: int, quarter: str) ->
             filepath,
         )
 
+        marks.append(("document", time.monotonic()))
+
         logger.info("etl.key_themes.document_saved", execution_id=execution_id, filepath=filepath)
 
-        report_metadata = get_standard_report_metadata()
-        generation_timestamp = datetime.now()
+        await _save_to_database(
+            theme_groups=theme_groups,
+            qa_index=qa_index,
+            filepath=filepath,
+            docx_filename=docx_filename,
+            etl_context={
+                "bank_info": bank_info,
+                "quarter": quarter,
+                "fiscal_year": fiscal_year,
+                "execution_id": execution_id,
+            },
+        )
 
-        try:
-            async with get_connection() as conn:
-                deleted = await conn.execute(
-                    text(
-                        """
-                    DELETE FROM aegis_reports
-                    WHERE bank_id = :bank_id
-                      AND fiscal_year = :fiscal_year
-                      AND quarter = :quarter
-                      AND report_type = :report_type
-                    RETURNING id
-                    """
-                    ),
-                    {
-                        "bank_id": bank_info["bank_id"],
-                        "fiscal_year": fiscal_year,
-                        "quarter": quarter,
-                        "report_type": report_metadata["report_type"],
-                    },
-                )
-                deleted_rows = deleted.fetchall()
-
-                if deleted_rows:
-                    remaining_reports = await conn.execute(
-                        text(
-                            """
-                        SELECT COUNT(*) as count
-                        FROM aegis_reports
-                        WHERE bank_id = :bank_id
-                          AND fiscal_year = :fiscal_year
-                          AND quarter = :quarter
-                        """
-                        ),
-                        {
-                            "bank_id": bank_info["bank_id"],
-                            "fiscal_year": fiscal_year,
-                            "quarter": quarter,
-                        },
-                    )
-                    count_result = remaining_reports.scalar()
-
-                    if count_result == 0:
-                        await conn.execute(
-                            text(
-                                """
-                            UPDATE aegis_data_availability
-                            SET database_names = array_remove(database_names, 'reports')
-                            WHERE bank_id = :bank_id
-                              AND fiscal_year = :fiscal_year
-                              AND quarter = :quarter
-                              AND 'reports' = ANY(database_names)
-                            """
-                            ),
-                            {
-                                "bank_id": bank_info["bank_id"],
-                                "fiscal_year": fiscal_year,
-                                "quarter": quarter,
-                            },
-                        )
-
-                result = await conn.execute(
-                    text(
-                        """
-                    INSERT INTO aegis_reports (
-                        report_name,
-                        report_description,
-                        report_type,
-                        bank_id,
-                        bank_name,
-                        bank_symbol,
-                        fiscal_year,
-                        quarter,
-                        local_filepath,
-                        s3_document_name,
-                        s3_pdf_name,
-                        generation_date,
-                        generated_by,
-                        execution_id,
-                        metadata
-                    ) VALUES (
-                        :report_name,
-                        :report_description,
-                        :report_type,
-                        :bank_id,
-                        :bank_name,
-                        :bank_symbol,
-                        :fiscal_year,
-                        :quarter,
-                        :local_filepath,
-                        :s3_document_name,
-                        :s3_pdf_name,
-                        :generation_date,
-                        :generated_by,
-                        :execution_id,
-                        :metadata
-                    )
-                    RETURNING id
-                    """
-                    ),
-                    {
-                        "report_name": report_metadata["report_name"],
-                        "report_description": report_metadata["report_description"],
-                        "report_type": report_metadata["report_type"],
-                        "bank_id": bank_info["bank_id"],
-                        "bank_name": bank_info["bank_name"],
-                        "bank_symbol": bank_info["bank_symbol"],
-                        "fiscal_year": fiscal_year,
-                        "quarter": quarter,
-                        "local_filepath": filepath,
-                        "s3_document_name": docx_filename,
-                        "s3_pdf_name": None,
-                        "generation_date": generation_timestamp,
-                        "generated_by": "key_themes_etl",
-                        "execution_id": execution_id,
-                        "metadata": json.dumps(
-                            {
-                                "theme_groups": len(theme_groups),
-                                "total_qa_blocks": sum(
-                                    len(group.qa_blocks) for group in theme_groups
-                                ),
-                                "invalid_qa_filtered": sum(
-                                    1 for qa in qa_index.values() if not qa.is_valid
-                                ),
-                            }
-                        ),
-                    },
-                )
-                result.fetchone()
-
-                await conn.execute(
-                    text(
-                        """
-                    UPDATE aegis_data_availability
-                    SET database_names =
-                        CASE
-                            WHEN 'reports' = ANY(database_names) THEN database_names
-                            ELSE array_append(database_names, 'reports')
-                        END
-                    WHERE bank_id = :bank_id
-                      AND fiscal_year = :fiscal_year
-                      AND quarter = :quarter
-                      AND NOT ('reports' = ANY(database_names))
-                    RETURNING bank_id
-                """
-                    ),
-                    {
-                        "bank_id": bank_info["bank_id"],
-                        "fiscal_year": fiscal_year,
-                        "quarter": quarter,
-                    },
-                )
-
-                await conn.commit()
-
-        except Exception as e:
-            logger.error("etl.key_themes.database_error", execution_id=execution_id, error=str(e))
-            raise
+        marks.append(("save", time.monotonic()))
 
         total_qa = sum(len(group.qa_blocks) for group in theme_groups)
         invalid_qa = sum(1 for qa in qa_index.values() if not qa.is_valid)
+        cost_summary = _get_total_llm_cost(context)
         logger.info(
             "etl.key_themes.completed",
             execution_id=execution_id,
@@ -1386,35 +1586,32 @@ async def generate_key_themes(bank_name: str, fiscal_year: int, quarter: str) ->
             valid_qa=total_qa,
             invalid_qa_filtered=invalid_qa,
             filepath=filepath,
+            llm_calls=cost_summary["llm_calls"],
+            total_tokens=cost_summary["total_tokens"],
+            total_cost=cost_summary["total_cost"],
+            **_timing_summary(marks),
         )
 
-        return (
-            f"✅ Complete: {filepath}\n   Theme groups: {len(theme_groups)}, "
-            f"Valid Q&A: {total_qa}, Filtered: {invalid_qa}"
+        return KeyThemesResult(
+            filepath=filepath,
+            theme_groups=len(theme_groups),
+            valid_qa=total_qa,
+            invalid_qa_filtered=invalid_qa,
+            total_cost=cost_summary["total_cost"],
+            total_tokens=cost_summary["total_tokens"],
         )
 
-    except (
-        KeyError,
-        TypeError,
-        AttributeError,
-        json.JSONDecodeError,
-        FileNotFoundError,
-        SQLAlchemyError,
-    ) as e:
-        error_msg = f"Error generating key themes report: {str(e)}"
-        logger.error(
-            "etl.key_themes.error", execution_id=execution_id, error=error_msg, exc_info=True
-        )
-        return f"❌ {error_msg}"
+    except KeyThemesError:
+        raise
     except (ValueError, RuntimeError) as e:
         logger.error("etl.key_themes.error", execution_id=execution_id, error=str(e))
-        return f"⚠️ {str(e)}"
-    except Exception as e:  # Catch-all for transport/LLM/other unexpected errors
+        raise KeyThemesUserError(str(e)) from e
+    except Exception as e:
         error_msg = f"Error generating key themes report: {str(e)}"
         logger.error(
             "etl.key_themes.error", execution_id=execution_id, error=error_msg, exc_info=True
         )
-        return f"❌ {error_msg}"
+        raise KeyThemesSystemError(error_msg) from e
 
 
 def main():
@@ -1436,15 +1633,21 @@ def main():
 
     print(f"\n🔄 Generating key themes report for {args.bank} {args.quarter} {args.year}...\n")
 
-    result = asyncio.run(
-        generate_key_themes(bank_name=args.bank, fiscal_year=args.year, quarter=args.quarter)
-    )
-
-    is_success = isinstance(result, str) and result.strip().startswith("✅")
-    output_stream = sys.stdout if is_success else sys.stderr
-    print(result, file=output_stream)
-
-    if not is_success:
+    try:
+        result = asyncio.run(
+            generate_key_themes(bank_name=args.bank, fiscal_year=args.year, quarter=args.quarter)
+        )
+        print(
+            f"✅ Complete: {result.filepath}\n"
+            f"   Theme groups: {result.theme_groups}, "
+            f"Valid Q&A: {result.valid_qa}, Filtered: {result.invalid_qa_filtered}\n"
+            f"   LLM cost: ${result.total_cost:.4f}, Tokens: {result.total_tokens:,}"
+        )
+    except KeyThemesUserError as e:
+        print(f"⚠️ {e}", file=sys.stderr)
+        sys.exit(1)
+    except KeyThemesError as e:
+        print(f"❌ {e}", file=sys.stderr)
         sys.exit(1)
 
 

@@ -1,10 +1,10 @@
-# Category Extraction Prompt - v3.0.0
+# Category Extraction Prompt - v4.0.0
 
 ## Metadata
 - **Model**: aegis
 - **Layer**: call_summary_etl
 - **Name**: category_extraction
-- **Version**: 3.0.0
+- **Version**: 4.0.0
 
 ---
 
@@ -237,12 +237,14 @@ MANDATORY deduplication - violations will be rejected:
 - PROFESSIONAL: Maintain analytical rigor and objectivity
 - SYNTHESIS: Better to have 3-5 insightful statements than 8-10 verbose ones
 - FINANCIAL FORMATTING: All dollar amounts use $ prefix with MM/BN/TN suffixes; all numbers are **bolded**
+- NO ABSENCE STATEMENTS: Never write "X was not discussed" or "no mention of Y". Focus exclusively on what WAS said. Not discussing a topic ≠ the bank doesn't do it. If insufficient content, reject the category.
 </quality_standards>
 
 <response_format>
 Use the provided tool to return structured category content.
 
 IMPORTANT:
+- Start with reasoning: briefly assess what content exists and whether it meets the extraction threshold
 - Only set rejected=true if there's genuinely no relevant content
 - Provide a detailed rejection_reason if rejected
 - For non-rejected categories, ensure title and summary_statements are focused and concise
@@ -275,6 +277,10 @@ Extract content from this transcript section:
     "parameters": {
       "type": "object",
       "properties": {
+        "reasoning": {
+          "type": "string",
+          "description": "Brief chain-of-thought before the extraction decision. What relevant content exists for this category? Does it meet the extraction threshold (2+ substantive statements OR Q&A coverage)? If rejecting, explain why both conditions are met. 1-3 sentences."
+        },
         "rejected": {
           "type": "boolean",
           "description": "True if this category lacks sufficient material content"
@@ -286,13 +292,13 @@ Extract content from this transcript section:
         },
         "title": {
           "type": "string",
-          "maxLength": 100,
-          "description": "Format: 'Category Name: Brief Context' (e.g., 'Expenses: Navigating workforce challenges' or 'Credit Quality: Resilient amid economic uncertainty'). Keep brief for TOC readability (max 60 chars total)"
+          "maxLength": 65,
+          "description": "Format: 'Category Name: Brief Context' (e.g., 'Expenses: Navigating workforce challenges' or 'Credit Quality: Resilient amid uncertainty'). Keep brief for TOC readability."
         },
         "summary_statements": {
           "type": "array",
-          "maxItems": 8,
-          "description": "Key findings - target 3-5 statements (max 7-8 for heavily-discussed topics).\nCRITICAL: Each statement must stay within research plan boundaries for this category.\nStatements outside this category's designated scope will result in rejection.",
+          "maxItems": 7,
+          "description": "Key findings - target 3-5 statements (max 7 only for heavily-discussed topics).\nCRITICAL: Each statement must stay within research plan boundaries for this category.\nStatements outside this category's designated scope will result in rejection.",
           "minItems": 1,
           "items": {
             "type": "object",
@@ -319,7 +325,7 @@ Extract content from this transcript section:
                     },
                     "content": {
                       "type": "string",
-                      "maxLength": 800,
+                      "maxLength": 400,
                       "description": "Concise evidence - 1-2 sentences maximum.\nDirect quotes: Capture the key insight without extensive background.\nParaphrases: Brief summary of the point.\nUse __text__ to underline critical phrases (e.g., \"__unprecedented growth__ in wealth management\")\nApply financial formatting conventions. Use __text__ for key phrases."
                     },
                     "speaker": {
@@ -343,6 +349,7 @@ Extract content from this transcript section:
         }
       },
       "required": [
+        "reasoning",
         "rejected"
       ]
     }
@@ -353,6 +360,19 @@ Extract content from this transcript section:
 ---
 
 ## Changelog
+
+### v3.1.0 (What Changed from v3.0.0)
+
+**Added chain-of-thought reasoning field**: New `reasoning` field in tool definition
+- Placed before `rejected` to force the model to articulate its assessment before the extraction decision
+- Required field — model must briefly assess available content and extraction threshold compliance
+- Improves accuracy on borderline rejection decisions (dual-condition threshold)
+- Makes rejection decisions auditable in logs
+- Updated `<response_format>` to reference reasoning
+
+**Addresses**: PROMPT_SOTA_REVIEW.md A2.1
+
+---
 
 ### v3.0.0 (What Changed from v2.5.0)
 

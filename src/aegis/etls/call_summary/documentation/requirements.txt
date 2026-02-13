@@ -1,5 +1,5 @@
 # Call Summary ETL - Pinned Dependencies
-# Auto-generated on 2025-11-18
+# Updated on 2026-02-13
 
 # Database connectivity
 sqlalchemy==2.0.36
@@ -8,6 +8,9 @@ asyncpg==0.30.0
 # Data processing
 pandas==2.2.3
 openpyxl==3.1.5
+
+# Validation
+pydantic==2.11.7
 
 # Document generation
 python-docx==1.2.0

@@ -4,16 +4,15 @@ import pytest
 
 from aegis.etls.call_summary.main import (
     _sanitize_for_prompt,
-    _normalize_text,
-    _texts_are_similar,
     _build_rejection_result,
     _filter_chunks_for_category,
     _timing_summary,
     format_categories_for_prompt,
-    _dedup_evidence_across_categories,
-    _dedup_statements_within_categories,
-    _dedup_statements_across_categories,
-    _deduplicate_results,
+    _format_categories_for_dedup,
+    _apply_dedup_removals,
+    DeduplicationResponse,
+    DuplicateStatement,
+    DuplicateEvidence,
     _generate_document,
 )
 
@@ -35,63 +34,6 @@ class TestSanitizeForPrompt:
 
     def test_already_escaped(self):
         assert _sanitize_for_prompt("{{x}}") == "{{{{x}}}}"
-
-
-# ---------------------------------------------------------------------------
-# _normalize_text
-# ---------------------------------------------------------------------------
-class TestNormalizeText:
-    """Tests for _normalize_text()."""
-
-    def test_strips_bold_markers(self):
-        assert "revenue" in _normalize_text("**Revenue**")
-
-    def test_strips_underline_markers(self):
-        assert "key phrase" in _normalize_text("__Key Phrase__")
-
-    def test_lowercases(self):
-        result = _normalize_text("UPPER Case")
-        assert result == "upper case"
-
-    def test_collapses_whitespace(self):
-        result = _normalize_text("  lots   of   space  ")
-        assert result == "lots of space"
-
-    def test_combined_normalization(self):
-        result = _normalize_text("  **Revenue**  grew  __strongly__  ")
-        assert result == "revenue grew strongly"
-
-
-# ---------------------------------------------------------------------------
-# _texts_are_similar
-# ---------------------------------------------------------------------------
-class TestTextsAreSimilar:
-    """Tests for _texts_are_similar()."""
-
-    def test_identical_texts(self):
-        assert _texts_are_similar("same text", "same text") is True
-
-    def test_completely_different(self):
-        assert _texts_are_similar("abc", "xyz 123 456 789") is False
-
-    def test_similar_with_bold_markers(self):
-        assert (
-            _texts_are_similar(
-                "Revenue grew **5%** to **$5.2 BN**",
-                "Revenue grew 5% to $5.2 BN",
-            )
-            is True
-        )
-
-    def test_below_threshold(self):
-        assert _texts_are_similar("short text", "completely different long text here") is False
-
-    def test_minor_wording_difference(self):
-        text_a = "Net interest income rose 5% quarter over quarter to $5.2 billion"
-        text_b = "Net interest income increased 5% QoQ to $5.2 billion"
-        # These are somewhat similar but may or may not pass threshold
-        result = _texts_are_similar(text_a, text_b)
-        assert isinstance(result, bool)
 
 
 # ---------------------------------------------------------------------------
@@ -243,20 +185,119 @@ class TestFormatCategoriesForPrompt:
 
 
 # ---------------------------------------------------------------------------
-# Deduplication functions
+# _format_categories_for_dedup
 # ---------------------------------------------------------------------------
-class TestDeduplication:
-    """Tests for deduplication functions."""
+class TestFormatCategoriesForDedup:
+    """Tests for _format_categories_for_dedup()."""
 
-    def test_evidence_dedup_removes_duplicates(self):
+    def test_basic_formatting(self):
+        results = [
+            {
+                "name": "Revenue",
+                "summary_statements": [
+                    {
+                        "statement": "Revenue grew 5%.",
+                        "evidence": [{"content": "Strong growth this quarter."}],
+                    }
+                ],
+            },
+        ]
+        output = _format_categories_for_dedup(results)
+        assert 'category index="0"' in output
+        assert 'statement index="0"' in output
+        assert 'evidence index="0"' in output
+        assert "Revenue grew 5%." in output
+
+    def test_skips_rejected(self):
+        results = [
+            {"name": "Cat1", "rejected": True, "rejection_reason": "no data"},
+            {
+                "name": "Cat2",
+                "summary_statements": [{"statement": "S1", "evidence": []}],
+            },
+        ]
+        output = _format_categories_for_dedup(results)
+        assert "Cat1" not in output
+        assert "Cat2" in output
+
+    def test_empty_results(self):
+        output = _format_categories_for_dedup([])
+        assert output == ""
+
+    def test_multiple_categories_and_indices(self):
+        results = [
+            {
+                "name": "Cat1",
+                "summary_statements": [
+                    {"statement": "S1", "evidence": [{"content": "E1"}, {"content": "E2"}]},
+                    {"statement": "S2", "evidence": []},
+                ],
+            },
+            {
+                "name": "Cat2",
+                "summary_statements": [
+                    {"statement": "S3", "evidence": [{"content": "E3"}]},
+                ],
+            },
+        ]
+        output = _format_categories_for_dedup(results)
+        assert 'category index="0"' in output
+        assert 'category index="1"' in output
+        assert 'statement index="0"' in output
+        assert 'statement index="1"' in output
+        assert 'evidence index="0"' in output
+        assert 'evidence index="1"' in output
+
+
+# ---------------------------------------------------------------------------
+# _apply_dedup_removals
+# ---------------------------------------------------------------------------
+class TestApplyDedupRemovals:
+    """Tests for _apply_dedup_removals()."""
+
+    def test_removes_duplicate_statement(self):
+        results = [
+            {
+                "name": "Cat1",
+                "summary_statements": [
+                    {"statement": "Revenue grew 5%.", "evidence": []},
+                ],
+            },
+            {
+                "name": "Cat2",
+                "summary_statements": [
+                    {"statement": "Revenue increased 5%.", "evidence": []},
+                    {"statement": "Credit improved.", "evidence": []},
+                ],
+            },
+        ]
+        dedup = DeduplicationResponse(
+            analysis_notes="Found duplicate",
+            duplicate_statements=[
+                DuplicateStatement(
+                    category_index=1,
+                    statement_index=0,
+                    duplicate_of_category_index=0,
+                    duplicate_of_statement_index=0,
+                    reasoning="Same revenue insight",
+                )
+            ],
+        )
+        stmts_removed, ev_removed = _apply_dedup_removals(results, dedup, "test-id")
+        assert stmts_removed == 1
+        assert ev_removed == 0
+        assert len(results[1]["summary_statements"]) == 1
+        assert "Credit" in results[1]["summary_statements"][0]["statement"]
+
+    def test_removes_duplicate_evidence(self):
         results = [
             {
                 "name": "Cat1",
                 "summary_statements": [
                     {
                         "statement": "S1",
-                        "evidence": [{"content": "Revenue grew 5% this quarter."}],
-                    }
+                        "evidence": [{"content": "CFO said revenue grew."}],
+                    },
                 ],
             },
             {
@@ -264,194 +305,163 @@ class TestDeduplication:
                 "summary_statements": [
                     {
                         "statement": "S2",
-                        "evidence": [{"content": "Revenue grew 5% this quarter."}],
-                    }
-                ],
-            },
-        ]
-        removed = _dedup_evidence_across_categories(results, "test-id")
-        assert removed == 1
-        assert len(results[0]["summary_statements"][0]["evidence"]) == 1
-        assert len(results[1]["summary_statements"][0]["evidence"]) == 0
-
-    def test_evidence_dedup_keeps_different(self):
-        results = [
-            {
-                "name": "Cat1",
-                "summary_statements": [
-                    {"statement": "S1", "evidence": [{"content": "Revenue grew 5%."}]},
-                ],
-            },
-            {
-                "name": "Cat2",
-                "summary_statements": [
-                    {"statement": "S2", "evidence": [{"content": "Credit losses declined."}]},
-                ],
-            },
-        ]
-        removed = _dedup_evidence_across_categories(results, "test-id")
-        assert removed == 0
-
-    def test_evidence_dedup_skips_rejected(self):
-        results = [
-            {"name": "Cat1", "rejected": True, "rejection_reason": "no data"},
-            {
-                "name": "Cat2",
-                "summary_statements": [
-                    {"statement": "S1", "evidence": [{"content": "text"}]},
-                ],
-            },
-        ]
-        removed = _dedup_evidence_across_categories(results, "test-id")
-        assert removed == 0
-
-    def test_statement_dedup_within_category(self):
-        results = [
-            {
-                "name": "Cat1",
-                "summary_statements": [
-                    {"statement": "Revenue grew 5% this quarter to $5.2 BN."},
-                    {"statement": "Revenue grew 5% this quarter to $5.2 BN."},
-                    {"statement": "A totally different statement about credit."},
-                ],
-            }
-        ]
-        removed = _dedup_statements_within_categories(results, "test-id")
-        assert removed == 1
-        assert len(results[0]["summary_statements"]) == 2
-
-    def test_statement_dedup_skips_rejected(self):
-        results = [{"name": "Cat1", "rejected": True}]
-        removed = _dedup_statements_within_categories(results, "test-id")
-        assert removed == 0
-
-    def test_deduplicate_results_combined(self):
-        results = [
-            {
-                "name": "Cat1",
-                "summary_statements": [
-                    {
-                        "statement": "Revenue grew strongly.",
-                        "evidence": [{"content": "Same evidence text here."}],
-                    },
-                    {
-                        "statement": "Revenue grew strongly.",
-                        "evidence": [{"content": "Different evidence."}],
-                    },
-                ],
-            },
-            {
-                "name": "Cat2",
-                "summary_statements": [
-                    {
-                        "statement": "Credit improved.",
-                        "evidence": [{"content": "Same evidence text here."}],
+                        "evidence": [
+                            {"content": "CFO said revenue grew."},
+                            {"content": "Unique evidence."},
+                        ],
                     },
                 ],
             },
         ]
-        result = _deduplicate_results(results, "test-id")
-        # Statement dedup should remove 1 duplicate in Cat1
-        assert len(result[0]["summary_statements"]) == 1
-        # Evidence dedup should remove duplicate in Cat2
-        assert len(result[1]["summary_statements"][0]["evidence"]) == 0
+        dedup = DeduplicationResponse(
+            analysis_notes="Duplicate evidence",
+            duplicate_evidence=[
+                DuplicateEvidence(
+                    category_index=1,
+                    statement_index=0,
+                    evidence_index=0,
+                    duplicate_of_category_index=0,
+                    duplicate_of_statement_index=0,
+                    duplicate_of_evidence_index=0,
+                    reasoning="Same CFO quote",
+                )
+            ],
+        )
+        stmts_removed, ev_removed = _apply_dedup_removals(results, dedup, "test-id")
+        assert stmts_removed == 0
+        assert ev_removed == 1
+        assert len(results[1]["summary_statements"][0]["evidence"]) == 1
+        assert "Unique" in results[1]["summary_statements"][0]["evidence"][0]["content"]
 
-    def test_deduplicate_empty_evidence_kept(self):
+    def test_no_duplicates_returns_zeros(self):
         results = [
             {
                 "name": "Cat1",
-                "summary_statements": [
-                    {"statement": "S1", "evidence": [{"content": ""}]},
-                ],
+                "summary_statements": [{"statement": "S1", "evidence": []}],
             },
         ]
-        removed = _dedup_evidence_across_categories(results, "test-id")
-        assert removed == 0
-        assert len(results[0]["summary_statements"][0]["evidence"]) == 1
+        dedup = DeduplicationResponse(analysis_notes="No duplicates found")
+        stmts_removed, ev_removed = _apply_dedup_removals(results, dedup, "test-id")
+        assert stmts_removed == 0
+        assert ev_removed == 0
 
-    def test_deduplicate_no_evidence_key(self):
+    def test_invalid_category_index_skipped(self):
         results = [
             {
                 "name": "Cat1",
-                "summary_statements": [
-                    {"statement": "S1"},
-                ],
+                "summary_statements": [{"statement": "S1", "evidence": []}],
             },
         ]
-        removed = _dedup_evidence_across_categories(results, "test-id")
-        assert removed == 0
-
-
-# ---------------------------------------------------------------------------
-# _dedup_statements_across_categories (B2.1)
-# ---------------------------------------------------------------------------
-class TestDeduplicateStatementsAcrossCategories:
-    """Tests for _dedup_statements_across_categories()."""
-
-    def test_removes_duplicate_across_categories(self):
-        results = [
-            {
-                "name": "Cat1",
-                "summary_statements": [
-                    {"statement": "Revenue grew 5% this quarter to $5.2 BN."},
-                ],
-            },
-            {
-                "name": "Cat2",
-                "summary_statements": [
-                    {"statement": "Revenue grew 5% this quarter to $5.2 BN."},
-                    {"statement": "Credit losses declined significantly."},
-                ],
-            },
-        ]
-        removed = _dedup_statements_across_categories(results, "test-id")
-        assert removed == 1
-        # Cat1 keeps its statement, Cat2 loses the duplicate
+        dedup = DeduplicationResponse(
+            duplicate_statements=[
+                DuplicateStatement(
+                    category_index=99,
+                    statement_index=0,
+                    duplicate_of_category_index=0,
+                    duplicate_of_statement_index=0,
+                )
+            ],
+        )
+        stmts_removed, ev_removed = _apply_dedup_removals(results, dedup, "test-id")
+        assert stmts_removed == 0
         assert len(results[0]["summary_statements"]) == 1
-        assert len(results[1]["summary_statements"]) == 1
-        assert "Credit" in results[1]["summary_statements"][0]["statement"]
 
-    def test_keeps_different_statements(self):
+    def test_invalid_statement_index_skipped(self):
+        results = [
+            {
+                "name": "Cat1",
+                "summary_statements": [{"statement": "S1", "evidence": []}],
+            },
+        ]
+        dedup = DeduplicationResponse(
+            duplicate_statements=[
+                DuplicateStatement(
+                    category_index=0,
+                    statement_index=99,
+                    duplicate_of_category_index=0,
+                    duplicate_of_statement_index=0,
+                )
+            ],
+        )
+        stmts_removed, ev_removed = _apply_dedup_removals(results, dedup, "test-id")
+        assert stmts_removed == 0
+
+    def test_invalid_evidence_index_skipped(self):
         results = [
             {
                 "name": "Cat1",
                 "summary_statements": [
-                    {"statement": "Revenue grew strongly this quarter."},
-                ],
-            },
-            {
-                "name": "Cat2",
-                "summary_statements": [
-                    {"statement": "Credit losses declined significantly."},
+                    {"statement": "S1", "evidence": [{"content": "E1"}]},
                 ],
             },
         ]
-        removed = _dedup_statements_across_categories(results, "test-id")
-        assert removed == 0
+        dedup = DeduplicationResponse(
+            duplicate_evidence=[
+                DuplicateEvidence(
+                    category_index=0,
+                    statement_index=0,
+                    evidence_index=99,
+                    duplicate_of_category_index=0,
+                    duplicate_of_statement_index=0,
+                    duplicate_of_evidence_index=0,
+                )
+            ],
+        )
+        stmts_removed, ev_removed = _apply_dedup_removals(results, dedup, "test-id")
+        assert ev_removed == 0
+        assert len(results[0]["summary_statements"][0]["evidence"]) == 1
 
     def test_skips_rejected_categories(self):
         results = [
-            {"name": "Cat1", "rejected": True},
-            {
-                "name": "Cat2",
-                "summary_statements": [
-                    {"statement": "Revenue grew strongly."},
-                ],
-            },
+            {"name": "Cat1", "rejected": True, "rejection_reason": "no data"},
         ]
-        removed = _dedup_statements_across_categories(results, "test-id")
-        assert removed == 0
+        dedup = DeduplicationResponse(
+            duplicate_statements=[
+                DuplicateStatement(
+                    category_index=0,
+                    statement_index=0,
+                    duplicate_of_category_index=0,
+                    duplicate_of_statement_index=0,
+                )
+            ],
+        )
+        stmts_removed, ev_removed = _apply_dedup_removals(results, dedup, "test-id")
+        assert stmts_removed == 0
 
-    def test_empty_statement_kept(self):
+    def test_reverse_order_removal_correctness(self):
+        """Verify that removing multiple items from same category works correctly."""
         results = [
             {
                 "name": "Cat1",
-                "summary_statements": [{"statement": ""}],
+                "summary_statements": [
+                    {"statement": "Keep this.", "evidence": []},
+                    {"statement": "Remove this.", "evidence": []},
+                    {"statement": "Also remove.", "evidence": []},
+                    {"statement": "Keep this too.", "evidence": []},
+                ],
             },
         ]
-        removed = _dedup_statements_across_categories(results, "test-id")
-        assert removed == 0
-        assert len(results[0]["summary_statements"]) == 1
+        dedup = DeduplicationResponse(
+            duplicate_statements=[
+                DuplicateStatement(
+                    category_index=0,
+                    statement_index=1,
+                    duplicate_of_category_index=0,
+                    duplicate_of_statement_index=0,
+                ),
+                DuplicateStatement(
+                    category_index=0,
+                    statement_index=2,
+                    duplicate_of_category_index=0,
+                    duplicate_of_statement_index=0,
+                ),
+            ],
+        )
+        stmts_removed, _ = _apply_dedup_removals(results, dedup, "test-id")
+        assert stmts_removed == 2
+        assert len(results[0]["summary_statements"]) == 2
+        assert results[0]["summary_statements"][0]["statement"] == "Keep this."
+        assert results[0]["summary_statements"][1]["statement"] == "Keep this too."
 
 
 # ---------------------------------------------------------------------------

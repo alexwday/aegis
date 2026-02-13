@@ -18,7 +18,6 @@ import os
 import sys
 from dataclasses import dataclass
 from datetime import datetime
-from difflib import SequenceMatcher
 from functools import lru_cache
 from itertools import groupby
 from typing import Dict, Any, List, Optional
@@ -75,9 +74,6 @@ LOG_SNIPPET_LENGTH = 80
 # --- Concurrency Configuration ---
 MAX_CONCURRENT_EXTRACTIONS = 5
 
-# --- Deduplication Configuration ---
-SIMILARITY_THRESHOLD = 0.75
-
 
 # --- ETL Exception Hierarchy ---
 
@@ -101,6 +97,8 @@ class CallSummaryResult:
     filepath: str
     total_categories: int
     included_categories: int
+    total_cost: float = 0.0
+    total_tokens: int = 0
 
 
 class ETLConfig:
@@ -197,13 +195,6 @@ class ETLConfig:
         """Get the maximum delay in seconds for retry backoff."""
         return self._config.get("retry", {}).get("max_delay", RETRY_MAX_DELAY)
 
-    @property
-    def similarity_threshold(self) -> float:
-        """Get the similarity threshold for deduplication."""
-        return self._config.get("deduplication", {}).get(
-            "similarity_threshold", SIMILARITY_THRESHOLD
-        )
-
 
 etl_config = ETLConfig(os.path.join(os.path.dirname(__file__), "config", "config.yaml"))
 
@@ -245,10 +236,41 @@ class SummaryStatement(BaseModel):
 class CategoryExtractionResponse(BaseModel):
     """Category extraction response from the LLM."""
 
+    reasoning: Optional[str] = None
     rejected: bool
     rejection_reason: Optional[str] = None
     title: Optional[str] = None
     summary_statements: List[SummaryStatement] = Field(default_factory=list)
+
+
+class DuplicateStatement(BaseModel):
+    """A statement removal instruction from the LLM dedup pass."""
+
+    category_index: int
+    statement_index: int
+    duplicate_of_category_index: int
+    duplicate_of_statement_index: int
+    reasoning: str = ""
+
+
+class DuplicateEvidence(BaseModel):
+    """An evidence removal instruction from the LLM dedup pass."""
+
+    category_index: int
+    statement_index: int
+    evidence_index: int
+    duplicate_of_category_index: int
+    duplicate_of_statement_index: int
+    duplicate_of_evidence_index: int
+    reasoning: str = ""
+
+
+class DeduplicationResponse(BaseModel):
+    """Deduplication response from the LLM."""
+
+    analysis_notes: str = ""
+    duplicate_statements: List[DuplicateStatement] = Field(default_factory=list)
+    duplicate_evidence: List[DuplicateEvidence] = Field(default_factory=list)
 
 
 @lru_cache(maxsize=1)
@@ -285,6 +307,48 @@ def _sanitize_for_prompt(text: str) -> str:
         Text with { and } escaped as {{ and }}
     """
     return text.replace("{", "{{").replace("}", "}}")
+
+
+def _accumulate_llm_cost(context: Dict[str, Any], metrics: Dict[str, Any]) -> None:
+    """
+    Accumulate LLM cost and token usage from a response's metrics dict.
+
+    Appends to context["_llm_costs"] list for later aggregation.
+    Safe for asyncio concurrency (single-threaded event loop).
+
+    Args:
+        context: Execution context with _llm_costs list
+        metrics: Response metrics dict with prompt_tokens, completion_tokens, total_cost
+    """
+    if "_llm_costs" not in context:
+        context["_llm_costs"] = []
+    context["_llm_costs"].append(
+        {
+            "prompt_tokens": metrics.get("prompt_tokens", 0),
+            "completion_tokens": metrics.get("completion_tokens", 0),
+            "total_cost": metrics.get("total_cost", 0),
+        }
+    )
+
+
+def _get_total_llm_cost(context: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Aggregate all accumulated LLM costs from context.
+
+    Returns:
+        Dict with total_cost, total_prompt_tokens, total_completion_tokens, total_tokens
+    """
+    costs = context.get("_llm_costs", [])
+    total_cost = sum(c.get("total_cost", 0) for c in costs)
+    prompt_tokens = sum(c.get("prompt_tokens", 0) for c in costs)
+    completion_tokens = sum(c.get("completion_tokens", 0) for c in costs)
+    return {
+        "total_cost": round(total_cost, 4),
+        "total_prompt_tokens": prompt_tokens,
+        "total_completion_tokens": completion_tokens,
+        "total_tokens": prompt_tokens + completion_tokens,
+        "llm_calls": len(costs),
+    }
 
 
 def format_categories_for_prompt(categories: List[Dict[str, Any]]) -> str:
@@ -506,7 +570,7 @@ async def verify_and_get_availability(
         quarter: Quarter (e.g., "Q3")
 
     Raises:
-        ValueError: If transcript data not available
+        ValueError: If transcript data not available (includes available periods)
     """
     async with get_connection() as conn:
         result = await conn.execute(
@@ -526,7 +590,30 @@ async def verify_and_get_availability(
         if row and row[0] and "transcripts" in row[0]:
             return
 
-        raise ValueError(f"No transcript data available for {bank_name} {quarter} {fiscal_year}")
+        # Query available transcript periods for this bank to provide helpful context
+        available_result = await conn.execute(
+            text(
+                """
+                SELECT fiscal_year, quarter
+                FROM aegis_data_availability
+                WHERE bank_id = :bank_id
+                  AND 'transcripts' = ANY(database_names)
+                ORDER BY fiscal_year DESC, quarter DESC
+                """
+            ),
+            {"bank_id": bank_id},
+        )
+        available_periods = [f"{r[1]} {r[0]}" for r in available_result.fetchall()]
+
+        if available_periods:
+            raise ValueError(
+                f"No transcript data available for {bank_name} {quarter} {fiscal_year}. "
+                f"Available periods: {', '.join(available_periods)}"
+            )
+        raise ValueError(
+            f"No transcript data available for {bank_name} {quarter} {fiscal_year}. "
+            f"No transcript data found for this bank in any period."
+        )
 
 
 async def _generate_research_plan(
@@ -563,6 +650,7 @@ async def _generate_research_plan(
             research_plan_data = validated.model_dump()
 
             metrics = response.get("metrics", {})
+            _accumulate_llm_cost(context, metrics)
             logger.info(
                 "etl.call_summary.llm_usage",
                 execution_id=execution_id,
@@ -581,8 +669,8 @@ async def _generate_research_plan(
             return research_plan_data
 
         except (KeyError, IndexError, json.JSONDecodeError, TypeError, ValidationError) as e:
-            logger.error(
-                "etl.call_summary.research_plan_error",
+            logger.warning(
+                "etl.call_summary.research_plan_parse_error",
                 execution_id=execution_id,
                 error=str(e),
                 attempt=attempt + 1,
@@ -634,219 +722,262 @@ def _build_rejection_result(index: int, category: dict, reason: str) -> dict:
     }
 
 
-def _normalize_text(raw_text: str) -> str:
+def _format_categories_for_dedup(category_results: list) -> str:
     """
-    Normalize text for similarity comparison.
-
-    Strips markdown bold/underline markers, lowercases, and collapses whitespace.
-
-    Args:
-        raw_text: Raw text string
-
-    Returns:
-        Normalized lowercase text with collapsed whitespace
-    """
-    # Remove **bold** and __underline__ markers
-    normalized = re.sub(r"\*\*(.+?)\*\*", r"\1", raw_text)
-    normalized = re.sub(r"__(.+?)__", r"\1", normalized)
-    # Lowercase and collapse whitespace
-    normalized = normalized.lower()
-    normalized = re.sub(r"\s+", " ", normalized).strip()
-    return normalized
-
-
-def _texts_are_similar(text_a: str, text_b: str) -> bool:
-    """
-    Check if two texts are similar using SequenceMatcher.
-
-    Args:
-        text_a: First text
-        text_b: Second text
-
-    Returns:
-        True if normalized similarity ratio >= configured similarity threshold
-    """
-    norm_a = _normalize_text(text_a)
-    norm_b = _normalize_text(text_b)
-    return SequenceMatcher(None, norm_a, norm_b).ratio() >= etl_config.similarity_threshold
-
-
-def _dedup_evidence_across_categories(category_results: list, execution_id: str) -> int:
-    """
-    Remove duplicate evidence across categories (first occurrence wins).
-
-    Args:
-        category_results: List of category result dicts (modified in-place)
-        execution_id: Execution ID for logging
-
-    Returns:
-        Number of evidence items removed
-    """
-    seen_evidence = []  # List of (category_name, evidence_content) tuples
-    removed_count = 0
-
-    for result in category_results:
-        if result.get("rejected", False) or "summary_statements" not in result:
-            continue
-
-        for stmt in result["summary_statements"]:
-            if not stmt.get("evidence"):
-                continue
-
-            filtered = []
-            for ev in stmt["evidence"]:
-                content = ev.get("content", "")
-                if not content:
-                    filtered.append(ev)
-                    continue
-
-                match = next(
-                    (cat for cat, seen in seen_evidence if _texts_are_similar(content, seen)),
-                    None,
-                )
-                if match:
-                    logger.debug(
-                        "etl.call_summary.dedup.evidence_removed",
-                        execution_id=execution_id,
-                        category=result["name"],
-                        duplicate_of_category=match,
-                        snippet=content[:LOG_SNIPPET_LENGTH],
-                    )
-                    removed_count += 1
-                else:
-                    seen_evidence.append((result["name"], content))
-                    filtered.append(ev)
-
-            stmt["evidence"] = filtered
-
-    return removed_count
-
-
-def _dedup_statements_within_categories(category_results: list, execution_id: str) -> int:
-    """
-    Remove duplicate statements within each category.
-
-    Args:
-        category_results: List of category result dicts (modified in-place)
-        execution_id: Execution ID for logging
-
-    Returns:
-        Number of statements removed
-    """
-    removed_count = 0
-
-    for result in category_results:
-        if result.get("rejected", False) or "summary_statements" not in result:
-            continue
-
-        unique = []
-        for stmt in result["summary_statements"]:
-            stmt_text = stmt.get("statement", "")
-            if not stmt_text:
-                unique.append(stmt)
-                continue
-
-            match = next(
-                (True for ex in unique if _texts_are_similar(stmt_text, ex.get("statement", ""))),
-                False,
-            )
-            if match:
-                logger.debug(
-                    "etl.call_summary.dedup.statement_removed",
-                    execution_id=execution_id,
-                    category=result["name"],
-                    statement=stmt_text[:LOG_SNIPPET_LENGTH],
-                )
-                removed_count += 1
-            else:
-                unique.append(stmt)
-
-        result["summary_statements"] = unique
-
-    return removed_count
-
-
-def _dedup_statements_across_categories(category_results: list, execution_id: str) -> int:
-    """
-    Remove duplicate statements across different categories (first occurrence wins).
-
-    Args:
-        category_results: List of category result dicts (modified in-place)
-        execution_id: Execution ID for logging
-
-    Returns:
-        Number of statements removed
-    """
-    seen_statements = []  # List of (category_name, statement_text) tuples
-    removed_count = 0
-
-    for result in category_results:
-        if result.get("rejected", False) or "summary_statements" not in result:
-            continue
-
-        unique = []
-        for stmt in result["summary_statements"]:
-            stmt_text = stmt.get("statement", "")
-            if not stmt_text:
-                unique.append(stmt)
-                continue
-
-            match = next(
-                (cat for cat, seen in seen_statements if _texts_are_similar(stmt_text, seen)),
-                None,
-            )
-            if match:
-                logger.debug(
-                    "etl.call_summary.dedup.cross_category_statement_removed",
-                    execution_id=execution_id,
-                    category=result["name"],
-                    duplicate_of_category=match,
-                    statement=stmt_text[:LOG_SNIPPET_LENGTH],
-                )
-                removed_count += 1
-            else:
-                seen_statements.append((result["name"], stmt_text))
-                unique.append(stmt)
-
-        result["summary_statements"] = unique
-
-    return removed_count
-
-
-def _deduplicate_results(category_results: list, execution_id: str) -> list:
-    """
-    Post-extraction deduplication of evidence and statements.
-
-    Three-pass dedup:
-    1. Cross-category evidence dedup: Remove evidence items that are >75% similar
-       to previously-seen evidence in earlier categories (first occurrence wins).
-    2. Within-category statement dedup: Remove later statements within the same
-       category that are >75% similar to earlier statements.
-    3. Cross-category statement dedup: Remove statements that are >75% similar
-       to previously-seen statements in earlier categories (first occurrence wins).
+    Format non-rejected category results as XML with explicit indices for dedup prompt.
 
     Args:
         category_results: List of category result dicts from extraction
+
+    Returns:
+        XML string with category/statement/evidence indices for LLM consumption
+    """
+    parts = []
+    for cat_idx, result in enumerate(category_results):
+        if result.get("rejected", False) or "summary_statements" not in result:
+            continue
+
+        cat_lines = [f'<category index="{cat_idx}" name="{_sanitize_for_prompt(result["name"])}">']
+
+        for stmt_idx, stmt in enumerate(result.get("summary_statements", [])):
+            stmt_text = _sanitize_for_prompt(stmt.get("statement", ""))
+            cat_lines.append(f'  <statement index="{stmt_idx}">{stmt_text}</statement>')
+
+            for ev_idx, ev in enumerate(stmt.get("evidence", [])):
+                ev_content = _sanitize_for_prompt(ev.get("content", ""))
+                cat_lines.append(f'    <evidence index="{ev_idx}">{ev_content}</evidence>')
+
+        cat_lines.append("</category>")
+        parts.append("\n".join(cat_lines))
+
+    return "\n\n".join(parts)
+
+
+def _apply_dedup_removals(
+    category_results: list, dedup_response: DeduplicationResponse, execution_id: str
+) -> tuple:
+    """
+    Apply validated removal instructions from the LLM dedup response.
+
+    Processes removals in reverse index order to prevent index shift corruption.
+    Validates all indices before removal and skips invalid ones.
+
+    Args:
+        category_results: List of category result dicts (modified in-place)
+        dedup_response: Validated deduplication response from LLM
         execution_id: Execution ID for logging
 
     Returns:
-        Modified category_results with duplicates removed
+        Tuple of (statements_removed, evidence_removed) counts
     """
-    evidence_removed = _dedup_evidence_across_categories(category_results, execution_id)
-    statements_within_removed = _dedup_statements_within_categories(category_results, execution_id)
-    statements_across_removed = _dedup_statements_across_categories(category_results, execution_id)
+    statements_removed = 0
+    evidence_removed = 0
 
-    total_statements_removed = statements_within_removed + statements_across_removed
-    if evidence_removed > 0 or total_statements_removed > 0:
-        logger.info(
-            "etl.call_summary.dedup.summary",
+    # --- Remove duplicate evidence (reverse order to avoid index shift) ---
+    sorted_evidence = sorted(
+        dedup_response.duplicate_evidence,
+        key=lambda e: (e.category_index, e.statement_index, e.evidence_index),
+        reverse=True,
+    )
+    for ev in sorted_evidence:
+        # Validate indices
+        if ev.category_index < 0 or ev.category_index >= len(category_results):
+            logger.debug(
+                "etl.call_summary.dedup.invalid_category_index",
+                execution_id=execution_id,
+                category_index=ev.category_index,
+            )
+            continue
+
+        result = category_results[ev.category_index]
+        if result.get("rejected", False) or "summary_statements" not in result:
+            continue
+
+        stmts = result["summary_statements"]
+        if ev.statement_index < 0 or ev.statement_index >= len(stmts):
+            logger.debug(
+                "etl.call_summary.dedup.invalid_statement_index",
+                execution_id=execution_id,
+                statement_index=ev.statement_index,
+            )
+            continue
+
+        evidence_list = stmts[ev.statement_index].get("evidence", [])
+        if ev.evidence_index < 0 or ev.evidence_index >= len(evidence_list):
+            logger.debug(
+                "etl.call_summary.dedup.invalid_evidence_index",
+                execution_id=execution_id,
+                evidence_index=ev.evidence_index,
+            )
+            continue
+
+        removed_ev = evidence_list.pop(ev.evidence_index)
+        evidence_removed += 1
+        logger.debug(
+            "etl.call_summary.dedup.evidence_removed",
             execution_id=execution_id,
-            evidence_removed=evidence_removed,
-            statements_within_removed=statements_within_removed,
-            statements_across_removed=statements_across_removed,
+            category=result["name"],
+            snippet=removed_ev.get("content", "")[:LOG_SNIPPET_LENGTH],
+            reasoning=ev.reasoning,
         )
 
-    return category_results
+    # --- Remove duplicate statements (reverse order to avoid index shift) ---
+    sorted_statements = sorted(
+        dedup_response.duplicate_statements,
+        key=lambda s: (s.category_index, s.statement_index),
+        reverse=True,
+    )
+    for stmt in sorted_statements:
+        if stmt.category_index < 0 or stmt.category_index >= len(category_results):
+            logger.debug(
+                "etl.call_summary.dedup.invalid_category_index",
+                execution_id=execution_id,
+                category_index=stmt.category_index,
+            )
+            continue
+
+        result = category_results[stmt.category_index]
+        if result.get("rejected", False) or "summary_statements" not in result:
+            continue
+
+        stmts = result["summary_statements"]
+        if stmt.statement_index < 0 or stmt.statement_index >= len(stmts):
+            logger.debug(
+                "etl.call_summary.dedup.invalid_statement_index",
+                execution_id=execution_id,
+                statement_index=stmt.statement_index,
+            )
+            continue
+
+        removed_stmt = stmts.pop(stmt.statement_index)
+        statements_removed += 1
+        logger.debug(
+            "etl.call_summary.dedup.statement_removed",
+            execution_id=execution_id,
+            category=result["name"],
+            statement=removed_stmt.get("statement", "")[:LOG_SNIPPET_LENGTH],
+            reasoning=stmt.reasoning,
+        )
+
+    return statements_removed, evidence_removed
+
+
+async def _deduplicate_results_llm(
+    category_results: list, dedup_prompts: dict, context: dict, execution_id: str
+) -> list:
+    """
+    LLM-based post-extraction deduplication of statements and evidence.
+
+    Sends all non-rejected category results to an LLM to identify semantic duplicates
+    (same insight expressed differently) across categories. On failure, returns results
+    unchanged with a warning log.
+
+    Args:
+        category_results: List of category result dicts from extraction
+        dedup_prompts: Loaded prompt dict with system_prompt, user_prompt, tool_definition
+        context: Auth/SSL context dict
+        execution_id: Execution ID for logging
+
+    Returns:
+        Modified category_results with LLM-identified duplicates removed
+    """
+    # Skip if fewer than 2 non-rejected categories
+    non_rejected = [r for r in category_results if not r.get("rejected", False)]
+    if len(non_rejected) < 2:
+        logger.info(
+            "etl.call_summary.dedup.skipped",
+            execution_id=execution_id,
+            reason="fewer than 2 non-rejected categories",
+        )
+        return category_results
+
+    formatted_categories = _format_categories_for_dedup(category_results)
+
+    system_prompt = dedup_prompts["system_prompt"]
+    user_prompt = dedup_prompts["user_prompt"].format(
+        categories_xml=_sanitize_for_prompt(formatted_categories)
+    )
+
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_prompt},
+    ]
+
+    max_retries = etl_config.max_retries
+    for attempt in range(max_retries):
+        try:
+            response = await complete_with_tools(
+                messages=messages,
+                tools=[dedup_prompts["tool_definition"]],
+                context=context,
+                llm_params={
+                    "model": etl_config.get_model("deduplication"),
+                    "temperature": etl_config.temperature,
+                    "max_tokens": etl_config.get_max_tokens("deduplication"),
+                },
+            )
+
+            tool_call = response["choices"][0]["message"]["tool_calls"][0]
+            raw_data = json.loads(tool_call["function"]["arguments"])
+            dedup_response = DeduplicationResponse.model_validate(raw_data)
+
+            metrics = response.get("metrics", {})
+            _accumulate_llm_cost(context, metrics)
+            logger.info(
+                "etl.call_summary.llm_usage",
+                execution_id=execution_id,
+                stage="deduplication",
+                prompt_tokens=metrics.get("prompt_tokens", 0),
+                completion_tokens=metrics.get("completion_tokens", 0),
+                total_cost=metrics.get("total_cost", 0),
+                response_time=metrics.get("response_time", 0),
+            )
+
+            statements_removed, evidence_removed = _apply_dedup_removals(
+                category_results, dedup_response, execution_id
+            )
+
+            if statements_removed > 0 or evidence_removed > 0:
+                logger.info(
+                    "etl.call_summary.dedup.summary",
+                    execution_id=execution_id,
+                    statements_removed=statements_removed,
+                    evidence_removed=evidence_removed,
+                )
+
+            return category_results
+
+        except (KeyError, IndexError, json.JSONDecodeError, TypeError, ValidationError) as e:
+            logger.warning(
+                "etl.call_summary.dedup_parse_error",
+                execution_id=execution_id,
+                error=str(e),
+                attempt=attempt + 1,
+            )
+            if attempt < max_retries - 1:
+                continue
+            raise RuntimeError(
+                f"Deduplication failed after {max_retries} attempts: {str(e)}"
+            ) from e
+        except Exception as e:  # Transport/LLM failures
+            logger.error(
+                "etl.call_summary.dedup_error",
+                execution_id=execution_id,
+                error=str(e),
+                attempt=attempt + 1,
+            )
+            if attempt < max_retries - 1:
+                delay = min(
+                    etl_config.retry_base_delay * (2**attempt), etl_config.retry_max_delay
+                )
+                delay += random.uniform(0, 0.5 * delay)
+                await asyncio.sleep(delay)
+                continue
+            raise RuntimeError(
+                f"Deduplication failed after {max_retries} attempts: {str(e)}"
+            ) from e
+
+    raise RuntimeError(f"Deduplication failed after {max_retries} attempts")
 
 
 def _filter_chunks_for_category(
@@ -1044,6 +1175,7 @@ async def _extract_single_category(  # noqa: E501  pylint: disable=too-many-argu
                     extracted_data["title"] = category["category_name"]
 
                 metrics = response.get("metrics", {})
+                _accumulate_llm_cost(context, metrics)
                 logger.info(
                     "etl.call_summary.llm_usage",
                     execution_id=execution_id,
@@ -1066,8 +1198,8 @@ async def _extract_single_category(  # noqa: E501  pylint: disable=too-many-argu
             except (
                 KeyError, IndexError, json.JSONDecodeError, TypeError, ValidationError
             ) as e:
-                logger.error(
-                    "etl.call_summary.category_extraction_error",
+                logger.warning(
+                    "etl.call_summary.category_extraction_parse_error",
                     execution_id=execution_id,
                     category_name=category["category_name"],
                     error=str(e),
@@ -1076,9 +1208,10 @@ async def _extract_single_category(  # noqa: E501  pylint: disable=too-many-argu
 
                 if attempt < max_retries - 1:
                     continue
-                return _build_rejection_result(
-                    index, category, f"Error after {max_retries} attempts: {str(e)}"
-                )
+                raise RuntimeError(
+                    f"Category extraction failed for '{category['category_name']}' "
+                    f"after {max_retries} attempts: {str(e)}"
+                ) from e
             except Exception as e:
                 logger.error(
                     "etl.call_summary.category_extraction_error",
@@ -1096,12 +1229,15 @@ async def _extract_single_category(  # noqa: E501  pylint: disable=too-many-argu
                     delay += random.uniform(0, 0.5 * delay)
                     await asyncio.sleep(delay)
                     continue
-                return _build_rejection_result(
-                    index, category, f"Error after {max_retries} attempts: {str(e)}"
-                )
+                raise RuntimeError(
+                    f"Category extraction failed for '{category['category_name']}' "
+                    f"after {max_retries} attempts: {str(e)}"
+                ) from e
 
-        # Unreachable in practice, but satisfies the return type contract
-        return _build_rejection_result(index, category, f"Failed after {max_retries} attempts")
+        raise RuntimeError(
+            f"Category extraction failed for '{category['category_name']}' "
+            f"after {max_retries} attempts"
+        )
 
 
 async def _process_categories(
@@ -1402,6 +1538,8 @@ async def _save_to_database(
             )
             result.fetchone()
 
+            await conn.commit()
+
     except SQLAlchemyError as e:
         logger.error(
             "etl.call_summary.database_error",
@@ -1586,6 +1724,14 @@ async def generate_call_summary(  # pylint: disable=too-many-statements
             execution_id=execution_id,
         )
 
+        dedup_prompts = load_prompt_from_db(
+            layer="call_summary_etl",
+            name="deduplication",
+            compose_with_globals=False,
+            available_databases=None,
+            execution_id=execution_id,
+        )
+
         # Cache sections to avoid redundant DB calls during category processing
         etl_context = {
             "retrieval_params": retrieval_params,
@@ -1609,9 +1755,13 @@ async def generate_call_summary(  # pylint: disable=too-many-statements
             etl_context=etl_context,
         )
 
-        category_results = _deduplicate_results(category_results, execution_id)
-
         marks.append(("extraction", time.monotonic()))
+
+        category_results = await _deduplicate_results_llm(
+            category_results, dedup_prompts, context, execution_id
+        )
+
+        marks.append(("deduplication", time.monotonic()))
 
         valid_categories = [c for c in category_results if not c.get("rejected", False)]
 
@@ -1636,10 +1786,14 @@ async def generate_call_summary(  # pylint: disable=too-many-statements
 
         marks.append(("save", time.monotonic()))
 
+        cost_summary = _get_total_llm_cost(context)
         logger.info(
             "etl.call_summary.completed",
             execution_id=execution_id,
             num_categories=len(valid_categories),
+            llm_calls=cost_summary["llm_calls"],
+            total_tokens=cost_summary["total_tokens"],
+            total_cost=cost_summary["total_cost"],
             **_timing_summary(marks),
         )
 
@@ -1647,6 +1801,8 @@ async def generate_call_summary(  # pylint: disable=too-many-statements
             filepath=filepath,
             total_categories=len(category_results),
             included_categories=len(valid_categories),
+            total_cost=cost_summary["total_cost"],
+            total_tokens=cost_summary["total_tokens"],
         )
 
     except CallSummaryError:
@@ -1654,19 +1810,6 @@ async def generate_call_summary(  # pylint: disable=too-many-statements
     except (ValueError, RuntimeError) as e:
         logger.error("etl.call_summary.error", execution_id=execution_id, error=str(e))
         raise CallSummaryUserError(str(e)) from e
-    except (
-        KeyError,
-        TypeError,
-        AttributeError,
-        json.JSONDecodeError,
-        SQLAlchemyError,
-        FileNotFoundError,
-    ) as e:
-        error_msg = f"Error generating call summary: {str(e)}"
-        logger.error(
-            "etl.call_summary.error", execution_id=execution_id, error=error_msg, exc_info=True
-        )
-        raise CallSummarySystemError(error_msg) from e
     except Exception as e:
         error_msg = f"Error generating call summary: {str(e)}"
         logger.error(
@@ -1700,7 +1843,8 @@ def main():
         )
         print(
             f"✅ Complete: {result.filepath}\n"
-            f"   Categories: {result.included_categories}/{result.total_categories} included"
+            f"   Categories: {result.included_categories}/{result.total_categories} included\n"
+            f"   LLM cost: ${result.total_cost:.4f}, Tokens: {result.total_tokens:,}"
         )
     except CallSummaryUserError as e:
         print(f"⚠️ {e}", file=sys.stderr)
