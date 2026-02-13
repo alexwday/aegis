@@ -1,10 +1,10 @@
-# Research Plan Prompt - v3.0.0
+# Research Plan Prompt - v4.0.0
 
 ## Metadata
 - **Model**: aegis
 - **Layer**: call_summary_etl
 - **Name**: research_plan
-- **Version**: 3.0.0
+- **Version**: 4.0.0
 
 ---
 
@@ -85,6 +85,9 @@ EXTRACTION APPROACH (core of extraction_strategy):
 - Note available metrics vs. category description (for planning only - not for output)
 - Provide specific search terms or phrases to focus on
 - Guide on handling emerging/novel topics that fit the category pattern
+- Identify where speakers provide CONTEXTUAL COLOR — explanations of "why", rationale
+  behind decisions, forward-looking reasoning, strategic context. These passages make
+  the best supporting evidence for extracted findings
 
 Q&A GROUP MAPPING (populate relevant_qa_groups field):
 - For each category, list the Q&A Group IDs (from "### Question N (Q&A Group X)" headers) that contain relevant discussion
@@ -113,7 +116,14 @@ The extraction_strategy field MUST be a comprehensive analysis that includes:
    - How to organize findings
    - What evidence to select
 
-4. SPECIFIC GUIDANCE:
+4. CONTEXTUAL EVIDENCE MAPPING:
+   Identify where the best supporting quotes are:
+   - Note passages where management explains the "why" behind results
+   - Flag forward-looking commentary and strategic rationale
+   - Highlight color commentary that provides context beyond raw numbers
+   - These are the passages that should become evidence in the final report
+
+5. SPECIFIC GUIDANCE:
    End with concrete extraction tips
    - Search terms to use
    - Sections to emphasize

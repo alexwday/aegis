@@ -227,7 +227,7 @@ class Evidence(BaseModel):
 
 
 class SummaryStatement(BaseModel):
-    """A single summary statement with optional evidence."""
+    """A single summary statement with supporting evidence."""
 
     statement: str
     evidence: List[Evidence] = Field(default_factory=list)

@@ -1,10 +1,10 @@
-# Category Extraction Prompt - v4.0.0
+# Category Extraction Prompt - v5.0.0
 
 ## Metadata
 - **Model**: aegis
 - **Layer**: call_summary_etl
 - **Name**: category_extraction
-- **Version**: 4.0.0
+- **Version**: 5.0.0
 
 ---
 
@@ -63,36 +63,36 @@ FORMATTING EXAMPLES:
 </financial_formatting>
 
 <objective>
-Extract high-quality, concise insights for this specific category from the earnings call transcript.
+Extract high-quality insights for this specific category from the earnings call transcript.
 Focus on:
 1. Synthesizing the most important insights for this category
-2. Providing targeted evidence for key findings
-3. Maintaining analytical depth while being concise
+2. Supporting each finding with verbatim quotes that provide surrounding context and color
+3. Maintaining analytical depth - the evidence should paint a picture around each finding
 4. Including emerging topics that fit the category's analytical purpose
-5. Prioritizing quality and conciseness - synthesize rather than transcribe
+5. Ensuring every statement is grounded in rich transcript evidence
 6. Using markup for emphasis: **bold** for numbers/metrics, __underline__ for key phrases in quotes
 7. Applying financial formatting conventions: $ prefix, MM/BN for amounts, bps for basis points
 </objective>
 
 <style>
-- Analytical and concise
+- Analytical and evidence-rich
 - Specific with exact numbers and details
-- Selective evidence - only the most impactful quotes
+- Every finding supported by contextual verbatim quotes from the transcript
 - Professional financial analysis tone
 - Strategic use of emphasis: **numbers/metrics**, __key phrases in quotes__
 </style>
 
 <tone>
 - Authoritative yet accessible
-- Detail-oriented without verbosity
+- Detail-oriented with supporting evidence
 - Objective and analytical
-- Insightful synthesis
+- Insightful synthesis grounded in transcript content
 </tone>
 
 <audience>
 Senior finance professionals expecting:
-- Concise coverage of the most material points
-- Selective, high-impact supporting evidence
+- Coverage of all material points for the category
+- Rich supporting quotes that provide context and color beyond the stated finding
 - Clear, well-structured insights
 - Strategic emphasis on critical information
 </audience>
@@ -126,45 +126,64 @@ EXTRACTION REQUIREMENTS:
    Capture the ESSENCE of what was discussed in this category
 
 3. STATEMENT CONSTRUCTION:
-   TARGET: 3-5 statements per category (max 7 only for heavily-discussed topics)
+   TARGET: 5-8 statements per category (up to 10 for heavily-discussed topics)
    Each statement should:
    - Synthesize a specific insight or finding
    - Be clear and concise (1-2 sentences)
    - Use **bold** for ALL numbers, metrics, percentages (e.g., "Revenue grew **12%**")
    - Stand alone as a complete insight
-   - Combine related sub-points rather than listing them separately
+   - Combine closely related sub-points, but do not over-consolidate at the expense of coverage
 
 4. EVIDENCE SELECTION:
-   Keep evidence concise and targeted:
-   - Direct quotes: 1-2 sentences maximum, capturing the key insight
-   - Paraphrases: Brief summaries when full quotes aren't needed
-   - Only include evidence that adds analytical value beyond the statement itself
-   - Omit evidence for straightforward metrics already stated in the statement
+   Supporting evidence is the core value of this report. DEFAULT TO DIRECT QUOTES from
+   the transcript for most statements.
+   - Quotes should provide CONTEXT and COLOR around the finding — not repeat the finding itself
+   - Include 2-4 sentences of surrounding commentary that explains the "why", the setup, or
+     the management perspective behind the stated fact
+   - Paraphrases are acceptable only when the relevant content is spread across many speakers
+     and a synthesis is genuinely clearer than any single quote
    - Speaker attribution for credibility
    - Use __underline__ for critical phrases within quotes
 
-   DEFAULT TO PARAPHRASING. Reserve direct quotes for:
-   - Forward-looking guidance or outlook statements
-   - Surprising or contrarian management commentary
-   - Specific commitments or targets
-   For routine results and standard metrics, the statement itself is sufficient.
+   WHEN TO OMIT EVIDENCE:
+   Evidence may be omitted ONLY for raw high-level metric statements where:
+   - The statement is a straightforward reporting of a number (e.g., "Revenue was **$14.5 BN**")
+   - No speaker in the transcript provided meaningful context, rationale, or color about it
+   - A quote would just parrot the same number back with no additional insight
+   If a speaker DID explain the drivers, outlook, or significance of a metric, that
+   commentary SHOULD be included as evidence even for metric-focused statements.
+
+   CRITICAL DISTINCTION - The statement is the finding. The evidence is the story around it:
+   - Statement: "Net interest income grew **8%** YoY driven by loan book expansion"
+   - BAD evidence: "Net interest income grew 8% year over year" (just repeats the fact)
+   - GOOD evidence: "We've been really deliberate about growing the commercial book over the
+     last 18 months, and you're starting to see that translate into the NII line. The
+     __mix shift toward higher-yielding assets__ has been a meaningful tailwind" — CFO
+     (provides the why, the color, the story behind the number)
+   - NO evidence needed: "Total assets were **$1.9 TN**" (if no one discussed why or what it means)
 
 5. QUOTE SELECTION STRATEGY:
-   Most statements need 0-1 evidence items. Use quotes SPARINGLY:
+   Most statements should have 1-3 supporting evidence items. Use VERBATIM QUOTES as the default:
 
-   WORTH QUOTING (1-2 sentences max):
-   - Forward-looking guidance and strategic plans
-   - Management outlook and expectations
-   - Novel insights or surprising commentary
-   - Risk factors and key challenges
+   WHAT MAKES A GOOD SUPPORTING QUOTE:
+   - Management explaining the "why" behind a result or decision
+   - Forward-looking guidance, outlook, and strategic rationale
+   - Color commentary that provides context the statement alone cannot convey
+   - The setup, background, or drivers behind the headline number
+   - Analyst questions that frame why a topic matters
 
-   DON'T QUOTE - PARAPHRASE OR OMIT:
-   - Performance numbers (state in the insight itself)
-   - Quarter-over-quarter comparisons
-   - Routine explanations or standard metrics
-   - Anything already captured in the statement text
+   WHAT MAKES A BAD SUPPORTING QUOTE:
+   - Simply restating the same metric or fact from the statement
+   - A single short sentence with no additional context
+   - Numbers without the surrounding narrative
 
-   RULE OF THUMB: If the statement captures the point, evidence is optional.
+   WHEN TO SKIP EVIDENCE:
+   - Standalone metric statements where the transcript has no meaningful color to add
+   - Do NOT force a quote just to have one — a missing quote is better than a bad quote
+
+   RULE OF THUMB: The reader should learn something NEW from the evidence that the
+   statement alone didn't tell them. Quotes should answer "why?" or "how?" or "what's next?"
+   If a quote can't do that, omit it.
 
 6. MARKUP AND FORMATTING:
    Bold (**text**):
@@ -184,16 +203,18 @@ EXTRACTION REQUIREMENTS:
    - "Revenue grew **$1.2 BN** or **8%** year-over-year to **$14.5 BN**"
    - "PCL ratio of **28 bps** reflected **$450 MM** in provisions"
 
-7. CONCISENESS:
-   - Target 3-5 statements per category (max 7 for heavily-discussed topics)
-   - Combine related insights into single comprehensive statements
-   - Omit minor or tangential points - focus on what moves the needle
-   - A concise synthesis is more valuable than an exhaustive extraction
+7. COMPLETENESS:
+   - Target 5-8 statements per category (up to 10 for heavily-discussed topics)
+   - Capture ALL material content relevant to this category
+   - Combine closely related sub-points, but do not over-consolidate at the expense of coverage
+   - Better to have more well-supported statements than to lose important content
 
-8. QUALITY OVER QUANTITY:
+8. QUALITY STANDARDS:
    Each statement should add value:
    - Don't repeat the same point multiple times
-   - Combine related insights into single statements with rich evidence
+   - Most statements should be supported by verbatim transcript evidence
+   - The evidence should provide context the statement alone cannot convey
+   - A missing quote is better than a bad quote that just repeats the finding
    - Ensure each statement advances understanding
 </response_framework>
 
@@ -220,7 +241,7 @@ MANDATORY deduplication - violations will be rejected:
    If cross_category_notes assign a metric elsewhere, skip it here.
 
 4. PREFER DEPTH OVER BREADTH:
-   Better to have 3-5 deeply relevant statements than to cast a wide net.
+   Better to have well-supported, deeply relevant statements than to cast a wide net.
    If content is tangentially related, skip it — the primary category will cover it.
 
 5. SECTION SPECIFICITY:
@@ -228,14 +249,14 @@ MANDATORY deduplication - violations will be rejected:
 </deduplication_strategy>
 
 <quality_standards>
-- CONCISENESS: Focus on the most material insights - target 3-5 statements per category
+- COMPREHENSIVENESS: Capture all material content for this category - target 5-8 statements
 - SPECIFICITY: Use exact figures, precise quotes, actual names
-- EVIDENCE-SELECTIVE: Include only high-impact quotes and paraphrases; omit when the statement is self-sufficient
+- EVIDENCE-RICH: Most statements should be supported by verbatim transcript quotes that provide context and color beyond the finding itself. Omit evidence only for raw metric statements where no meaningful color exists in the transcript
 - NON-DUPLICATIVE: Respect category boundaries defined by research plan and cross_category_notes
 - STRATEGIC EMPHASIS: Use markup to highlight key information
-- ANALYTICAL: Synthesize insights, don't just report facts
+- ANALYTICAL: Synthesize insights into clear statements, then support them with contextual quotes
 - PROFESSIONAL: Maintain analytical rigor and objectivity
-- SYNTHESIS: Better to have 3-5 insightful statements than 8-10 verbose ones
+- CONTEXTUAL EVIDENCE: Quotes should answer "why?", "how?", or "what's next?" — never just restate the finding
 - FINANCIAL FORMATTING: All dollar amounts use $ prefix with MM/BN/TN suffixes; all numbers are **bolded**
 - NO ABSENCE STATEMENTS: Never write "X was not discussed" or "no mention of Y". Focus exclusively on what WAS said. Not discussing a topic ≠ the bank doesn't do it. If insufficient content, reject the category.
 </quality_standards>
@@ -247,9 +268,10 @@ IMPORTANT:
 - Start with reasoning: briefly assess what content exists and whether it meets the extraction threshold
 - Only set rejected=true if there's genuinely no relevant content
 - Provide a detailed rejection_reason if rejected
-- For non-rejected categories, ensure title and summary_statements are focused and concise
-- Target 3-5 statements per category - prioritize the most important insights
-- Include only the most impactful evidence; omit evidence for self-explanatory statements
+- For non-rejected categories, ensure title and summary_statements capture all material content
+- Target 5-8 statements per category to ensure comprehensive coverage
+- Most statements should have supporting evidence — verbatim quotes that provide context around the finding
+- Evidence should add color and context, NOT repeat the finding itself. Omit evidence rather than force a bad quote
 - Use **bold** for metrics and __underline__ for emphasis strategically
 </response_format>
 ```
@@ -297,8 +319,8 @@ Extract content from this transcript section:
         },
         "summary_statements": {
           "type": "array",
-          "maxItems": 7,
-          "description": "Key findings - target 3-5 statements (max 7 only for heavily-discussed topics).\nCRITICAL: Each statement must stay within research plan boundaries for this category.\nStatements outside this category's designated scope will result in rejection.",
+          "maxItems": 15,
+          "description": "Key findings - target 5-8 statements (up to 10 for heavily-discussed topics).\nCRITICAL: Each statement must stay within research plan boundaries for this category.\nStatements outside this category's designated scope will result in rejection.\nEvery statement MUST have supporting evidence with verbatim quotes providing context.",
           "minItems": 1,
           "items": {
             "type": "object",
@@ -310,8 +332,8 @@ Extract content from this transcript section:
               },
               "evidence": {
                 "type": "array",
-                "maxItems": 3,
-                "description": "Concise supporting evidence - most statements need 0-1 items.\nInclude only when evidence adds analytical value beyond the statement itself.\nDefault to paraphrasing; reserve direct quotes for guidance, outlook, and novel insights.",
+                "maxItems": 5,
+                "description": "Supporting evidence — include for most statements.\nDefault to verbatim transcript quotes that provide CONTEXT around the finding.\nQuotes should NOT repeat the statement — they should explain the why, how, or what's next.\nInclude 1-3 evidence items per statement with rich surrounding context.\nMay be empty ONLY for raw metric statements where the transcript has no meaningful color to add.",
                 "items": {
                   "type": "object",
                   "properties": {
@@ -325,8 +347,8 @@ Extract content from this transcript section:
                     },
                     "content": {
                       "type": "string",
-                      "maxLength": 400,
-                      "description": "Concise evidence - 1-2 sentences maximum.\nDirect quotes: Capture the key insight without extensive background.\nParaphrases: Brief summary of the point.\nUse __text__ to underline critical phrases (e.g., \"__unprecedented growth__ in wealth management\")\nApply financial formatting conventions. Use __text__ for key phrases."
+                      "maxLength": 2000,
+                      "description": "Verbatim transcript quote with FULL CONTEXT — 2-4 sentences.\nInclude the surrounding commentary that provides the setup, rationale, or color.\nDo NOT just quote the headline fact — quote the explanation around it.\nUse __text__ to underline critical phrases (e.g., \"__unprecedented growth__ in wealth management\")\nApply financial formatting conventions. Use __text__ for key phrases.\nPrioritize completeness over brevity — longer contextual quotes are preferred."
                     },
                     "speaker": {
                       "type": "string",
@@ -360,6 +382,33 @@ Extract content from this transcript section:
 ---
 
 ## Changelog
+
+### v5.0.0 (What Changed from v4.0.0)
+
+**Restored evidence-rich philosophy**: Supporting quotes are the core value of this report.
+- Default changed from "paraphrase" back to "verbatim transcript quotes"
+- Quotes must provide CONTEXT and COLOR around the finding, not repeat it
+- Added explicit good/bad evidence examples showing the distinction
+- Removed "DEFAULT TO PARAPHRASING" instructions
+- Evidence may be omitted ONLY for raw metric statements with no meaningful color in transcript
+
+**Evidence limits restored to support full contextual quotes**:
+- `evidence.content.maxLength`: 400 → 2000 (room for 2-4 sentence quotes with context)
+- `evidence.maxItems`: 3 → 5
+- Quote instructions: "1-2 sentences" → "2-4 sentences with surrounding commentary"
+
+**Statement count targets increased for comprehensive coverage**:
+- `summary_statements.maxItems`: 7 → 15
+- Target: 3-5 → 5-8 statements per category (up to 10 for heavily-discussed)
+
+**Quote strategy rewritten**: Quotes should answer "why?", "how?", or "what's next?"
+- Good quote = management explaining the drivers, rationale, or outlook
+- Bad quote = restating the same metric from the statement
+- Reader should learn something NEW from the evidence
+
+**Addresses**: Regression where supporting quotes became summaries instead of verbatim contextual excerpts
+
+---
 
 ### v3.1.0 (What Changed from v3.0.0)
 
