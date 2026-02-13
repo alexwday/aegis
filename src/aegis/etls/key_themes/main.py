@@ -703,10 +703,22 @@ async def classify_qa_block(
     else:
         prev_class_str = "No previous classifications yet (this is the first Q&A)."
 
+    bank_name = context.get("bank_name")
+    quarter_val = context.get("quarter")
+    fiscal_year_val = context.get("fiscal_year")
+    if not all([bank_name, quarter_val, fiscal_year_val]):
+        logger.warning(
+            "etl.key_themes.missing_context_fields",
+            execution_id=execution_id,
+            bank_name=bank_name,
+            quarter=quarter_val,
+            fiscal_year=fiscal_year_val,
+        )
+
     system_prompt = prompt_data["system_prompt"].format(
-        bank_name=context.get("bank_name", "Bank"),
-        quarter=context.get("quarter", "Q"),
-        fiscal_year=context.get("fiscal_year", "Year"),
+        bank_name=bank_name or "Bank",
+        quarter=quarter_val or "Q",
+        fiscal_year=fiscal_year_val or "Year",
         categories_list=categories_str,
         num_categories=len(categories),
         previous_classifications=prev_class_str,
@@ -843,10 +855,23 @@ async def format_qa_html(
     execution_id = context.get("execution_id")
     prompt_data = formatting_prompts
 
+    bank_name = context.get("bank_name")
+    quarter_val = context.get("quarter")
+    fiscal_year_val = context.get("fiscal_year")
+    if not all([bank_name, quarter_val, fiscal_year_val]):
+        logger.warning(
+            "etl.key_themes.missing_context_fields",
+            execution_id=execution_id,
+            stage="html_formatting",
+            bank_name=bank_name,
+            quarter=quarter_val,
+            fiscal_year=fiscal_year_val,
+        )
+
     system_prompt = prompt_data["system_prompt"].format(
-        bank_name=context.get("bank_name", "Bank"),
-        quarter=context.get("quarter", "Q"),
-        fiscal_year=context.get("fiscal_year", "Year"),
+        bank_name=bank_name or "Bank",
+        quarter=quarter_val or "Q",
+        fiscal_year=fiscal_year_val or "Year",
     )
 
     # Build completion note for incomplete Q&As
@@ -884,26 +909,28 @@ async def format_qa_html(
                 },
             )
 
-            if isinstance(response, dict):
-                qa_block.formatted_content = (
-                    response.get("choices", [{}])[0].get("message", {}).get("content", "")
+            if not isinstance(response, dict):
+                raise RuntimeError(
+                    f"Unexpected response type from LLM for {qa_block.qa_id}: "
+                    f"{type(response).__name__}"
                 )
-            else:
-                qa_block.formatted_content = str(response)
+
+            qa_block.formatted_content = (
+                response.get("choices", [{}])[0].get("message", {}).get("content", "")
+            )
 
             # Log and accumulate LLM usage
-            if isinstance(response, dict):
-                metrics = response.get("metrics", {})
-                _accumulate_llm_cost(context, metrics)
-                logger.info(
-                    "etl.key_themes.llm_usage",
-                    execution_id=execution_id,
-                    stage=f"formatting:{qa_block.qa_id}",
-                    prompt_tokens=metrics.get("prompt_tokens", 0),
-                    completion_tokens=metrics.get("completion_tokens", 0),
-                    total_cost=metrics.get("total_cost", 0),
-                    response_time=metrics.get("response_time", 0),
-                )
+            metrics = response.get("metrics", {})
+            _accumulate_llm_cost(context, metrics)
+            logger.info(
+                "etl.key_themes.llm_usage",
+                execution_id=execution_id,
+                stage=f"formatting:{qa_block.qa_id}",
+                prompt_tokens=metrics.get("prompt_tokens", 0),
+                completion_tokens=metrics.get("completion_tokens", 0),
+                total_cost=metrics.get("total_cost", 0),
+                response_time=metrics.get("response_time", 0),
+            )
             break
 
         except Exception as e:
@@ -1041,11 +1068,26 @@ async def determine_comprehensive_grouping(
     # Format categories using standardized XML format
     categories_str = format_categories_for_prompt(categories)
 
+    bank_name = context.get("bank_name")
+    bank_symbol = context.get("bank_symbol")
+    quarter_val = context.get("quarter")
+    fiscal_year_val = context.get("fiscal_year")
+    if not all([bank_name, bank_symbol, quarter_val, fiscal_year_val]):
+        logger.warning(
+            "etl.key_themes.missing_context_fields",
+            execution_id=execution_id,
+            stage="theme_grouping",
+            bank_name=bank_name,
+            bank_symbol=bank_symbol,
+            quarter=quarter_val,
+            fiscal_year=fiscal_year_val,
+        )
+
     system_prompt = prompt_data["system_prompt"].format(
-        bank_name=context.get("bank_name", "Bank"),
-        bank_symbol=context.get("bank_symbol", "BANK"),
-        quarter=context.get("quarter", "Q"),
-        fiscal_year=context.get("fiscal_year", "Year"),
+        bank_name=bank_name or "Bank",
+        bank_symbol=bank_symbol or "BANK",
+        quarter=quarter_val or "Q",
+        fiscal_year=fiscal_year_val or "Year",
         total_qa_blocks=len(valid_qa_blocks),
         qa_blocks_info=qa_blocks_str,
         categories_list=categories_str,
@@ -1143,10 +1185,26 @@ async def determine_comprehensive_grouping(
     if result:
         theme_groups = []
         for group_item in result.theme_groups:
+            title = group_item.group_title
+            rationale = group_item.rationale
+            if not title:
+                logger.warning(
+                    "etl.key_themes.empty_group_title",
+                    execution_id=execution_id,
+                    qa_ids=group_item.qa_ids,
+                )
+                title = "Theme Group"
+            if not rationale:
+                logger.warning(
+                    "etl.key_themes.empty_group_rationale",
+                    execution_id=execution_id,
+                    group_title=title,
+                )
+                rationale = "Regrouped by category"
             group = ThemeGroup(
-                group_title=group_item.group_title or "Theme Group",
+                group_title=title,
                 qa_ids=group_item.qa_ids,
-                rationale=group_item.rationale or "Regrouped by category",
+                rationale=rationale,
             )
             theme_groups.append(group)
 
@@ -1252,6 +1310,12 @@ def create_document(
             conv_run.font.color.rgb = RGBColor(0, 0, 0)
 
             # Apply auto_bold_html_metrics to formatted content
+            if not qa_block.formatted_content:
+                logger.warning(
+                    "etl.key_themes.using_unformatted_content",
+                    qa_id=qa_block.qa_id,
+                    group_title=group.group_title,
+                )
             content = qa_block.formatted_content or qa_block.original_content
             content = auto_bold_html_metrics(content)
 
