@@ -61,11 +61,11 @@ The following tables are available on the hosted server:
 - `process_monitor_logs` - Workflow execution tracking
 - `aegis_transcripts` - Earnings call transcripts with embeddings
 
-Table schema files are preserved in the `data/` directory for reference:
-- `data/aegis_data_availability_schema.sql`
-- `data/process_monitor_logs_schema.sql`
-- `data/aegis_transcripts_schema.sql`
-- `data/aegis_tables_schema.sql`
+Table schema files are preserved in the `schemas/` directory for reference:
+- `schemas/aegis_data_availability_schema.sql`
+- `schemas/process_monitor_logs_schema.sql`
+- `schemas/aegis_transcripts_schema.sql`
+- `schemas/aegis_tables_schema.sql`
 
 ### Database Status Check
 
@@ -583,7 +583,7 @@ aegis/
 │       └── ssl.py        # SSL configuration
 ├── run_fastapi.py        # FastAPI server with WebSocket support
 ├── tests/               # Test suite
-├── data/                # SQL schemas and sample data
+├── schemas/             # PostgreSQL table schemas
 ├── docs/                # Documentation
 └── performance_testing/ # Performance test suite
 ```
