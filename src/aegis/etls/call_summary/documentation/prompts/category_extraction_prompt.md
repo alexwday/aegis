@@ -1,10 +1,10 @@
-# Category Extraction Prompt - v5.0.0
+# Category Extraction Prompt - v6.0.0
 
 ## Metadata
 - **Model**: aegis
 - **Layer**: call_summary_etl
 - **Name**: category_extraction
-- **Version**: 5.0.0
+- **Version**: 6.0.0
 
 ---
 
@@ -137,9 +137,16 @@ EXTRACTION REQUIREMENTS:
 4. EVIDENCE SELECTION:
    Supporting evidence is the core value of this report. DEFAULT TO DIRECT QUOTES from
    the transcript for most statements.
-   - Quotes should provide CONTEXT and COLOR around the finding — not repeat the finding itself
-   - Include 2-4 sentences of surrounding commentary that explains the "why", the setup, or
-     the management perspective behind the stated fact
+
+   THE KEY PRINCIPLE: The statement already captures the metric/fact. The quote's job is
+   to paint the SURROUNDING PICTURE — the narrative context that helps the reader understand
+   why that metric matters, what drove it, or what it means going forward. The quote does
+   NOT need to contain the metric itself.
+
+   - Pull quotes from the sentences AROUND the metric — the explanation, the rationale,
+     the strategic context, the management commentary that gives the number its meaning
+   - Draw from other parts of the transcript that directly relate to and reinforce the finding
+   - Include 2-4 sentences of surrounding commentary
    - Paraphrases are acceptable only when the relevant content is spread across many speakers
      and a synthesis is genuinely clearer than any single quote
    - Speaker attribution for credibility
@@ -153,37 +160,44 @@ EXTRACTION REQUIREMENTS:
    If a speaker DID explain the drivers, outlook, or significance of a metric, that
    commentary SHOULD be included as evidence even for metric-focused statements.
 
-   CRITICAL DISTINCTION - The statement is the finding. The evidence is the story around it:
+   CRITICAL DISTINCTION — the statement captures the fact, the quote paints the picture:
    - Statement: "Net interest income grew **8%** YoY driven by loan book expansion"
-   - BAD evidence: "Net interest income grew 8% year over year" (just repeats the fact)
-   - GOOD evidence: "We've been really deliberate about growing the commercial book over the
-     last 18 months, and you're starting to see that translate into the NII line. The
-     __mix shift toward higher-yielding assets__ has been a meaningful tailwind" — CFO
-     (provides the why, the color, the story behind the number)
+   - BAD quote: "Net interest income grew 8% year over year to $4.2 billion"
+     (just restates the metric — the statement already said this)
+   - GOOD quote: "We've been really deliberate about __growing the commercial book__ over
+     the last 18 months, and you're starting to see that translate. The __mix shift toward
+     higher-yielding assets__ has been a meaningful tailwind for us" — CFO
+     (explains the WHY — the reader now understands what drove NII growth)
+   - GOOD quote: "As we look at the rate environment, we think there's still
+     __room for further NIM expansion__ particularly as fixed-rate assets reprice" — CFO
+     (adds forward context — what it means going forward)
    - NO evidence needed: "Total assets were **$1.9 TN**" (if no one discussed why or what it means)
 
 5. QUOTE SELECTION STRATEGY:
    Most statements should have 1-3 supporting evidence items. Use VERBATIM QUOTES as the default:
 
    WHAT MAKES A GOOD SUPPORTING QUOTE:
-   - Management explaining the "why" behind a result or decision
-   - Forward-looking guidance, outlook, and strategic rationale
-   - Color commentary that provides context the statement alone cannot convey
-   - The setup, background, or drivers behind the headline number
-   - Analyst questions that frame why a topic matters
+   - The sentences AROUND the metric that explain what drove it
+   - Management rationale, strategy, or decision-making context
+   - Forward-looking guidance, outlook, and what it means going forward
+   - Color commentary from a different part of the transcript that reinforces the finding
+   - Analyst questions that frame why a topic matters to investors
+   - The quote does NOT need to contain the specific metric from the statement
 
    WHAT MAKES A BAD SUPPORTING QUOTE:
-   - Simply restating the same metric or fact from the statement
-   - A single short sentence with no additional context
-   - Numbers without the surrounding narrative
+   - A quote that contains the same metric/value already stated in the finding
+   - Simply restating the fact in the speaker's words
+   - A single short sentence with no surrounding context
+   - Quoting the metric line itself rather than the explanation around it
 
    WHEN TO SKIP EVIDENCE:
    - Standalone metric statements where the transcript has no meaningful color to add
    - Do NOT force a quote just to have one — a missing quote is better than a bad quote
 
-   RULE OF THUMB: The reader should learn something NEW from the evidence that the
-   statement alone didn't tell them. Quotes should answer "why?" or "how?" or "what's next?"
-   If a quote can't do that, omit it.
+   RULE OF THUMB: Cover the statement text with your hand. Read only the quote.
+   Does the quote tell you something NEW that the statement didn't? Does it help you
+   understand the "why", "how", or "what's next"? If yes, it's a good quote.
+   If the quote just restates the same fact, drop it.
 
 6. MARKUP AND FORMATTING:
    Bold (**text**):
@@ -348,7 +362,7 @@ Extract content from this transcript section:
                     "content": {
                       "type": "string",
                       "maxLength": 2000,
-                      "description": "Verbatim transcript quote with FULL CONTEXT — 2-4 sentences.\nInclude the surrounding commentary that provides the setup, rationale, or color.\nDo NOT just quote the headline fact — quote the explanation around it.\nUse __text__ to underline critical phrases (e.g., \"__unprecedented growth__ in wealth management\")\nApply financial formatting conventions. Use __text__ for key phrases.\nPrioritize completeness over brevity — longer contextual quotes are preferred."
+                      "description": "Verbatim transcript quote — 2-4 sentences from AROUND the finding.\nDo NOT quote the metric/fact itself — the statement already captures that.\nInstead quote the surrounding explanation: the why, the drivers, the rationale, the outlook.\nPull from sentences near the metric or from other transcript passages that reinforce the finding.\nUse __text__ to underline critical phrases. Apply financial formatting conventions."
                     },
                     "speaker": {
                       "type": "string",
@@ -382,6 +396,19 @@ Extract content from this transcript section:
 ---
 
 ## Changelog
+
+### v6.0.0 (What Changed from v5.0.0)
+
+**Sharpened quote selection — quotes paint the picture, not restate the metric**:
+- Core principle: the statement captures the fact; the quote captures the surrounding narrative
+- Quotes should be drawn from the sentences AROUND the metric, not the metric line itself
+- Added multiple good/bad examples showing the distinction clearly
+- Added "cover the statement" test: does the quote tell you something NEW?
+- Tool definition updated: "Do NOT quote the metric/fact itself"
+
+**Addresses**: Quotes still gravitating toward metric-containing lines instead of surrounding context
+
+---
 
 ### v5.0.0 (What Changed from v4.0.0)
 

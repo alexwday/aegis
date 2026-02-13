@@ -1063,22 +1063,19 @@ async def _extract_single_category(  # noqa: E501  pylint: disable=too-many-argu
 
         if not category_plan:
             logger.info(
-                "etl.call_summary.category_skipped_by_plan",
+                "etl.call_summary.category_not_in_plan",
                 execution_id=execution_id,
                 category_name=category["category_name"],
                 category_index=index,
-                reason="Not in research plan — no relevant content identified",
-            )
-            return _build_rejection_result(
-                index,
-                category,
-                "Research plan determined no relevant content for this category",
+                reason="Not in research plan — proceeding with full unfiltered transcript",
             )
 
-        # Extract Q&A group filter from research plan
-        relevant_qa_groups = category_plan.get("relevant_qa_groups", [])
+        # Extract Q&A group filter from research plan (empty = no filtering)
+        relevant_qa_groups = (
+            category_plan.get("relevant_qa_groups", []) if category_plan else []
+        )
 
-        # Filter chunks to relevant content; fallback categories get full transcript
+        # Filter chunks to relevant content; no plan = full unfiltered transcript
         cache = etl_context.get("section_cache", {})
         chunks = _filter_chunks_for_category(
             section_cache=cache,
@@ -1117,6 +1114,17 @@ async def _extract_single_category(  # noqa: E501  pylint: disable=too-many-argu
             chunks=chunks, combo=retrieval_params, context=context
         )
 
+        extraction_strategy = (
+            category_plan["extraction_strategy"]
+            if category_plan
+            else "No research plan available — extract all relevant content from the transcript."
+        )
+        cross_category_notes = (
+            category_plan.get("cross_category_notes", "")
+            if category_plan
+            else ""
+        )
+
         system_prompt = extraction_prompts["system_prompt"].format(
             category_index=index,
             total_categories=total_categories,
@@ -1127,10 +1135,8 @@ async def _extract_single_category(  # noqa: E501  pylint: disable=too-many-argu
             category_name=_sanitize_for_prompt(category["category_name"]),
             category_description=_sanitize_for_prompt(category["category_description"]),
             transcripts_section=category["transcript_sections"],
-            research_plan=_sanitize_for_prompt(category_plan["extraction_strategy"]),
-            cross_category_notes=_sanitize_for_prompt(
-                category_plan.get("cross_category_notes", "")
-            ),
+            research_plan=_sanitize_for_prompt(extraction_strategy),
+            cross_category_notes=_sanitize_for_prompt(cross_category_notes),
         )
 
         user_prompt = extraction_prompts["user_prompt"].format(
