@@ -4,7 +4,7 @@
 - **Model**: aegis
 - **Layer**: call_summary_etl
 - **Name**: category_extraction
-- **Version**: 6.0.0
+- **Version**: 6.1.0
 
 ---
 
@@ -54,11 +54,11 @@ RATIOS:
 - Use standard notation (e.g., CET1 ratio of 13.2%, efficiency ratio of 54.1%)
 
 FORMATTING EXAMPLES:
-- CORRECT: "Revenue increased **$1.2 BN** or **8%** year-over-year"
+- CORRECT: "Revenue increased **$1.2 BN** or **8%** **year-over-year**, driven by __broad-based strength across all business segments__"
 - WRONG: "Revenue increased 1.2 billion dollars or 8 percent year-over-year"
-- CORRECT: "NIM expanded **15 bps** to **1.72%**"
-- WRONG: "NIM expanded 15 basis points to 1.72 percent"
-- CORRECT: "PCL of **$450 MM** compared to **$380 MM** in prior quarter"
+- CORRECT: "NIM expanded **15 bps** to **1.72%**, as __deposit costs continued to normalize faster than expected__"
+- WRONG: "NIM expanded 15 basis points to 1.72 percent, driven by deposit cost normalization"
+- CORRECT: "PCL of **$450 MM** compared to **$380 MM** in **prior quarter**, reflecting __a conservative approach to commercial real estate exposures__"
 - WRONG: "PCL of 450 million compared to 380 million in prior quarter"
 </financial_formatting>
 
@@ -70,7 +70,7 @@ Focus on:
 3. Maintaining analytical depth - the evidence should paint a picture around each finding
 4. Including emerging topics that fit the category's analytical purpose
 5. Ensuring every statement is grounded in rich transcript evidence
-6. Using markup for emphasis: **bold** for numbers/metrics, __underline__ for key phrases in quotes
+6. Using HEAVY markup for emphasis: **bold** for ALL numbers/metrics/temporal references, __underline__ for key insight phrases in BOTH statements and quotes
 7. Applying financial formatting conventions: $ prefix, MM/BN for amounts, bps for basis points
 </objective>
 
@@ -79,7 +79,7 @@ Focus on:
 - Specific with exact numbers and details
 - Every finding supported by contextual verbatim quotes from the transcript
 - Professional financial analysis tone
-- Strategic use of emphasis: **numbers/metrics**, __key phrases in quotes__
+- Dense formatting: **bold** ALL numbers/metrics, __underline__ key insight phrases in every statement and quote
 </style>
 
 <tone>
@@ -131,6 +131,7 @@ EXTRACTION REQUIREMENTS:
    - Synthesize a specific insight or finding
    - Be clear and concise (1-2 sentences)
    - Use **bold** for ALL numbers, metrics, percentages (e.g., "Revenue grew **12%**")
+   - Use __underline__ for 1-2 key insight phrases per statement — the core takeaway a reader's eye should jump to
    - Stand alone as a complete insight
    - Combine closely related sub-points, but do not over-consolidate at the expense of coverage
 
@@ -200,22 +201,34 @@ EXTRACTION REQUIREMENTS:
    If the quote just restates the same fact, drop it.
 
 6. MARKUP AND FORMATTING:
+   TWO LEVELS OF EMPHASIS — both are MANDATORY in statements AND evidence:
+
    Bold (**text**):
    - ALL numbers, metrics, percentages, financial figures MUST be bolded
    - ALL dollar amounts (e.g., **$1.2 BN**, **$450 MM**)
    - ALL percentages (e.g., **12.3%**, **15 bps**)
    - ALL key ratios (e.g., **CET1 of 13.2%**)
+   - ALL temporal references (e.g., **Q4**, **year-over-year**, **next year**)
    - If a number appears in text, it MUST be wrapped in **bold markers**
 
    Underline (__text__):
-   - Key phrases or critical statements within quotes
-   - Forward-looking commitments or strategic language
-   - Example: CFO noted __"unprecedented growth"__ in wealth management
+   - 1-2 key insight phrases per statement — the core takeaway a reader should see first
+   - Key phrases or critical statements within evidence quotes
+   - Forward-looking commitments, strategic language, management conviction
+   - Phrase length: 5-15 words representing a complete thought
+   - Do NOT underline single words or isolated metrics — underline PHRASES
 
-   Examples of correct formatting:
-   - "NIM expanded **15 bps** to **1.72%**, driven by asset repricing"
-   - "Revenue grew **$1.2 BN** or **8%** year-over-year to **$14.5 BN**"
-   - "PCL ratio of **28 bps** reflected **$450 MM** in provisions"
+   Examples of correct STATEMENT formatting (both bold AND underline):
+   - "NIM expanded **15 bps** to **1.72%**, as __deposit costs continued to normalize faster than expected__"
+   - "Revenue grew **$1.2 BN** or **8%** **year-over-year**, driven by __broad-based strength across investment banking and trading__"
+   - "PCL ratio of **28 bps** reflected **$450 MM** in provisions, as __management took a conservative approach to commercial real estate exposures__"
+   - "__Pipelines are at the highest levels seen in years__, with backlog up **25%** **year-over-year**"
+   - "__Expect M&A activity to accelerate significantly once economic clarity improves__, with advisory fees up **15%** in **Q4**"
+
+   WRONG — common mistakes:
+   - "NIM expanded **15 bps** to **1.72%**, driven by asset repricing" — missing underline on key insight
+   - "__uncertainty__" — single word, not a complete thought. Underline PHRASES only
+   - "__**15 bps**__" — isolated metric should be bold ONLY, not underlined
 
 7. COMPLETENESS:
    - Target 5-8 statements per category (up to 10 for heavily-discussed topics)
@@ -267,11 +280,11 @@ MANDATORY deduplication - violations will be rejected:
 - SPECIFICITY: Use exact figures, precise quotes, actual names
 - EVIDENCE-RICH: Most statements should be supported by verbatim transcript quotes that provide context and color beyond the finding itself. Omit evidence only for raw metric statements where no meaningful color exists in the transcript
 - NON-DUPLICATIVE: Respect category boundaries defined by research plan and cross_category_notes
-- STRATEGIC EMPHASIS: Use markup to highlight key information
+- HEAVY EMPHASIS: Every statement MUST have both **bold** metrics AND __underlined__ insight phrases. Every evidence quote MUST have __underlined__ critical phrases. Formatting should be dense — the reader relies on it to scan quickly
 - ANALYTICAL: Synthesize insights into clear statements, then support them with contextual quotes
 - PROFESSIONAL: Maintain analytical rigor and objectivity
 - CONTEXTUAL EVIDENCE: Quotes should answer "why?", "how?", or "what's next?" — never just restate the finding
-- FINANCIAL FORMATTING: All dollar amounts use $ prefix with MM/BN/TN suffixes; all numbers are **bolded**
+- FINANCIAL FORMATTING: All dollar amounts use $ prefix with MM/BN/TN suffixes; ALL numbers are **bolded**; ALL temporal references are **bolded**
 - NO ABSENCE STATEMENTS: Never write "X was not discussed" or "no mention of Y". Focus exclusively on what WAS said. Not discussing a topic ≠ the bank doesn't do it. If insufficient content, reject the category.
 </quality_standards>
 
@@ -286,7 +299,7 @@ IMPORTANT:
 - Target 5-8 statements per category to ensure comprehensive coverage
 - Most statements should have supporting evidence — verbatim quotes that provide context around the finding
 - Evidence should add color and context, NOT repeat the finding itself. Omit evidence rather than force a bad quote
-- Use **bold** for metrics and __underline__ for emphasis strategically
+- Use **bold** for ALL metrics/numbers/temporal references and __underline__ for key insight phrases — EVERY statement and quote must have formatting applied
 </response_format>
 ```
 
@@ -342,7 +355,7 @@ Extract content from this transcript section:
               "statement": {
                 "type": "string",
                 "maxLength": 500,
-                "description": "Synthesized insight that captures a material theme or trend.\nUse **text** to bold key metrics, numbers, percentages (e.g., \"Revenue grew **12%** year-over-year\")\nApply financial formatting: $ prefix, MM/BN for amounts. Bold ALL numbers with **markers**."
+                "description": "Synthesized insight that captures a material theme or trend.\nUse **text** to bold key metrics, numbers, percentages (e.g., \"Revenue grew **12%** year-over-year\")\nUse __text__ to underline 1-2 key insight phrases — the core takeaway (e.g., \"__broad-based strength across investment banking__\")\nApply financial formatting: $ prefix, MM/BN for amounts. Bold ALL numbers with **markers**."
               },
               "evidence": {
                 "type": "array",
@@ -362,7 +375,7 @@ Extract content from this transcript section:
                     "content": {
                       "type": "string",
                       "maxLength": 2000,
-                      "description": "Verbatim transcript quote — 2-4 sentences from AROUND the finding.\nDo NOT quote the metric/fact itself — the statement already captures that.\nInstead quote the surrounding explanation: the why, the drivers, the rationale, the outlook.\nPull from sentences near the metric or from other transcript passages that reinforce the finding.\nUse __text__ to underline critical phrases. Apply financial formatting conventions."
+                      "description": "Verbatim transcript quote — 2-4 sentences from AROUND the finding.\nDo NOT quote the metric/fact itself — the statement already captures that.\nInstead quote the surrounding explanation: the why, the drivers, the rationale, the outlook.\nPull from sentences near the metric or from other transcript passages that reinforce the finding.\nMUST use __text__ to underline 1-2 critical phrases per quote. MUST use **text** to bold ALL numbers and metrics. Apply financial formatting conventions."
                     },
                     "speaker": {
                       "type": "string",
