@@ -220,20 +220,36 @@ def _apply_base_formatting(run, base_font_size, base_color, base_italic):
     run.italic = base_italic
 
 
-def _find_next_format_match(text):
-    """Find the next bold or underline match and return match and type."""
-    bold_match = re.search(r"\*\*([^*]+)\*\*", text)
-    underline_match = re.search(r"__([^_]+)__", text)
+def _add_bold_runs(
+    paragraph, text: str, base_font_size, base_color, base_italic, underline: bool = False
+) -> None:
+    """Add runs with bold marker processing, optionally applying underline to all runs."""
+    bold_pattern = r"\*\*(.*?)\*\*"
+    last_end = 0
 
-    if bold_match and underline_match:
-        if bold_match.start() < underline_match.start():
-            return bold_match, "bold"
-        return underline_match, "underline"
-    if bold_match:
-        return bold_match, "bold"
-    if underline_match:
-        return underline_match, "underline"
-    return None, None
+    for bold_match in re.finditer(bold_pattern, text):
+        # Plain text before this bold span
+        if bold_match.start() > last_end:
+            run = paragraph.add_run(text[last_end : bold_match.start()])
+            _apply_base_formatting(run, base_font_size, base_color, base_italic)
+            if underline:
+                run.underline = True
+
+        # Bold text
+        run = paragraph.add_run(bold_match.group(1))
+        _apply_base_formatting(run, base_font_size, base_color, base_italic)
+        run.bold = True
+        if underline:
+            run.underline = True
+
+        last_end = bold_match.end()
+
+    # Remaining text after last bold span
+    if last_end < len(text):
+        run = paragraph.add_run(text[last_end:])
+        _apply_base_formatting(run, base_font_size, base_color, base_italic)
+        if underline:
+            run.underline = True
 
 
 # Patterns for financial metrics that should be bolded (most specific first)
@@ -289,7 +305,11 @@ def parse_and_format_text(
 ) -> None:
     """
     Parse markdown-style formatting and add formatted runs to paragraph.
-    Supports **bold** for emphasis and __underline__ for important phrases.
+    Supports **bold** and __underline__, including **bold** nested inside __underline__.
+
+    Processes underline spans first, then bold within each segment, so that
+    ``__key insight with **$1.2 BN** growth__`` renders as underlined text
+    with the metric both bold and underlined.
 
     Args:
         paragraph: Word paragraph object to add formatted text to
@@ -303,28 +323,32 @@ def parse_and_format_text(
         _apply_base_formatting(run, base_font_size, base_color, base_italic)
         return
 
-    remaining_text = content
-    while remaining_text:
-        next_match, match_type = _find_next_format_match(remaining_text)
+    # Process underline spans first, then bold within each segment
+    underline_pattern = r"__(.*?)__"
+    last_end = 0
 
-        if next_match:
-            if next_match.start() > 0:
-                run = paragraph.add_run(remaining_text[: next_match.start()])
-                _apply_base_formatting(run, base_font_size, base_color, base_italic)
+    for ul_match in re.finditer(underline_pattern, content, re.DOTALL):
+        # Text before this underline span — process for bold only
+        if ul_match.start() > last_end:
+            _add_bold_runs(
+                paragraph, content[last_end : ul_match.start()],
+                base_font_size, base_color, base_italic, underline=False,
+            )
 
-            run = paragraph.add_run(next_match.group(1))
-            _apply_base_formatting(run, base_font_size, base_color, base_italic)
+        # Underlined text — process for bold within underline
+        _add_bold_runs(
+            paragraph, ul_match.group(1),
+            base_font_size, base_color, base_italic, underline=True,
+        )
 
-            if match_type == "bold":
-                run.bold = True
-            elif match_type == "underline":
-                run.underline = True
+        last_end = ul_match.end()
 
-            remaining_text = remaining_text[next_match.end() :]  # noqa: E203
-        else:
-            run = paragraph.add_run(remaining_text)
-            _apply_base_formatting(run, base_font_size, base_color, base_italic)
-            break
+    # Remaining text after last underline span
+    if last_end < len(content):
+        _add_bold_runs(
+            paragraph, content[last_end:],
+            base_font_size, base_color, base_italic, underline=False,
+        )
 
 
 def _add_category_heading(doc, title: str, heading_level: int) -> None:
