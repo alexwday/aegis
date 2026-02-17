@@ -1,9 +1,15 @@
 """
-Push ETL prompt markdown files to the local PostgreSQL prompts table.
+Push ETL prompt files to the local PostgreSQL prompts table.
 
-Reads each prompt markdown file, parses out the system_prompt, user_prompt,
-and tool_definition sections, then INSERTs as a new row in the prompts table.
-The prompt_manager uses MAX(updated_at) to select the latest version at runtime.
+Reads each prompt file (markdown or YAML), parses out the system_prompt,
+user_prompt, and tool_definition sections, then INSERTs as a new row in the
+prompts table.  The prompt_manager uses MAX(updated_at) to select the latest
+version at runtime.
+
+Supports two file formats:
+  - Markdown (.md): Sections delimited by ## headers and ``` fences
+  - YAML (.yaml):   Keys system_template, user_template, tool_name,
+                     tool_description, tool_parameters
 
 Usage:
     source venv/bin/activate
@@ -14,6 +20,8 @@ import json
 import re
 import sys
 from pathlib import Path
+
+import yaml
 
 # Add project root to path so we can import aegis modules
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -62,6 +70,37 @@ PROMPT_FILES = [
         "name": "theme_grouping",
         "path": "src/aegis/etls/key_themes/documentation/prompts/theme_grouping_prompt.md",
         "description": "Review category classifications, regroup, and create dynamic titles",
+    },
+    # --- CM Readthrough ETL (YAML format) ---
+    {
+        "layer": "cm_readthrough_etl",
+        "name": "outlook_extraction",
+        "path": "src/aegis/etls/cm_readthrough/documentation/prompts/outlook_extraction.yaml",
+        "description": "Extract capital markets outlook statements by category with relevance scoring",
+    },
+    {
+        "layer": "cm_readthrough_etl",
+        "name": "qa_extraction_dynamic",
+        "path": "src/aegis/etls/cm_readthrough/documentation/prompts/qa_extraction_dynamic.yaml",
+        "description": "Extract analyst Q&A questions by category from earnings calls",
+    },
+    {
+        "layer": "cm_readthrough_etl",
+        "name": "batch_formatting",
+        "path": "src/aegis/etls/cm_readthrough/documentation/prompts/batch_formatting.yaml",
+        "description": "Format outlook statements with two-level HTML emphasis for Word documents",
+    },
+    {
+        "layer": "cm_readthrough_etl",
+        "name": "subtitle_generation",
+        "path": "src/aegis/etls/cm_readthrough/documentation/prompts/subtitle_generation.yaml",
+        "description": "Generate concise section subtitles from cross-bank capital markets themes",
+    },
+    {
+        "layer": "cm_readthrough_etl",
+        "name": "qa_deduplication",
+        "path": "src/aegis/etls/cm_readthrough/documentation/prompts/qa_deduplication.yaml",
+        "description": "Identify and remove duplicate analyst questions across categories and sections",
     },
 ]
 
@@ -166,6 +205,63 @@ def _extract_tool_definition(text: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# YAML parsing (for CM readthrough prompts)
+# ---------------------------------------------------------------------------
+
+
+def parse_prompt_yaml(filepath: str) -> dict:
+    """
+    Parse a YAML prompt file and extract components.
+
+    YAML prompts use keys: system_template, user_template, tool_name,
+    tool_description, tool_parameters.
+
+    Args:
+        filepath: Path to the YAML file
+
+    Returns:
+        Dict with version, system_prompt, user_prompt, tool_definition keys
+    """
+    text = Path(filepath).read_text(encoding="utf-8")
+    data = yaml.safe_load(text)
+
+    system_prompt = data.get("system_template", "")
+    if not system_prompt:
+        raise ValueError(f"No system_template found in {filepath}")
+
+    user_prompt = data.get("user_template", "")
+    if not user_prompt:
+        raise ValueError(f"No user_template found in {filepath}")
+
+    # Build tool definition from YAML fields if present
+    tool_definition = None
+    tool_name = data.get("tool_name")
+    if tool_name:
+        tool_definition = {
+            "type": "function",
+            "function": {
+                "name": tool_name,
+                "description": data.get("tool_description", ""),
+                "parameters": {
+                    "type": "object",
+                    "properties": data.get("tool_parameters", {}),
+                },
+            },
+        }
+
+    # Extract version from system_template text if present
+    version_match = re.search(r"[Vv]ersion[:\s]+(\S+)", text)
+    version = version_match.group(1) if version_match else "1.0.0"
+
+    return {
+        "version": version,
+        "system_prompt": system_prompt.strip(),
+        "user_prompt": user_prompt.strip(),
+        "tool_definition": tool_definition,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Database insertion
 # ---------------------------------------------------------------------------
 
@@ -245,8 +341,12 @@ def main():
             filepath = PROJECT_ROOT / prompt_def["path"]
             print(f"\n--- {prompt_def['layer']}/{prompt_def['name']} ---")
 
-            # Parse the markdown
-            parsed = parse_prompt_markdown(str(filepath))
+            # Parse based on file extension
+            if filepath.suffix in (".yaml", ".yml"):
+                parsed = parse_prompt_yaml(str(filepath))
+            else:
+                parsed = parse_prompt_markdown(str(filepath))
+
             print(f"  File version:  {parsed['version']}")
             print(f"  System prompt: {len(parsed['system_prompt'])} chars")
             print(f"  User prompt:   {len(parsed['user_prompt'])} chars")
@@ -264,7 +364,7 @@ def main():
 
         conn.commit()
         print("\n" + "=" * 70)
-        print("All 6 prompts pushed successfully.")
+        print(f"All {len(PROMPT_FILES)} prompts pushed successfully.")
         print("=" * 70)
 
     except Exception as e:
