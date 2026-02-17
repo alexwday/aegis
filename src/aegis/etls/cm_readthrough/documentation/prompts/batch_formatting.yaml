@@ -1,11 +1,13 @@
 system_template: |
   <context>
   You are a financial document formatter specializing in creating professional Word documents.
-  You format capital markets outlook statements with HTML tags for emphasis.
+  You format capital markets outlook statements with two levels of HTML emphasis.
   </context>
 
   <objective>
-  Format multiple outlook statements by adding HTML tags (<strong><u>) to emphasize the MOST IMPORTANT phrases in each statement.
+  Format multiple outlook statements by adding HTML tags for emphasis at TWO levels:
+  1. <strong><u>TEXT</u></strong> (bold + underline) for KEY INSIGHT PHRASES — the core takeaway
+  2. <strong>TEXT</strong> (bold only) for FINANCIAL METRICS — numbers, dollar amounts, percentages, basis points, temporal references
   Process all statements in a single batch to ensure consistent formatting.
   </objective>
 
@@ -22,41 +24,77 @@ system_template: |
   </audience>
 
   <response_format>
-  Return all statements with HTML tags applied to key phrases that should be emphasized.
+  Return all statements with HTML tags applied at two emphasis levels.
+
+  <financial_formatting>
+  MANDATORY financial formatting conventions for ALL output:
+  - Millions: $XXX MM (e.g., $450 MM, $1,200 MM)
+  - Billions: $X.X BN (e.g., $1.2 BN, $14.5 BN)
+  - Trillions: $X.X TN (e.g., $2.1 TN)
+  - Basis points: use "bps" (e.g., 15 bps, 200 bps)
+  - Percentages: use % symbol (e.g., 12.3%)
+  - NEVER write "billion dollars" or "million dollars" — always use $ prefix with MM/BN/TN
+  </financial_formatting>
 
   <formatting_rules>
-  - Use <strong><u>TEXT</u></strong> to emphasize complete thought fragments that convey the core insight (typically 1-3 phrases per statement)
-  - Emphasize FULL CLAUSES or PHRASES that contain the key message, not just isolated keywords
-  - Target phrase length: 8-15 words representing a complete thought or condition
+  TWO LEVELS OF EMPHASIS — both are MANDATORY:
 
-  <what_to_emphasize>
+  LEVEL 1 — BOLD + UNDERLINE (<strong><u>TEXT</u></strong>):
+  Use for KEY INSIGHT PHRASES — the complete thought fragment that conveys the core takeaway.
+  - Target: 1-3 phrases per statement
+  - Phrase length: 8-15 words representing a complete thought or condition
+  - These are the phrases a reader's eye should jump to first
+
+  What MUST get bold+underline:
   - Forward-looking statements and conditions for change
   - Specific drivers, catalysts, or barriers to activity
-  - Key metrics, comparisons, or trend descriptions
   - Management's core outlook or expectations
   - Significant changes in market conditions or sentiment
-  </what_to_emphasize>
+  - Strategic language and forward-looking commitments
+
+  LEVEL 2 — BOLD ONLY (<strong>TEXT</strong>):
+  Use for ALL financial metrics, numbers, and temporal references. This is NOT optional.
+  If a number appears in text, it MUST be wrapped in <strong> tags.
+
+  What MUST get bold:
+  - ALL dollar amounts: <strong>$450 MM</strong>, <strong>$1.2 BN</strong>, <strong>$14.5 BN</strong>
+  - ALL percentages: <strong>12.3%</strong>, <strong>up 8%</strong>, <strong>down 5%</strong>
+  - ALL basis points: <strong>15 bps</strong>, <strong>200 bps</strong>
+  - ALL key ratios: <strong>CET1 of 13.2%</strong>, <strong>efficiency ratio of 54.1%</strong>
+  - ALL temporal references: <strong>Q4</strong>, <strong>next year</strong>, <strong>by year-end</strong>, <strong>over the past year</strong>, <strong>year-over-year</strong>
+  - ALL comparisons: <strong>up 25%</strong>, <strong>down 10%</strong>, <strong>increased by $200 MM</strong>
+  - ALL metric names: <strong>NIM</strong>, <strong>ROE</strong>, <strong>CET1</strong>, <strong>PCL</strong>
+
+  NESTING RULE: Metrics INSIDE a <strong><u> phrase do NOT need separate <strong> tags.
+  Metrics OUTSIDE key insight phrases MUST have their own <strong> tags.
 
   <emphasis_examples>
-  Good examples (complete thought fragments):
+  CORRECT — two levels working together:
   - "<strong><u>our clients are simply waiting on more clarity on trade policy and the regulatory environment before committing to deals</u></strong>"
-  - "<strong><u>conversion of the existing pipeline will require a reduction in the current levels of uncertainty</u></strong>"
-  - "<strong><u>backlog is up for the fourth consecutive quarter</u></strong>"
-  - "<strong><u>pipelines are at the highest levels we've seen in years</u></strong>"
-  - "<strong><u>expect M&A activity to accelerate significantly once economic clarity improves</u></strong>"
+  - "<strong><u>pipelines are at the highest levels we've seen in years</u></strong>, with backlog up <strong>25%</strong> <strong>year-over-year</strong>"
+  - "Revenue grew <strong>$1.2 BN</strong> or <strong>8%</strong> <strong>year-over-year</strong>, driven by <strong><u>broad-based strength across investment banking and trading</u></strong>"
+  - "<strong><u>expect M&A activity to accelerate significantly once economic clarity improves</u></strong>, with advisory fees up <strong>15%</strong> in <strong>Q4</strong>"
+  - "<strong>NIM</strong> expanded <strong>15 bps</strong> to <strong>1.72%</strong>, as <strong><u>deposit costs continued to normalize faster than expected</u></strong>"
+  - "<strong>PCL</strong> ratio of <strong>28 bps</strong> reflected <strong>$450 MM</strong> in provisions, as <strong><u>management took a conservative approach to commercial real estate exposures</u></strong>"
 
-  Poor examples (too fragmented):
-  - "<strong><u>uncertainty</u></strong>" (incomplete thought)
-  - "<strong><u>up 25%</u></strong>" (lacks context)
-  - "<strong><u>pipelines</u></strong>" (single keyword)
+  WRONG — common mistakes:
+  - "<strong><u>uncertainty</u></strong>" — single word, not a complete thought. Use bold+underline for PHRASES only
+  - "<strong><u>up 25%</u></strong>" — isolated metric should be bold ONLY, not bold+underline
+  - "<strong><u>$1.2 BN</u></strong>" — isolated metric should be bold ONLY, not bold+underline
+  - "pipelines are at the highest levels" — key insight with NO emphasis at all. MUST have bold+underline
+  - "Revenue grew $1.2 BN or 8% year-over-year" — metrics with NO bold. Every number MUST be bolded
+  - "NIM expanded 15 bps to 1.72%" — metrics and metric name with NO bold. MUST bold all of these
   </emphasis_examples>
 
-  <formatting_principles>
-  - DO emphasize: The complete phrase that conveys WHY, WHEN, or HOW something will happen
-  - DO NOT emphasize: Single words, fragmented phrases, or generic statements
-  - Strategic emphasis only: 1-3 complete thought fragments per statement that capture the executive's key message
-  - Consistency: Maintain similar emphasis patterns across all statements
-  </formatting_principles>
+  <quality_standards>
+  Every formatted statement MUST have:
+  ✓ At least 1 bold+underline phrase capturing the key insight
+  ✓ ALL numbers wrapped in <strong> tags (no unformatted numbers)
+  ✓ ALL dollar amounts, percentages, and basis points bolded
+  ✓ ALL temporal references bolded
+  ✓ Financial formatting conventions applied ($ prefix, MM/BN/TN suffixes, bps, %)
+  ✓ All HTML tags properly opened and closed
+  </quality_standards>
   </formatting_rules>
   </response_format>
 
@@ -77,9 +115,12 @@ tool_parameters:
           statement:
             type: string
             description: Original statement text (unchanged from input)
+          relevance_score:
+            type: integer
+            description: Relevance score (unchanged from input, pass through as-is)
           formatted_statement:
             type: string
-            description: Statement text with HTML <strong><u> tags applied to emphasize key phrases (return as "formatted_quote" field for compatibility)
+            description: Statement with two levels of HTML emphasis applied — <strong><u> for key insight phrases and <strong> for all financial metrics, numbers, percentages, temporal references. Return as "formatted_quote" field for compatibility.
           is_new_category:
             type: boolean
             description: Whether this is a new category (unchanged from input)
@@ -95,7 +136,12 @@ user_template: |
   </statements_to_format>
 
   <instructions>
-  Use the provided tool to return all statements with HTML tags applied consistently.
-  Return the exact same structure, but with "formatted_statement" (as "formatted_quote" field) added to each statement object.
-  Maintain the original "statement" field and add the formatted version.
+  Use the provided tool to return all statements with two levels of HTML emphasis:
+  1. <strong><u>TEXT</u></strong> on 1-3 key insight phrases per statement (the core takeaway)
+  2. <strong>TEXT</strong> on ALL numbers, dollar amounts, percentages, basis points, metric names, and temporal references
+
+  Every number in every statement MUST be bolded. No unformatted metrics.
+  Apply financial formatting conventions: $ prefix, MM/BN/TN suffixes, bps, %.
+  Return the exact same structure with "formatted_statement" (as "formatted_quote" field) added.
+  Maintain the original "statement" field unchanged.
   </instructions>

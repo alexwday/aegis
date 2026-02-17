@@ -10,6 +10,19 @@ from sqlalchemy import text
 from aegis.utils.logging import get_logger
 from aegis.connections.postgres_connector import get_connection
 
+# --- Transcript Section Constants ---
+SECTION_MD = "MANAGEMENT DISCUSSION SECTION"
+SECTION_QA = "Q&A"
+SECTIONS_KEY_MD = "MD"
+SECTIONS_KEY_QA = "QA"
+SECTIONS_KEY_ALL = "ALL"
+VALID_SECTION_KEYS = {SECTIONS_KEY_MD, SECTIONS_KEY_QA, SECTIONS_KEY_ALL}
+SECTION_FILTER = {
+    SECTIONS_KEY_MD: [SECTION_MD],
+    SECTIONS_KEY_QA: [SECTION_QA],
+    SECTIONS_KEY_ALL: [SECTION_MD, SECTION_QA],
+}
+
 
 async def get_filter_diagnostics(combo: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
     """
@@ -147,27 +160,7 @@ async def retrieve_full_section(
     logger = get_logger()
     execution_id = context.get("execution_id")
 
-    section_filter = {
-        "MD": ["MANAGEMENT DISCUSSION SECTION"],
-        "QA": ["Q&A"],
-        "ALL": ["MANAGEMENT DISCUSSION SECTION", "Q&A"],
-    }
-
-    sections_to_fetch = section_filter.get(sections, ["MANAGEMENT DISCUSSION SECTION", "Q&A"])
-
-    diagnostics = await get_filter_diagnostics(combo, context)
-
-    logger.info(
-        "etl.cm_readthrough.filter_diagnostics",
-        execution_id=execution_id,
-        filters={
-            "bank_id": combo["bank_id"],
-            "fiscal_year": combo["fiscal_year"],
-            "quarter": combo["quarter"],
-            "sections": sections,
-        },
-        diagnostics=diagnostics,
-    )
+    sections_to_fetch = SECTION_FILTER.get(sections, SECTION_FILTER[SECTIONS_KEY_ALL])
 
     try:
         async with get_connection() as conn:
@@ -222,7 +215,19 @@ async def retrieve_full_section(
                     }
                 )
 
-            if len(chunks) == 0 and diagnostics.get("matching_all_filters", 0) == 0:
+            if len(chunks) == 0:
+                diagnostics = await get_filter_diagnostics(combo, context)
+                logger.info(
+                    "etl.cm_readthrough.filter_diagnostics",
+                    execution_id=execution_id,
+                    filters={
+                        "bank_id": combo["bank_id"],
+                        "fiscal_year": combo["fiscal_year"],
+                        "quarter": combo["quarter"],
+                        "sections": sections,
+                    },
+                    diagnostics=diagnostics,
+                )
                 logger.warning(
                     "etl.cm_readthrough.no_results_found",
                     execution_id=execution_id,
@@ -254,10 +259,14 @@ async def retrieve_full_section(
         logger.error(
             "etl.cm_readthrough.full_section_error", execution_id=execution_id, error=str(e)
         )
-        return []
+        raise RuntimeError(
+            f"Failed to retrieve transcript sections for "
+            f"{combo.get('bank_symbol', 'unknown')} "
+            f"{combo.get('quarter', '?')} {combo.get('fiscal_year', '?')}: {e}"
+        ) from e
 
 
-async def format_full_section_chunks(
+def format_full_section_chunks(
     chunks: List[Dict[str, Any]],
     combo: Dict[str, Any],
     context: Dict[str, Any],

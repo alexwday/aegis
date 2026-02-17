@@ -11,7 +11,6 @@ import argparse
 import asyncio
 import json
 import random
-import re
 import time
 import uuid
 import os
@@ -49,7 +48,6 @@ from aegis.etls.call_summary.transcript_utils import (
     SECTIONS_KEY_QA,
     SECTIONS_KEY_ALL,
     VALID_SECTION_KEYS,
-    SECTION_FILTER,
 )
 from aegis.utils.ssl import setup_ssl
 from aegis.connections.oauth_connector import setup_authentication
@@ -688,9 +686,7 @@ async def _generate_research_plan(
                 attempt=attempt + 1,
             )
             if attempt < max_retries - 1:
-                delay = min(
-                    etl_config.retry_base_delay * (2**attempt), etl_config.retry_max_delay
-                )
+                delay = min(etl_config.retry_base_delay * (2**attempt), etl_config.retry_max_delay)
                 delay += random.uniform(0, 0.5 * delay)
                 await asyncio.sleep(delay)
                 continue
@@ -967,9 +963,7 @@ async def _deduplicate_results_llm(
                 attempt=attempt + 1,
             )
             if attempt < max_retries - 1:
-                delay = min(
-                    etl_config.retry_base_delay * (2**attempt), etl_config.retry_max_delay
-                )
+                delay = min(etl_config.retry_base_delay * (2**attempt), etl_config.retry_max_delay)
                 delay += random.uniform(0, 0.5 * delay)
                 await asyncio.sleep(delay)
                 continue
@@ -1071,9 +1065,7 @@ async def _extract_single_category(  # noqa: E501  pylint: disable=too-many-argu
             )
 
         # Extract Q&A group filter from research plan (empty = no filtering)
-        relevant_qa_groups = (
-            category_plan.get("relevant_qa_groups", []) if category_plan else []
-        )
+        relevant_qa_groups = category_plan.get("relevant_qa_groups", []) if category_plan else []
 
         # Filter chunks to relevant content; no plan = full unfiltered transcript
         cache = etl_context.get("section_cache", {})
@@ -1120,9 +1112,7 @@ async def _extract_single_category(  # noqa: E501  pylint: disable=too-many-argu
             else "No research plan available — extract all relevant content from the transcript."
         )
         cross_category_notes = (
-            category_plan.get("cross_category_notes", "")
-            if category_plan
-            else ""
+            category_plan.get("cross_category_notes", "") if category_plan else ""
         )
 
         system_prompt = extraction_prompts["system_prompt"].format(
@@ -1194,9 +1184,7 @@ async def _extract_single_category(  # noqa: E501  pylint: disable=too-many-argu
 
                 return extracted_data
 
-            except (
-                KeyError, IndexError, json.JSONDecodeError, TypeError, ValidationError
-            ) as e:
+            except (KeyError, IndexError, json.JSONDecodeError, TypeError, ValidationError) as e:
                 logger.warning(
                     "etl.call_summary.category_extraction_parse_error",
                     execution_id=execution_id,

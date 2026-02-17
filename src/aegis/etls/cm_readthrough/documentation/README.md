@@ -22,6 +22,21 @@ The ETL requires transcript data from the database and configuration files defin
 | **qa_market_volatility_regulatory_categories.xlsx** | `config/categories/` | Category definitions for Section 2 Q&A (Global Markets, Risk Management, Corporate Banking, Regulatory Changes) |
 | **qa_pipelines_activity_categories.xlsx** | `config/categories/` | Category definitions for Section 3 Q&A (Investment Banking/M&A, Transaction Banking) |
 
+## Runtime Standardization Controls
+
+The CM readthrough ETL now follows the same reliability/contract standards used in the other production ETLs.
+
+| Control | Location | Notes |
+|--------|----------|-------|
+| **Typed result + typed errors** | `main.py` (`CMReadthroughResult`, `CMReadthroughUserError`, `CMReadthroughSystemError`) | Runtime returns structured success metadata and classifies user vs system failures |
+| **Per-task token budgets** | `config/config.yaml` (`llm.max_tokens`) | `outlook_extraction`, `qa_extraction`, `subtitle_generation`, `batch_formatting`, plus `default` fallback |
+| **Retry/backoff policy** | `config/config.yaml` (`retry`) + `main.py` | Exponential backoff with jitter for tool-call stages |
+| **Schema validation for tool outputs** | `main.py` (Pydantic models) | Validates extraction/formatting/subtitle tool responses before use |
+| **Prompt safety** | `main.py` (`_sanitize_for_prompt`) | Escapes braces for safe `.format()` prompt injection |
+| **Observability** | `main.py` (`_accumulate_llm_cost`, `_timing_summary`) | Stage-level LLM usage and timing logs on completion |
+| **Transcript retrieval safeguards** | `transcript_utils.py` | Diagnostics only on misses; retrieval failures raise explicit runtime errors |
+| **Document validation** | `document_converter.py` (`validate_document_content`) | Prevents writing invalid/empty report documents |
+
 
 ## Process
 
@@ -43,7 +58,7 @@ The ETL generates both a formatted Word document and a database record stored in
 
 | Output | Location | Description |
 |--------|----------|-------------|
-| **DOCX File** | `output/CM_Readthrough_[YEAR]_[QUARTER]_[HASH].docx` | Formatted Word document with landscape orientation, dark blue headers, and three sections: Outlook (2-column), Section 2 Q&A (3-column), Section 3 Q&A (3-column) |
+| **DOCX File** | `output/CM_Readthrough_[YEAR]_[QUARTER].docx` | Formatted Word document with landscape orientation, dark blue headers, and three sections: Outlook (2-column), Section 2 Q&A (3-column), Section 3 Q&A (3-column) |
 | **Database Record** | `aegis_reports` table | Cross-bank report metadata with report_type='cm_readthrough', generation timestamp, and JSON metadata (banks_processed, banks_with_outlook/section2/section3, subtitles) |
 
 

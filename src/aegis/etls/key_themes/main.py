@@ -31,7 +31,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from docx import Document
 from docx.shared import Pt, Inches, RGBColor
-from docx.enum.text import WD_ALIGN_PARAGRAPH
+
 
 from aegis.etls.key_themes.document_converter import (
     HTMLToDocx,
@@ -534,9 +534,11 @@ def load_categories_from_xlsx(execution_id: str) -> List[Dict[str, Any]]:
         # Convert to list of dicts, ensuring all required fields are non-empty
         categories = []
         for idx, row in df.iterrows():
-            for field in required_columns:
-                if pd.isna(row[field]) or str(row[field]).strip() == "":
-                    raise ValueError(f"Missing value for '{field}' in {file_name} (row {idx + 2})")
+            for col_name in required_columns:
+                if pd.isna(row[col_name]) or str(row[col_name]).strip() == "":
+                    raise ValueError(
+                        f"Missing value for '{col_name}' in {file_name} (row {idx + 2})"
+                    )
 
             transcript_sections = str(row["transcript_sections"]).strip()
             if transcript_sections not in VALID_SECTION_KEYS:
@@ -1210,9 +1212,7 @@ async def determine_comprehensive_grouping(
 
         return theme_groups
 
-    raise RuntimeError(
-        "Theme grouping failed: LLM returned no tool calls after all retries"
-    )
+    raise RuntimeError("Theme grouping failed: LLM returned no tool calls after all retries")
 
 
 def validate_grouping_assignments(
@@ -1463,9 +1463,7 @@ async def _save_to_database(
                     "metadata": json.dumps(
                         {
                             "theme_groups": len(theme_groups),
-                            "total_qa_blocks": sum(
-                                len(group.qa_blocks) for group in theme_groups
-                            ),
+                            "total_qa_blocks": sum(len(group.qa_blocks) for group in theme_groups),
                             "invalid_qa_filtered": sum(
                                 1 for qa in qa_index.values() if not qa.is_valid
                             ),
@@ -1577,9 +1575,7 @@ async def generate_key_themes(bank_name: str, fiscal_year: int, quarter: str) ->
         )
 
         # Stage 1: Sequential classification with cumulative context
-        await classify_all_qa_blocks_sequential(
-            qa_index, categories, extraction_prompts, context
-        )
+        await classify_all_qa_blocks_sequential(qa_index, categories, extraction_prompts, context)
 
         marks.append(("classification", time.monotonic()))
 

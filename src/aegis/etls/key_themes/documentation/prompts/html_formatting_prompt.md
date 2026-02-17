@@ -1,14 +1,14 @@
-# HTML Formatting Prompt - v6.0.0
+# HTML Formatting Prompt - v6.1.0
 
 ## Metadata
 - **Model**: aegis
 - **Layer**: key_themes_etl
 - **Name**: html_formatting
-- **Version**: 6.0.0
+- **Version**: 6.1.0
 - **Framework**: CO-STAR+XML
 - **Purpose**: Transform Q&A content into executive-ready HTML-formatted documents with strategic emphasis
 - **Token Target**: 32768
-- **Last Updated**: 2026-02-13
+- **Last Updated**: 2026-02-17
 
 ---
 
@@ -64,25 +64,26 @@ SIMPLE, CLEAR HTML FORMATTING RULES:
 
 IMPORTANT: Formatting is for EMPHASIS ONLY. After removing pleasantries/fluff, include ALL remaining business content whether formatted or not.
 
-1. BLUE LARGER TEXT - Highlight the ACTUAL QUESTION(S) and KEY RESPONSE:
-   • QUESTION: <span style="color: #1e4d8b; font-size: 11pt; font-weight: bold;">The analyst's actual question sentence(s)</span> - The sentence(s) that ASK something (contain "?", "can you", "could you", "how", "what", etc.). NOT the preceding context or background setup.
+1. BLUE TEXT - Highlight BOTH the analyst's context AND their question, using TWO SHADES to distinguish them:
+   • CONTEXT: <span style="color: #6b9bd2; font-size: 11pt;">The analyst's context/background sentences</span> - Lighter blue, not bold. The setup that frames the question.
+   • QUESTION: <span style="color: #1e4d8b; font-size: 11pt; font-weight: bold;">The analyst's actual question sentence(s)</span> - Dark blue, bold. The sentence(s) that ASK something (contain "?", "can you", "could you", "how", "what", etc.).
    • ANSWER: <span style="color: #4d94ff; font-size: 11pt; font-weight: bold;">The executive's key response sentences</span> - May be multiple sentences if response has multiple important points
    Note: Blue formatting is for visual emphasis - include all other business content too
 
-   CRITICAL DISTINCTION — CONTEXT vs. QUESTION:
+   CRITICAL DISTINCTION — CONTEXT vs. QUESTION use different shades:
    Analysts often provide 1-3 sentences of context/background before asking their question.
-   Only the QUESTION sentence(s) get blue — NOT the context/setup.
+   The QUESTION gets dark bold blue. The CONTEXT gets lighter non-bold blue.
 
-   • CONTEXT (no blue): "So I wanted to ask about your NIM outlook for next year."
-   • QUESTION (blue): "Can you give us some color on where you see margins heading?"
+   • CONTEXT (light blue): <span style="color: #6b9bd2; font-size: 11pt;">So I wanted to ask about your NIM outlook for next year.</span>
+   • QUESTION (dark blue): <span style="color: #1e4d8b; font-size: 11pt; font-weight: bold;">Can you give us some color on where you see margins heading?</span>
 
-   • CONTEXT (no blue): "I'm particularly interested in buybacks versus organic growth."
-   • QUESTION (blue): "Could you talk about your capital deployment priorities?"
+   • CONTEXT (light blue): <span style="color: #6b9bd2; font-size: 11pt;">I'm particularly interested in buybacks versus organic growth.</span>
+   • QUESTION (dark blue): <span style="color: #1e4d8b; font-size: 11pt; font-weight: bold;">Could you talk about your capital deployment priorities?</span>
 
-   • CONTEXT (no blue): "We've seen peers report significant CRE stress this quarter."
-   • QUESTION (blue): "How are you thinking about your commercial real estate exposure?"
+   • CONTEXT (light blue): <span style="color: #6b9bd2; font-size: 11pt;">We've seen peers report significant CRE stress this quarter.</span>
+   • QUESTION (dark blue): <span style="color: #1e4d8b; font-size: 11pt; font-weight: bold;">How are you thinking about your commercial real estate exposure?</span>
 
-   If the analyst's turn is ONLY a question (no preceding context), that sentence gets blue.
+   If the analyst's turn is ONLY a question (no preceding context), that sentence gets dark bold blue.
 
 2. YELLOW HIGHLIGHT - Key strategic statements:
    • <mark style="background-color: #ffff99;">Any game-changing revelation or critical strategic insight</mark>
@@ -137,7 +138,8 @@ GUIDELINE: When in doubt, KEEP IT. We want 95%+ of the original content preserve
 
 <quality_checklist>
 ✓ Speaker names are <b>bolded</b> and inline
-✓ The analyst's ACTUAL QUESTION sentence(s) have blue formatting (not context/setup)
+✓ The analyst's CONTEXT sentence(s) have light blue formatting (#6b9bd2, not bold)
+✓ The analyst's ACTUAL QUESTION sentence(s) have dark blue formatting (#1e4d8b, bold)
 ✓ Key response sentence(s) have blue formatting
 ✓ Critical insights have yellow highlight
 ✓ ALL numbers, metrics, and temporal references are <b>bolded</b>
@@ -154,7 +156,7 @@ Jane Doe, CFO: Thanks John. So, um, on NIM, we're seeing it at around 1.65% for 
 </example_input>
 
 <example_output>
-<b>John Smith</b> (Goldman Sachs): So I wanted to ask about, you know, your NIM outlook for next year. <span style="color: #1e4d8b; font-size: 11pt; font-weight: bold;">Can you give us some color on where you see margins heading given the rate environment? And maybe touch on deposit costs as well?</span>
+<b>John Smith</b> (Goldman Sachs): <span style="color: #6b9bd2; font-size: 11pt;">So I wanted to ask about, you know, your NIM outlook for next year.</span> <span style="color: #1e4d8b; font-size: 11pt; font-weight: bold;">Can you give us some color on where you see margins heading given the rate environment? And maybe touch on deposit costs as well?</span>
 
 <b>Jane Doe</b> (CFO): <span style="color: #4d94ff; font-size: 11pt; font-weight: bold;">So, on NIM, we're seeing it at around <b>1.65%</b> for <b>Q4</b>, and we expect it to expand to approximately <b>1.70%</b> to <b>1.75%</b> by <b>mid next year</b> as deposit costs normalize.</span> <u>We're committed to reaching <b>1.80%</b> by <b>end of 2025</b></u>. On the deposit side, our costs peaked at <b>235 basis points</b> <b>last quarter</b> and we're already seeing them come down, you know, pretty significantly.
 </example_output>
@@ -176,7 +178,7 @@ Sarah Williams, CFO: And if I can just add to Bob's point - the $2 billion techn
 </example_input>
 
 <example_output>
-<b>Mike Johnson</b> (JP Morgan): <span style="color: #1e4d8b; font-size: 11pt; font-weight: bold;">Could you talk about your capital deployment priorities?</span> I'm particularly interested in buybacks versus organic growth investments and any specific targets you have there.
+<b>Mike Johnson</b> (JP Morgan): <span style="color: #1e4d8b; font-size: 11pt; font-weight: bold;">Could you talk about your capital deployment priorities?</span> <span style="color: #6b9bd2; font-size: 11pt;">I'm particularly interested in buybacks versus organic growth investments and any specific targets you have there.</span>
 
 <b>Bob Smith</b> (CEO): So our capital priorities remain consistent. <span style="color: #4d94ff; font-size: 11pt; font-weight: bold;">First is organic growth - we're investing about <b>$2 billion</b> annually in technology and digital capabilities. Second is our dividend, which we increased by <b>8%</b> <b>this quarter</b>. Third is buybacks - we have <b>$5 billion</b> remaining on our current authorization and expect to complete it <b>by year-end</b>.</span> Our <b>CET1 ratio</b> of <b>13.2%</b> gives us plenty of flexibility here. <mark style="background-color: #ffff99;"><u>We're targeting a <b>15%</b> ROE by <b>fiscal 2026</b></u></mark>.
 
@@ -236,14 +238,14 @@ Mark Chen, CRO: Great question, Rachel. So our CRE book is about $28 billion, ro
 </example_input>
 
 <example_output>
-<b>Rachel Torres</b> (RBC Capital Markets): We've seen a number of your peers report significant stress in the <i>commercial real estate</i> book <b>this quarter</b>, particularly in the office segment. And I know you've been building reserves in that area over the past few quarters. <span style="color: #1e4d8b; font-size: 11pt; font-weight: bold;">How are you thinking about your CRE exposure going forward? And do you see any need to accelerate the provisioning cycle?</span>
+<b>Rachel Torres</b> (RBC Capital Markets): <span style="color: #6b9bd2; font-size: 11pt;">We've seen a number of your peers report significant stress in the <i>commercial real estate</i> book <b>this quarter</b>, particularly in the office segment. And I know you've been building reserves in that area over the past few quarters.</span> <span style="color: #1e4d8b; font-size: 11pt; font-weight: bold;">How are you thinking about your CRE exposure going forward? And do you see any need to accelerate the provisioning cycle?</span>
 
 <b>Mark Chen</b> (CRO): <span style="color: #4d94ff; font-size: 11pt; font-weight: bold;">Our CRE book is about <b>$28 billion</b>, roughly <b>8%</b> of total loans. The office segment specifically is <b>$6.2 billion</b>, and we've been proactively managing that exposure.</span> We've reduced our office exposure by about <b>15%</b> <b>over the past year</b> through natural maturities and selective sales. Our current LTV on the office portfolio is around <b>58%</b>, so we have a reasonable cushion there. On provisioning, we've already built <b>$180 million</b> in stage 2 reserves specifically for <i>CRE office</i>, and we don't see the need to accelerate beyond our current pace. We're comfortable with where we are.
 </example_output>
 
 QUESTION HIGHLIGHTING NOTE:
-- Rachel provides 2 sentences of context about peers and reserve building (NOT highlighted in blue)
-- Only the actual questions get blue: "How are you thinking about..." and "And do you see any need..."
+- Rachel provides 2 sentences of context about peers and reserve building (LIGHT blue, not bold)
+- The actual questions get DARK blue + bold: "How are you thinking about..." and "And do you see any need..."
 
 <edge_cases>
 Multiple executives answering:
@@ -290,6 +292,19 @@ Format this Q&A exchange with HTML tags for emphasis:
 ## Tool Definition
 
 **Note**: This prompt does not use a tool definition. The output is returned as plain HTML-formatted text for direct document insertion.
+
+---
+
+## What Changed from v6.0.0
+
+Version 6.1.0 uses two shades of blue to highlight both analyst context AND the actual question:
+
+**Two-Shade Question Highlighting:**
+- **v6.0.0**: Only the actual question sentence(s) got blue; context had no highlighting
+- **v6.1.0**: Context gets light blue (#6b9bd2, not bold); question gets dark blue (#1e4d8b, bold)
+
+**Why This Change:**
+Business feedback indicated that context surrounding the question is valuable for quick scanning — readers want to see the framing alongside the question. Using two shades preserves the distinction (the actual question stands out more) while keeping important context visible.
 
 ---
 

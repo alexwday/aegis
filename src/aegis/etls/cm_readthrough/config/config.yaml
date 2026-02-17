@@ -5,19 +5,34 @@
 # Tiers: small, medium, large
 models:
   outlook_extraction:
-    tier: medium  # Uses config.llm.large.model (32768 token support)
+    tier: medium  # Uses config.llm.medium.model (32768 token support)
   qa_extraction:
-    tier: medium  # Uses config.llm.large.model (32768 token support)
+    tier: medium  # Uses config.llm.medium.model (32768 token support)
   subtitle_generation:
-    tier: medium  # Uses config.llm.large.model (tool calling support)
+    tier: medium  # Uses config.llm.medium.model (tool calling support)
   batch_formatting:
-    tier: medium  # Uses config.llm.large.model
+    tier: medium  # Uses config.llm.medium.model
+  qa_deduplication:
+    tier: medium  # Uses config.llm.medium.model for semantic comparison
 
 # LLM Parameters
 llm:
   temperature: 0.1
-  max_tokens: 32768
+  max_tokens:
+    outlook_extraction: 32768
+    qa_extraction: 32768
+    subtitle_generation: 256
+    batch_formatting: 32768
+    qa_deduplication: 32768
+    default: 32768
 
 # Concurrency control
 concurrency:
   max_concurrent_banks: 5
+  max_concurrent_subtitle_generation: 3
+
+# Retry configuration for LLM calls
+retry:
+  max_retries: 3
+  base_delay: 1.0
+  max_delay: 10.0
