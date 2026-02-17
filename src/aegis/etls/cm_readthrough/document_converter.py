@@ -263,9 +263,6 @@ def create_combined_document(results: Dict[str, Any], output_path: str) -> None:
     section.page_height = Inches(8.5)
     metadata = results.get("metadata", {})
 
-    add_static_contents(doc, metadata)
-    doc.add_page_break()
-
     add_section1_outlook(doc, results)
 
     doc.add_page_break()
@@ -357,8 +354,8 @@ def add_section1_outlook(doc: Document, results: Dict[str, Any]) -> None:
     header_cells[0].text = "Banks/\nSegments"
     header_cells[1].text = "Investment Banking and Trading Outlook"
 
-    header_cells[0].width = Inches(0.4)  # Minimal ticker column
-    header_cells[1].width = Inches(9.6)  # Maximum content column width
+    header_cells[0].width = Inches(0.8)  # Ticker column
+    header_cells[1].width = Inches(9.2)  # Content column
 
     for cell in header_cells:
         shading_elm = parse_xml(r'<w:shd {} w:fill="002060"/>'.format(nsdecls("w")))
@@ -375,8 +372,8 @@ def add_section1_outlook(doc: Document, results: Dict[str, Any]) -> None:
     for bank_name, bank_data in banks_with_content.items():
         row = table.rows[row_idx]
 
-        row.cells[0].width = Inches(0.4)
-        row.cells[1].width = Inches(9.6)
+        row.cells[0].width = Inches(0.8)
+        row.cells[1].width = Inches(9.2)
 
         ticker = name_to_symbol.get(bank_name, bank_name[:4].upper())
         ticker_cell = row.cells[0]
@@ -542,9 +539,9 @@ def add_section2_qa(doc: Document, results: Dict[str, Any]) -> None:
     header_cells[1].text = "Banks"
     header_cells[2].text = "Relevant Questions"
 
-    header_cells[0].width = Inches(0.8)  # Themes (very narrow)
-    header_cells[1].width = Inches(0.4)  # Banks (minimal)
-    header_cells[2].width = Inches(8.8)  # Questions (maximum width)
+    header_cells[0].width = Inches(0.8)  # Themes
+    header_cells[1].width = Inches(0.8)  # Banks
+    header_cells[2].width = Inches(8.4)  # Questions
 
     for cell in header_cells:
         shading_elm = parse_xml(r'<w:shd {} w:fill="002060"/>'.format(nsdecls("w")))
@@ -569,8 +566,8 @@ def add_section2_qa(doc: Document, results: Dict[str, Any]) -> None:
             is_last_in_category = row_idx == category_end_row
 
             row.cells[0].width = Inches(0.8)
-            row.cells[1].width = Inches(0.4)
-            row.cells[2].width = Inches(8.8)
+            row.cells[1].width = Inches(0.8)
+            row.cells[2].width = Inches(8.4)
 
             if is_first_in_category:
                 row.cells[0].text = category
@@ -715,9 +712,9 @@ def add_section3_qa(doc: Document, results: Dict[str, Any]) -> None:
     header_cells[1].text = "Banks"
     header_cells[2].text = "Relevant Questions"
 
-    header_cells[0].width = Inches(0.8)  # Themes (very narrow)
-    header_cells[1].width = Inches(0.4)  # Banks (minimal)
-    header_cells[2].width = Inches(8.8)  # Questions (maximum width)
+    header_cells[0].width = Inches(0.8)  # Themes
+    header_cells[1].width = Inches(0.8)  # Banks
+    header_cells[2].width = Inches(8.4)  # Questions
 
     for cell in header_cells:
         shading_elm = parse_xml(r'<w:shd {} w:fill="002060"/>'.format(nsdecls("w")))
@@ -742,8 +739,8 @@ def add_section3_qa(doc: Document, results: Dict[str, Any]) -> None:
             is_last_in_category = row_idx == category_end_row
 
             row.cells[0].width = Inches(0.8)
-            row.cells[1].width = Inches(0.4)
-            row.cells[2].width = Inches(8.8)
+            row.cells[1].width = Inches(0.8)
+            row.cells[2].width = Inches(8.4)
 
             if is_first_in_category:
                 row.cells[0].text = category

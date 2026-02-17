@@ -1604,7 +1604,7 @@ async def generate_key_themes(bank_name: str, fiscal_year: int, quarter: str) ->
         output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "output")
         os.makedirs(output_dir, exist_ok=True)
 
-        filename_base = f"{bank_info['bank_symbol']}_{fiscal_year}_{quarter}"
+        filename_base = f"{bank_info['bank_symbol']}_{fiscal_year}_{quarter}_key_themes"
         docx_filename = f"{filename_base}.docx"
         filepath = os.path.join(output_dir, docx_filename)
 

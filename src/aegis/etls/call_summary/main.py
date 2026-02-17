@@ -1398,7 +1398,7 @@ def _generate_document(valid_categories: list, etl_context: dict) -> tuple:
     output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "output")
     os.makedirs(output_dir, exist_ok=True)
 
-    filename_base = f"{bank_info['bank_symbol']}_{fiscal_year}_{quarter}"
+    filename_base = f"{bank_info['bank_symbol']}_{fiscal_year}_{quarter}_call_summary"
     docx_filename = f"{filename_base}.docx"
     filepath = os.path.join(output_dir, docx_filename)
     doc.save(filepath)
