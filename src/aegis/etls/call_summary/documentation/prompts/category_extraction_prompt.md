@@ -151,7 +151,8 @@ EXTRACTION REQUIREMENTS:
    - Paraphrases are acceptable only when the relevant content is spread across many speakers
      and a synthesis is genuinely clearer than any single quote
    - Speaker attribution for credibility
-   - Use __underline__ for critical phrases within quotes
+   - MUST apply formatting markers to quotes: **bold** ALL metrics/numbers, __underline__ 1-2 key phrases
+   - Adding **bold** and __underline__ markers to quotes is NOT modifying the quote — the text content stays verbatim, markers are formatting only
 
    WHEN TO OMIT EVIDENCE:
    Evidence may be omitted ONLY for raw high-level metric statements where:
@@ -162,16 +163,16 @@ EXTRACTION REQUIREMENTS:
    commentary SHOULD be included as evidence even for metric-focused statements.
 
    CRITICAL DISTINCTION — the statement captures the fact, the quote paints the picture:
-   - Statement: "Net interest income grew **8%** YoY driven by loan book expansion"
+   - Statement: "Net interest income grew **8%** YoY driven by __loan book expansion__"
    - BAD quote: "Net interest income grew 8% year over year to $4.2 billion"
-     (just restates the metric — the statement already said this)
+     (just restates the metric, AND has no formatting markers — WRONG on both counts)
    - GOOD quote: "We've been really deliberate about __growing the commercial book__ over
-     the last 18 months, and you're starting to see that translate. The __mix shift toward
+     the last **18 months**, and you're starting to see that translate. The __mix shift toward
      higher-yielding assets__ has been a meaningful tailwind for us" — CFO
-     (explains the WHY — the reader now understands what drove NII growth)
+     (explains the WHY, has __underlined__ key phrases and **bolded** metrics)
    - GOOD quote: "As we look at the rate environment, we think there's still
-     __room for further NIM expansion__ particularly as fixed-rate assets reprice" — CFO
-     (adds forward context — what it means going forward)
+     __room for further NIM expansion__ particularly as **fixed-rate assets** reprice" — CFO
+     (adds forward context, with formatting applied)
    - NO evidence needed: "Total assets were **$1.9 TN**" (if no one discussed why or what it means)
 
 5. QUOTE SELECTION STRATEGY:
@@ -375,7 +376,7 @@ Extract content from this transcript section:
                     "content": {
                       "type": "string",
                       "maxLength": 2000,
-                      "description": "Verbatim transcript quote — 2-4 sentences from AROUND the finding.\nDo NOT quote the metric/fact itself — the statement already captures that.\nInstead quote the surrounding explanation: the why, the drivers, the rationale, the outlook.\nPull from sentences near the metric or from other transcript passages that reinforce the finding.\nMUST use __text__ to underline 1-2 critical phrases per quote. MUST use **text** to bold ALL numbers and metrics. Apply financial formatting conventions."
+                      "description": "Transcript quote (verbatim text with formatting markers added) — 2-4 sentences from AROUND the finding.\nDo NOT quote the metric/fact itself — the statement already captures that.\nInstead quote the surrounding explanation: the why, the drivers, the rationale, the outlook.\nPull from sentences near the metric or from other transcript passages that reinforce the finding.\nFORMATTING IS MANDATORY — adding markers does NOT violate verbatim:\n- MUST use __text__ to underline 1-2 critical phrases per quote (the key takeaway phrases)\n- MUST use **text** to bold ALL numbers, metrics, percentages, and temporal references\n- Every quote MUST have at least one __underlined__ phrase and all metrics **bolded**"
                     },
                     "speaker": {
                       "type": "string",
