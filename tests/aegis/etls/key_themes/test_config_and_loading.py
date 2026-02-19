@@ -141,6 +141,18 @@ class TestGetBankInfoFromConfig:
             "symbol": "JPM",
             "type": "US_Banks",
         },
+        4: {
+            "id": 4,
+            "name": "National Bank of Canada",
+            "symbol": "NA",
+            "type": "Canadian_Banks",
+        },
+        11: {
+            "id": 11,
+            "name": "Citigroup Inc.",
+            "symbol": "C",
+            "type": "US_Banks",
+        },
     }
 
     @pytest.fixture(autouse=True)
@@ -170,6 +182,16 @@ class TestGetBankInfoFromConfig:
     def test_lookup_by_partial_name(self):
         result = get_bank_info_from_config("Royal Bank")
         assert result["bank_id"] == 1
+
+    def test_lookup_symbol_na_not_shadowed_by_name_partial(self):
+        result = get_bank_info_from_config("NA")
+        assert result["bank_id"] == 4
+        assert result["bank_symbol"] == "NA"
+
+    def test_lookup_symbol_c_not_shadowed_by_name_partial(self):
+        result = get_bank_info_from_config("C")
+        assert result["bank_id"] == 11
+        assert result["bank_symbol"] == "C"
 
     def test_not_found_raises(self):
         with pytest.raises(ValueError, match="not found"):
