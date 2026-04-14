@@ -71,9 +71,11 @@ def build_report_state(
     fiscal_quarter: str,
     min_importance: float,
     bucket_headlines: Optional[Dict[str, str]] = None,
+    config_review_by_bank: Optional[Dict[str, Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
     """Build the mock-compatible report state JSON."""
     headlines = bucket_headlines or {}
+    raw_config_reviews = config_review_by_bank or {}
     buckets = []
     for idx, category in enumerate(categories):
         bg, accent = BUCKET_COLORS[idx % len(BUCKET_COLORS)]
@@ -87,6 +89,7 @@ def build_report_state(
                 "color_bg": bg,
                 "color_accent": accent,
                 "generated_headline": headlines.get(f"bucket_{idx}", ""),
+                "source": "config",
             }
         )
 
@@ -100,6 +103,7 @@ def build_report_state(
             "color_bg": OTHER_COLOR[0],
             "color_accent": OTHER_COLOR[1],
             "generated_headline": "",
+            "source": "system",
         }
     )
 
@@ -113,6 +117,71 @@ def build_report_state(
         }
         for ticker in banks_data
     }
+
+    config_review_state = {"by_bank": {}}
+    for ticker in banks_data:
+        bank_review = raw_config_reviews.get(ticker, {})
+        existing_updates = []
+        for idx, suggestion in enumerate(bank_review.get("existing_section_updates", []), start=1):
+            proposed_row = suggestion.get("proposed_config_row", {})
+            existing_updates.append(
+                {
+                    "id": suggestion.get("id") or f"{ticker}_existing_{idx}",
+                    "bucket_index": suggestion.get("bucket_index"),
+                    "bucket_id": suggestion.get("bucket_id"),
+                    "category_name": suggestion.get("category_name")
+                    or proposed_row.get("category_name", ""),
+                    "gap_summary": suggestion.get("gap_summary", ""),
+                    "why_update": suggestion.get("why_update", ""),
+                    "supporting_evidence": [
+                        evidence
+                        for evidence in suggestion.get("supporting_evidence", [])
+                        if evidence
+                    ],
+                    "proposed_config_row": {
+                        "transcript_sections": proposed_row.get("transcript_sections", "ALL"),
+                        "report_section": proposed_row.get("report_section", "Results Summary"),
+                        "category_name": proposed_row.get("category_name", ""),
+                        "category_description": proposed_row.get("category_description", ""),
+                        "example_1": proposed_row.get("example_1", ""),
+                        "example_2": proposed_row.get("example_2", ""),
+                        "example_3": proposed_row.get("example_3", ""),
+                    },
+                }
+            )
+
+        new_section_suggestions = []
+        for idx, suggestion in enumerate(bank_review.get("new_section_suggestions", []), start=1):
+            proposed_row = suggestion.get("proposed_config_row", {})
+            new_section_suggestions.append(
+                {
+                    "id": suggestion.get("id") or f"{ticker}_new_{idx}",
+                    "category_name": suggestion.get("category_name")
+                    or proposed_row.get("category_name", ""),
+                    "why_new_section": suggestion.get("why_new_section", ""),
+                    "supporting_evidence": [
+                        evidence
+                        for evidence in suggestion.get("supporting_evidence", [])
+                        if evidence
+                    ],
+                    "suggested_subtitle": suggestion.get("suggested_subtitle", ""),
+                    "adopted_bucket_id": suggestion.get("adopted_bucket_id"),
+                    "proposed_config_row": {
+                        "transcript_sections": proposed_row.get("transcript_sections", "ALL"),
+                        "report_section": proposed_row.get("report_section", "Results Summary"),
+                        "category_name": proposed_row.get("category_name", ""),
+                        "category_description": proposed_row.get("category_description", ""),
+                        "example_1": proposed_row.get("example_1", ""),
+                        "example_2": proposed_row.get("example_2", ""),
+                        "example_3": proposed_row.get("example_3", ""),
+                    },
+                }
+            )
+
+        config_review_state["by_bank"][ticker] = {
+            "existing_section_updates": existing_updates,
+            "new_section_suggestions": new_section_suggestions,
+        }
 
     return {
         "meta": {
@@ -129,6 +198,8 @@ def build_report_state(
         "banner_visible": True,
         "banner_src": None,
         "bucket_user_titles": {},
+        "config_review": config_review_state,
+        "next_bucket_seq": len(categories),
     }
 
 

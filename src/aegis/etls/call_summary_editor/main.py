@@ -54,6 +54,7 @@ from aegis.etls.call_summary_editor.interactive_html import (
     generate_html as generate_interactive_html,
 )
 from aegis.etls.call_summary_editor.interactive_pipeline import (
+    analyze_config_coverage,
     build_interactive_bank_data,
     count_included_categories,
     generate_bucket_headlines,
@@ -1754,10 +1755,6 @@ async def generate_call_summary(  # pylint: disable=too-many-statements
     try:
         bank_info = get_bank_info_from_config(bank_name)
 
-        await verify_and_get_availability(
-            bank_info["bank_id"], bank_info["bank_name"], fiscal_year, quarter
-        )
-
         ssl_config = setup_ssl()
         auth_config = await setup_authentication(execution_id, ssl_config)
 
@@ -1820,6 +1817,11 @@ async def generate_call_summary(  # pylint: disable=too-many-statements
             "temperature": etl_config.temperature,
             "max_tokens": min(default_max_tokens, 2048),
         }
+        config_review_llm_params = {
+            "model": config.llm.medium.model,
+            "temperature": etl_config.temperature,
+            "max_tokens": min(default_max_tokens, 4096),
+        }
 
         etl_context = {
             "bank_info": bank_info,
@@ -1846,9 +1848,21 @@ async def generate_call_summary(  # pylint: disable=too-many-statements
             qa_boundary_llm_params=qa_boundary_llm_params,
             md_llm_params=md_llm_params,
             qa_llm_params=qa_llm_params,
+            max_concurrent_md_blocks=etl_config.max_concurrent_extractions,
         )
         banks_data = {bank_data["ticker"]: bank_data}
         marks.append(("classification", time.monotonic()))
+
+        config_review_by_bank = {
+            bank_data["ticker"]: await analyze_config_coverage(
+                bank_data=bank_data,
+                categories=categories,
+                min_importance=min_importance,
+                context=context,
+                llm_params=config_review_llm_params,
+            )
+        }
+        marks.append(("config_review", time.monotonic()))
 
         bucket_headlines = await generate_bucket_headlines(
             banks_data=banks_data,
@@ -1864,6 +1878,7 @@ async def generate_call_summary(  # pylint: disable=too-many-statements
             fiscal_quarter=quarter,
             min_importance=min_importance,
             bucket_headlines=bucket_headlines,
+            config_review_by_bank=config_review_by_bank,
         )
         included_categories = count_included_categories(banks_data, min_importance)
         total_categories = len(categories)

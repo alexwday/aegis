@@ -1505,19 +1505,33 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 .tp-view-btn.active .tp-view-icon{opacity:1}
 
 /* Sentence popover */
-#s-popover{position:fixed;z-index:9999;background:#fff;border:1px solid #E4E6EA;border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.14);width:280px;display:none;overflow:hidden}
-#s-pop-text{padding:10px 14px;font-size:12px;color:#3C3F44;border-bottom:1px solid #F0F2F5;line-height:1.55;font-style:italic;max-height:80px;overflow:hidden;text-overflow:ellipsis}
+#s-popover{position:fixed;z-index:9999;background:#fff;border:1px solid #E4E6EA;border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.14);width:420px;max-width:min(420px,calc(100vw - 16px));display:none;overflow:hidden}
+#s-pop-text{padding:12px 14px;font-size:12px;color:#3C3F44;border-bottom:1px solid #F0F2F5;line-height:1.6;font-style:italic;max-height:180px;overflow:auto}
 #s-pop-title{padding:6px 14px 4px;font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:#8A8D91;background:#F8F9FB;border-bottom:1px solid #F0F2F5}
-#s-pop-scores{max-height:220px;overflow-y:auto}
-.s-score-row{display:flex;align-items:center;gap:8px;padding:6px 14px;cursor:pointer;transition:background .1s}
+#s-pop-scores{max-height:420px;overflow-y:auto}
+.s-score-section{padding:10px 0;border-bottom:1px solid #F0F2F5}
+.s-score-section:last-child{border-bottom:none}
+.s-score-section-title{padding:0 14px 8px;font-size:10px;font-weight:700;color:#65676B;text-transform:uppercase;letter-spacing:.04em}
+.s-score-row{display:flex;align-items:flex-start;gap:8px;padding:8px 14px;cursor:pointer;transition:background .1s}
 .s-score-row:hover{background:#F0F2F5}
 .s-score-row.current{background:#EEF3FA}
 .s-score-row.readonly{cursor:default}
 .s-score-row.readonly:hover{background:transparent}
 .s-score-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
-.s-score-name{flex:1;font-size:12px;color:#1A2332;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.s-score-val{font-size:11px;font-weight:700;color:#65676B;min-width:28px;text-align:right}
+.s-score-main{flex:1;min-width:0}
+.s-score-name{font-size:12px;color:#1A2332;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.s-score-meta{font-size:10px;color:#8A8D91;line-height:1.4;margin-top:1px}
+.s-score-val{font-size:11px;font-weight:700;color:#65676B;min-width:28px;text-align:right;padding-top:1px}
 .s-score-check{font-size:12px;color:#1565C0;margin-left:2px;min-width:12px}
+.s-expand-btn{margin:0 14px;padding:7px 10px;border:1px solid #D7DBE0;border-radius:6px;background:#fff;color:#1A2332;font-size:11px;font-weight:600;cursor:pointer;width:calc(100% - 28px);text-align:left}
+.s-expand-btn:hover{background:#F8F9FB}
+#s-pop-all{display:none;padding-top:8px}
+.s-pop-form{padding:8px 14px 2px;display:grid;gap:8px}
+.s-pop-form input,.s-pop-form textarea,.s-pop-form select{width:100%;border:1px solid #CDD0D5;border-radius:6px;padding:7px 9px;font-size:12px;font-family:inherit;background:#fff;color:#1A2332}
+.s-pop-form textarea{min-height:64px;resize:vertical}
+.s-pop-form-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.s-pop-form-actions{display:flex;justify-content:flex-end;padding:2px 14px 12px}
+#s-pop-custom{display:none}
 #s-pop-footer{padding:8px 14px;border-top:1px solid #F0F2F5;background:#F8F9FB}
 .s-pop-note{font-size:10px;color:#8A8D91;font-style:italic}
 
@@ -1549,6 +1563,25 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 .bkt-chevron.open{transform:rotate(0deg)}
 .bkt-chevron.closed{transform:rotate(-90deg)}
 .bkt-quotes{padding:2px 0 2px 6px}
+
+/* Config review */
+.cfg-review{margin-bottom:18px;padding:16px 18px;border:1px solid #E4E6EA;border-radius:8px;background:linear-gradient(180deg,#FBFCFE 0%,#F6F8FB 100%)}
+.cfg-review-header{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:14px}
+.cfg-review-title{font-size:18px;font-weight:800;color:#1A2332}
+.cfg-review-subtitle{font-size:12px;color:#65676B;max-width:620px}
+.cfg-review-grid{display:grid;gap:12px}
+.cfg-review-card{border:1px solid #E4E6EA;border-radius:8px;background:#fff;padding:14px}
+.cfg-review-card h3{font-size:14px;font-weight:700;color:#1A2332;margin-bottom:4px}
+.cfg-review-card p{font-size:12px;line-height:1.55;color:#3C3F44}
+.cfg-review-kicker{font-size:10px;font-weight:700;color:#8A8D91;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px}
+.cfg-review-note{font-size:11px;color:#65676B;margin-top:8px}
+.cfg-review-evidence{margin-top:10px;display:grid;gap:6px}
+.cfg-review-evidence-item{font-size:11px;line-height:1.5;color:#444;background:#F8F9FB;border-radius:6px;padding:8px 10px;border-left:3px solid #D4DAE3}
+.cfg-config-table{width:100%;border-collapse:collapse;margin-top:12px;font-size:11px}
+.cfg-config-table th,.cfg-config-table td{border:1px solid #E4E6EA;padding:7px 8px;text-align:left;vertical-align:top}
+.cfg-config-table th{width:140px;background:#F8F9FB;color:#65676B;font-weight:700}
+.cfg-review-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}
+.cfg-review-empty{font-size:12px;color:#8A8D91;font-style:italic}
 
 /* Quote card (sub-quote) */
 .q-card{background:#fff;border:1px solid #E4E6EA;border-radius:6px;margin-bottom:4px;overflow:hidden}
@@ -1607,6 +1640,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
   #tp-resize{display:none!important}
   #report-header{display:none!important}
   #s-popover{display:none!important}
+  .cfg-review{display:none!important}
 
   /* PDF banner */
   #banner-wrap{display:block!important;text-align:center;padding:8px 0 4px;border:none;margin:0}
@@ -1727,6 +1761,23 @@ let state = null;
 let sortableInstances = [];
 let _activeSid = null; // sentence currently shown in popover
 let _transcriptView = 'blocks'; // 'blocks' | 'classified' | 'category'
+const DYNAMIC_BUCKET_COLORS = [
+  {bg:'#E3F2FD', accent:'#1565C0'},
+  {bg:'#F3E5F5', accent:'#6A1B9A'},
+  {bg:'#E8F5E9', accent:'#2E7D32'},
+  {bg:'#FFF3E0', accent:'#E65100'},
+  {bg:'#FCE4EC', accent:'#880E4F'},
+  {bg:'#E0F7FA', accent:'#00695C'},
+  {bg:'#FFF8E1', accent:'#F57F17'},
+  {bg:'#E8EAF6', accent:'#283593'},
+  {bg:'#F1F8E9', accent:'#558B2F'},
+  {bg:'#FBE9E7', accent:'#BF360C'},
+  {bg:'#E0F2F1', accent:'#004D40'},
+  {bg:'#EDE7F6', accent:'#4527A0'},
+  {bg:'#F9FBE7', accent:'#827717'},
+  {bg:'#FCE4EC', accent:'#AD1457'},
+  {bg:'#E8EAF6', accent:'#1A237E'},
+];
 
 document.addEventListener('DOMContentLoaded', () => {
   __HTML_TPL__ = document.documentElement.outerHTML;
@@ -1873,6 +1924,76 @@ function getBucket(bid) {
          {id:'other',name:'Other',color_bg:'#FAFAFA',color_accent:'#9E9E9E'};
 }
 
+function bucketLabel(bucket) {
+  return (state.bucket_user_titles && state.bucket_user_titles[bucket.id]) || bucket.name || 'Other';
+}
+
+function bucketAppliesTo(bucket, transcriptSection) {
+  const applies = (bucket && bucket.transcript_sections) || 'ALL';
+  return bucket.id === 'other' || applies === 'ALL' || applies === transcriptSection;
+}
+
+function getSentenceContext(sid) {
+  const bank = state.banks[state.current_bank] || {};
+  for (const blk of (bank.md_blocks || [])) {
+    if ((blk.sentences || []).some(s => s.sid === sid)) {
+      return {transcriptSection:'MD', editable:true, role:'md'};
+    }
+  }
+  for (const conv of (bank.qa_conversations || [])) {
+    if ((conv.question_sentences || []).some(s => s.sid === sid)) {
+      return {transcriptSection:'QA', editable:false, role:'qa_question'};
+    }
+    if ((conv.answer_sentences || []).some(s => s.sid === sid)) {
+      return {transcriptSection:'QA', editable:true, role:'qa_answer'};
+    }
+  }
+  return {transcriptSection:'ALL', editable:false, role:'unknown'};
+}
+
+function getApplicableBucketsForSentence(sid) {
+  const ctx = getSentenceContext(sid);
+  const currentBucketId = effectivePrimary(sid);
+  return {
+    context: ctx,
+    buckets: state.buckets.filter(bucket =>
+      bucket.id === currentBucketId || bucketAppliesTo(bucket, ctx.transcriptSection))
+  };
+}
+
+function nextBucketColors() {
+  const count = state.buckets.filter(b => b.id !== 'other').length;
+  return DYNAMIC_BUCKET_COLORS[count % DYNAMIC_BUCKET_COLORS.length] || {bg:'#ECEFF1', accent:'#546E7A'};
+}
+
+function insertBucket(bucket) {
+  if (!state.buckets) state.buckets = [];
+  const otherIdx = state.buckets.findIndex(b => b.id === 'other');
+  if (otherIdx >= 0) state.buckets.splice(otherIdx, 0, bucket);
+  else state.buckets.push(bucket);
+}
+
+function createBucketFromRow(row, options={}) {
+  if (state.next_bucket_seq == null) {
+    state.next_bucket_seq = state.buckets.filter(b => /^bucket_\d+$/.test(b.id)).length;
+  }
+  const colors = nextBucketColors();
+  const bucketId = `bucket_${state.next_bucket_seq++}`;
+  const bucket = {
+    id: bucketId,
+    name: (row.category_name || '').trim(),
+    report_section: row.report_section || 'Results Summary',
+    transcript_sections: row.transcript_sections || 'ALL',
+    description: row.category_description || '',
+    color_bg: colors.bg,
+    color_accent: colors.accent,
+    generated_headline: options.generated_headline || '',
+    source: options.source || 'custom',
+  };
+  insertBucket(bucket);
+  return bucket;
+}
+
 function effectivePrimary(sid) {
   const bs = getBankState(state.current_bank);
   return (bs.sentence_user_primary && bs.sentence_user_primary[sid]) ||
@@ -2004,7 +2125,7 @@ function renderMDBlockClassified(blk, inc) {
     const cls = grpInc ? '' : ' t-grp-excl';
     const spans = tSpansWithParas(g.sents, 'md', inc);
     return `<div class="t-class-group${cls}" style="border-left-color:${bkt.color_accent};background:${grpInc?bkt.color_bg:'#FAFAFA'}">
-      <div class="t-class-label" style="color:${bkt.color_accent}"><span class="t-gbullet">&bull;</span> ${esc(bkt.name)}</div>
+      <div class="t-class-label" style="color:${bkt.color_accent}"><span class="t-gbullet">&bull;</span> ${esc(bucketLabel(bkt))}</div>
       <div class="t-block-text">${spans}</div></div>`;
   }).join('');
   return `<div class="t-block">
@@ -2021,7 +2142,7 @@ function renderQAConvClassified(conv, inc, convIdx) {
     const cls = grpInc ? '' : ' t-grp-excl';
     const spans = tSpansWithParas(g.sents, 'qa', inc);
     return `<div class="t-class-group${cls}" style="border-left-color:${bkt.color_accent};background:${grpInc?bkt.color_bg:'#FAFAFA'}">
-      <div class="t-class-label" style="color:${bkt.color_accent}"><span class="t-gbullet">&bull;</span> ${esc(bkt.name)}</div>
+      <div class="t-class-label" style="color:${bkt.color_accent}"><span class="t-gbullet">&bull;</span> ${esc(bucketLabel(bkt))}</div>
       <div class="t-block-text">${spans}</div></div>`;
   }).join('');
   const qLabel = conv.analyst_name + (conv.analyst_affiliation ? ` (${conv.analyst_affiliation})` : '');
@@ -2054,7 +2175,7 @@ function renderTranscriptBodyByCategory() {
     const items = byBucket[bucket.id];
     if (!items || !items.length) return;
     const incCount = items.filter(i => inc.has(i.sent.sid)).length;
-    html += `<div class="t-cat-header"><strong>${esc(bucket.name)}</strong><span class="t-cat-count">${incCount}/${items.length}</span></div>`;
+    html += `<div class="t-cat-header"><strong>${esc(bucketLabel(bucket))}</strong><span class="t-cat-count">${incCount}/${items.length}</span></div>`;
     // Group consecutive sentences from same speaker+block into bullet groups
     const groups = [];
     let cur = null;
@@ -2080,10 +2201,70 @@ function renderTranscriptBodyByCategory() {
 // ============================================================
 // SENTENCE POPOVER
 // ============================================================
+function renderPopoverScoreRow(bucket, score, sid, options={}) {
+  const readonly = !!options.readonly;
+  const current = !!options.current;
+  const showMeta = !!options.showMeta;
+  const scoreText = Number.isFinite(score) ? score.toFixed(1) : '—';
+  const cls = `s-score-row${current?' current':''}${readonly?' readonly':''}`;
+  const onclick = readonly ? '' : `onclick="reassignSentence('${sid}','${bucket.id}')"`;
+  return `<div class="${cls}" ${onclick}>
+    <div class="s-score-dot" style="background:${bucket.color_accent}"></div>
+    <div class="s-score-main">
+      <div class="s-score-name">${esc(bucketLabel(bucket))}</div>
+      ${showMeta ? `<div class="s-score-meta">${esc(bucket.description || 'No description provided.')}</div>` : ''}
+    </div>
+    <div class="s-score-val">${scoreText}</div>
+    <div class="s-score-check">${current ? '&#10003;' : ''}</div>
+  </div>`;
+}
+
+function togglePopoverAll(evt) {
+  evt.stopPropagation();
+  const panel = document.getElementById('s-pop-all');
+  const btn = document.getElementById('s-pop-all-btn');
+  if (!panel || !btn) return;
+  const open = panel.style.display === 'block';
+  panel.style.display = open ? 'none' : 'block';
+  btn.textContent = open ? btn.dataset.showLabel : btn.dataset.hideLabel;
+}
+
+function toggleCustomBucketForm(evt) {
+  evt.stopPropagation();
+  const panel = document.getElementById('s-pop-custom');
+  const btn = document.getElementById('s-pop-custom-btn');
+  if (!panel || !btn) return;
+  const open = panel.style.display === 'block';
+  panel.style.display = open ? 'none' : 'block';
+  btn.textContent = open ? 'Create custom classification' : 'Hide custom classification form';
+}
+
+function createCustomBucketForActiveSentence() {
+  if (!_activeSid) return;
+  const context = getSentenceContext(_activeSid);
+  if (!context.editable) return;
+
+  const name = (document.getElementById('s-custom-name')?.value || '').trim();
+  const reportSection = document.getElementById('s-custom-section')?.value || 'Results Summary';
+  const subtitle = (document.getElementById('s-custom-subtitle')?.value || '').trim();
+  const description = (document.getElementById('s-custom-description')?.value || '').trim();
+  if (!name) return;
+
+  const bucket = createBucketFromRow({
+    category_name: name,
+    category_description: description,
+    transcript_sections: context.transcriptSection,
+    report_section: reportSection,
+  }, {
+    generated_headline: subtitle,
+    source: 'custom',
+  });
+  reassignSentence(_activeSid, bucket.id);
+}
+
 function showSentencePopover(evt, el) {
   evt.stopPropagation();
   const sid    = el.dataset.sid;
-  const btype  = el.dataset.btype;
   const scores = JSON.parse(decodeURIComponent(escape(atob(el.dataset.scores))));
   const sent   = findSentence(sid);
   if (!sent) return;
@@ -2097,51 +2278,94 @@ function showSentencePopover(evt, el) {
   document.getElementById('s-pop-text').textContent = `"${sent.text}"`;
 
   // Note line
-  const readonly = btype === 'qa';
+  const bucketState = getApplicableBucketsForSentence(sid);
+  const readonly = !bucketState.context.editable;
   document.getElementById('s-pop-note').textContent = readonly
-    ? 'QA: reassign whole conversation via drag-drop'
+    ? 'Question sentence is scored individually, but analyst context is read-only in the report.'
     : 'Click a category to reassign this sentence';
 
-  // Score rows — show all buckets scoring > 0.5, sorted desc; always show current
   const curPrimary = effectivePrimary(sid);
-  const rows = state.buckets
+  const applicableBuckets = bucketState.buckets;
+  const scoredRows = applicableBuckets
     .filter(b => b.id !== 'other')
-    .map(b => ({ b, score: scores[b.id] || 0 }))
-    .filter(({b, score}) => score > 0.5 || b.id === curPrimary)
-    .sort((a, b) => b.score - a.score);
+    .map(b => ({ bucket: b, score: scores[b.id] || 0 }))
+    .sort((a, b) => b.score - a.score || bucketLabel(a.bucket).localeCompare(bucketLabel(b.bucket)));
 
-  // Also add Other if it's current
-  if (curPrimary === 'other') {
-    rows.push({ b: getBucket('other'), score: 0 });
-  }
+  const topIds = scoredRows.slice(0, 3).map(row => row.bucket.id);
+  if (!topIds.includes(curPrimary)) topIds.push(curPrimary);
+  const topRows = applicableBuckets
+    .filter(bucket => topIds.includes(bucket.id))
+    .map(bucket => ({ bucket, score: scores[bucket.id] || 0 }))
+    .sort((a, b) => (b.bucket.id === curPrimary) - (a.bucket.id === curPrimary) || b.score - a.score);
+  const allRows = applicableBuckets
+    .map(bucket => ({ bucket, score: scores[bucket.id] || 0 }))
+    .sort((a, b) =>
+      (b.bucket.id === curPrimary) - (a.bucket.id === curPrimary) ||
+      b.score - a.score ||
+      bucketLabel(a.bucket).localeCompare(bucketLabel(b.bucket))
+    );
 
-  const scoresHtml = rows.map(({b, score}) => {
-    const isCur = b.id === curPrimary;
-    const cls   = `s-score-row${isCur?' current':''}${readonly?' readonly':''}`;
-    const onclick = readonly ? '' : `onclick="reassignSentence('${sid}','${b.id}')"`;
-    return `<div class="${cls}" ${onclick}>
-      <div class="s-score-dot" style="background:${b.color_accent}"></div>
-      <div class="s-score-name">${esc(b.name)}</div>
-      <div class="s-score-val">${score.toFixed(1)}</div>
-      <div class="s-score-check">${isCur ? '&#10003;' : ''}</div>
+  const topHtml = topRows.map(({bucket, score}) =>
+    renderPopoverScoreRow(bucket, score, sid, {
+      readonly,
+      current: bucket.id === curPrimary,
+      showMeta: false,
+    })
+  ).join('');
+  const remainingCount = Math.max(allRows.length - topRows.length, 0);
+  const allHtml = allRows.map(({bucket, score}) =>
+    renderPopoverScoreRow(bucket, score, sid, {
+      readonly,
+      current: bucket.id === curPrimary,
+      showMeta: true,
+    })
+  ).join('');
+
+  const customHtml = readonly ? '' : `
+    <div class="s-score-section">
+      <button id="s-pop-custom-btn" class="s-expand-btn" onclick="toggleCustomBucketForm(event)">Create custom classification</button>
+      <div id="s-pop-custom">
+        <div class="s-pop-form">
+          <input id="s-custom-name" type="text" placeholder="New classification name">
+          <div class="s-pop-form-row">
+            <select id="s-custom-section">
+              <option value="Results Summary">Results Summary</option>
+              <option value="Earnings Call Q&A">Earnings Call Q&A</option>
+            </select>
+            <input id="s-custom-subtitle" type="text" placeholder="Optional subtitle">
+          </div>
+          <textarea id="s-custom-description" placeholder="Optional description"></textarea>
+        </div>
+        <div class="s-pop-form-actions">
+          <button class="btn btn-primary btn-sm" onclick="createCustomBucketForActiveSentence()">Create and assign</button>
+        </div>
+      </div>
     </div>`;
-  }).join('');
 
-  // If not readonly, add Other option at bottom
-  const otherRow = !readonly && curPrimary !== 'other' ? `
-    <div class="s-score-row" onclick="reassignSentence('${sid}','other')">
-      <div class="s-score-dot" style="background:#9E9E9E"></div>
-      <div class="s-score-name">Other</div>
-      <div class="s-score-val">—</div>
-      <div class="s-score-check"></div>
+  const allSectionHtml = allRows.length ? `
+    <div class="s-score-section">
+      <button id="s-pop-all-btn" class="s-expand-btn"
+              data-show-label="Show all classifications${remainingCount ? ` (${remainingCount} more)` : ''}"
+              data-hide-label="Hide all classifications"
+              onclick="togglePopoverAll(event)">
+        Show all classifications${remainingCount ? ` (${remainingCount} more)` : ''}
+      </button>
+      <div id="s-pop-all">${allHtml}</div>
     </div>` : '';
 
-  document.getElementById('s-pop-scores').innerHTML = scoresHtml + otherRow;
+  document.getElementById('s-pop-scores').innerHTML = `
+    <div class="s-score-section">
+      <div class="s-score-section-title">Top Matches</div>
+      ${topHtml || '<div class="s-score-row readonly"><div class="s-score-main"><div class="s-score-name">No scores available</div></div></div>'}
+    </div>
+    ${allSectionHtml}
+    ${customHtml}
+  `;
 
   // Position near click
   const pop = document.getElementById('s-popover');
   pop.style.display = 'block';
-  const pw = 280, ph_est = 320;
+  const pw = Math.min(420, window.innerWidth - 16), ph_est = 520;
   let left = evt.clientX + 8;
   let top  = evt.clientY + 8;
   if (left + pw > window.innerWidth - 8)  left = evt.clientX - pw - 8;
@@ -2180,6 +2404,9 @@ function maybeClosePopover(evt) {
 // SENTENCE REASSIGNMENT (MD only) — Option A: immediate full re-render
 // ============================================================
 function reassignSentence(sid, newBucketId) {
+  const {context} = getApplicableBucketsForSentence(sid);
+  const targetBucket = getBucket(newBucketId);
+  if (!context.editable || !bucketAppliesTo(targetBucket, context.transcriptSection)) return;
   const bs = getBankState(state.current_bank);
   if (!bs.sentence_user_primary) bs.sentence_user_primary = {};
   bs.sentence_user_primary[sid] = newBucketId;
@@ -2232,31 +2459,38 @@ function computeMDSubquotes(blk, bs) {
 }
 
 /**
- * For QA conversations, the entire conversation is one sub-quote unit.
- * The effective bucket = whole-conv override || primary_bucket.
+ * For QA conversations, group consecutive answer sentences by effective bucket.
+ * The analyst question stays attached as context on each resulting sub-quote.
  */
 function computeQASubquotes(conv, bs) {
   const excluded = new Set(bs.excluded_sentences || []);
-  // If ALL answer sentences are excluded, skip this conversation
-  const hasAnswers = conv.answer_sentences.some(s => !excluded.has(s.sid));
-  if (!hasAnswers) return [];
+  const visibleAnswers = (conv.answer_sentences || []).filter(s => !excluded.has(s.sid));
+  if (!visibleAnswers.length) return [];
 
-  const sqid = `SQ_${conv.id}`;
-  const override = bs.subquote_bucket_overrides && bs.subquote_bucket_overrides[sqid];
-  const effectiveBucket = override || conv.primary_bucket || 'other';
-
-  return [{
-    id: sqid,
-    type: 'qa',
-    conv_id: conv.id,
-    analyst_name: conv.analyst_name,
-    analyst_affiliation: conv.analyst_affiliation,
-    executive_name: conv.executive_name,
-    executive_title: conv.executive_title,
-    effective_bucket: effectiveBucket,
-    question_sentences: conv.question_sentences,
-    answer_sentences: conv.answer_sentences.filter(s => !excluded.has(s.sid)),
-  }];
+  const groups = [];
+  let cur = null;
+  for (const sent of visibleAnswers) {
+    const effectiveBucket = (bs.sentence_user_primary && bs.sentence_user_primary[sent.sid]) || sent.primary || conv.primary_bucket || 'other';
+    if (!cur || cur.effective_bucket !== effectiveBucket) {
+      if (cur) groups.push(cur);
+      cur = {
+        id: `SQ_${sent.sid}`,
+        type: 'qa',
+        conv_id: conv.id,
+        analyst_name: conv.analyst_name,
+        analyst_affiliation: conv.analyst_affiliation,
+        executive_name: conv.executive_name,
+        executive_title: conv.executive_title,
+        effective_bucket: effectiveBucket,
+        question_sentences: conv.question_sentences || [],
+        answer_sentences: [sent],
+      };
+    } else {
+      cur.answer_sentences.push(sent);
+    }
+  }
+  if (cur) groups.push(cur);
+  return groups;
 }
 
 function getAllSubquotes(bankId) {
@@ -2281,7 +2515,7 @@ function getSubquoteFormats(sq, fmt) {
   return sents.map(s => s[key] || s.text || '').join(' ').trim();
 }
 
-function getReportSubquotes(bankId, bucketId, sourceType) {
+function getReportSubquotes(bankId, bucketId) {
   const bs  = getBankState(bankId);
   const all = getAllSubquotes(bankId);
 
@@ -2289,11 +2523,6 @@ function getReportSubquotes(bankId, bucketId, sourceType) {
     sq.effective_bucket === bucketId &&
     getSubquoteImportance(sq) >= MIN_IMPORTANCE
   );
-
-  // Filter by source type (md or qa) when specified
-  if (sourceType) {
-    eligible = eligible.filter(sq => sq.type === sourceType);
-  }
 
   const order = bs.bucket_subquote_order && bs.bucket_subquote_order[bucketId];
   if (order && order.length) {
@@ -2308,6 +2537,101 @@ function getReportSubquotes(bankId, bucketId, sourceType) {
   return [...eligible].sort((a, b) => getSubquoteImportance(b) - getSubquoteImportance(a));
 }
 
+function getConfigReview(bankId) {
+  return (((state.config_review || {}).by_bank || {})[bankId]) || {
+    existing_section_updates: [],
+    new_section_suggestions: [],
+  };
+}
+
+function renderConfigRowTable(row) {
+  if (!row) return '';
+  return `<table class="cfg-config-table">
+    <tr><th>transcript_sections</th><td>${esc(row.transcript_sections || '')}</td></tr>
+    <tr><th>report_section</th><td>${esc(row.report_section || '')}</td></tr>
+    <tr><th>category_name</th><td>${esc(row.category_name || '')}</td></tr>
+    <tr><th>category_description</th><td>${esc(row.category_description || '')}</td></tr>
+    <tr><th>example_1</th><td>${esc(row.example_1 || '')}</td></tr>
+    <tr><th>example_2</th><td>${esc(row.example_2 || '')}</td></tr>
+    <tr><th>example_3</th><td>${esc(row.example_3 || '')}</td></tr>
+  </table>`;
+}
+
+function renderEvidence(items) {
+  if (!items || !items.length) return '';
+  return `<div class="cfg-review-evidence">${items.map(item =>
+    `<div class="cfg-review-evidence-item">${esc(item)}</div>`).join('')}</div>`;
+}
+
+function adoptSuggestedBucket(suggestionId) {
+  const review = getConfigReview(state.current_bank);
+  const suggestion = (review.new_section_suggestions || []).find(item => item.id === suggestionId);
+  if (!suggestion) return;
+
+  if (suggestion.adopted_bucket_id && state.buckets.some(bucket => bucket.id === suggestion.adopted_bucket_id)) {
+    renderCurrentBank();
+    return;
+  }
+
+  const bucket = createBucketFromRow(suggestion.proposed_config_row || {}, {
+    generated_headline: suggestion.suggested_subtitle || '',
+    source: 'suggestion',
+  });
+  suggestion.adopted_bucket_id = bucket.id;
+  renderCurrentBank();
+}
+
+function renderConfigReviewSection() {
+  const review = getConfigReview(state.current_bank);
+  const existing = review.existing_section_updates || [];
+  const suggestions = review.new_section_suggestions || [];
+  if (!existing.length && !suggestions.length) return '';
+
+  const existingHtml = existing.length ? existing.map(item => `
+    <div class="cfg-review-card">
+      <div class="cfg-review-kicker">Existing Section Needs More Context</div>
+      <h3>${esc(item.category_name || '')}</h3>
+      <p>${esc(item.gap_summary || '')}</p>
+      <div class="cfg-review-note">${esc(item.why_update || '')}</div>
+      ${renderEvidence(item.supporting_evidence || [])}
+      ${renderConfigRowTable(item.proposed_config_row)}
+    </div>
+  `).join('') : '<div class="cfg-review-empty">No existing config rows were flagged for expansion.</div>';
+
+  const suggestionsHtml = suggestions.length ? suggestions.map(item => {
+    const adopted = item.adopted_bucket_id && state.buckets.some(bucket => bucket.id === item.adopted_bucket_id);
+    return `<div class="cfg-review-card">
+      <div class="cfg-review-kicker">Suggested New Classification</div>
+      <h3>${esc(item.category_name || (item.proposed_config_row || {}).category_name || '')}</h3>
+      <p>${esc(item.why_new_section || '')}</p>
+      ${item.suggested_subtitle ? `<div class="cfg-review-note">Suggested subtitle: ${esc(item.suggested_subtitle)}</div>` : ''}
+      ${renderEvidence(item.supporting_evidence || [])}
+      ${renderConfigRowTable(item.proposed_config_row)}
+      <div class="cfg-review-actions">
+        <button class="btn ${adopted ? 'btn-secondary' : 'btn-primary'} btn-sm"
+                ${adopted ? 'disabled' : `onclick="adoptSuggestedBucket('${item.id}')"`}>
+          ${adopted ? 'Available in classifications' : 'Add to classifications'}
+        </button>
+      </div>
+    </div>`;
+  }).join('') : '<div class="cfg-review-empty">No new config rows were suggested for this transcript.</div>';
+
+  return `<div class="cfg-review">
+    <div class="cfg-review-header">
+      <div>
+        <div class="cfg-review-title">Config Analysis Review</div>
+        <div class="cfg-review-subtitle">
+          Review where the current input sheet may need stronger descriptions or where the transcript introduces a new category worth adding.
+        </div>
+      </div>
+    </div>
+    <div class="cfg-review-grid">
+      ${existingHtml}
+      ${suggestionsHtml}
+    </div>
+  </div>`;
+}
+
 // ============================================================
 // REPORT PANEL
 // ============================================================
@@ -2317,33 +2641,35 @@ function renderReportPanel() {
 
 function renderReportSections() {
   destroySortables();
-  let html = '';
+  let html = renderConfigReviewSection();
+  const sectionRank = {'Results Summary': 0, 'Earnings Call Q&A': 1, 'Other': 2};
+  const reportSections = [...new Set(
+    state.buckets
+      .filter(bucket => getReportSubquotes(state.current_bank, bucket.id).length > 0)
+      .map(bucket => bucket.report_section || 'Results Summary')
+  )].sort((a, b) => (sectionRank[a] ?? 99) - (sectionRank[b] ?? 99) || a.localeCompare(b));
 
-  // Fixed L1 sections: MD content under Results Summary, QA content under Earnings Call Q&A
-  const reportSections = [
-    { name: 'Results Summary', sourceType: 'md' },
-    { name: 'Earnings Call Q&A', sourceType: 'qa' },
-  ];
-
-  reportSections.forEach(({name: secName, sourceType}) => {
-    const hasContent = state.buckets.some(b =>
-      getReportSubquotes(state.current_bank, b.id, sourceType).length > 0
+  reportSections.forEach(secName => {
+    const sectionBuckets = state.buckets.filter(
+      bucket => (bucket.report_section || 'Results Summary') === secName
+    );
+    const hasContent = sectionBuckets.some(bucket =>
+      getReportSubquotes(state.current_bank, bucket.id).length > 0
     );
     if (!hasContent) return;
 
     html += `<div class="rpt-l1">${secName}</div>`;
 
-    state.buckets.forEach(bucket => {
-      const quotes = getReportSubquotes(state.current_bank, bucket.id, sourceType);
+    sectionBuckets.forEach(bucket => {
+      const quotes = getReportSubquotes(state.current_bank, bucket.id);
       if (quotes.length === 0) return;
 
-      const compositeId = `${bucket.id}__${sourceType}`;
       const userTitle = (state.bucket_user_titles || {})[bucket.id];
       const titleVal  = userTitle != null ? userTitle : bucket.name;
 
       html += `
-<div class="bkt-section" id="bs_${compositeId}">
-  <div class="bkt-header" onclick="toggleBucket('${compositeId}')">
+<div class="bkt-section" id="bs_${bucket.id}">
+  <div class="bkt-header" onclick="toggleBucket('${bucket.id}')">
     <div class="bkt-bar" style="background:${bucket.color_accent}"></div>
     <div class="bkt-info">
       <input class="bkt-name-input" value="${escAttr(titleVal)}"
@@ -2352,10 +2678,10 @@ function renderReportSections() {
              onkeydown="if(event.key==='Enter')this.blur()">
       ${bucket.generated_headline ? `<div class="bkt-headline">${esc(bucket.generated_headline)}</div>` : ''}
     </div>
-    <span class="bkt-count" id="bkc_${compositeId}">${quotes.length}</span>
-    <span class="bkt-chevron open" id="bkv_${compositeId}">&#9662;</span>
+    <span class="bkt-count" id="bkc_${bucket.id}">${quotes.length}</span>
+    <span class="bkt-chevron open" id="bkv_${bucket.id}">&#9662;</span>
   </div>
-  <div class="bkt-quotes" id="bq_${compositeId}" data-bucket-id="${compositeId}">
+  <div class="bkt-quotes" id="bq_${bucket.id}" data-bucket-id="${bucket.id}">
     ${quotes.map(sq => renderSubquoteCard(sq, bucket)).join('')}
   </div>
 </div>`;
@@ -2403,7 +2729,7 @@ function renderSubquoteCard(sq, bucket) {
   <div class="q-card-header">
     <span class="drag-handle">&#8942;</span>
     <select class="fmt-select" onchange="switchFmt('${sq.id}',this.value)">
-      ${['verbatim','condensed','summary','paraphrase'].map(f =>
+      ${['verbatim','condensed'].map(f =>
         `<option value="${f}"${fmt===f?' selected':''}>${fmtLabel(f)}</option>`
       ).join('')}
     </select>
@@ -2430,7 +2756,7 @@ function renderSubquoteText(sq, fmt, bs) {
   if (useSpans) {
     // Show sentence spans (clickable for MD, read-only for QA)
     return `<p>${sents.map(s => {
-      const bid = isQA ? (s.primary) : effectivePrimary(s.sid);
+      const bid = effectivePrimary(s.sid);
       const bkt = getBucket(bid);
       const text = fmt === 'condensed' ? (s.condensed || s.text) : s.text;
       const scores64 = btoa(unescape(encodeURIComponent(JSON.stringify(s.scores))));
@@ -2442,19 +2768,19 @@ function renderSubquoteText(sq, fmt, bs) {
     }).join(' ')}</p>`;
   }
 
-  // summary / paraphrase — plain text, no spans
+  // Non-span formats — plain text, no spans
   const text = sents.map(s => s[fmt] || s.text || '').join(' ').trim();
   return text.split(/\n\n+/).filter(Boolean).map(p => `<p>${esc(p.trim())}</p>`).join('');
 }
 
 function fmtLabel(f) {
-  return {verbatim:'Verbatim',condensed:'Condensed',summary:'Summary',paraphrase:'Paraphrase'}[f]||f;
+  return {verbatim:'Verbatim',condensed:'Condensed'}[f]||f;
 }
 function fmtIcon(f) {
-  return {verbatim:'&#8220;',condensed:'&#8796;',summary:'&#9776;',paraphrase:'&#8634;'}[f]||'?';
+  return {verbatim:'&#8220;',condensed:'&#8796;'}[f]||'?';
 }
 function fmtTitle(f) {
-  return {verbatim:'Verbatim — original text',condensed:'Condensed — shortened',summary:'Summary — key points',paraphrase:'Paraphrase — rewritten'}[f]||f;
+  return {verbatim:'Verbatim — original text',condensed:'Condensed — shortened'}[f]||f;
 }
 
 function expandCard(btn) {
@@ -2472,10 +2798,8 @@ function destroySortables() {
 function initSortables() {
   if (typeof Sortable === 'undefined') return;
   document.querySelectorAll('.bkt-quotes').forEach(container => {
-    const compositeId = container.dataset.bucketId || '';
-    const sourceType = compositeId.includes('__qa') ? 'qa' : 'md';
     sortableInstances.push(Sortable.create(container, {
-      group: `report-sq-${sourceType}`,
+      group: 'report-subquotes',
       animation: 150,
       handle: '.drag-handle',
       ghostClass: 'sortable-ghost',
@@ -2490,47 +2814,40 @@ function initSortables() {
   });
 }
 
-function handleSubquoteDrop(sqid, fromComposite, toComposite) {
-  // Composite IDs are "bucket_N__md" or "bucket_N__qa" — extract the real bucket ID
-  const fromBid = fromComposite.replace(/__(?:md|qa)$/, '');
-  const toBid   = toComposite.replace(/__(?:md|qa)$/, '');
+function handleSubquoteDrop(sqid, fromBid, toBid) {
   const bs = getBankState(state.current_bank);
+  const sq = getAllSubquotes(state.current_bank).find(x => x.id === sqid);
+  const targetBucket = getBucket(toBid);
+  const transcriptSection = sq && sq.type === 'md' ? 'MD' : 'QA';
 
-  if (fromBid !== toBid) {
-    // Override bucket for this entire sub-quote
-    if (!bs.subquote_bucket_overrides) bs.subquote_bucket_overrides = {};
-    bs.subquote_bucket_overrides[sqid] = toBid;
-
-    // Also set sentence_user_primary for all sentences in the sub-quote
-    // so transcript coloring stays in sync
-    const sq = getAllSubquotes(state.current_bank).find(x => x.id === sqid);
-    if (sq) {
-      if (!bs.sentence_user_primary) bs.sentence_user_primary = {};
-      const sents = sq.type === 'md' ? sq.sentences : sq.answer_sentences;
-      (sents || []).forEach(s => { bs.sentence_user_primary[s.sid] = toBid; });
-    }
+  if (!sq || !bucketAppliesTo(targetBucket, transcriptSection)) {
+    renderCurrentBank();
+    return;
   }
 
-  // Capture DOM order for target bucket (using composite ID for DOM lookup)
-  const targetEl = document.getElementById(`bq_${toComposite}`);
+  if (fromBid !== toBid) {
+    if (!bs.subquote_bucket_overrides) bs.subquote_bucket_overrides = {};
+    bs.subquote_bucket_overrides[sqid] = toBid;
+    if (!bs.sentence_user_primary) bs.sentence_user_primary = {};
+    const sents = sq.type === 'md' ? sq.sentences : sq.answer_sentences;
+    (sents || []).forEach(s => { bs.sentence_user_primary[s.sid] = toBid; });
+  }
+
+  const targetEl = document.getElementById(`bq_${toBid}`);
   if (targetEl) {
     const ids = [...targetEl.querySelectorAll('[data-subquote-id]')].map(el => el.dataset.subquoteId);
     if (!bs.bucket_subquote_order) bs.bucket_subquote_order = {};
     bs.bucket_subquote_order[toBid] = ids;
   }
   if (fromBid !== toBid) {
-    const fromEl = document.getElementById(`bq_${fromComposite}`);
+    const fromEl = document.getElementById(`bq_${fromBid}`);
     if (fromEl) {
       const ids = [...fromEl.querySelectorAll('[data-subquote-id]')].map(el => el.dataset.subquoteId);
       if (!bs.bucket_subquote_order) bs.bucket_subquote_order = {};
       bs.bucket_subquote_order[fromBid] = ids;
     }
-    updateBucketCount(fromComposite);
   }
-  updateBucketCount(toComposite);
-
-  // Update transcript panel for moved sentences
-  renderTranscriptBody();
+  renderCurrentBank();
 }
 
 // ============================================================
@@ -2579,7 +2896,7 @@ function showAddMenu(convId, anchor) {
   state.buckets.filter(b => b.id !== 'other').forEach(b => {
     const item = document.createElement('div');
     item.className = 'atr-item';
-    item.innerHTML = `<span class="atr-dot" style="background:${b.color_accent}"></span>${esc(b.name)}`;
+    item.innerHTML = `<span class="atr-dot" style="background:${b.color_accent}"></span>${esc(bucketLabel(b))}`;
     item.onclick = () => { addConvToReport(convId, b.id); menu.remove(); };
     menu.appendChild(item);
   });
@@ -2638,12 +2955,7 @@ function saveBucketTitle(id, val) {
 function updateBucketCount(compositeId) {
   const el = document.getElementById(`bkc_${compositeId}`);
   if (!el) return;
-  const parts = compositeId.match(/^(.+)__(\w+)$/);
-  if (parts) {
-    el.textContent = getReportSubquotes(state.current_bank, parts[1], parts[2]).length;
-  } else {
-    el.textContent = getReportSubquotes(state.current_bank, compositeId).length;
-  }
+  el.textContent = getReportSubquotes(state.current_bank, compositeId).length;
 }
 
 // ============================================================

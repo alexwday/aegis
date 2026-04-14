@@ -129,6 +129,11 @@ def _setup_mocks():
         new_callable=AsyncMock,
         return_value={"bucket_0": "Revenue growth remains strong"},
     )
+    patches["config_review"] = patch(
+        "aegis.etls.call_summary_editor.main.analyze_config_coverage",
+        new_callable=AsyncMock,
+        return_value={"existing_section_updates": [], "new_section_suggestions": []},
+    )
     patches["save"] = patch(
         "aegis.etls.call_summary_editor.main._save_interactive_report_to_database",
         new_callable=AsyncMock,
