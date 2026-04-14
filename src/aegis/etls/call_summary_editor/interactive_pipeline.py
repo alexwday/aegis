@@ -677,11 +677,46 @@ def _preview_text(text: str, limit: int = 1200) -> str:
 
 
 def _format_block_preview(paragraphs: List[str], max_paragraph_chars: int = 900) -> str:
-    """Format a large preview for a QA speaker block with per-paragraph labels."""
+    """Format a large preview for a QA speaker block without numeric labels."""
     preview_parts = []
-    for para_idx, paragraph in enumerate(paragraphs, start=1):
-        preview_parts.append(f'P{para_idx}: "{_preview_text(paragraph, max_paragraph_chars)}"')
-    return "\n  ".join(preview_parts)
+    for paragraph in paragraphs:
+        preview_parts.append(f"<paragraph>{_preview_text(paragraph, max_paragraph_chars)}</paragraph>")
+    return "\n".join(preview_parts)
+
+
+def _format_qa_block_prompt_entry(entry: Dict[str, Any]) -> str:
+    """Format one QA speaker block as XML for boundary detection."""
+    hint = (entry.get("speaker_type_hint") or "?").upper()
+    return (
+        "<qa_block>\n"
+        f"  <index>{entry['block_index']}</index>\n"
+        f"  <speaker_type_hint>{hint}</speaker_type_hint>\n"
+        f"  <speaker>{entry.get('speaker', 'Unknown Speaker')}</speaker>\n"
+        f"  <speaker_title>{entry.get('speaker_title', '')}</speaker_title>\n"
+        f"  <speaker_affiliation>{entry.get('speaker_affiliation', '')}</speaker_affiliation>\n"
+        "  <preview>\n"
+        f"{entry.get('preview', '')}\n"
+        "  </preview>\n"
+        "</qa_block>"
+    )
+
+
+def _qa_boundary_retry_message(total_blocks: int, errors: List[str]) -> str:
+    """Build corrective retry guidance for QA boundary re-attempts."""
+    error_lines = "\n".join(f"- {error}" for error in errors) if errors else "- Unknown error"
+    return (
+        "## Retry Correction\n"
+        "The previous grouping was invalid. Correct it and try again.\n\n"
+        "## Hard Constraints\n"
+        f"1. The only valid block indices are integers 1 through {total_blocks} inclusive.\n"
+        "2. Only the integers inside `<index>` tags are valid block indices.\n"
+        "3. Ignore any numbers inside speaker names, titles, affiliations, or preview text.\n"
+        "4. Every valid block index must appear exactly once across all conversations.\n"
+        "5. Each conversation must remain a contiguous run of block indices.\n\n"
+        "## Validation Errors To Fix\n"
+        f"{error_lines}\n\n"
+        "Return a corrected grouping with the provided tool."
+    )
 
 
 def _resolve_block_indices(
@@ -770,20 +805,9 @@ async def detect_qa_boundaries(
     block_entries = _build_qa_block_index(qa_raw_blocks)
     block_lines = []
     for entry in block_entries:
-        hint = (entry.get("speaker_type_hint") or "?").upper()
-        speaker_line = entry.get("speaker", "Unknown Speaker")
-        if entry.get("speaker_title"):
-            speaker_line += f", {entry['speaker_title']}"
-        if entry.get("speaker_affiliation"):
-            speaker_line += f" ({entry['speaker_affiliation']})"
-        preview = _format_block_preview(entry.get("paragraphs", []))
-        block_lines.append(
-            (
-                f"[{entry['block_index']}] block={entry['block_id']} "
-                f"type_hint={hint} | {speaker_line}\n"
-                f"  {preview}"
-            )
-        )
+        entry = dict(entry)
+        entry["preview"] = _format_block_preview(entry.get("paragraphs", []))
+        block_lines.append(_format_qa_block_prompt_entry(entry))
 
     system_prompt = (
         "You are a transcript-structure analyst for earnings call Q&A sections. "
@@ -798,10 +822,13 @@ async def detect_qa_boundaries(
         "Each conversation starts with an analyst question block and includes the executive "
         "response blocks that follow until the next analyst question block.\n\n"
         "## Rules\n"
-        "1. Preserve transcript order and cover the indexed blocks exactly once.\n"
-        "2. Use the block content and speaker metadata when a type hint is ambiguous.\n"
-        "3. Keep each conversation as a contiguous run of block indices.\n"
-        "4. Return the grouped indices with the provided tool.\n\n"
+        f"1. The only valid block indices are integers 1 through {len(qa_raw_blocks)} inclusive.\n"
+        "2. Preserve transcript order and cover the indexed blocks exactly once.\n"
+        "3. Use the block content and speaker metadata when a type hint is ambiguous.\n"
+        "4. Keep each conversation as a contiguous run of block indices.\n"
+        "5. Only the integers inside `<index>` tags are valid block indices.\n"
+        "6. Ignore any numbers that appear inside speaker names, titles, affiliations, or preview text.\n"
+        "7. Return the grouped indices with the provided tool.\n\n"
         "## Indexed Blocks\n"
         f"{_xml_block('qa_block_index', '\n\n'.join(block_lines))}"
     )
@@ -809,10 +836,11 @@ async def detect_qa_boundaries(
     block_id_to_index = {
         block["id"]: idx for idx, block in enumerate(qa_raw_blocks, start=1)
     }
-    messages = [
+    base_messages = [
         {"role": "developer", "content": system_prompt},
         {"role": "user", "content": user_prompt},
     ]
+    messages = list(base_messages)
 
     max_attempts = 3
     last_parseable_indices: Optional[List[List[int]]] = None
@@ -829,6 +857,15 @@ async def detect_qa_boundaries(
         if not raw:
             last_validation_errors = ["No parseable tool response returned"]
             if attempt < max_attempts - 1:
+                messages = base_messages + [
+                    {
+                        "role": "user",
+                        "content": _qa_boundary_retry_message(
+                            len(qa_raw_blocks),
+                            last_validation_errors,
+                        ),
+                    }
+                ]
                 continue
             break
 
@@ -843,6 +880,15 @@ async def detect_qa_boundaries(
             )
             last_validation_errors = [f"Tool output schema validation failed: {exc}"]
             if attempt < max_attempts - 1:
+                messages = base_messages + [
+                    {
+                        "role": "user",
+                        "content": _qa_boundary_retry_message(
+                            len(qa_raw_blocks),
+                            last_validation_errors,
+                        ),
+                    }
+                ]
                 continue
             break
 
@@ -865,6 +911,16 @@ async def detect_qa_boundaries(
             errors=validation_errors,
         )
         last_validation_errors = validation_errors
+        if attempt < max_attempts - 1:
+            messages = base_messages + [
+                {
+                    "role": "user",
+                    "content": _qa_boundary_retry_message(
+                        len(qa_raw_blocks),
+                        validation_errors,
+                    ),
+                }
+            ]
 
     if last_parseable_indices is not None:
         logger.warning(

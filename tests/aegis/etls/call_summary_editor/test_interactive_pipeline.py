@@ -97,6 +97,17 @@ async def test_detect_qa_boundaries_retries_until_valid_output():
     assert len(conversations) == 1
     assert [block["id"] for block in conversations[0]] == ["RY_QA_1", "RY_QA_2"]
     assert mock_call_tool.await_count == 2
+    first_call_messages = mock_call_tool.await_args_list[0].kwargs["messages"]
+    first_user_prompt = next(
+        message["content"] for message in first_call_messages if message["role"] == "user"
+    )
+    assert "<index>1</index>" in first_user_prompt
+    assert "block=RY_QA_1" not in first_user_prompt
+    second_call_messages = mock_call_tool.await_args_list[1].kwargs["messages"]
+    retry_prompt = second_call_messages[-1]["content"]
+    assert "The previous grouping was invalid" in retry_prompt
+    assert "The only valid block indices are integers 1 through 2 inclusive." in retry_prompt
+    assert "Only the integers inside `<index>` tags are valid block indices." in retry_prompt
 
 
 @pytest.mark.asyncio
