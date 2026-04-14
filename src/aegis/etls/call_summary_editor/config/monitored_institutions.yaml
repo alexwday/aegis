@@ -1,0 +1,21 @@
+# Monitored Financial Institutions (14 Total - Canadian & US Banks Only)
+# Format: ticker: {id, name, type, path_safe_name}
+# IDs are unique sequential identifiers for each institution
+
+# Canadian Banks (7)
+RY-CA: {id: 1, name: "Royal Bank of Canada", type: "Canadian_Banks", path_safe_name: "RY-CA_Royal_Bank_of_Canada"}
+BMO-CA: {id: 2, name: "Bank of Montreal", type: "Canadian_Banks", path_safe_name: "BMO-CA_Bank_of_Montreal"}
+CM-CA: {id: 3, name: "Canadian Imperial Bank of Commerce", type: "Canadian_Banks", path_safe_name: "CM-CA_Canadian_Imperial_Bank_of_Commerce"}
+NA-CA: {id: 4, name: "National Bank of Canada", type: "Canadian_Banks", path_safe_name: "NA-CA_National_Bank_of_Canada"}
+BNS-CA: {id: 5, name: "Bank of Nova Scotia", type: "Canadian_Banks", path_safe_name: "BNS-CA_Bank_of_Nova_Scotia"}
+TD-CA: {id: 6, name: "Toronto-Dominion Bank", type: "Canadian_Banks", path_safe_name: "TD-CA_Toronto-Dominion_Bank"}
+LB-CA: {id: 7, name: "Laurentian Bank", type: "Canadian_Banks", path_safe_name: "LB-CA_Laurentian_Bank"}
+
+# U.S. Banks (7)
+JPM-US: {id: 8, name: "JPMorgan Chase & Co.", type: "US_Banks", path_safe_name: "JPM-US_JPMorgan_Chase_Co"}
+BAC-US: {id: 9, name: "Bank of America Corporation", type: "US_Banks", path_safe_name: "BAC-US_Bank_of_America_Corporation"}
+WFC-US: {id: 10, name: "Wells Fargo & Company", type: "US_Banks", path_safe_name: "WFC-US_Wells_Fargo_Company"}
+C-US: {id: 11, name: "Citigroup Inc.", type: "US_Banks", path_safe_name: "C-US_Citigroup_Inc"}
+MS-US: {id: 12, name: "Morgan Stanley", type: "US_Banks", path_safe_name: "MS-US_Morgan_Stanley"}
+GS-US: {id: 13, name: "Goldman Sachs Group Inc.", type: "US_Banks", path_safe_name: "GS-US_Goldman_Sachs_Group_Inc"}
+JEF-US: {id: 14, name: "Jefferies Financial Group Inc.", type: "US_Banks", path_safe_name: "JEF-US_Jefferies_Financial_Group_Inc"}

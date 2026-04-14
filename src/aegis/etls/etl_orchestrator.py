@@ -78,6 +78,16 @@ ETL_CONFIGS = {
         "is_cross_bank": False,
         "schedule_driven": False,
     },
+    "call_summary_editor": {
+        "module": "aegis.etls.call_summary_editor",
+        "report_type": "call_summary_editor",
+        "description": "Editor-targeted earnings call summary",
+        "monitored_institutions_path": (
+            "src/aegis/etls/call_summary_editor/config/monitored_institutions.yaml"
+        ),
+        "is_cross_bank": False,
+        "schedule_driven": False,
+    },
     "key_themes": {
         "module": "aegis.etls.key_themes",
         "report_type": "key_themes",

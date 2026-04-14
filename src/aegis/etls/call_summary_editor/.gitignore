@@ -1,0 +1,14 @@
+# Output files
+output/*.docx
+output/*.pdf
+output/.~lock.*
+
+# Banner image (use your own)
+banner.jpg
+banner.jpeg
+banner.png
+
+# Test files
+*_test.py
+*_optimized.yaml
+test_*.py

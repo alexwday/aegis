@@ -1,0 +1,30 @@
+# Call Summary Interactive HTML Report Generator - Configuration
+# Copy this file and fill in your actual values, or set via environment variables.
+
+# NAS path to the earnings transcript XML data
+# The script expects: {data_path}/{year}/{quarter}/{institution_type}/{path_safe_name}/*.xml
+nas:
+  data_path: "Finance Data and Analytics/DSA/Earnings Call Transcripts/Outputs/Data"
+  ssl_cert_path: "Finance Data and Analytics/DSA/Certs/corp_cert.cer"
+
+# LLM API configuration (same as other stages)
+llm:
+  base_url: "https://api.openai.com/v1"          # Replace with your internal LLM gateway
+  model: "gpt-5-mini"
+  temperature: 0.1
+  max_tokens: 32768
+  timeout: 120
+  token_endpoint: "https://auth.example.com/oauth/token"   # Replace with actual OAuth endpoint
+  cost_per_1k_prompt_tokens: 0.0025
+  cost_per_1k_completion_tokens: 0.01
+  max_retries: 3
+  retry_delay: 1.0
+
+# Processing thresholds
+processing:
+  # Quotes below this importance score are excluded from the report by default (0-10)
+  min_importance_score: 4.0
+  # Development mode: limit processing for testing
+  dev_mode: false
+  dev_max_banks: 2
+  dev_max_quotes_per_bank: 10
