@@ -93,24 +93,11 @@ def build_report_state(
             }
         )
 
-    buckets.append(
-        {
-            "id": "other",
-            "name": "Other",
-            "report_section": "Other",
-            "transcript_sections": "ALL",
-            "description": "Quotes not strongly matching any defined bucket.",
-            "color_bg": OTHER_COLOR[0],
-            "color_accent": OTHER_COLOR[1],
-            "generated_headline": "",
-            "source": "system",
-        }
-    )
-
     bank_states = {
         ticker: {
             "sentence_user_primary": {},
             "excluded_sentences": [],
+            "force_included_sentences": [],
             "subquote_bucket_overrides": {},
             "bucket_subquote_order": {},
             "subquote_formats": {},

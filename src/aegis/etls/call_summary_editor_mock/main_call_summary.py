@@ -1520,7 +1520,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 .s-score-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
 .s-score-main{flex:1;min-width:0}
 .s-score-name{font-size:12px;color:#1A2332;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.s-score-meta{font-size:10px;color:#8A8D91;line-height:1.4;margin-top:1px}
 .s-score-val{font-size:11px;font-weight:700;color:#65676B;min-width:28px;text-align:right;padding-top:1px}
 .s-score-check{font-size:12px;color:#1565C0;margin-left:2px;min-width:12px}
 .s-expand-btn{margin:0 14px;padding:7px 10px;border:1px solid #D7DBE0;border-radius:6px;background:#fff;color:#1A2332;font-size:11px;font-weight:600;cursor:pointer;width:calc(100% - 28px);text-align:left}
@@ -1538,6 +1537,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 /* Report panel */
 #report-panel{flex:1;display:flex;flex-direction:column;background:#4A4A4A;overflow:hidden;min-width:0}
 #report-header{flex-shrink:0;background:#3A3A3A;border-bottom:1px solid #333;padding:10px 18px;display:flex;align-items:center;justify-content:space-between}
+#config-review-shell{display:none;flex-shrink:0;max-height:42%;overflow:auto;padding:0 18px 14px;background:#ECEEF2;border-bottom:1px solid #3F4145}
 .report-meta-title{font-size:14px;font-weight:700;color:rgba(255,255,255,.85)}
 .report-actions{display:flex;gap:8px}
 .report-actions .btn{color:rgba(255,255,255,.75);border-color:rgba(255,255,255,.25);background:transparent}
@@ -1565,15 +1565,25 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 .bkt-quotes{padding:2px 0 2px 6px}
 
 /* Config review */
-.cfg-review{margin-bottom:18px;padding:16px 18px;border:1px solid #E4E6EA;border-radius:8px;background:linear-gradient(180deg,#FBFCFE 0%,#F6F8FB 100%)}
-.cfg-review-header{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:14px}
-.cfg-review-title{font-size:18px;font-weight:800;color:#1A2332}
-.cfg-review-subtitle{font-size:12px;color:#65676B;max-width:620px}
-.cfg-review-grid{display:grid;gap:12px}
-.cfg-review-card{border:1px solid #E4E6EA;border-radius:8px;background:#fff;padding:14px}
-.cfg-review-card h3{font-size:14px;font-weight:700;color:#1A2332;margin-bottom:4px}
-.cfg-review-card p{font-size:12px;line-height:1.55;color:#3C3F44}
-.cfg-review-kicker{font-size:10px;font-weight:700;color:#8A8D91;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px}
+.cfg-review-drawer{margin-top:12px;border:1px solid #D7DBE0;border-radius:8px;background:#fff;overflow:hidden}
+.cfg-review-drawer summary{list-style:none;cursor:pointer;padding:12px 14px;display:flex;align-items:flex-start;justify-content:space-between;gap:12px;background:linear-gradient(180deg,#FBFCFE 0%,#F5F7FA 100%)}
+.cfg-review-drawer summary::-webkit-details-marker{display:none}
+.cfg-review-title{font-size:15px;font-weight:800;color:#1A2332}
+.cfg-review-subtitle{font-size:11px;color:#65676B;margin-top:2px;max-width:620px;line-height:1.45}
+.cfg-review-pills{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.cfg-review-pill{font-size:10px;font-weight:700;color:#4B5563;background:#E8EDF4;border-radius:999px;padding:4px 8px;white-space:nowrap}
+.cfg-review-body{padding:14px}
+.cfg-review-section+.cfg-review-section{margin-top:16px}
+.cfg-review-section h3{font-size:12px;font-weight:800;color:#1A2332;margin:0 0 8px}
+.cfg-review-table{width:100%;border-collapse:collapse;font-size:11px}
+.cfg-review-table th,.cfg-review-table td{border:1px solid #E4E6EA;padding:8px 9px;text-align:left;vertical-align:top}
+.cfg-review-table th{background:#F8F9FB;color:#65676B;font-weight:700}
+.cfg-review-table td{color:#3C3F44;line-height:1.5}
+.cfg-review-empty{font-size:12px;color:#8A8D91;font-style:italic;padding:4px 0}
+.cfg-review-detail{margin:0}
+.cfg-review-detail summary{list-style:none;cursor:pointer;font-size:11px;font-weight:700;color:#0A66C2;padding:0;background:none;display:inline-flex}
+.cfg-review-detail summary::-webkit-details-marker{display:none}
+.cfg-review-detail-body{margin-top:8px}
 .cfg-review-note{font-size:11px;color:#65676B;margin-top:8px}
 .cfg-review-evidence{margin-top:10px;display:grid;gap:6px}
 .cfg-review-evidence-item{font-size:11px;line-height:1.5;color:#444;background:#F8F9FB;border-radius:6px;padding:8px 10px;border-left:3px solid #D4DAE3}
@@ -1581,7 +1591,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 .cfg-config-table th,.cfg-config-table td{border:1px solid #E4E6EA;padding:7px 8px;text-align:left;vertical-align:top}
 .cfg-config-table th{width:140px;background:#F8F9FB;color:#65676B;font-weight:700}
 .cfg-review-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}
-.cfg-review-empty{font-size:12px;color:#8A8D91;font-style:italic}
 
 /* Quote card (sub-quote) */
 .q-card{background:#fff;border:1px solid #E4E6EA;border-radius:6px;margin-bottom:4px;overflow:hidden}
@@ -1639,8 +1648,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
   #transcript-wrap{display:none!important}
   #tp-resize{display:none!important}
   #report-header{display:none!important}
+  #config-review-shell{display:none!important}
   #s-popover{display:none!important}
-  .cfg-review{display:none!important}
 
   /* PDF banner */
   #banner-wrap{display:block!important;text-align:center;padding:8px 0 4px;border:none;margin:0}
@@ -1730,6 +1739,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
           <button class="btn btn-secondary" onclick="window.print()">&#128196; PDF</button>
         </div>
       </div>
+      <div id="config-review-shell"></div>
       <div id="report-body"><div id="report-page" class="attrib-off"></div></div>
     </div>
   </div>
@@ -1921,16 +1931,16 @@ function renderTranscriptPanel() {
 
 function getBucket(bid) {
   return state.buckets.find(b => b.id === bid) ||
-         {id:'other',name:'Other',color_bg:'#FAFAFA',color_accent:'#9E9E9E'};
+         {id:'unassigned',name:'Unassigned',color_bg:'#FAFAFA',color_accent:'#9E9E9E'};
 }
 
 function bucketLabel(bucket) {
-  return (state.bucket_user_titles && state.bucket_user_titles[bucket.id]) || bucket.name || 'Other';
+  return (state.bucket_user_titles && state.bucket_user_titles[bucket.id]) || bucket.name || 'Unassigned';
 }
 
 function bucketAppliesTo(bucket, transcriptSection) {
   const applies = (bucket && bucket.transcript_sections) || 'ALL';
-  return bucket.id === 'other' || applies === 'ALL' || applies === transcriptSection;
+  return applies === 'ALL' || applies === transcriptSection;
 }
 
 function getSentenceContext(sid) {
@@ -1962,15 +1972,13 @@ function getApplicableBucketsForSentence(sid) {
 }
 
 function nextBucketColors() {
-  const count = state.buckets.filter(b => b.id !== 'other').length;
+  const count = state.buckets.length;
   return DYNAMIC_BUCKET_COLORS[count % DYNAMIC_BUCKET_COLORS.length] || {bg:'#ECEFF1', accent:'#546E7A'};
 }
 
 function insertBucket(bucket) {
   if (!state.buckets) state.buckets = [];
-  const otherIdx = state.buckets.findIndex(b => b.id === 'other');
-  if (otherIdx >= 0) state.buckets.splice(otherIdx, 0, bucket);
-  else state.buckets.push(bucket);
+  state.buckets.push(bucket);
 }
 
 function createBucketFromRow(row, options={}) {
@@ -1997,7 +2005,7 @@ function createBucketFromRow(row, options={}) {
 function effectivePrimary(sid) {
   const bs = getBankState(state.current_bank);
   return (bs.sentence_user_primary && bs.sentence_user_primary[sid]) ||
-         findSentence(sid)?.primary || 'other';
+         findSentence(sid)?.primary || state.buckets[0]?.id || '';
 }
 
 function renderTranscriptBody() {
@@ -2009,13 +2017,13 @@ function renderTranscriptBody() {
 // ── Helpers: inclusion check + consecutive-category grouping ──
 function computeIncludedSids(bankId) {
   const inc = new Set();
-  const all = getAllSubquotes(bankId);
-  for (const sq of all) {
-    if (getSubquoteImportance(sq) < MIN_IMPORTANCE) continue;
-    const sents = sq.type === 'md' ? sq.sentences
-      : [...(sq.question_sentences||[]), ...(sq.answer_sentences||[])];
-    for (const s of sents) inc.add(s.sid);
-  }
+  state.buckets.forEach(bucket => {
+    getReportSubquotes(bankId, bucket.id).forEach(sq => {
+      const sents = sq.type === 'md' ? sq.sentences
+        : [...(sq.question_sentences||[]), ...(sq.answer_sentences||[])];
+      for (const s of sents) inc.add(s.sid);
+    });
+  });
   return inc;
 }
 function groupByCat(sentences) {
@@ -2204,7 +2212,6 @@ function renderTranscriptBodyByCategory() {
 function renderPopoverScoreRow(bucket, score, sid, options={}) {
   const readonly = !!options.readonly;
   const current = !!options.current;
-  const showMeta = !!options.showMeta;
   const scoreText = Number.isFinite(score) ? score.toFixed(1) : '—';
   const cls = `s-score-row${current?' current':''}${readonly?' readonly':''}`;
   const onclick = readonly ? '' : `onclick="reassignSentence('${sid}','${bucket.id}')"`;
@@ -2212,7 +2219,6 @@ function renderPopoverScoreRow(bucket, score, sid, options={}) {
     <div class="s-score-dot" style="background:${bucket.color_accent}"></div>
     <div class="s-score-main">
       <div class="s-score-name">${esc(bucketLabel(bucket))}</div>
-      ${showMeta ? `<div class="s-score-meta">${esc(bucket.description || 'No description provided.')}</div>` : ''}
     </div>
     <div class="s-score-val">${scoreText}</div>
     <div class="s-score-check">${current ? '&#10003;' : ''}</div>
@@ -2287,7 +2293,6 @@ function showSentencePopover(evt, el) {
   const curPrimary = effectivePrimary(sid);
   const applicableBuckets = bucketState.buckets;
   const scoredRows = applicableBuckets
-    .filter(b => b.id !== 'other')
     .map(b => ({ bucket: b, score: scores[b.id] || 0 }))
     .sort((a, b) => b.score - a.score || bucketLabel(a.bucket).localeCompare(bucketLabel(b.bucket)));
 
@@ -2309,7 +2314,6 @@ function showSentencePopover(evt, el) {
     renderPopoverScoreRow(bucket, score, sid, {
       readonly,
       current: bucket.id === curPrimary,
-      showMeta: false,
     })
   ).join('');
   const remainingCount = Math.max(allRows.length - topRows.length, 0);
@@ -2317,7 +2321,6 @@ function showSentencePopover(evt, el) {
     renderPopoverScoreRow(bucket, score, sid, {
       readonly,
       current: bucket.id === curPrimary,
-      showMeta: true,
     })
   ).join('');
 
@@ -2409,7 +2412,9 @@ function reassignSentence(sid, newBucketId) {
   if (!context.editable || !bucketAppliesTo(targetBucket, context.transcriptSection)) return;
   const bs = getBankState(state.current_bank);
   if (!bs.sentence_user_primary) bs.sentence_user_primary = {};
+  if (!bs.force_included_sentences) bs.force_included_sentences = [];
   bs.sentence_user_primary[sid] = newBucketId;
+  if (!bs.force_included_sentences.includes(sid)) bs.force_included_sentences.push(sid);
   document.getElementById('s-popover').style.display = 'none';
   _activeSid = null;
   renderCurrentBank(); // full re-render: transcript colors + report groupings
@@ -2470,7 +2475,7 @@ function computeQASubquotes(conv, bs) {
   const groups = [];
   let cur = null;
   for (const sent of visibleAnswers) {
-    const effectiveBucket = (bs.sentence_user_primary && bs.sentence_user_primary[sent.sid]) || sent.primary || conv.primary_bucket || 'other';
+    const effectiveBucket = (bs.sentence_user_primary && bs.sentence_user_primary[sent.sid]) || sent.primary || conv.primary_bucket || state.buckets[0]?.id || '';
     if (!cur || cur.effective_bucket !== effectiveBucket) {
       if (cur) groups.push(cur);
       cur = {
@@ -2515,14 +2520,38 @@ function getSubquoteFormats(sq, fmt) {
   return sents.map(s => s[key] || s.text || '').join(' ').trim();
 }
 
+function getSubquoteBucketScore(sq) {
+  const bucketId = sq.effective_bucket;
+  const sents = sq.type === 'md' ? sq.sentences : sq.answer_sentences;
+  if (!bucketId || !sents || !sents.length) return 0;
+  return Math.max(...sents.map(s => Number((s.scores || {})[bucketId] || 0)));
+}
+
+function getSubquoteSentenceIds(sq) {
+  const sents = sq.type === 'md' ? sq.sentences : sq.answer_sentences;
+  return (sents || []).map(s => s.sid);
+}
+
+function isSubquoteForceIncluded(sq, bs) {
+  const forced = new Set(bs.force_included_sentences || []);
+  return getSubquoteSentenceIds(sq).some(sid => forced.has(sid));
+}
+
 function getReportSubquotes(bankId, bucketId) {
   const bs  = getBankState(bankId);
   const all = getAllSubquotes(bankId);
-
-  let eligible = all.filter(sq =>
-    sq.effective_bucket === bucketId &&
+  const candidates = all.filter(sq => sq.effective_bucket === bucketId);
+  const forced = candidates.filter(sq => isSubquoteForceIncluded(sq, bs));
+  const autoCandidates = candidates.filter(sq =>
+    !isSubquoteForceIncluded(sq, bs) &&
     getSubquoteImportance(sq) >= MIN_IMPORTANCE
   );
+  const rankedAuto = [...autoCandidates].sort((a, b) =>
+    getSubquoteImportance(b) - getSubquoteImportance(a) ||
+    getSubquoteBucketScore(b) - getSubquoteBucketScore(a) ||
+    a.id.localeCompare(b.id)
+  );
+  let eligible = [...forced, ...rankedAuto];
 
   const order = bs.bucket_subquote_order && bs.bucket_subquote_order[bucketId];
   if (order && order.length) {
@@ -2534,7 +2563,11 @@ function getReportSubquotes(bankId, bucketId) {
     eligible.forEach(sq => { if (!order.includes(sq.id)) ordered.push(sq); });
     return ordered;
   }
-  return [...eligible].sort((a, b) => getSubquoteImportance(b) - getSubquoteImportance(a));
+  return [...eligible].sort((a, b) =>
+    getSubquoteImportance(b) - getSubquoteImportance(a) ||
+    getSubquoteBucketScore(b) - getSubquoteBucketScore(a) ||
+    a.id.localeCompare(b.id)
+  );
 }
 
 function getConfigReview(bankId) {
@@ -2563,6 +2596,17 @@ function renderEvidence(items) {
     `<div class="cfg-review-evidence-item">${esc(item)}</div>`).join('')}</div>`;
 }
 
+function renderConfigReviewDetail(detailText, items, row) {
+  return `<details class="cfg-review-detail">
+    <summary>Expand</summary>
+    <div class="cfg-review-detail-body">
+      ${detailText ? `<div class="cfg-review-note">${esc(detailText)}</div>` : ''}
+      ${renderEvidence(items || [])}
+      ${renderConfigRowTable(row)}
+    </div>
+  </details>`;
+}
+
 function adoptSuggestedBucket(suggestionId) {
   const review = getConfigReview(state.current_bank);
   const suggestion = (review.new_section_suggestions || []).find(item => item.id === suggestionId);
@@ -2587,61 +2631,102 @@ function renderConfigReviewSection() {
   const suggestions = review.new_section_suggestions || [];
   if (!existing.length && !suggestions.length) return '';
 
-  const existingHtml = existing.length ? existing.map(item => `
-    <div class="cfg-review-card">
-      <div class="cfg-review-kicker">Existing Section Needs More Context</div>
-      <h3>${esc(item.category_name || '')}</h3>
-      <p>${esc(item.gap_summary || '')}</p>
-      <div class="cfg-review-note">${esc(item.why_update || '')}</div>
-      ${renderEvidence(item.supporting_evidence || [])}
-      ${renderConfigRowTable(item.proposed_config_row)}
+  const existingHtml = existing.length ? `
+    <div class="cfg-review-section">
+      <h3>Existing section updates</h3>
+      <table class="cfg-review-table">
+        <thead>
+          <tr>
+            <th>Category</th>
+            <th>Gap summary</th>
+            <th>Why update</th>
+            <th>Details</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${existing.map(item => `
+            <tr>
+              <td>${esc(item.category_name || '')}</td>
+              <td>${esc(item.gap_summary || '')}</td>
+              <td>${esc(item.why_update || '')}</td>
+              <td>${renderConfigReviewDetail('', item.supporting_evidence || [], item.proposed_config_row)}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
     </div>
-  `).join('') : '<div class="cfg-review-empty">No existing config rows were flagged for expansion.</div>';
+  ` : '<div class="cfg-review-empty">No existing config rows were flagged for expansion.</div>';
 
-  const suggestionsHtml = suggestions.length ? suggestions.map(item => {
-    const adopted = item.adopted_bucket_id && state.buckets.some(bucket => bucket.id === item.adopted_bucket_id);
-    return `<div class="cfg-review-card">
-      <div class="cfg-review-kicker">Suggested New Classification</div>
-      <h3>${esc(item.category_name || (item.proposed_config_row || {}).category_name || '')}</h3>
-      <p>${esc(item.why_new_section || '')}</p>
-      ${item.suggested_subtitle ? `<div class="cfg-review-note">Suggested subtitle: ${esc(item.suggested_subtitle)}</div>` : ''}
-      ${renderEvidence(item.supporting_evidence || [])}
-      ${renderConfigRowTable(item.proposed_config_row)}
-      <div class="cfg-review-actions">
-        <button class="btn ${adopted ? 'btn-secondary' : 'btn-primary'} btn-sm"
-                ${adopted ? 'disabled' : `onclick="adoptSuggestedBucket('${item.id}')"`}>
-          ${adopted ? 'Available in classifications' : 'Add to classifications'}
-        </button>
-      </div>
-    </div>`;
-  }).join('') : '<div class="cfg-review-empty">No new config rows were suggested for this transcript.</div>';
+  const suggestionsHtml = suggestions.length ? `
+    <div class="cfg-review-section">
+      <h3>Suggested new classifications</h3>
+      <table class="cfg-review-table">
+        <thead>
+          <tr>
+            <th>Category</th>
+            <th>Why new</th>
+            <th>Suggested subtitle</th>
+            <th>Action</th>
+            <th>Details</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${suggestions.map(item => {
+            const adopted = item.adopted_bucket_id && state.buckets.some(bucket => bucket.id === item.adopted_bucket_id);
+            return `<tr>
+              <td>${esc(item.category_name || (item.proposed_config_row || {}).category_name || '')}</td>
+              <td>${esc(item.why_new_section || '')}</td>
+              <td>${esc(item.suggested_subtitle || '—')}</td>
+              <td>
+                <button class="btn ${adopted ? 'btn-secondary' : 'btn-primary'} btn-sm"
+                        ${adopted ? 'disabled' : `onclick="adoptSuggestedBucket('${item.id}')"`}>
+                  ${adopted ? 'Available in classifications' : 'Add to classifications'}
+                </button>
+              </td>
+              <td>${renderConfigReviewDetail('', item.supporting_evidence || [], item.proposed_config_row)}</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+  ` : '<div class="cfg-review-empty">No new config rows were suggested for this transcript.</div>';
 
-  return `<div class="cfg-review">
-    <div class="cfg-review-header">
+  return `<details class="cfg-review-drawer">
+    <summary>
       <div>
         <div class="cfg-review-title">Config Analysis Review</div>
         <div class="cfg-review-subtitle">
-          Review where the current input sheet may need stronger descriptions or where the transcript introduces a new category worth adding.
+          Separate review area for config-sheet updates and new classification suggestions. This does not appear inside the report preview.
         </div>
       </div>
-    </div>
-    <div class="cfg-review-grid">
+      <div class="cfg-review-pills">
+        <span class="cfg-review-pill">${existing.length} existing update${existing.length === 1 ? '' : 's'}</span>
+        <span class="cfg-review-pill">${suggestions.length} new classification${suggestions.length === 1 ? '' : 's'}</span>
+      </div>
+    </summary>
+    <div class="cfg-review-body">
       ${existingHtml}
       ${suggestionsHtml}
     </div>
-  </div>`;
+  </details>`;
 }
 
 // ============================================================
 // REPORT PANEL
 // ============================================================
 function renderReportPanel() {
+  const reviewShell = document.getElementById('config-review-shell');
+  if (reviewShell) {
+    const reviewHtml = renderConfigReviewSection();
+    reviewShell.innerHTML = reviewHtml;
+    reviewShell.style.display = reviewHtml ? 'block' : 'none';
+  }
   renderReportSections();
 }
 
 function renderReportSections() {
   destroySortables();
-  let html = renderConfigReviewSection();
+  let html = '';
   const sectionRank = {'Results Summary': 0, 'Earnings Call Q&A': 1, 'Other': 2};
   const reportSections = [...new Set(
     state.buckets
@@ -2829,8 +2914,12 @@ function handleSubquoteDrop(sqid, fromBid, toBid) {
     if (!bs.subquote_bucket_overrides) bs.subquote_bucket_overrides = {};
     bs.subquote_bucket_overrides[sqid] = toBid;
     if (!bs.sentence_user_primary) bs.sentence_user_primary = {};
+    if (!bs.force_included_sentences) bs.force_included_sentences = [];
     const sents = sq.type === 'md' ? sq.sentences : sq.answer_sentences;
-    (sents || []).forEach(s => { bs.sentence_user_primary[s.sid] = toBid; });
+    (sents || []).forEach(s => {
+      bs.sentence_user_primary[s.sid] = toBid;
+      if (!bs.force_included_sentences.includes(s.sid)) bs.force_included_sentences.push(s.sid);
+    });
   }
 
   const targetEl = document.getElementById(`bq_${toBid}`);
@@ -2873,10 +2962,14 @@ function deleteSubquote(sqid) {
   if (!sq) return;
 
   if (!bs.excluded_sentences) bs.excluded_sentences = [];
+  if (!bs.force_included_sentences) bs.force_included_sentences = [];
   const sents = sq.type === 'md' ? sq.sentences : sq.answer_sentences;
   (sents || []).forEach(s => {
     if (!bs.excluded_sentences.includes(s.sid)) bs.excluded_sentences.push(s.sid);
   });
+  bs.force_included_sentences = bs.force_included_sentences.filter(
+    sid => !(sents || []).some(s => s.sid === sid)
+  );
 
   // Surgical DOM removal to avoid full re-render
   const card = document.querySelector(`[data-subquote-id="${sqid}"]`);
@@ -2893,18 +2986,13 @@ function showAddMenu(convId, anchor) {
   document.querySelectorAll('.atr-menu').forEach(m => m.remove());
   const menu = document.createElement('div');
   menu.className = 'atr-menu';
-  state.buckets.filter(b => b.id !== 'other').forEach(b => {
+  state.buckets.forEach(b => {
     const item = document.createElement('div');
     item.className = 'atr-item';
     item.innerHTML = `<span class="atr-dot" style="background:${b.color_accent}"></span>${esc(bucketLabel(b))}`;
     item.onclick = () => { addConvToReport(convId, b.id); menu.remove(); };
     menu.appendChild(item);
   });
-  const other = document.createElement('div');
-  other.className = 'atr-item';
-  other.innerHTML = `<span class="atr-dot" style="background:#9E9E9E"></span>Other`;
-  other.onclick = () => { addConvToReport(convId, 'other'); menu.remove(); };
-  menu.appendChild(other);
 
   const rect = anchor.getBoundingClientRect();
   menu.style.top  = (rect.bottom + 4) + 'px';
@@ -2928,10 +3016,12 @@ function addConvToReport(convId, bucketId) {
     sid => !conv.answer_sentences.some(s => s.sid === sid)
   );
 
-  // Override bucket
-  const sqid = `SQ_${convId}`;
-  if (!bs.subquote_bucket_overrides) bs.subquote_bucket_overrides = {};
-  bs.subquote_bucket_overrides[sqid] = bucketId;
+  if (!bs.sentence_user_primary) bs.sentence_user_primary = {};
+  if (!bs.force_included_sentences) bs.force_included_sentences = [];
+  conv.answer_sentences.forEach(s => {
+    bs.sentence_user_primary[s.sid] = bucketId;
+    if (!bs.force_included_sentences.includes(s.sid)) bs.force_included_sentences.push(s.sid);
+  });
 
   renderReportSections();
   renderTranscriptBody();
@@ -2966,6 +3056,7 @@ function getBankState(bankId) {
   if (!state.bank_states[bankId]) {
     state.bank_states[bankId] = {
       sentence_user_primary: {}, excluded_sentences: [],
+      force_included_sentences: [],
       subquote_bucket_overrides: {}, bucket_subquote_order: {}, subquote_formats: {},
     };
   }

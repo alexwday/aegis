@@ -1848,6 +1848,7 @@ async def generate_call_summary(  # pylint: disable=too-many-statements
             qa_boundary_llm_params=qa_boundary_llm_params,
             md_llm_params=md_llm_params,
             qa_llm_params=qa_llm_params,
+            report_inclusion_threshold=min_importance,
             max_concurrent_md_blocks=etl_config.max_concurrent_extractions,
         )
         banks_data = {bank_data["ticker"]: bank_data}

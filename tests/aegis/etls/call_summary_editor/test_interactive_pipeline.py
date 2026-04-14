@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from aegis.etls.call_summary_editor.interactive_pipeline import (
+    _primary_from_scores,
     analyze_config_coverage,
     classify_qa_conversation,
     count_included_categories,
@@ -143,14 +144,24 @@ async def test_detect_qa_boundaries_uses_last_parseable_version_after_three_inva
     assert mock_call_tool.await_count == 3
 
 
-def test_count_included_categories_excludes_other_bucket():
+def test_count_included_categories_counts_auto_included_buckets():
     banks_data = {
         "RY-CA": {
             "md_blocks": [
                 {
                     "sentences": [
-                        {"primary": "bucket_0", "importance_score": 8.0, "summary": "Revenue up"},
-                        {"primary": "other", "importance_score": 9.0, "summary": "Greeting"},
+                        {
+                            "primary": "bucket_0",
+                            "scores": {"bucket_0": 8.0},
+                            "importance_score": 8.0,
+                            "condensed": "Revenue up",
+                        },
+                        {
+                            "primary": "bucket_1",
+                            "scores": {"bucket_1": 7.1},
+                            "importance_score": 7.0,
+                            "condensed": "Expenses down",
+                        },
                     ]
                 }
             ],
@@ -158,7 +169,17 @@ def test_count_included_categories_excludes_other_bucket():
         }
     }
 
-    assert count_included_categories(banks_data, 4.0) == 1
+    assert count_included_categories(banks_data, 4.0) == 2
+
+
+def test_primary_from_scores_uses_best_positive_score_without_legacy_threshold():
+    scores = {
+        "bucket_0": 0.8,
+        "bucket_1": 0.35,
+        "bucket_2": 0.1,
+    }
+
+    assert _primary_from_scores(scores, ["bucket_0", "bucket_1", "bucket_2"]) == "bucket_0"
 
 
 @pytest.mark.asyncio
@@ -177,7 +198,8 @@ async def test_analyze_config_coverage_returns_existing_and_new_rows():
                         "sid": "md_1",
                         "text": "We are scaling agentic AI across operations.",
                         "condensed": "Scaling agentic AI across operations.",
-                        "primary": "other",
+                        "primary": "bucket_0",
+                        "scores": {"bucket_0": 6.0},
                         "importance_score": 8.5,
                     }
                 ],
@@ -339,6 +361,7 @@ async def test_classify_qa_conversation_classifies_question_sentences_individual
             company_name="Royal Bank of Canada",
             fiscal_year=2026,
             fiscal_quarter="Q1",
+            report_inclusion_threshold=4.0,
             context={"execution_id": "test-exec"},
             llm_params={"model": "gpt-test"},
         )
@@ -349,3 +372,61 @@ async def test_classify_qa_conversation_classifies_question_sentences_individual
     assert result["question_sentences"][1]["importance_score"] == 6.8
     assert result["answer_sentences"][0]["primary"] == "bucket_0"
     assert result["answer_sentences"][1]["primary"] == "bucket_1"
+
+
+@pytest.mark.asyncio
+async def test_classify_qa_conversation_prompt_mentions_auto_include_threshold():
+    categories = [
+        {
+            "transcript_sections": "QA",
+            "report_section": "Earnings Call Q&A",
+            "category_name": "Capital",
+            "category_description": "Capital and CET1 discussion.",
+        }
+    ]
+    conv_blocks = [
+        {
+            "speaker": "Analyst",
+            "speaker_affiliation": "Big Bank",
+            "speaker_title": "",
+            "speaker_type_hint": "q",
+            "paragraphs": ["How are you thinking about CET1?"],
+        },
+        {
+            "speaker": "Chief Financial Officer",
+            "speaker_affiliation": "Royal Bank of Canada",
+            "speaker_title": "CFO",
+            "speaker_type_hint": "a",
+            "paragraphs": ["CET1 should remain strong."],
+        },
+    ]
+
+    mock_call_tool = AsyncMock(
+        return_value={
+            "primary_bucket_index": 0,
+            "question_sentences": [],
+            "answer_sentences": [],
+        }
+    )
+
+    with patch(
+        "aegis.etls.call_summary_editor.interactive_pipeline._call_tool",
+        new=mock_call_tool,
+    ):
+        await classify_qa_conversation(
+            conv_idx=1,
+            conv_blocks=conv_blocks,
+            ticker="RY-CA",
+            categories=categories,
+            categories_text_qa="",
+            company_name="Royal Bank of Canada",
+            fiscal_year=2026,
+            fiscal_quarter="Q1",
+            report_inclusion_threshold=4.0,
+            context={"execution_id": "test-exec"},
+            llm_params={"model": "gpt-test"},
+        )
+
+    prompt_messages = mock_call_tool.await_args.kwargs["messages"]
+    user_prompt = next(message["content"] for message in prompt_messages if message["role"] == "user")
+    assert "Scores >= 4.0 are auto-included in the draft report for analyst review." in user_prompt

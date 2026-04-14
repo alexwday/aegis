@@ -85,4 +85,8 @@ def test_generate_html_injects_period_and_state():
     assert "Revenue growth remains strong" in html
     assert state["config_review"]["by_bank"]["RY-CA"]["new_section_suggestions"][0]["category_name"] == "AI"
     assert state["next_bucket_seq"] == 1
+    assert len(state["buckets"]) == 1
+    assert state["bank_states"]["RY-CA"]["force_included_sentences"] == []
+    assert 'id="config-review-shell"' in html
     assert "Config Analysis Review" in html
+    assert "No description provided." not in html

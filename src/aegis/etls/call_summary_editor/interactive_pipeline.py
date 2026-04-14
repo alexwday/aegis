@@ -73,7 +73,7 @@ class QAExchangeClassification(BaseModel):
     """Whole-exchange classification for one QA conversation."""
 
     primary_bucket_index: int = Field(
-        description="0-based index of the best bucket for the whole exchange. -1 for Other."
+        description="0-based index of the best existing bucket for the whole exchange."
     )
     question_sentences: List[SentenceResult]
     answer_sentences: List[SentenceResult]
@@ -421,6 +421,24 @@ def _xml_block(tag: str, content: str) -> str:
     return f"<{tag}>\n{body}\n</{tag}>"
 
 
+def _importance_scale_guidance(report_inclusion_threshold: float) -> str:
+    """Return prompt guidance for the 0-10 importance scale."""
+    threshold = f"{float(report_inclusion_threshold):.1f}"
+    return (
+        "Use `importance_score` as the draft auto-inclusion score for the report editor.\n"
+        f"- Scores >= {threshold} are auto-included in the draft report for analyst review.\n"
+        f"- Scores just below {threshold} should be reserved for content that is mostly low-value, "
+        "procedural, repetitive, or not worth surfacing by default.\n"
+        f"- If a sentence is at least semi-important and you want the user to review it in the "
+        f"draft, score it at or above {threshold}.\n"
+        "- 0-1: ceremonial, legal boilerplate, operator instructions, or procedural remarks.\n"
+        "- 2-3: low-signal detail that usually does not belong in the draft by default.\n"
+        "- 4-6: meaningful report-worthy content that should usually appear for review.\n"
+        "- 7-8: clearly important takeaway.\n"
+        "- 9-10: headline-level or must-keep takeaway."
+    )
+
+
 def applicable_bucket_ids(categories: List[Dict[str, Any]], section: str) -> List[str]:
     """Return bucket ids applicable to the given transcript section."""
     return [
@@ -502,8 +520,8 @@ async def _call_tool(
 
 
 def _bucket_name(bucket_id: str, categories: List[Dict[str, Any]]) -> str:
-    if bucket_id == "other":
-        return "Other"
+    if not bucket_id:
+        return "Unassigned"
     try:
         idx = int(bucket_id.split("_")[1])
         return categories[idx]["category_name"]
@@ -511,15 +529,32 @@ def _bucket_name(bucket_id: str, categories: List[Dict[str, Any]]) -> str:
         return bucket_id
 
 
+def _fallback_bucket_id(applicable_ids: List[str]) -> str:
+    """Return a deterministic fallback bucket when score output is unavailable."""
+    return applicable_ids[0] if applicable_ids else ""
+
+
 def _primary_from_scores(scores: Dict[str, float], applicable_ids: List[str]) -> str:
-    """Pick the highest-scoring applicable bucket, else Other."""
-    best_id, best_score = "other", 0.0
+    """Pick the highest-scoring applicable bucket, else the first applicable bucket."""
+    best_id = ""
+    best_score: Optional[float] = None
     for bucket_id in applicable_ids:
-        score = scores.get(bucket_id, 0.0)
-        if score > best_score:
+        score = scores.get(bucket_id)
+        if score is None:
+            continue
+        if best_score is None or score > best_score:
             best_score = score
             best_id = bucket_id
-    return best_id if best_score >= 1.5 else "other"
+    if best_id and best_score is not None:
+        return best_id
+    return _fallback_bucket_id(applicable_ids)
+
+
+def _bucket_score(scores: Dict[str, float], bucket_id: str) -> float:
+    """Return the recorded score for a bucket from sparse top-3 score output."""
+    if not bucket_id:
+        return 0.0
+    return float(scores.get(bucket_id, 0.0))
 
 
 def _normalise_scores(raw_scores: Any, categories: List[Dict[str, Any]]) -> Dict[str, float]:
@@ -590,12 +625,13 @@ def _make_sentence_record(
     applicable_ids: List[str],
 ) -> Dict[str, Any]:
     if llm_result is None:
+        fallback_bucket = _fallback_bucket_id(applicable_ids)
         return {
             "sid": sentence_id,
             "text": text,
-            "primary": "other",
+            "primary": fallback_bucket,
             "scores": {},
-            "importance_score": 2.0,
+            "importance_score": 0.0,
             "condensed": text,
         }
 
@@ -851,6 +887,7 @@ async def classify_md_block(
     company_name: str,
     fiscal_year: int,
     fiscal_quarter: str,
+    report_inclusion_threshold: float,
     context: Dict[str, Any],
     llm_params: Dict[str, Any],
 ) -> Dict[str, Any]:
@@ -899,11 +936,12 @@ async def classify_md_block(
             f"Classify the indexed sentences in Management Discussion paragraph {para_idx + 1}.\n\n"
             "## Decision Criteria\n"
             "Choose bucket scores from the category descriptions and examples, then score how "
-            "quotable each sentence is for an investor-relations summary.\n\n"
+            "quotable each sentence is for an investor-relations summary.\n"
+            f"{_importance_scale_guidance(report_inclusion_threshold)}\n\n"
             "## Rules\n"
             "1. Return one result for every S-numbered sentence in the current paragraph.\n"
             "2. Use up to the top 3 bucket-score pairs for each sentence, ordered by score descending.\n"
-            "3. Score importance from 0 to 10. Ceremonial or procedural content should be near 0.\n"
+            "3. Score importance from 0 to 10 using the inclusion guidance above.\n"
             "4. Keep `condensed` faithful to the sentence while removing filler.\n"
             "5. Keep the `index` aligned to the S-number shown in the current paragraph.\n\n"
             "## Categories\n"
@@ -982,6 +1020,7 @@ async def classify_qa_conversation(
     company_name: str,
     fiscal_year: int,
     fiscal_quarter: str,
+    report_inclusion_threshold: float,
     context: Dict[str, Any],
     llm_params: Dict[str, Any],
 ) -> Dict[str, Any]:
@@ -1043,12 +1082,13 @@ async def classify_qa_conversation(
         "Classify this Q&A exchange at the whole-conversation level and at the sentence level.\n\n"
         "## Decision Criteria\n"
         "Use the overall exchange topic for `primary_bucket_index`, then score each analyst and "
-        "executive sentence from the category descriptions and examples.\n\n"
+        "executive sentence from the category descriptions and examples.\n"
+        f"{_importance_scale_guidance(report_inclusion_threshold)}\n\n"
         "## Rules\n"
-        "1. Set `primary_bucket_index` to the single best bucket for the full exchange, or -1 for Other.\n"
+        "1. Set `primary_bucket_index` to the single best existing bucket for the full exchange.\n"
         "2. Return one result for every `QS` and `AS` sentence shown below.\n"
         "3. Use up to the top 3 bucket-score pairs for each sentence, ordered by score descending.\n"
-        "4. Score importance from 0 to 10 based on investor-relations relevance.\n"
+        "4. Score importance from 0 to 10 using the inclusion guidance above.\n"
         "5. Keep `condensed` faithful to the source sentence while removing filler.\n"
         "6. Keep each `index` aligned to the numbered `QS` or `AS` sentence.\n\n"
         "## Categories\n"
@@ -1067,7 +1107,7 @@ async def classify_qa_conversation(
         llm_params=llm_params,
     )
 
-    primary_bucket = "other"
+    primary_bucket = _fallback_bucket_id(applicable_ids)
     question_records: List[Dict[str, Any]] = []
     answer_records: List[Dict[str, Any]] = []
     if raw:
@@ -1117,9 +1157,9 @@ async def classify_qa_conversation(
                 {
                     "sid": f"{conv_id}_qs{idx}",
                     "text": sentence,
-                    "primary": "other",
+                    "primary": _fallback_bucket_id(applicable_ids),
                     "scores": {},
-                    "importance_score": 3.0,
+                    "importance_score": 0.0,
                     "condensed": sentence,
                     "para_idx": question_para_indices[idx] if idx < len(question_para_indices) else 0,
                 }
@@ -1131,13 +1171,38 @@ async def classify_qa_conversation(
                 {
                     "sid": f"{conv_id}_as{idx}",
                     "text": sentence,
-                    "primary": "other",
+                    "primary": _fallback_bucket_id(applicable_ids),
                     "scores": {},
-                    "importance_score": 3.0,
+                    "importance_score": 0.0,
                     "condensed": sentence,
                     "para_idx": answer_para_indices[idx] if idx < len(answer_para_indices) else 0,
                 }
             )
+
+    if primary_bucket not in applicable_ids:
+        answer_bucket_totals: Dict[str, Dict[str, float]] = defaultdict(
+            lambda: {"count": 0.0, "importance": 0.0, "score": 0.0}
+        )
+        for sentence in answer_records or question_records:
+            bucket_id = sentence.get("primary") or _fallback_bucket_id(applicable_ids)
+            if not bucket_id:
+                continue
+            answer_bucket_totals[bucket_id]["count"] += 1.0
+            answer_bucket_totals[bucket_id]["importance"] += float(sentence.get("importance_score", 0.0))
+            answer_bucket_totals[bucket_id]["score"] += _bucket_score(
+                sentence.get("scores", {}),
+                bucket_id,
+            )
+        if answer_bucket_totals:
+            primary_bucket = max(
+                answer_bucket_totals.items(),
+                key=lambda item: (
+                    item[1]["count"],
+                    item[1]["importance"],
+                    item[1]["score"],
+                    item[0],
+                ),
+            )[0]
 
     return {
         "id": conv_id,
@@ -1164,6 +1229,7 @@ async def build_interactive_bank_data(
     qa_boundary_llm_params: Dict[str, Any],
     md_llm_params: Dict[str, Any],
     qa_llm_params: Dict[str, Any],
+    report_inclusion_threshold: float,
     max_concurrent_md_blocks: int = 1,
 ) -> Dict[str, Any]:
     """Convert one bank's raw XML transcript blocks into mock-style bank state."""
@@ -1206,6 +1272,7 @@ async def build_interactive_bank_data(
                 company_name=company_name,
                 fiscal_year=fiscal_year,
                 fiscal_quarter=fiscal_quarter,
+                report_inclusion_threshold=report_inclusion_threshold,
                 context=context,
                 llm_params=md_llm_params,
             )
@@ -1236,6 +1303,7 @@ async def build_interactive_bank_data(
                 company_name=company_name,
                 fiscal_year=fiscal_year,
                 fiscal_quarter=fiscal_quarter,
+                report_inclusion_threshold=report_inclusion_threshold,
                 context=context,
                 llm_params=qa_llm_params,
             )
@@ -1265,7 +1333,7 @@ def _build_config_review_digest(
         notable = [
             sentence
             for sentence in block.get("sentences", [])
-            if sentence.get("importance_score", 0) >= min_importance or sentence.get("primary") == "other"
+            if sentence.get("importance_score", 0) >= min_importance
         ]
         if not notable:
             continue
@@ -1277,10 +1345,13 @@ def _build_config_review_digest(
         lines = [f"[MD Block {block_index}] {speaker_line}"]
         for sentence in sorted(
             notable,
-            key=lambda item: (float(item.get("importance_score", 0)), item.get("primary") == "other"),
+            key=lambda item: (
+                float(item.get("importance_score", 0)),
+                _bucket_score(item.get("scores", {}), item.get("primary", "")),
+            ),
             reverse=True,
         )[:4]:
-            bucket_name = _bucket_name(sentence.get("primary", "other"), categories)
+            bucket_name = _bucket_name(sentence.get("primary", ""), categories)
             text = sentence.get("condensed") or sentence.get("text", "")
             lines.append(
                 f"- importance={float(sentence.get('importance_score', 0)):.1f} | "
@@ -1292,7 +1363,7 @@ def _build_config_review_digest(
         notable_answers = [
             sentence
             for sentence in conversation.get("answer_sentences", [])
-            if sentence.get("importance_score", 0) >= min_importance or sentence.get("primary") == "other"
+            if sentence.get("importance_score", 0) >= min_importance
         ]
         if not notable_answers and not conversation.get("question_sentences"):
             continue
@@ -1305,14 +1376,17 @@ def _build_config_review_digest(
             f"Q: {_preview_text(question_text, 320) if question_text else 'Question unavailable'}"
         ]
         lines.append(
-            f"Current conversation bucket: {_bucket_name(conversation.get('primary_bucket', 'other'), categories)}"
+            f"Current conversation bucket: {_bucket_name(conversation.get('primary_bucket', ''), categories)}"
         )
         for sentence in sorted(
             notable_answers,
-            key=lambda item: (float(item.get("importance_score", 0)), item.get("primary") == "other"),
+            key=lambda item: (
+                float(item.get("importance_score", 0)),
+                _bucket_score(item.get("scores", {}), item.get("primary", "")),
+            ),
             reverse=True,
         )[:4]:
-            bucket_name = _bucket_name(sentence.get("primary", "other"), categories)
+            bucket_name = _bucket_name(sentence.get("primary", ""), categories)
             text = sentence.get("condensed") or sentence.get("text", "")
             lines.append(
                 f"- importance={float(sentence.get('importance_score', 0)):.1f} | "
@@ -1473,33 +1547,102 @@ async def analyze_config_coverage(
     }
 
 
+def _build_auto_include_candidates(bank_data: Dict[str, Any]) -> Dict[str, List[Dict[str, Any]]]:
+    """Build subquote-like report candidates grouped by assigned bucket."""
+    candidates: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+
+    for block in bank_data.get("md_blocks", []):
+        current: Optional[Dict[str, Any]] = None
+        for sentence in block.get("sentences", []):
+            bucket_id = sentence.get("primary")
+            if not bucket_id:
+                continue
+            if not current or current["bucket_id"] != bucket_id:
+                if current:
+                    candidates[current["bucket_id"]].append(current)
+                current = {
+                    "bucket_id": bucket_id,
+                    "importance": float(sentence.get("importance_score", 0.0)),
+                    "bucket_score": _bucket_score(sentence.get("scores", {}), bucket_id),
+                    "text": sentence.get("condensed") or sentence.get("text", ""),
+                }
+            else:
+                current["importance"] = max(
+                    current["importance"],
+                    float(sentence.get("importance_score", 0.0)),
+                )
+                current["bucket_score"] = max(
+                    current["bucket_score"],
+                    _bucket_score(sentence.get("scores", {}), bucket_id),
+                )
+                extra_text = sentence.get("condensed") or sentence.get("text", "")
+                if extra_text:
+                    current["text"] = f"{current['text']} {extra_text}".strip()
+        if current:
+            candidates[current["bucket_id"]].append(current)
+
+    for conversation in bank_data.get("qa_conversations", []):
+        current = None
+        for sentence in conversation.get("answer_sentences", []):
+            bucket_id = sentence.get("primary")
+            if not bucket_id:
+                continue
+            if not current or current["bucket_id"] != bucket_id:
+                if current:
+                    candidates[current["bucket_id"]].append(current)
+                current = {
+                    "bucket_id": bucket_id,
+                    "importance": float(sentence.get("importance_score", 0.0)),
+                    "bucket_score": _bucket_score(sentence.get("scores", {}), bucket_id),
+                    "text": sentence.get("condensed") or sentence.get("text", ""),
+                }
+            else:
+                current["importance"] = max(
+                    current["importance"],
+                    float(sentence.get("importance_score", 0.0)),
+                )
+                current["bucket_score"] = max(
+                    current["bucket_score"],
+                    _bucket_score(sentence.get("scores", {}), bucket_id),
+                )
+                extra_text = sentence.get("condensed") or sentence.get("text", "")
+                if extra_text:
+                    current["text"] = f"{current['text']} {extra_text}".strip()
+        if current:
+            candidates[current["bucket_id"]].append(current)
+
+    return candidates
+
+
 def collect_headline_samples(
     banks_data: Dict[str, Dict[str, Any]],
     min_importance: float,
 ) -> Dict[str, List[str]]:
-    """Collect summary snippets for bucket-level headline generation."""
+    """Collect all report-included snippets for bucket-level headline generation."""
     samples: Dict[str, List[str]] = defaultdict(list)
     for bank_data in banks_data.values():
-        for block in bank_data.get("md_blocks", []):
-            for sentence in block.get("sentences", []):
-                if sentence.get("importance_score", 0) >= min_importance and sentence.get("primary") != "other":
-                    if len(samples[sentence["primary"]]) < 8:
-                        samples[sentence["primary"]].append(
-                            sentence.get("condensed")
-                            or sentence.get("summary")
-                            or sentence.get("text", "")
-                        )
+        candidates_by_bucket = _build_auto_include_candidates(bank_data)
+        for bucket_id, candidates in candidates_by_bucket.items():
+            eligible = [
+                candidate
+                for candidate in candidates
+                if candidate["importance"] >= min_importance
+            ]
+            if not eligible:
+                continue
 
-        for conversation in bank_data.get("qa_conversations", []):
-            for sentence in conversation.get("answer_sentences", []):
-                if sentence.get("importance_score", 0) >= min_importance and sentence.get("primary") != "other":
-                    primary_bucket = conversation.get("primary_bucket") or sentence["primary"]
-                    if primary_bucket != "other" and len(samples[primary_bucket]) < 8:
-                        samples[primary_bucket].append(
-                            sentence.get("condensed")
-                            or sentence.get("summary")
-                            or sentence.get("text", "")
-                        )
+            ranked = sorted(
+                eligible,
+                key=lambda item: (
+                    item["importance"],
+                    item["bucket_score"],
+                    len(item.get("text", "")),
+                ),
+                reverse=True,
+            )
+            for candidate in ranked:
+                if candidate.get("text"):
+                    samples[bucket_id].append(candidate["text"])
     return samples
 
 
@@ -1561,5 +1704,5 @@ def count_included_categories(
     banks_data: Dict[str, Dict[str, Any]],
     min_importance: float,
 ) -> int:
-    """Count non-Other buckets with at least one included high-importance sentence."""
+    """Count buckets with at least one auto-included report sample."""
     return len(collect_headline_samples(banks_data, min_importance))
