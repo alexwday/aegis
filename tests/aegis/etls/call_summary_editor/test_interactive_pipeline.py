@@ -6,6 +6,7 @@ import pytest
 
 from aegis.etls.call_summary_editor.interactive_pipeline import (
     _primary_from_scores,
+    _seed_selected_report_sentences,
     analyze_config_coverage,
     classify_qa_conversation,
     count_included_categories,
@@ -644,7 +645,122 @@ async def test_classify_qa_conversation_prompt_mentions_auto_include_threshold()
     user_prompt = next(
         message["content"] for message in prompt_messages if message["role"] == "user"
     )
+    assert "Use bucket `score` on a 0-10 relevance scale." in user_prompt
     assert "Scores >= 4.0 should remain visible for analyst review at minimum." in user_prompt
+
+
+@pytest.mark.asyncio
+async def test_classify_qa_conversation_rescales_normalized_bucket_scores():
+    categories = [
+        {
+            "transcript_sections": "QA",
+            "report_section": "Earnings Call Q&A",
+            "category_name": "Capital",
+            "category_description": "Capital and CET1 discussion.",
+        }
+    ]
+    conv_blocks = [
+        {
+            "speaker": "Analyst",
+            "speaker_affiliation": "Big Bank",
+            "speaker_title": "",
+            "speaker_type_hint": "q",
+            "paragraphs": ["How are you thinking about CET1?"],
+        },
+        {
+            "speaker": "Chief Financial Officer",
+            "speaker_affiliation": "Royal Bank of Canada",
+            "speaker_title": "CFO",
+            "speaker_type_hint": "a",
+            "paragraphs": ["CET1 should remain strong."],
+        },
+    ]
+
+    with patch(
+        "aegis.etls.call_summary_editor.interactive_pipeline._call_tool",
+        new=AsyncMock(
+            return_value={
+                "primary_bucket_index": 0,
+                "question_sentences": [
+                    {
+                        "index": 1,
+                        "scores": [{"bucket_index": 0, "score": 0.82}],
+                        "importance_score": 7.0,
+                        "condensed": "How are you thinking about CET1?",
+                    }
+                ],
+                "answer_sentences": [
+                    {
+                        "index": 1,
+                        "scores": [{"bucket_index": 0, "score": 0.84}],
+                        "importance_score": 7.1,
+                        "condensed": "CET1 should remain strong.",
+                    }
+                ],
+            }
+        ),
+    ):
+        result = await classify_qa_conversation(
+            conv_idx=1,
+            conv_blocks=conv_blocks,
+            ticker="RY-CA",
+            categories=categories,
+            categories_text_qa="",
+            company_name="Royal Bank of Canada",
+            fiscal_year=2026,
+            fiscal_quarter="Q1",
+            report_inclusion_threshold=4.0,
+            selected_importance_threshold=6.5,
+            candidate_importance_threshold=4.0,
+            min_bucket_score_for_assignment=6.0,
+            context={"execution_id": "test-exec"},
+            llm_params={"model": "gpt-test"},
+        )
+
+    assert result["primary_bucket"] == "bucket_0"
+    assert result["answer_sentences"][0]["scores"]["bucket_0"] == 8.4
+    assert result["answer_sentences"][0]["selected_bucket_id"] == "bucket_0"
+    assert result["answer_sentences"][0]["status"] == "selected"
+
+
+def test_seed_selected_report_sentences_promotes_mapped_candidates_when_preview_is_blank():
+    processed_md = [
+        {
+            "sentences": [
+                {
+                    "sid": "md_1",
+                    "status": "candidate",
+                    "selected_bucket_id": "bucket_0",
+                    "primary": "bucket_0",
+                },
+                {
+                    "sid": "md_2",
+                    "status": "candidate",
+                    "selected_bucket_id": "",
+                    "primary": "",
+                },
+            ]
+        }
+    ]
+    processed_qa = [
+        {
+            "answer_sentences": [
+                {
+                    "sid": "qa_1",
+                    "status": "candidate",
+                    "selected_bucket_id": "bucket_1",
+                    "primary": "bucket_1",
+                }
+            ]
+        }
+    ]
+
+    summary = _seed_selected_report_sentences(processed_md, processed_qa)
+
+    assert summary == {"promoted": 2, "md": 1, "qa": 1}
+    assert processed_md[0]["sentences"][0]["status"] == "selected"
+    assert processed_md[0]["sentences"][1]["status"] == "candidate"
+    assert processed_qa[0]["answer_sentences"][0]["status"] == "selected"
 
 
 @pytest.mark.asyncio

@@ -42,7 +42,7 @@ class SentenceResult(BaseModel):
     scores: List[Any] = Field(
         description=(
             "Up to the top 3 bucket-score pairs for this sentence. Each item should include "
-            "bucket_index and score."
+            "bucket_index and a 0-10 relevance score."
         )
     )
     importance_score: float = Field(description="IR quotability 0-10")
@@ -131,13 +131,13 @@ _SENTENCE_RESULT_SCHEMA = {
             "type": "array",
             "description": (
                 "Return up to the top 3 bucket-score pairs for this sentence, ordered by "
-                "score descending."
+                "score descending. Use a 0-10 relevance scale."
             ),
             "items": {
                 "type": "object",
                 "properties": {
                     "bucket_index": {"type": "integer"},
-                    "score": {"type": "number"},
+                    "score": {"type": "number", "description": "Bucket relevance score from 0 to 10"},
                 },
                 "required": ["bucket_index", "score"],
                 "additionalProperties": False,
@@ -456,6 +456,18 @@ def _importance_scale_guidance(report_inclusion_threshold: float) -> str:
     )
 
 
+def _bucket_score_scale_guidance() -> str:
+    """Return prompt guidance for the 0-10 bucket relevance scale."""
+    return (
+        "Use bucket `score` on a 0-10 relevance scale.\n"
+        "- 0 means the sentence does not fit the bucket.\n"
+        "- 1-3 means weak or tangential overlap.\n"
+        "- 4-5 means a plausible but not definitive fit.\n"
+        "- 6-8 means a strong fit that can support assignment.\n"
+        "- 9-10 means a direct, highly confident fit."
+    )
+
+
 def applicable_bucket_ids(categories: List[Dict[str, Any]], section: str) -> List[str]:
     """Return bucket ids applicable to the given transcript section."""
     return [
@@ -615,6 +627,8 @@ def _normalise_scores(raw_scores: Any, categories: List[Dict[str, Any]]) -> Dict
             normalized = key.replace("bucket_", "")
             if normalized.isdigit():
                 output[f"bucket_{normalized}"] = round(float(value), 2)
+    if output and 0.0 < max(output.values()) <= 1.0:
+        return {bucket_id: round(score * 10.0, 2) for bucket_id, score in output.items()}
     return output
 
 
@@ -751,6 +765,52 @@ def _make_sentence_record(
         ),
         "emerging_topic": not bool(selected_bucket_id),
         "condensed": llm_result.condensed or text,
+    }
+
+
+def _seed_selected_report_sentences(
+    processed_md: List[Dict[str, Any]],
+    processed_qa: List[Dict[str, Any]],
+) -> Dict[str, int]:
+    """Promote mapped candidates when the initial draft would otherwise be blank."""
+
+    report_sentences = [
+        sentence
+        for block in processed_md
+        for sentence in block.get("sentences", [])
+    ] + [
+        sentence
+        for conversation in processed_qa
+        for sentence in conversation.get("answer_sentences", [])
+    ]
+
+    if any(sentence.get("status") == "selected" for sentence in report_sentences):
+        return {"promoted": 0, "md": 0, "qa": 0}
+
+    md_promoted = 0
+    for block in processed_md:
+        for sentence in block.get("sentences", []):
+            if sentence.get("status") != "candidate":
+                continue
+            if not (sentence.get("selected_bucket_id") or sentence.get("primary")):
+                continue
+            sentence["status"] = "selected"
+            md_promoted += 1
+
+    qa_promoted = 0
+    for conversation in processed_qa:
+        for sentence in conversation.get("answer_sentences", []):
+            if sentence.get("status") != "candidate":
+                continue
+            if not (sentence.get("selected_bucket_id") or sentence.get("primary")):
+                continue
+            sentence["status"] = "selected"
+            qa_promoted += 1
+
+    return {
+        "promoted": md_promoted + qa_promoted,
+        "md": md_promoted,
+        "qa": qa_promoted,
     }
 
 
@@ -1105,6 +1165,7 @@ async def classify_md_block(  # pylint: disable=unused-argument
             "## Decision Criteria\n"
             "Choose bucket scores from the category descriptions and examples, then score how "
             "quotable each sentence is for an investor-relations summary.\n"
+            f"{_bucket_score_scale_guidance()}\n"
             f"{_importance_scale_guidance(report_inclusion_threshold)}\n\n"
             "## Rules\n"
             "1. Return one result for every S-numbered sentence in the current paragraph.\n"
@@ -1269,6 +1330,7 @@ async def classify_qa_conversation(  # pylint: disable=unused-argument
         "## Decision Criteria\n"
         "Use the overall exchange topic for `primary_bucket_index`, then score each analyst and "
         "executive sentence from the category descriptions and examples.\n"
+        f"{_bucket_score_scale_guidance()}\n"
         f"{_importance_scale_guidance(report_inclusion_threshold)}\n\n"
         "## Rules\n"
         "1. Set `primary_bucket_index` to the single best existing bucket for the full exchange.\n"
@@ -1639,6 +1701,30 @@ async def build_interactive_bank_data(
             )
         else:
             processed_qa.append(result)
+
+    qa_summary = _summarise_qa_results(processed_qa)
+    seed_summary = _seed_selected_report_sentences(processed_md, processed_qa)
+    if seed_summary["promoted"]:
+        logger.info(
+            "Seeded initial report draft from mapped candidates",
+            ticker=ticker,
+            promoted_sentences=seed_summary["promoted"],
+            md_promoted=seed_summary["md"],
+            qa_promoted=seed_summary["qa"],
+        )
+        qa_summary = _summarise_qa_results(processed_qa)
+    logger.info(
+        "Q&A classification complete",
+        ticker=ticker,
+        conversations=qa_summary["conversations"],
+        question_sentences=qa_summary["question_sentences"],
+        answer_sentences=qa_summary["answer_sentences"],
+        selected=qa_summary["selected"],
+        candidate=qa_summary["candidate"],
+        rejected=qa_summary["rejected"],
+        errored_conversations=qa_summary["errored_conversations"],
+        sentence_errors=qa_summary["errors"],
+    )
 
     return {
         "ticker": ticker,
