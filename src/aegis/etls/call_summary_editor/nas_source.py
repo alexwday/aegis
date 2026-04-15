@@ -16,8 +16,23 @@ from aegis.utils.logging import get_logger
 
 logger = get_logger()
 
-DEFAULT_NAS_DATA_PATH = (
-    "Finance Data and Analytics/DSA/Earnings Call Transcripts/Outputs/Data"
+DEFAULT_NAS_DATA_PATH = "Finance Data and Analytics/DSA/Earnings Call Transcripts/Outputs/Data"
+MD_SECTION_PATTERNS = (
+    "management discussion",
+    "management remarks",
+    "prepared remarks",
+    "prepared statement",
+    "prepared comments",
+    "presentation",
+)
+QA_SECTION_PATTERNS = (
+    "q&a",
+    "q and a",
+    "questions and answers",
+    "question and answer",
+    "question-and-answer",
+    "questions & answers",
+    "questions",
 )
 
 try:
@@ -144,7 +159,9 @@ def find_transcript_xml(
         except Exception:
             return None
 
-    parsed = [candidate for candidate in (parse_filename(f.filename) for f in xml_files) if candidate]
+    parsed = [
+        candidate for candidate in (parse_filename(f.filename) for f in xml_files) if candidate
+    ]
     if not parsed:
         return None
 
@@ -169,9 +186,25 @@ def _clean(text: str) -> str:
     return text.strip().replace("\n", " ").replace("\r", " ").replace("\t", " ")
 
 
+def _normalise_section_key(section_name: str) -> str:
+    """Map raw XML section labels into MD/QA buckets."""
+    raw_cleaned = _clean(section_name).lower()
+    cleaned = raw_cleaned.replace("&", " and ")
+    cleaned = " ".join(cleaned.split())
+
+    if any(pattern in cleaned or pattern in raw_cleaned for pattern in MD_SECTION_PATTERNS):
+        return "MD"
+    if any(pattern in cleaned or pattern in raw_cleaned for pattern in QA_SECTION_PATTERNS):
+        return "QA"
+    return ""
+
+
 def parse_transcript_xml(xml_bytes: bytes) -> Optional[Dict[str, Any]]:
     """Parse FactSet XML into transcript title, participants, and section blocks."""
     try:
+        # Strip UTF-8 BOM if present; ET.fromstring can choke on it in namespaced docs.
+        if xml_bytes.startswith(b"\xef\xbb\xbf"):
+            xml_bytes = xml_bytes[3:]
         root = ET.fromstring(xml_bytes)
         namespace = (root.tag.split("}")[0] + "}") if root.tag.startswith("{") else ""
 
@@ -186,7 +219,9 @@ def parse_transcript_xml(xml_bytes: bytes) -> Optional[Dict[str, Any]]:
             return None
 
         title_element = find_element(meta, "title")
-        title = _clean(title_element.text) if title_element is not None and title_element.text else ""
+        title = (
+            _clean(title_element.text) if title_element is not None and title_element.text else ""
+        )
 
         participants: Dict[str, Dict[str, str]] = {}
         participants_element = find_element(meta, "participants")
@@ -196,7 +231,9 @@ def parse_transcript_xml(xml_bytes: bytes) -> Optional[Dict[str, Any]]:
                 if not participant_id:
                     continue
                 participants[participant_id] = {
-                    "name": _clean(participant.get("name", "") or participant.text or "Unknown Speaker"),
+                    "name": _clean(
+                        participant.get("name", "") or participant.text or "Unknown Speaker"
+                    ),
                     "type": participant.get("type", ""),
                     "title": _clean(participant.get("title", "")),
                     "affiliation": _clean(participant.get("affiliation", "")),
@@ -230,14 +267,17 @@ def parse_transcript_xml(xml_bytes: bytes) -> Optional[Dict[str, Any]]:
 
         return {"title": title, "participants": participants, "sections": sections}
     except ET.ParseError as exc:
-        logger.warning("etl.call_summary_editor.xml_parse_failed", error=str(exc))
-        return None
-    except Exception as exc:
-        logger.warning("etl.call_summary_editor.xml_parse_error", error=str(exc))
+        logger.exception(
+            "etl.call_summary_editor.xml_parse_failed",
+            error=str(exc),
+            byte_size=len(xml_bytes),
+        )
         return None
 
 
-def extract_raw_blocks(parsed: Dict[str, Any], ticker: str) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+def extract_raw_blocks(
+    parsed: Dict[str, Any], ticker: str
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
     """Extract MD and QA speaker blocks from parsed transcript XML."""
     participants = parsed.get("participants", {})
     md_blocks: List[Dict[str, Any]] = []
@@ -246,8 +286,21 @@ def extract_raw_blocks(parsed: Dict[str, Any], ticker: str) -> Tuple[List[Dict[s
 
     for section in parsed.get("sections", []):
         section_name = section.get("name", "")
-        is_md = "management discussion" in section_name.lower()
-        is_qa = "question" in section_name.lower() or "q&a" in section_name.lower()
+        section_key = _normalise_section_key(section_name)
+        is_md = section_key == "MD"
+        is_qa = section_key == "QA"
+
+        if not is_md and not is_qa:
+            speaker_count = sum(
+                1 for speaker in section.get("speakers", []) if speaker.get("paragraphs")
+            )
+            logger.warning(
+                "etl.call_summary_editor.xml_unknown_section_skipped",
+                ticker=ticker,
+                section_name=section_name,
+                dropped_speaker_blocks=speaker_count,
+            )
+            continue
 
         for speaker in section.get("speakers", []):
             paragraphs = speaker.get("paragraphs", [])
@@ -255,9 +308,11 @@ def extract_raw_blocks(parsed: Dict[str, Any], ticker: str) -> Tuple[List[Dict[s
                 continue
 
             block_counter += 1
-            participant = participants.get(speaker.get("speaker_id", ""), {"name": "Unknown Speaker"})
+            participant = participants.get(
+                speaker.get("speaker_id", ""), {"name": "Unknown Speaker"}
+            )
             record = {
-                "id": f"{ticker}_{'MD' if is_md else 'QA'}_{block_counter}",
+                "id": f"{ticker}_{section_key}_{block_counter}",
                 "speaker": _clean(participant.get("name", "Unknown Speaker")),
                 "speaker_title": _clean(participant.get("title", "")),
                 "speaker_affiliation": _clean(participant.get("affiliation", "")),
@@ -266,7 +321,7 @@ def extract_raw_blocks(parsed: Dict[str, Any], ticker: str) -> Tuple[List[Dict[s
             }
             if is_md:
                 md_blocks.append(record)
-            elif is_qa:
+            else:
                 qa_blocks.append(record)
 
     return md_blocks, qa_blocks

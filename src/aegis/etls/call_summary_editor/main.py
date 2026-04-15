@@ -2,15 +2,17 @@
 Interactive Call Summary Editor ETL.
 
 Usage:
-    python -m aegis.etls.call_summary_editor.main --bank "Royal Bank of Canada" --year 2024 --quarter Q3
+    python -m aegis.etls.call_summary_editor.main \\
+        --bank "Royal Bank of Canada" --year 2024 --quarter Q3
     python -m aegis.etls.call_summary_editor.main --bank RY --year 2024 --quarter Q3
     python -m aegis.etls.call_summary_editor.main --bank 1 --year 2024 --quarter Q3
+    python -m aegis.etls.call_summary_editor.main benchmark \\
+        --predicted path/to/report.html --expected path/to/expected_items.json
 """
 
 import argparse
 import asyncio
 import json
-import random
 import time
 import uuid
 import os
@@ -18,37 +20,12 @@ import sys
 from dataclasses import dataclass
 from datetime import datetime
 from functools import lru_cache
-from itertools import groupby
-from typing import Dict, Any, List, Optional
-from pydantic import BaseModel, Field, ValidationError
+from typing import Dict, Any, List
 from sqlalchemy import text
-from sqlalchemy.exc import SQLAlchemyError
 import pandas as pd
 import yaml
-from docx import Document
-from docx.shared import Pt
 
-from aegis.etls.call_summary_editor.document_converter import (
-    get_standard_report_metadata,
-    setup_document_formatting,
-    add_banner_image,
-    add_document_title,
-    add_section_heading,
-    add_table_of_contents,
-    mark_document_for_update,
-    add_structured_content_to_doc,
-    validate_document_content,
-)
-from aegis.etls.call_summary_editor.transcript_utils import (
-    retrieve_full_section,
-    format_full_section_chunks,
-    SECTION_MD,
-    SECTION_QA,
-    SECTIONS_KEY_MD,
-    SECTIONS_KEY_QA,
-    SECTIONS_KEY_ALL,
-    VALID_SECTION_KEYS,
-)
+from aegis.etls.call_summary_editor.transcript_utils import VALID_SECTION_KEYS
 from aegis.etls.call_summary_editor.interactive_html import (
     build_report_state as build_interactive_report_state,
     generate_html as generate_interactive_html,
@@ -65,26 +42,22 @@ from aegis.etls.call_summary_editor.nas_source import (
     get_nas_connection,
     parse_transcript_xml,
 )
+from aegis.etls.call_summary_editor.benchmark import (
+    benchmark_recall,
+    load_expected_items,
+    load_predicted_items,
+    render_benchmark_report,
+)
 from aegis.utils.ssl import setup_ssl
 from aegis.connections.oauth_connector import setup_authentication
-from aegis.connections.llm_connector import complete_with_tools
 from aegis.connections.postgres_connector import get_connection
 from aegis.utils.logging import setup_logging, get_logger
-from aegis.utils.prompt_loader import load_prompt_from_db
 from aegis.utils.settings import config
 
 setup_logging()
 logger = get_logger()
 
-# --- Retry Configuration ---
-MAX_RETRIES = 3
-RETRY_BASE_DELAY = 1.0
-RETRY_MAX_DELAY = 10.0
-
-# --- Display / Logging Configuration ---
-LOG_SNIPPET_LENGTH = 80
-
-# --- Concurrency Configuration ---
+# --- Concurrency default (overridable via config.yaml) ---
 MAX_CONCURRENT_EXTRACTIONS = 5
 
 
@@ -194,96 +167,45 @@ class ETLConfig:
         )
 
     @property
-    def max_retries(self) -> int:
-        """Get the maximum number of LLM call retries."""
-        return self._config.get("retry", {}).get("max_retries", MAX_RETRIES)
+    def min_importance(self) -> float:
+        """Inclusion threshold for sentences/categories in the interactive report."""
+        return float(self._config.get("pipeline", {}).get("min_importance", 4.0))
 
     @property
-    def retry_base_delay(self) -> float:
-        """Get the base delay in seconds for retry backoff."""
-        return self._config.get("retry", {}).get("base_delay", RETRY_BASE_DELAY)
+    def headline_sample_size(self) -> int:
+        """Maximum sample snippets fed to the headline LLM per bucket."""
+        return int(self._config.get("pipeline", {}).get("headline_sample_size", 8))
 
     @property
-    def retry_max_delay(self) -> float:
-        """Get the maximum delay in seconds for retry backoff."""
-        return self._config.get("retry", {}).get("max_delay", RETRY_MAX_DELAY)
+    def selected_importance_threshold(self) -> float:
+        """Initial threshold for evidence auto-selected into the report draft."""
+        return float(self._config.get("pipeline", {}).get("selected_importance_threshold", 6.5))
+
+    @property
+    def candidate_importance_threshold(self) -> float:
+        """Initial threshold for evidence kept visible as a review candidate."""
+        return float(self._config.get("pipeline", {}).get("candidate_importance_threshold", 4.0))
+
+    @property
+    def min_bucket_score_for_assignment(self) -> float:
+        """Minimum existing-bucket relevance score required for automatic assignment."""
+        return float(self._config.get("pipeline", {}).get("min_bucket_score_for_assignment", 6.0))
+
+    @property
+    def enable_headlines(self) -> bool:
+        """Whether optional generated headlines should be produced."""
+        return bool(self._config.get("pipeline", {}).get("enable_headlines", False))
+
+    def get_stage_params(self, stage: str) -> Dict[str, Any]:
+        """Resolve model, temperature, and max_tokens for a named pipeline stage."""
+        return {
+            "model": self.get_model(stage),
+            "temperature": self.temperature,
+            "max_tokens": self.get_max_tokens(stage),
+        }
 
 
 etl_config = ETLConfig(os.path.join(os.path.dirname(__file__), "config", "config.yaml"))
-
-
-# --- Pydantic Models for LLM Response Validation ---
-
-
-class CategoryPlan(BaseModel):
-    """A single category's research plan from the LLM."""
-
-    index: int
-    name: str
-    extraction_strategy: str
-    cross_category_notes: str = ""
-    relevant_qa_groups: List[int] = Field(default_factory=list)
-
-
-class ResearchPlanResponse(BaseModel):
-    """Top-level research plan response from the LLM."""
-
-    category_plans: List[CategoryPlan]
-
-
-class Evidence(BaseModel):
-    """A single piece of supporting evidence for a statement."""
-
-    type: str = "quote"
-    content: str = ""
-    speaker: str = ""
-
-
-class SummaryStatement(BaseModel):
-    """A single summary statement with supporting evidence."""
-
-    statement: str
-    evidence: List[Evidence] = Field(default_factory=list)
-
-
-class CategoryExtractionResponse(BaseModel):
-    """Category extraction response from the LLM."""
-
-    reasoning: Optional[str] = None
-    rejected: bool
-    rejection_reason: Optional[str] = None
-    title: Optional[str] = None
-    summary_statements: List[SummaryStatement] = Field(default_factory=list)
-
-
-class DuplicateStatement(BaseModel):
-    """A statement removal instruction from the LLM dedup pass."""
-
-    category_index: int
-    statement_index: int
-    duplicate_of_category_index: int
-    duplicate_of_statement_index: int
-    reasoning: str = ""
-
-
-class DuplicateEvidence(BaseModel):
-    """An evidence removal instruction from the LLM dedup pass."""
-
-    category_index: int
-    statement_index: int
-    evidence_index: int
-    duplicate_of_category_index: int
-    duplicate_of_statement_index: int
-    duplicate_of_evidence_index: int
-    reasoning: str = ""
-
-
-class DeduplicationResponse(BaseModel):
-    """Deduplication response from the LLM."""
-
-    analysis_notes: str = ""
-    duplicate_statements: List[DuplicateStatement] = Field(default_factory=list)
-    duplicate_evidence: List[DuplicateEvidence] = Field(default_factory=list)
 
 
 @lru_cache(maxsize=1)
@@ -307,43 +229,6 @@ def _load_monitored_institutions() -> Dict[int, Dict[str, Any]]:
     return institutions
 
 
-def _sanitize_for_prompt(text: str) -> str:
-    """
-    Escape curly braces in text for safe use in .format() templates.
-
-    Prevents KeyError/IndexError when XLSX-sourced content contains { or }.
-
-    Args:
-        text: Raw text string
-
-    Returns:
-        Text with { and } escaped as {{ and }}
-    """
-    return text.replace("{", "{{").replace("}", "}}")
-
-
-def _accumulate_llm_cost(context: Dict[str, Any], metrics: Dict[str, Any]) -> None:
-    """
-    Accumulate LLM cost and token usage from a response's metrics dict.
-
-    Appends to context["_llm_costs"] list for later aggregation.
-    Safe for asyncio concurrency (single-threaded event loop).
-
-    Args:
-        context: Execution context with _llm_costs list
-        metrics: Response metrics dict with prompt_tokens, completion_tokens, total_cost
-    """
-    if "_llm_costs" not in context:
-        context["_llm_costs"] = []
-    context["_llm_costs"].append(
-        {
-            "prompt_tokens": metrics.get("prompt_tokens", 0),
-            "completion_tokens": metrics.get("completion_tokens", 0),
-            "total_cost": metrics.get("total_cost", 0),
-        }
-    )
-
-
 def _get_total_llm_cost(context: Dict[str, Any]) -> Dict[str, Any]:
     """
     Aggregate all accumulated LLM costs from context.
@@ -362,59 +247,6 @@ def _get_total_llm_cost(context: Dict[str, Any]) -> Dict[str, Any]:
         "total_tokens": prompt_tokens + completion_tokens,
         "llm_calls": len(costs),
     }
-
-
-def format_categories_for_prompt(categories: List[Dict[str, Any]]) -> str:
-    """
-    Format category dictionaries into standardized XML format for prompt injection.
-
-    This is the standardized formatting function used across all ETLs (Call Summary,
-    Key Themes, CM Readthrough) to ensure consistent category presentation to LLMs.
-
-    Args:
-        categories: List of category dicts with standardized 6-column format
-
-    Returns:
-        Formatted XML string with category information
-    """
-    formatted_sections = []
-
-    for cat in categories:
-        # Map transcript_sections to human-readable description
-        section_desc = {
-            SECTIONS_KEY_MD: "Management Discussion section only",
-            SECTIONS_KEY_QA: "Q&A section only",
-            SECTIONS_KEY_ALL: "Both Management Discussion and Q&A sections",
-        }.get(cat.get("transcript_sections", SECTIONS_KEY_ALL), "ALL sections")
-
-        section = "<category>\n"
-        section += f"<name>{_sanitize_for_prompt(cat['category_name'])}</name>\n"
-        section += f"<section>{section_desc}</section>\n"
-        section += (
-            f"<description>{_sanitize_for_prompt(cat['category_description'])}</description>\n"
-        )
-
-        # Collect non-empty examples
-        examples = []
-        for i in range(1, 4):
-            example_key = f"example_{i}"
-            if (
-                cat.get(example_key)
-                and isinstance(cat[example_key], str)
-                and cat[example_key].strip()
-            ):
-                examples.append(cat[example_key])
-
-        if examples:
-            section += "<examples>\n"
-            for example in examples:
-                section += f"  <example>{_sanitize_for_prompt(example)}</example>\n"
-            section += "</examples>\n"
-
-        section += "</category>"
-        formatted_sections.append(section)
-
-    return "\n\n".join(formatted_sections)
 
 
 def load_categories_from_xlsx(bank_type: str, execution_id: str) -> List[Dict[str, Any]]:
@@ -564,989 +396,6 @@ def get_bank_info_from_config(bank_identifier: str) -> Dict[str, Any]:
         f"Bank '{bank_identifier}' not found in monitored institutions.\n"
         f"Available banks: {', '.join(sorted(available))}"
     )
-
-
-async def verify_and_get_availability(
-    bank_id: int, bank_name: str, fiscal_year: int, quarter: str
-) -> None:
-    """
-    Verify transcript data is available for the specified bank and period.
-
-    Args:
-        bank_id: Bank ID
-        bank_name: Bank name (for error messages)
-        fiscal_year: Year (e.g., 2024)
-        quarter: Quarter (e.g., "Q3")
-
-    Raises:
-        ValueError: If transcript data not available (includes available periods)
-    """
-    async with get_connection() as conn:
-        result = await conn.execute(
-            text(
-                """
-                SELECT database_names
-                FROM aegis_data_availability
-                WHERE bank_id = :bank_id
-                  AND fiscal_year = :fiscal_year
-                  AND quarter = :quarter
-                """
-            ),
-            {"bank_id": bank_id, "fiscal_year": fiscal_year, "quarter": quarter},
-        )
-        row = result.fetchone()
-
-        if row and row[0] and "transcripts" in row[0]:
-            return
-
-        # Query available transcript periods for this bank to provide helpful context
-        available_result = await conn.execute(
-            text(
-                """
-                SELECT fiscal_year, quarter
-                FROM aegis_data_availability
-                WHERE bank_id = :bank_id
-                  AND 'transcripts' = ANY(database_names)
-                ORDER BY fiscal_year DESC, quarter DESC
-                """
-            ),
-            {"bank_id": bank_id},
-        )
-        available_periods = [f"{r[1]} {r[0]}" for r in available_result.fetchall()]
-
-        if available_periods:
-            raise ValueError(
-                f"No transcript data available for {bank_name} {quarter} {fiscal_year}. "
-                f"Available periods: {', '.join(available_periods)}"
-            )
-        raise ValueError(
-            f"No transcript data available for {bank_name} {quarter} {fiscal_year}. "
-            f"No transcript data found for this bank in any period."
-        )
-
-
-async def _generate_research_plan(
-    context: dict, research_prompts: dict, transcript_text: str, execution_id: str
-) -> dict:
-    """Generate research plan using LLM."""
-    system_prompt = research_prompts["system_prompt"]
-    user_prompt = research_prompts["user_prompt_template"].format(
-        transcript_text=_sanitize_for_prompt(transcript_text)
-    )
-
-    messages = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": user_prompt},
-    ]
-
-    max_retries = etl_config.max_retries
-    for attempt in range(max_retries):
-        try:
-            response = await complete_with_tools(
-                messages=messages,
-                tools=[research_prompts["tool_definition"]],
-                context=context,
-                llm_params={
-                    "model": etl_config.get_model("research_plan"),
-                    "temperature": etl_config.temperature,
-                    "max_tokens": etl_config.get_max_tokens("research_plan"),
-                },
-            )
-
-            tool_call = response["choices"][0]["message"]["tool_calls"][0]
-            raw_data = json.loads(tool_call["function"]["arguments"])
-            validated = ResearchPlanResponse.model_validate(raw_data)
-            research_plan_data = validated.model_dump()
-
-            metrics = response.get("metrics", {})
-            _accumulate_llm_cost(context, metrics)
-            logger.info(
-                "etl.call_summary_editor.llm_usage",
-                execution_id=execution_id,
-                stage="research_plan",
-                prompt_tokens=metrics.get("prompt_tokens", 0),
-                completion_tokens=metrics.get("completion_tokens", 0),
-                total_cost=metrics.get("total_cost", 0),
-                response_time=metrics.get("response_time", 0),
-            )
-
-            logger.info(
-                "etl.call_summary_editor.research_plan_generated",
-                execution_id=execution_id,
-                num_plans=len(research_plan_data["category_plans"]),
-            )
-            return research_plan_data
-
-        except (KeyError, IndexError, json.JSONDecodeError, TypeError, ValidationError) as e:
-            logger.warning(
-                "etl.call_summary_editor.research_plan_parse_error",
-                execution_id=execution_id,
-                error=str(e),
-                attempt=attempt + 1,
-            )
-            if attempt < max_retries - 1:
-                continue
-            raise RuntimeError(
-                f"Error generating research plan after {max_retries} attempts: {str(e)}"
-            ) from e
-        except Exception as e:  # Catch transport/LLM failures (httpx/OpenAI/etc.)
-            logger.error(
-                "etl.call_summary_editor.research_plan_error",
-                execution_id=execution_id,
-                error=str(e),
-                attempt=attempt + 1,
-            )
-            if attempt < max_retries - 1:
-                delay = min(etl_config.retry_base_delay * (2**attempt), etl_config.retry_max_delay)
-                delay += random.uniform(0, 0.5 * delay)
-                await asyncio.sleep(delay)
-                continue
-            raise RuntimeError(
-                f"Error generating research plan after {max_retries} attempts: {str(e)}"
-            ) from e
-
-    raise RuntimeError(f"Failed to generate research plan after {max_retries} attempts")
-
-
-def _build_rejection_result(index: int, category: dict, reason: str) -> dict:
-    """
-    Build a standardized rejection result for a category.
-
-    Args:
-        index: 1-based category index
-        category: Category configuration dict
-        reason: Human-readable rejection reason
-
-    Returns:
-        Rejection result dict with index, name, report_section, rejected, rejection_reason
-    """
-    return {
-        "index": index,
-        "name": category["category_name"],
-        "report_section": category.get("report_section", "Results Summary"),
-        "rejected": True,
-        "rejection_reason": reason,
-    }
-
-
-def _format_categories_for_dedup(category_results: list) -> str:
-    """
-    Format non-rejected category results as XML with explicit indices for dedup prompt.
-
-    Args:
-        category_results: List of category result dicts from extraction
-
-    Returns:
-        XML string with category/statement/evidence indices for LLM consumption
-    """
-    parts = []
-    for cat_idx, result in enumerate(category_results):
-        if result.get("rejected", False) or "summary_statements" not in result:
-            continue
-
-        cat_lines = [f'<category index="{cat_idx}" name="{_sanitize_for_prompt(result["name"])}">']
-
-        for stmt_idx, stmt in enumerate(result.get("summary_statements", [])):
-            stmt_text = _sanitize_for_prompt(stmt.get("statement", ""))
-            cat_lines.append(f'  <statement index="{stmt_idx}">{stmt_text}</statement>')
-
-            for ev_idx, ev in enumerate(stmt.get("evidence", [])):
-                ev_content = _sanitize_for_prompt(ev.get("content", ""))
-                cat_lines.append(f'    <evidence index="{ev_idx}">{ev_content}</evidence>')
-
-        cat_lines.append("</category>")
-        parts.append("\n".join(cat_lines))
-
-    return "\n\n".join(parts)
-
-
-def _apply_dedup_removals(
-    category_results: list, dedup_response: DeduplicationResponse, execution_id: str
-) -> tuple:
-    """
-    Apply validated removal instructions from the LLM dedup response.
-
-    Processes removals in reverse index order to prevent index shift corruption.
-    Validates all indices before removal and skips invalid ones.
-
-    Args:
-        category_results: List of category result dicts (modified in-place)
-        dedup_response: Validated deduplication response from LLM
-        execution_id: Execution ID for logging
-
-    Returns:
-        Tuple of (statements_removed, evidence_removed) counts
-    """
-    statements_removed = 0
-    evidence_removed = 0
-
-    # --- Remove duplicate evidence (reverse order to avoid index shift) ---
-    sorted_evidence = sorted(
-        dedup_response.duplicate_evidence,
-        key=lambda e: (e.category_index, e.statement_index, e.evidence_index),
-        reverse=True,
-    )
-    for ev in sorted_evidence:
-        # Validate indices
-        if ev.category_index < 0 or ev.category_index >= len(category_results):
-            logger.debug(
-                "etl.call_summary_editor.dedup.invalid_category_index",
-                execution_id=execution_id,
-                category_index=ev.category_index,
-            )
-            continue
-
-        result = category_results[ev.category_index]
-        if result.get("rejected", False) or "summary_statements" not in result:
-            continue
-
-        stmts = result["summary_statements"]
-        if ev.statement_index < 0 or ev.statement_index >= len(stmts):
-            logger.debug(
-                "etl.call_summary_editor.dedup.invalid_statement_index",
-                execution_id=execution_id,
-                statement_index=ev.statement_index,
-            )
-            continue
-
-        evidence_list = stmts[ev.statement_index].get("evidence", [])
-        if ev.evidence_index < 0 or ev.evidence_index >= len(evidence_list):
-            logger.debug(
-                "etl.call_summary_editor.dedup.invalid_evidence_index",
-                execution_id=execution_id,
-                evidence_index=ev.evidence_index,
-            )
-            continue
-
-        removed_ev = evidence_list.pop(ev.evidence_index)
-        evidence_removed += 1
-        logger.debug(
-            "etl.call_summary_editor.dedup.evidence_removed",
-            execution_id=execution_id,
-            category=result["name"],
-            snippet=removed_ev.get("content", "")[:LOG_SNIPPET_LENGTH],
-            reasoning=ev.reasoning,
-        )
-
-    # --- Remove duplicate statements (reverse order to avoid index shift) ---
-    sorted_statements = sorted(
-        dedup_response.duplicate_statements,
-        key=lambda s: (s.category_index, s.statement_index),
-        reverse=True,
-    )
-    for stmt in sorted_statements:
-        if stmt.category_index < 0 or stmt.category_index >= len(category_results):
-            logger.debug(
-                "etl.call_summary_editor.dedup.invalid_category_index",
-                execution_id=execution_id,
-                category_index=stmt.category_index,
-            )
-            continue
-
-        result = category_results[stmt.category_index]
-        if result.get("rejected", False) or "summary_statements" not in result:
-            continue
-
-        stmts = result["summary_statements"]
-        if stmt.statement_index < 0 or stmt.statement_index >= len(stmts):
-            logger.debug(
-                "etl.call_summary_editor.dedup.invalid_statement_index",
-                execution_id=execution_id,
-                statement_index=stmt.statement_index,
-            )
-            continue
-
-        removed_stmt = stmts.pop(stmt.statement_index)
-        statements_removed += 1
-        logger.debug(
-            "etl.call_summary_editor.dedup.statement_removed",
-            execution_id=execution_id,
-            category=result["name"],
-            statement=removed_stmt.get("statement", "")[:LOG_SNIPPET_LENGTH],
-            reasoning=stmt.reasoning,
-        )
-
-    return statements_removed, evidence_removed
-
-
-async def _deduplicate_results_llm(
-    category_results: list, dedup_prompts: dict, context: dict, execution_id: str
-) -> list:
-    """
-    LLM-based post-extraction deduplication of statements and evidence.
-
-    Sends all non-rejected category results to an LLM to identify semantic duplicates
-    (same insight expressed differently) across categories. On failure, returns results
-    unchanged with a warning log.
-
-    Args:
-        category_results: List of category result dicts from extraction
-        dedup_prompts: Loaded prompt dict with system_prompt, user_prompt, tool_definition
-        context: Auth/SSL context dict
-        execution_id: Execution ID for logging
-
-    Returns:
-        Modified category_results with LLM-identified duplicates removed
-    """
-    # Skip if fewer than 2 non-rejected categories
-    non_rejected = [r for r in category_results if not r.get("rejected", False)]
-    if len(non_rejected) < 2:
-        logger.info(
-            "etl.call_summary_editor.dedup.skipped",
-            execution_id=execution_id,
-            reason="fewer than 2 non-rejected categories",
-        )
-        return category_results
-
-    formatted_categories = _format_categories_for_dedup(category_results)
-
-    system_prompt = dedup_prompts["system_prompt"]
-    user_prompt = dedup_prompts["user_prompt"].format(
-        categories_xml=_sanitize_for_prompt(formatted_categories)
-    )
-
-    messages = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": user_prompt},
-    ]
-
-    max_retries = etl_config.max_retries
-    for attempt in range(max_retries):
-        try:
-            response = await complete_with_tools(
-                messages=messages,
-                tools=[dedup_prompts["tool_definition"]],
-                context=context,
-                llm_params={
-                    "model": etl_config.get_model("deduplication"),
-                    "temperature": etl_config.temperature,
-                    "max_tokens": etl_config.get_max_tokens("deduplication"),
-                },
-            )
-
-            tool_call = response["choices"][0]["message"]["tool_calls"][0]
-            raw_data = json.loads(tool_call["function"]["arguments"])
-            dedup_response = DeduplicationResponse.model_validate(raw_data)
-
-            metrics = response.get("metrics", {})
-            _accumulate_llm_cost(context, metrics)
-            logger.info(
-                "etl.call_summary_editor.llm_usage",
-                execution_id=execution_id,
-                stage="deduplication",
-                prompt_tokens=metrics.get("prompt_tokens", 0),
-                completion_tokens=metrics.get("completion_tokens", 0),
-                total_cost=metrics.get("total_cost", 0),
-                response_time=metrics.get("response_time", 0),
-            )
-
-            statements_removed, evidence_removed = _apply_dedup_removals(
-                category_results, dedup_response, execution_id
-            )
-
-            if statements_removed > 0 or evidence_removed > 0:
-                logger.info(
-                    "etl.call_summary_editor.dedup.summary",
-                    execution_id=execution_id,
-                    statements_removed=statements_removed,
-                    evidence_removed=evidence_removed,
-                )
-
-            return category_results
-
-        except (KeyError, IndexError, json.JSONDecodeError, TypeError, ValidationError) as e:
-            logger.warning(
-                "etl.call_summary_editor.dedup_parse_error",
-                execution_id=execution_id,
-                error=str(e),
-                attempt=attempt + 1,
-            )
-            if attempt < max_retries - 1:
-                continue
-            raise RuntimeError(
-                f"Deduplication failed after {max_retries} attempts: {str(e)}"
-            ) from e
-        except Exception as e:  # Transport/LLM failures
-            logger.error(
-                "etl.call_summary_editor.dedup_error",
-                execution_id=execution_id,
-                error=str(e),
-                attempt=attempt + 1,
-            )
-            if attempt < max_retries - 1:
-                delay = min(etl_config.retry_base_delay * (2**attempt), etl_config.retry_max_delay)
-                delay += random.uniform(0, 0.5 * delay)
-                await asyncio.sleep(delay)
-                continue
-            raise RuntimeError(
-                f"Deduplication failed after {max_retries} attempts: {str(e)}"
-            ) from e
-
-    raise RuntimeError(f"Deduplication failed after {max_retries} attempts")
-
-
-def _filter_chunks_for_category(
-    section_cache: dict,
-    transcript_sections: str,
-    relevant_qa_groups: list,
-) -> list:
-    """
-    Filter cached transcript chunks for a specific category.
-
-    MD chunks are always included in full (no visible block IDs for filtering).
-    QA chunks are filtered to only those whose qa_group_id is in relevant_qa_groups.
-    If relevant_qa_groups is empty/None, all QA chunks are included as a safety fallback.
-
-    Args:
-        section_cache: Dict with keys "MD", "QA", "ALL" mapping to chunk lists
-        transcript_sections: "MD", "QA", or "ALL" — which sections this category uses
-        relevant_qa_groups: List of Q&A group IDs relevant to this category
-
-    Returns:
-        Filtered list of chunks for the category
-    """
-    md_chunks = section_cache.get(SECTIONS_KEY_MD, [])
-    qa_chunks = section_cache.get(SECTIONS_KEY_QA, [])
-
-    # Filter QA chunks if we have a non-empty relevance list
-    if relevant_qa_groups:
-        qa_group_set = set(relevant_qa_groups)
-        filtered_qa = [c for c in qa_chunks if c.get("qa_group_id") in qa_group_set]
-    else:
-        # Safety fallback: no filtering when list is empty/None
-        filtered_qa = qa_chunks
-
-    # Combine based on transcript_sections
-    if transcript_sections == SECTIONS_KEY_MD:
-        return list(md_chunks)
-    if transcript_sections == SECTIONS_KEY_QA:
-        return list(filtered_qa)
-    # SECTIONS_KEY_ALL or any other value
-    return list(md_chunks) + list(filtered_qa)
-
-
-async def _extract_single_category(  # noqa: E501  pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals
-    index: int,
-    category: dict,
-    research_plan_data: dict,
-    extraction_prompts: dict,
-    etl_context: dict,
-    semaphore: asyncio.Semaphore,
-    total_categories: int,
-) -> dict:
-    """
-    Extract data for a single category (parallel-safe coroutine).
-
-    Acquires the semaphore to limit concurrency, then performs chunk filtering,
-    transcript formatting, and LLM extraction with retry logic. Never raises;
-    returns a rejection result on unrecoverable errors.
-
-    Args:
-        index: 1-based category index
-        category: Category configuration dict
-        research_plan_data: Research plan from LLM
-        extraction_prompts: Prompts for extraction
-        etl_context: Shared read-only context dict
-        semaphore: Concurrency-limiting semaphore
-        total_categories: Total number of categories being processed
-
-    Returns:
-        Extraction result dict (accepted or rejected)
-    """
-    async with semaphore:
-        retrieval_params = etl_context["retrieval_params"]
-        bank_info = etl_context["bank_info"]
-        quarter = etl_context["quarter"]
-        fiscal_year = etl_context["fiscal_year"]
-        context = etl_context["context"]
-        execution_id = etl_context["execution_id"]
-
-        category_plan = next(
-            (p for p in research_plan_data["category_plans"] if p.get("index") == index),
-            None,
-        )
-
-        if not category_plan:
-            logger.info(
-                "etl.call_summary_editor.category_not_in_plan",
-                execution_id=execution_id,
-                category_name=category["category_name"],
-                category_index=index,
-                reason="Not in research plan — proceeding with full unfiltered transcript",
-            )
-
-        # Extract Q&A group filter from research plan (empty = no filtering)
-        relevant_qa_groups = category_plan.get("relevant_qa_groups", []) if category_plan else []
-
-        # Filter chunks to relevant content; no plan = full unfiltered transcript
-        cache = etl_context.get("section_cache", {})
-        chunks = _filter_chunks_for_category(
-            section_cache=cache,
-            transcript_sections=category["transcript_sections"],
-            relevant_qa_groups=relevant_qa_groups,
-        )
-
-        # Fallback if section_cache missed this section type entirely
-        if not chunks and not cache.get(category["transcript_sections"]):
-            chunks = await retrieve_full_section(
-                combo=retrieval_params,
-                sections=category["transcript_sections"],
-                context=context,
-            )
-
-        # Log chunk filtering results
-        total_section_chunks = len(cache.get(category["transcript_sections"], []))
-        logger.debug(
-            "etl.call_summary_editor.chunk_filtering",
-            execution_id=execution_id,
-            category_name=category["category_name"],
-            transcript_sections=category["transcript_sections"],
-            relevant_qa_groups=relevant_qa_groups,
-            total_chunks=total_section_chunks,
-            filtered_chunks=len(chunks),
-        )
-
-        if not chunks:
-            return _build_rejection_result(
-                index,
-                category,
-                f"No {category['transcript_sections']} section data available",
-            )
-
-        formatted_section = format_full_section_chunks(
-            chunks=chunks, combo=retrieval_params, context=context
-        )
-
-        extraction_strategy = (
-            category_plan["extraction_strategy"]
-            if category_plan
-            else "No research plan available — extract all relevant content from the transcript."
-        )
-        cross_category_notes = (
-            category_plan.get("cross_category_notes", "") if category_plan else ""
-        )
-
-        system_prompt = extraction_prompts["system_prompt"].format(
-            category_index=index,
-            total_categories=total_categories,
-            bank_name=bank_info["bank_name"],
-            bank_symbol=bank_info["bank_symbol"],
-            quarter=quarter,
-            fiscal_year=fiscal_year,
-            category_name=_sanitize_for_prompt(category["category_name"]),
-            category_description=_sanitize_for_prompt(category["category_description"]),
-            transcripts_section=category["transcript_sections"],
-            research_plan=_sanitize_for_prompt(extraction_strategy),
-            cross_category_notes=_sanitize_for_prompt(cross_category_notes),
-        )
-
-        user_prompt = extraction_prompts["user_prompt"].format(
-            formatted_section=_sanitize_for_prompt(formatted_section)
-        )
-
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ]
-
-        max_retries = etl_config.max_retries
-        for attempt in range(max_retries):
-            try:
-                response = await complete_with_tools(
-                    messages=messages,
-                    tools=[extraction_prompts["tool_definition"]],
-                    context=context,
-                    llm_params={
-                        "model": etl_config.get_model("category_extraction"),
-                        "temperature": etl_config.temperature,
-                        "max_tokens": etl_config.get_max_tokens("category_extraction"),
-                    },
-                )
-
-                tool_call = response["choices"][0]["message"]["tool_calls"][0]
-                raw_data = json.loads(tool_call["function"]["arguments"])
-                validated = CategoryExtractionResponse.model_validate(raw_data)
-                extracted_data = validated.model_dump()
-
-                extracted_data["index"] = index
-                extracted_data["name"] = category["category_name"]
-                extracted_data["report_section"] = category.get("report_section", "Results Summary")
-                if not extracted_data.get("title"):
-                    extracted_data["title"] = category["category_name"]
-
-                metrics = response.get("metrics", {})
-                _accumulate_llm_cost(context, metrics)
-                logger.info(
-                    "etl.call_summary_editor.llm_usage",
-                    execution_id=execution_id,
-                    stage=f"extraction:{category['category_name']}",
-                    prompt_tokens=metrics.get("prompt_tokens", 0),
-                    completion_tokens=metrics.get("completion_tokens", 0),
-                    total_cost=metrics.get("total_cost", 0),
-                    response_time=metrics.get("response_time", 0),
-                )
-
-                logger.info(
-                    "etl.call_summary_editor.category_completed",
-                    execution_id=execution_id,
-                    category_name=category["category_name"],
-                    rejected=extracted_data.get("rejected", False),
-                )
-
-                return extracted_data
-
-            except (KeyError, IndexError, json.JSONDecodeError, TypeError, ValidationError) as e:
-                logger.warning(
-                    "etl.call_summary_editor.category_extraction_parse_error",
-                    execution_id=execution_id,
-                    category_name=category["category_name"],
-                    error=str(e),
-                    attempt=attempt + 1,
-                )
-
-                if attempt < max_retries - 1:
-                    continue
-                raise RuntimeError(
-                    f"Category extraction failed for '{category['category_name']}' "
-                    f"after {max_retries} attempts: {str(e)}"
-                ) from e
-            except Exception as e:
-                logger.error(
-                    "etl.call_summary_editor.category_extraction_error",
-                    execution_id=execution_id,
-                    category_name=category["category_name"],
-                    error=str(e),
-                    attempt=attempt + 1,
-                )
-
-                if attempt < max_retries - 1:
-                    delay = min(
-                        etl_config.retry_base_delay * (2**attempt),
-                        etl_config.retry_max_delay,
-                    )
-                    delay += random.uniform(0, 0.5 * delay)
-                    await asyncio.sleep(delay)
-                    continue
-                raise RuntimeError(
-                    f"Category extraction failed for '{category['category_name']}' "
-                    f"after {max_retries} attempts: {str(e)}"
-                ) from e
-
-        raise RuntimeError(
-            f"Category extraction failed for '{category['category_name']}' "
-            f"after {max_retries} attempts"
-        )
-
-
-async def _process_categories(
-    categories: list, research_plan_data: dict, extraction_prompts: dict, etl_context: dict
-) -> list:
-    """
-    Process all categories concurrently and extract data from transcripts.
-
-    Uses asyncio.gather with a semaphore to limit concurrency. Each category
-    executes independently with no shared mutable state. Results are sorted
-    by index for deterministic ordering regardless of completion order.
-
-    Args:
-        categories: List of category configurations
-        research_plan_data: Research plan from LLM
-        extraction_prompts: Prompts for extraction
-        etl_context: Dict with keys: retrieval_params, bank_info, quarter,
-            fiscal_year, context, execution_id
-
-    Returns:
-        List of category results (both accepted and rejected), sorted by index
-    """
-    semaphore = asyncio.Semaphore(etl_config.max_concurrent_extractions)
-    total_categories = len(categories)
-
-    tasks = [
-        _extract_single_category(
-            index=i,
-            category=cat,
-            research_plan_data=research_plan_data,
-            extraction_prompts=extraction_prompts,
-            etl_context=etl_context,
-            semaphore=semaphore,
-            total_categories=total_categories,
-        )
-        for i, cat in enumerate(categories, 1)
-    ]
-
-    results = await asyncio.gather(*tasks)
-    return sorted(results, key=lambda r: r.get("index", 0))
-
-
-def _insert_toc_at_position(doc, toc_entries: list) -> bool:
-    """
-    Insert TOC paragraphs before the first Heading 1 in the document body.
-
-    Uses lxml addprevious() to position the TOC after banner/title but before
-    body content. Falls back to appending at the end if position detection fails.
-
-    Args:
-        doc: Word Document object
-        toc_entries: List of (title, heading_level) tuples
-
-    Returns:
-        True if TOC was inserted at the correct position, False if fallback needed
-    """
-    try:
-        body = doc.element.body
-        ns = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
-
-        # Find the first Heading 1 paragraph element
-        first_h1 = None
-        for para_elem in body.iterchildren(f"{ns}p"):
-            for ppr in para_elem.iterchildren(f"{ns}pPr"):
-                for pstyle in ppr.iterchildren(f"{ns}pStyle"):
-                    if pstyle.get(f"{ns}val") == "Heading1":
-                        first_h1 = para_elem
-                        break
-                if first_h1:
-                    break
-            if first_h1:
-                break
-
-        if first_h1 is None:
-            return False
-
-        # Count paragraphs before adding TOC
-        paras_before = len(list(body.iterchildren(f"{ns}p")))
-
-        # Build TOC paragraphs and insert before first Heading 1
-        add_table_of_contents(doc, toc_entries)
-
-        # The TOC was appended at the end; move its paragraphs before first_h1
-        # Determine which paragraphs were added by comparing counts
-        all_paras = list(body.iterchildren(f"{ns}p"))
-        toc_paras = all_paras[paras_before:]
-
-        for toc_para in toc_paras:
-            body.remove(toc_para)
-            first_h1.addprevious(toc_para)
-
-        return True
-
-    except Exception as e:  # pylint: disable=broad-except
-        logger.warning(
-            "etl.call_summary_editor.toc_insertion_failed",
-            error=str(e),
-        )
-        return False
-
-
-def _generate_document(valid_categories: list, etl_context: dict) -> tuple:
-    """
-    Generate Word document from category results.
-
-    Builds body content first (collecting TOC entries), then inserts the TOC
-    before the first section heading with real heading titles as fallback text.
-
-    Args:
-        valid_categories: List of accepted category results
-        etl_context: Dict with keys: bank_info, quarter, fiscal_year, execution_id
-
-    Returns:
-        Tuple of (filepath, docx_filename)
-    """
-    bank_info = etl_context["bank_info"]
-    quarter = etl_context["quarter"]
-    fiscal_year = etl_context["fiscal_year"]
-    execution_id = etl_context["execution_id"]
-    doc = Document()
-    setup_document_formatting(doc)
-
-    etl_dir = os.path.dirname(os.path.abspath(__file__))
-    config_dir = os.path.join(etl_dir, "config")
-    add_banner_image(doc, config_dir)
-
-    add_document_title(doc, quarter, fiscal_year, bank_info["bank_symbol"])
-
-    # Build body content, collecting TOC entries as we go
-    toc_entries = []
-
-    sorted_categories = sorted(
-        valid_categories,
-        key=lambda x: (
-            0 if x.get("report_section", "Results Summary") == "Results Summary" else 1,
-            x.get("report_section", "Results Summary"),
-            x.get("index", 0),
-        ),
-    )
-
-    for idx, (section_name, section_categories) in enumerate(
-        groupby(sorted_categories, key=lambda x: x.get("report_section", "Results Summary"))
-    ):
-        section_categories = list(section_categories)
-        add_section_heading(doc, section_name, is_first_section=idx == 0)
-        toc_entries.append((section_name, 1))
-
-        for i, category_data in enumerate(section_categories, 1):
-            title = category_data.get("title") or category_data.get("name") or "Untitled"
-            if not category_data.get("rejected", False):
-                toc_entries.append((title, 2))
-
-            add_structured_content_to_doc(doc, category_data, heading_level=2)
-
-            if i < len(section_categories):
-                spacer = doc.add_paragraph()
-                spacer.paragraph_format.space_after = Pt(6)
-                spacer.add_run()
-
-    # Insert TOC with real heading titles before the first section heading
-    if not _insert_toc_at_position(doc, toc_entries):
-        add_table_of_contents(doc, toc_entries)
-
-    try:
-        mark_document_for_update(doc)
-    except (AttributeError, ValueError):
-        pass
-
-    validate_document_content(doc)
-
-    output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "output")
-    os.makedirs(output_dir, exist_ok=True)
-
-    filename_base = f"{bank_info['bank_symbol']}_{fiscal_year}_{quarter}_call_summary_editor"
-    docx_filename = f"{filename_base}.docx"
-    filepath = os.path.join(output_dir, docx_filename)
-    doc.save(filepath)
-
-    logger.info("etl.call_summary_editor.document_saved", execution_id=execution_id, filepath=filepath)
-
-    return filepath, docx_filename
-
-
-async def _save_to_database(
-    category_results: list,
-    valid_categories: list,
-    filepath: str,
-    docx_filename: str,
-    etl_context: dict,
-) -> None:
-    """
-    Save report metadata to database.
-
-    Args:
-        category_results: All category results
-        valid_categories: Accepted category results
-        filepath: Local file path
-        docx_filename: Document filename
-        etl_context: Dict with keys: bank_info, quarter, fiscal_year, bank_type, execution_id
-    """
-    bank_info = etl_context["bank_info"]
-    quarter = etl_context["quarter"]
-    fiscal_year = etl_context["fiscal_year"]
-    bank_type = etl_context["bank_type"]
-    execution_id = etl_context["execution_id"]
-
-    report_metadata = get_standard_report_metadata()
-    generation_timestamp = datetime.now()
-
-    stage = "connecting"
-    try:
-        async with get_connection() as conn:
-            stage = "deleting existing report"
-            delete_result = await conn.execute(
-                text(
-                    """
-                DELETE FROM aegis_reports
-                WHERE bank_id = :bank_id
-                  AND fiscal_year = :fiscal_year
-                  AND quarter = :quarter
-                  AND report_type = :report_type
-                RETURNING id
-                """
-                ),
-                {
-                    "bank_id": bank_info["bank_id"],
-                    "fiscal_year": fiscal_year,
-                    "quarter": quarter,
-                    "report_type": report_metadata["report_type"],
-                },
-            )
-            delete_result.fetchall()
-
-            stage = "inserting new report"
-            result = await conn.execute(
-                text(
-                    """
-                INSERT INTO aegis_reports (
-                    report_name,
-                    report_description,
-                    report_type,
-                    bank_id,
-                    bank_name,
-                    bank_symbol,
-                    fiscal_year,
-                    quarter,
-                    local_filepath,
-                    s3_document_name,
-                    s3_pdf_name,
-                    generation_date,
-                    generated_by,
-                    execution_id,
-                    metadata
-                ) VALUES (
-                    :report_name,
-                    :report_description,
-                    :report_type,
-                    :bank_id,
-                    :bank_name,
-                    :bank_symbol,
-                    :fiscal_year,
-                    :quarter,
-                    :local_filepath,
-                    :s3_document_name,
-                    :s3_pdf_name,
-                    :generation_date,
-                    :generated_by,
-                    :execution_id,
-                    :metadata
-                )
-                RETURNING id
-                """
-                ),
-                {
-                    "report_name": report_metadata["report_name"],
-                    "report_description": report_metadata["report_description"],
-                    "report_type": report_metadata["report_type"],
-                    "bank_id": bank_info["bank_id"],
-                    "bank_name": bank_info["bank_name"],
-                    "bank_symbol": bank_info["bank_symbol"],
-                    "fiscal_year": fiscal_year,
-                    "quarter": quarter,
-                    "local_filepath": filepath,
-                    "s3_document_name": docx_filename,
-                    "s3_pdf_name": None,
-                    "generation_date": generation_timestamp,
-                    "generated_by": "call_summary_editor_etl",
-                    "execution_id": execution_id,
-                    "metadata": json.dumps(
-                        {
-                            "bank_type": bank_type,
-                            "categories_processed": len(category_results),
-                            "categories_included": len(valid_categories),
-                            "categories_rejected": len(category_results) - len(valid_categories),
-                        }
-                    ),
-                },
-            )
-            result.fetchone()
-
-            await conn.commit()
-
-    except SQLAlchemyError as e:
-        logger.error(
-            "etl.call_summary_editor.database_error",
-            execution_id=execution_id,
-            stage=stage,
-            filepath=filepath,
-            error=str(e),
-        )
-        raise
 
 
 def _timing_summary(marks: list) -> dict:
@@ -1760,7 +609,9 @@ async def generate_call_summary(  # pylint: disable=too-many-statements
 
         if not auth_config["success"]:
             error_msg = f"Authentication failed: {auth_config.get('error', 'Unknown error')}"
-            logger.error("etl.call_summary_editor.auth_failed", execution_id=execution_id, error=error_msg)
+            logger.error(
+                "etl.call_summary_editor.auth_failed", execution_id=execution_id, error=error_msg
+            )
             raise CallSummarySystemError(error_msg)
 
         context = {
@@ -1772,7 +623,10 @@ async def generate_call_summary(  # pylint: disable=too-many-statements
         marks.append(("setup", time.monotonic()))
 
         categories = load_categories_from_xlsx(bank_info["bank_type"], execution_id)
-        min_importance = 4.0
+        min_importance = etl_config.min_importance
+        selected_importance_threshold = etl_config.selected_importance_threshold
+        candidate_importance_threshold = etl_config.candidate_importance_threshold
+        min_bucket_score_for_assignment = etl_config.min_bucket_score_for_assignment
 
         nas_conn = get_nas_connection()
         xml_result = find_transcript_xml(nas_conn, bank_info, fiscal_year, quarter)
@@ -1783,45 +637,23 @@ async def generate_call_summary(  # pylint: disable=too-many-statements
         marks.append(("retrieval", time.monotonic()))
 
         parsed_transcript = parse_transcript_xml(xml_result.xml_bytes)
+        period_label = f"{bank_info['bank_name']} {quarter} {fiscal_year}"
         if parsed_transcript is None:
-            raise CallSummaryUserError(
-                f"Failed to parse transcript XML for {bank_info['bank_name']} {quarter} {fiscal_year}"
-            )
+            raise CallSummaryUserError(f"Failed to parse transcript XML for {period_label}")
 
         ticker = bank_info.get("full_ticker") or bank_info["bank_symbol"]
         md_raw_blocks, qa_raw_blocks = extract_raw_blocks(parsed_transcript, ticker)
         if not md_raw_blocks and not qa_raw_blocks:
             raise CallSummaryUserError(
-                f"Transcript XML contained no usable content for {bank_info['bank_name']} {quarter} {fiscal_year}"
+                f"Transcript XML contained no usable content for {period_label}"
             )
         marks.append(("parse", time.monotonic()))
 
-        default_max_tokens = etl_config.get_max_tokens("default")
-        qa_boundary_llm_params = {
-            "model": config.llm.medium.model,
-            "temperature": etl_config.temperature,
-            "max_tokens": min(default_max_tokens, 4096),
-        }
-        md_llm_params = {
-            "model": config.llm.medium.model,
-            "temperature": etl_config.temperature,
-            "max_tokens": default_max_tokens,
-        }
-        qa_llm_params = {
-            "model": config.llm.medium.model,
-            "temperature": etl_config.temperature,
-            "max_tokens": default_max_tokens,
-        }
-        headline_llm_params = {
-            "model": config.llm.medium.model,
-            "temperature": etl_config.temperature,
-            "max_tokens": min(default_max_tokens, 2048),
-        }
-        config_review_llm_params = {
-            "model": config.llm.medium.model,
-            "temperature": etl_config.temperature,
-            "max_tokens": min(default_max_tokens, 4096),
-        }
+        qa_boundary_llm_params = etl_config.get_stage_params("qa_boundary")
+        md_llm_params = etl_config.get_stage_params("md_classification")
+        qa_llm_params = etl_config.get_stage_params("qa_classification")
+        headline_llm_params = etl_config.get_stage_params("headline")
+        config_review_llm_params = etl_config.get_stage_params("config_review")
 
         etl_context = {
             "bank_info": bank_info,
@@ -1849,6 +681,9 @@ async def generate_call_summary(  # pylint: disable=too-many-statements
             md_llm_params=md_llm_params,
             qa_llm_params=qa_llm_params,
             report_inclusion_threshold=min_importance,
+            selected_importance_threshold=selected_importance_threshold,
+            candidate_importance_threshold=candidate_importance_threshold,
+            min_bucket_score_for_assignment=min_bucket_score_for_assignment,
             max_concurrent_md_blocks=etl_config.max_concurrent_extractions,
         )
         banks_data = {bank_data["ticker"]: bank_data}
@@ -1865,13 +700,16 @@ async def generate_call_summary(  # pylint: disable=too-many-statements
         }
         marks.append(("config_review", time.monotonic()))
 
-        bucket_headlines = await generate_bucket_headlines(
-            banks_data=banks_data,
-            categories=categories,
-            min_importance=min_importance,
-            context=context,
-            llm_params=headline_llm_params,
-        )
+        bucket_headlines = {}
+        if etl_config.enable_headlines:
+            bucket_headlines = await generate_bucket_headlines(
+                banks_data=banks_data,
+                categories=categories,
+                min_importance=min_importance,
+                context=context,
+                llm_params=headline_llm_params,
+                sample_size=etl_config.headline_sample_size,
+            )
         report_state = build_interactive_report_state(
             banks_data=banks_data,
             categories=categories,
@@ -1937,11 +775,79 @@ async def generate_call_summary(  # pylint: disable=too-many-statements
         )
         raise CallSummarySystemError(error_msg) from exc
     finally:
+        # Always report LLM spend so partial-run costs are visible on failure.
+        partial = _get_total_llm_cost(context) if "context" in locals() else None
+        if partial and partial.get("llm_calls", 0) > 0:
+            logger.info(
+                "etl.call_summary_editor.llm_spend_final",
+                execution_id=execution_id,
+                llm_calls=partial["llm_calls"],
+                total_tokens=partial["total_tokens"],
+                total_cost=partial["total_cost"],
+            )
         if nas_conn is not None:
             try:
                 nas_conn.close()
-            except Exception:
+            except Exception:  # pylint: disable=broad-except
                 pass
+
+
+async def preflight_call_summary(bank_name: str, fiscal_year: int, quarter: str) -> Dict[str, Any]:
+    """Validate bank lookup, XLSX categories, NAS XML presence, and XML parseability.
+
+    Runs everything up to (but not including) the LLM classification stages so a
+    fleet run can be gated on cheap checks. Returns a status dict; never raises
+    for data-quality issues.
+    """
+    status: Dict[str, Any] = {
+        "bank_name": bank_name,
+        "fiscal_year": fiscal_year,
+        "quarter": quarter,
+        "ok": False,
+        "failure": None,
+    }
+    nas_conn = None
+    try:
+        bank_info = get_bank_info_from_config(bank_name)
+        status["bank_symbol"] = bank_info["bank_symbol"]
+        status["bank_type"] = bank_info["bank_type"]
+
+        categories = load_categories_from_xlsx(bank_info["bank_type"], execution_id="preflight")
+        status["categories_loaded"] = len(categories)
+
+        nas_conn = get_nas_connection()
+        xml_result = find_transcript_xml(nas_conn, bank_info, fiscal_year, quarter)
+        if xml_result is None:
+            status["failure"] = "no transcript XML found on NAS"
+            return status
+        status["transcript_path"] = xml_result.file_path
+
+        parsed_transcript = parse_transcript_xml(xml_result.xml_bytes)
+        if parsed_transcript is None:
+            status["failure"] = "transcript XML failed to parse"
+            return status
+
+        ticker = bank_info.get("full_ticker") or bank_info["bank_symbol"]
+        md_raw_blocks, qa_raw_blocks = extract_raw_blocks(parsed_transcript, ticker)
+        status["md_blocks"] = len(md_raw_blocks)
+        status["qa_blocks"] = len(qa_raw_blocks)
+
+        if not md_raw_blocks and not qa_raw_blocks:
+            status["failure"] = "transcript contained no MD or QA blocks"
+            return status
+
+        status["ok"] = True
+        return status
+    except Exception as exc:  # pylint: disable=broad-except
+        status["failure"] = f"{type(exc).__name__}: {exc}"
+        return status
+    finally:
+        if nas_conn is not None:
+            try:
+                nas_conn.close()
+            except Exception:  # pylint: disable=broad-except
+                pass
+
 
 def main():
     """Main entry point for command-line execution."""
@@ -1950,13 +856,68 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
 
-    parser.add_argument("--bank", required=True, help="Bank ID, name, or symbol")
-    parser.add_argument("--year", type=int, required=True, help="Fiscal year")
+    subparsers = parser.add_subparsers(dest="command")
+    benchmark_parser = subparsers.add_parser(
+        "benchmark",
+        help="Run recall benchmark against a saved report HTML or JSON payload.",
+    )
+    benchmark_parser.add_argument(
+        "--predicted",
+        required=True,
+        help="Path to a saved report HTML or JSON payload containing predicted evidence.",
+    )
+    benchmark_parser.add_argument(
+        "--expected",
+        required=True,
+        help="Path to analyst-reviewed JSON expectations.",
+    )
+    benchmark_parser.add_argument(
+        "--output",
+        help="Optional output file for the benchmark report.",
+    )
+    benchmark_parser.add_argument(
+        "--format",
+        choices=["markdown", "json"],
+        default="markdown",
+        help="Benchmark output format.",
+    )
+
+    parser.add_argument("--bank", help="Bank ID, name, or symbol")
+    parser.add_argument("--year", type=int, help="Fiscal year")
+    parser.add_argument("--quarter", choices=["Q1", "Q2", "Q3", "Q4"], help="Quarter")
     parser.add_argument(
-        "--quarter", required=True, choices=["Q1", "Q2", "Q3", "Q4"], help="Quarter"
+        "--preflight",
+        action="store_true",
+        help="Validate bank config, NAS transcript, and XML parseability without calling the LLM.",
     )
 
     args = parser.parse_args()
+
+    if args.command == "benchmark":
+        predicted_items = load_predicted_items(args.predicted)
+        expected_items = load_expected_items(args.expected)
+        result = benchmark_recall(predicted_items, expected_items)
+        if args.format == "json":
+            output_text = json.dumps(result, indent=2)
+        else:
+            output_text = render_benchmark_report(result)
+        if args.output:
+            with open(args.output, "w", encoding="utf-8") as handle:
+                handle.write(output_text)
+        print(output_text)
+        sys.exit(0)
+
+    if not args.bank or args.year is None or not args.quarter:
+        parser.error("--bank, --year, and --quarter are required unless using the benchmark command")
+
+    if args.preflight:
+        print(f"\n🔍 Preflight check: {args.bank} {args.quarter} {args.year}\n")
+        status = asyncio.run(
+            preflight_call_summary(bank_name=args.bank, fiscal_year=args.year, quarter=args.quarter)
+        )
+        for key, value in status.items():
+            print(f"  {key}: {value}")
+        sys.exit(0 if status["ok"] else 1)
 
     print(f"\n🔄 Generating report for {args.bank} {args.quarter} {args.year}...\n")
 

@@ -1,6 +1,7 @@
 """Integration tests for the interactive call_summary_editor ETL."""
 
 import os
+import sys
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -10,6 +11,7 @@ from aegis.etls.call_summary_editor.main import (
     CallSummarySystemError,
     CallSummaryUserError,
     generate_call_summary,
+    main,
 )
 
 
@@ -29,7 +31,9 @@ MOCK_XML_RESULT = type(
     "MockXmlResult",
     (),
     {
-        "file_path": "Data/2024/Q3/Canadian_Banks/RY-CA_Royal_Bank_of_Canada/RY-CA_Q3_2024_E1_123_5.xml",
+        "file_path": (
+            "Data/2024/Q3/Canadian_Banks/RY-CA_Royal_Bank_of_Canada/" "RY-CA_Q3_2024_E1_123_5.xml"
+        ),
         "xml_bytes": b"<transcript />",
     },
 )()
@@ -69,11 +73,16 @@ MOCK_BANK_DATA = {
                     "sid": "s1",
                     "text": "Revenue grew 8% year-over-year to $14.5 billion.",
                     "primary": "bucket_0",
+                    "selected_bucket_id": "bucket_0",
+                    "candidate_bucket_ids": ["bucket_0"],
                     "scores": {"bucket_0": 8.5},
                     "importance_score": 8.0,
+                    "status": "selected",
+                    "verbatim_text": "Revenue grew 8% year-over-year to $14.5 billion.",
                     "condensed": "Revenue grew 8% to $14.5 billion.",
-                    "summary": "Revenue grew 8% year-over-year.",
-                    "paraphrase": "Management noted revenue grew 8% year-over-year.",
+                    "source_block_id": "RY-CA_MD_1",
+                    "parent_record_id": "RY-CA_MD_1",
+                    "transcript_section": "MD",
                     "para_idx": 0,
                 }
             ],
@@ -93,11 +102,6 @@ def _setup_mocks():
     patches["ssl"] = patch(
         "aegis.etls.call_summary_editor.main.setup_ssl",
         return_value={"verify": False},
-    )
-    patches["availability"] = patch(
-        "aegis.etls.call_summary_editor.main.verify_and_get_availability",
-        new_callable=AsyncMock,
-        return_value=None,
     )
     patches["nas_conn"] = patch(
         "aegis.etls.call_summary_editor.main.get_nas_connection",
@@ -132,7 +136,7 @@ def _setup_mocks():
     patches["config_review"] = patch(
         "aegis.etls.call_summary_editor.main.analyze_config_coverage",
         new_callable=AsyncMock,
-        return_value={"existing_section_updates": [], "new_section_suggestions": []},
+        return_value={"config_change_proposals": []},
     )
     patches["save"] = patch(
         "aegis.etls.call_summary_editor.main._save_interactive_report_to_database",
@@ -210,3 +214,39 @@ class TestGenerateCallSummaryIntegration:
             await generate_call_summary(
                 bank_name="NONEXISTENT_BANK_XYZ", fiscal_year=2024, quarter="Q3"
             )
+
+
+def test_benchmark_cli_outputs_json(tmp_path, monkeypatch, capsys):
+    predicted_path = tmp_path / "predicted.json"
+    expected_path = tmp_path / "expected.json"
+    predicted_path.write_text(
+        '[{"sid":"md_1","selected_bucket_id":"bucket_0","status":"selected","parent_record_id":"RY-CA_MD_1"}]',
+        encoding="utf-8",
+    )
+    expected_path.write_text(
+        '[{"evidence_id":"md_1","expected_bucket_id":"bucket_0"}]',
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "call_summary_editor",
+            "benchmark",
+            "--predicted",
+            str(predicted_path),
+            "--expected",
+            str(expected_path),
+            "--format",
+            "json",
+        ],
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        main()
+
+    assert exc_info.value.code == 0
+    stdout = capsys.readouterr().out
+    assert '"captured": 1' in stdout
+    assert '"recall": 1.0' in stdout

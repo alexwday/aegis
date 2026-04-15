@@ -37,11 +37,7 @@ async def test_detect_qa_boundaries_uses_tool_output():
     with patch(
         "aegis.etls.call_summary_editor.interactive_pipeline._call_tool",
         new=AsyncMock(
-            return_value={
-                "conversations": [
-                    {"conversation_id": "conv_1", "block_indices": [1, 2]}
-                ]
-            }
+            return_value={"conversations": [{"conversation_id": "conv_1", "block_indices": [1, 2]}]}
         ),
     ):
         conversations = await detect_qa_boundaries(
@@ -111,7 +107,7 @@ async def test_detect_qa_boundaries_retries_until_valid_output():
 
 
 @pytest.mark.asyncio
-async def test_detect_qa_boundaries_uses_last_parseable_version_after_three_invalid_attempts():
+async def test_detect_qa_boundaries_raises_after_three_invalid_attempts():
     qa_raw_blocks = [
         {
             "id": "RY_QA_1",
@@ -143,15 +139,14 @@ async def test_detect_qa_boundaries_uses_last_parseable_version_after_three_inva
         "aegis.etls.call_summary_editor.interactive_pipeline._call_tool",
         new=mock_call_tool,
     ):
-        conversations = await detect_qa_boundaries(
-            qa_raw_blocks=qa_raw_blocks,
-            categories_text_qa="",
-            context={"execution_id": "test-exec"},
-            llm_params={"model": "gpt-test"},
-        )
+        with pytest.raises(RuntimeError, match="failed validation after 3 attempts"):
+            await detect_qa_boundaries(
+                qa_raw_blocks=qa_raw_blocks,
+                categories_text_qa="",
+                context={"execution_id": "test-exec"},
+                llm_params={"model": "gpt-test"},
+            )
 
-    assert len(conversations) == 1
-    assert [block["id"] for block in conversations[0]] == ["RY_QA_2"]
     assert mock_call_tool.await_count == 3
 
 
@@ -163,15 +158,19 @@ def test_count_included_categories_counts_auto_included_buckets():
                     "sentences": [
                         {
                             "primary": "bucket_0",
+                            "selected_bucket_id": "bucket_0",
                             "scores": {"bucket_0": 8.0},
                             "importance_score": 8.0,
-                            "condensed": "Revenue up",
+                            "status": "selected",
+                            "verbatim_text": "Revenue up",
                         },
                         {
                             "primary": "bucket_1",
+                            "selected_bucket_id": "bucket_1",
                             "scores": {"bucket_1": 7.1},
                             "importance_score": 7.0,
-                            "condensed": "Expenses down",
+                            "status": "selected",
+                            "verbatim_text": "Expenses down",
                         },
                     ]
                 }
@@ -208,10 +207,31 @@ async def test_analyze_config_coverage_returns_existing_and_new_rows():
                     {
                         "sid": "md_1",
                         "text": "We are scaling agentic AI across operations.",
-                        "condensed": "Scaling agentic AI across operations.",
+                        "verbatim_text": "We are scaling agentic AI across operations.",
                         "primary": "bucket_0",
+                        "selected_bucket_id": "bucket_0",
+                        "candidate_bucket_ids": ["bucket_0"],
                         "scores": {"bucket_0": 6.0},
                         "importance_score": 8.5,
+                        "status": "selected",
+                        "source_block_id": "RY-CA_MD_1",
+                        "parent_record_id": "RY-CA_MD_1",
+                        "transcript_section": "MD",
+                    },
+                    {
+                        "sid": "md_2",
+                        "text": "Agentic AI is now a standalone operating priority.",
+                        "verbatim_text": "Agentic AI is now a standalone operating priority.",
+                        "primary": "",
+                        "selected_bucket_id": "",
+                        "candidate_bucket_ids": ["bucket_0"],
+                        "scores": {"bucket_0": 5.2},
+                        "importance_score": 8.1,
+                        "status": "candidate",
+                        "source_block_id": "RY-CA_MD_1",
+                        "parent_record_id": "RY-CA_MD_1",
+                        "transcript_section": "MD",
+                        "emerging_topic": True,
                     }
                 ],
             }
@@ -231,43 +251,93 @@ async def test_analyze_config_coverage_returns_existing_and_new_rows():
     ]
 
     mock_tool = AsyncMock(
-        return_value={
-            "existing_section_updates": [
-                {
-                    "bucket_index": 0,
-                    "category_name": "Efficiency",
-                    "gap_summary": "The category does not explicitly mention AI-enabled productivity.",
-                    "why_update": "New transcript language ties efficiency to agentic AI execution.",
-                    "supporting_evidence": ["Scaling agentic AI across operations."],
-                    "proposed_config_row": {
-                        "transcript_sections": "MD",
-                        "report_section": "Results Summary",
-                        "category_name": "Efficiency",
-                        "category_description": "Productivity, cost discipline, and AI-enabled operating leverage.",
-                        "example_1": "Scaling agentic AI across operations.",
-                        "example_2": "",
-                        "example_3": "",
-                    },
-                }
-            ],
-            "new_section_suggestions": [
-                {
-                    "category_name": "Agentic AI",
-                    "why_new_section": "AI now appears as a standalone strategic theme with repeatable importance.",
-                    "supporting_evidence": ["Scaling agentic AI across operations."],
-                    "suggested_subtitle": "AI moves from pilot to operating model",
-                    "proposed_config_row": {
-                        "transcript_sections": "MD",
-                        "report_section": "Results Summary",
-                        "category_name": "Agentic AI",
-                        "category_description": "Strategic, operational, or financial commentary on agentic AI deployment.",
-                        "example_1": "Scaling agentic AI across operations.",
-                        "example_2": "",
-                        "example_3": "",
-                    },
-                }
-            ],
-        }
+        side_effect=[
+            {
+                "proposals": [
+                    {
+                        "change_type": "update_existing",
+                        "change_summary": (
+                            "Expand the Efficiency row to cover AI-enabled productivity."
+                        ),
+                        "target_bucket_index": 0,
+                        "target_category_name": "Efficiency",
+                        "suggested_subtitle": "",
+                        "linked_evidence_ids": ["md_1"],
+                        "current_row": {
+                            "transcript_sections": "MD",
+                            "report_section": "Results Summary",
+                            "category_name": "Efficiency",
+                            "category_description": "Productivity and cost discipline.",
+                            "example_1": "",
+                            "example_2": "",
+                            "example_3": "",
+                        },
+                        "proposed_row": {
+                            "transcript_sections": "MD",
+                            "report_section": "Results Summary",
+                            "category_name": "Efficiency",
+                            "category_description": (
+                                "Productivity, cost discipline, and AI-enabled operating leverage."
+                            ),
+                            "example_1": "Scaling agentic AI across operations.",
+                            "example_2": "",
+                            "example_3": "",
+                        },
+                        "supporting_quotes": [
+                            {
+                                "evidence_id": "md_1",
+                                "quote": "We are scaling agentic AI across operations.",
+                                "speaker": "Chief Executive Officer, CEO",
+                                "transcript_section": "MD",
+                            }
+                        ],
+                    }
+                ],
+            },
+            {
+                "proposals": [
+                    {
+                        "change_type": "new_category",
+                        "change_summary": (
+                            "Create a new category for standalone agentic AI commentary."
+                        ),
+                        "target_bucket_index": -1,
+                        "target_category_name": "Agentic AI",
+                        "suggested_subtitle": "AI moves from pilot to operating model",
+                        "linked_evidence_ids": ["md_2"],
+                        "current_row": {
+                            "transcript_sections": "ALL",
+                            "report_section": "Results Summary",
+                            "category_name": "",
+                            "category_description": "",
+                            "example_1": "",
+                            "example_2": "",
+                            "example_3": "",
+                        },
+                        "proposed_row": {
+                            "transcript_sections": "MD",
+                            "report_section": "Results Summary",
+                            "category_name": "Agentic AI",
+                            "category_description": (
+                                "Strategic, operational, or financial commentary on "
+                                "agentic AI deployment."
+                            ),
+                            "example_1": "Agentic AI is now a standalone operating priority.",
+                            "example_2": "",
+                            "example_3": "",
+                        },
+                        "supporting_quotes": [
+                            {
+                                "evidence_id": "md_2",
+                                "quote": "Agentic AI is now a standalone operating priority.",
+                                "speaker": "Chief Executive Officer, CEO",
+                                "transcript_section": "MD",
+                            }
+                        ],
+                    }
+                ],
+            },
+        ]
     )
 
     with patch(
@@ -282,16 +352,139 @@ async def test_analyze_config_coverage_returns_existing_and_new_rows():
             llm_params={"model": "gpt-test"},
         )
 
-    assert review["existing_section_updates"][0]["bucket_id"] == "bucket_0"
+    assert review["config_change_proposals"][0]["target_bucket_id"] == "bucket_0"
     assert (
-        review["existing_section_updates"][0]["proposed_config_row"]["category_description"]
+        review["config_change_proposals"][0]["proposed_row"]["category_description"]
         == "Productivity, cost discipline, and AI-enabled operating leverage."
     )
-    assert review["new_section_suggestions"][0]["category_name"] == "Agentic AI"
+    assert review["config_change_proposals"][1]["target_category_name"] == "Agentic AI"
     assert (
-        review["new_section_suggestions"][0]["proposed_config_row"]["report_section"]
+        review["config_change_proposals"][1]["proposed_row"]["report_section"]
         == "Results Summary"
     )
+    assert review["config_change_proposals"][1]["linked_evidence_ids"] == ["md_2"]
+    assert mock_tool.await_count == 2
+    first_prompt = mock_tool.await_args_list[0].kwargs["messages"][-1]["content"]
+    second_prompt = mock_tool.await_args_list[1].kwargs["messages"][-1]["content"]
+    assert "<mapped_evidence>" in first_prompt
+    assert "<id>md_1</id>" in first_prompt
+    assert "<id>md_2</id>" not in first_prompt
+    assert "<uncovered_evidence>" in second_prompt
+    assert "<id>md_2</id>" in second_prompt
+
+
+@pytest.mark.asyncio
+async def test_analyze_config_coverage_uses_full_verbatim_evidence_without_importance_filter():
+    long_quote = " ".join(["AI rollout remains broader than initially planned."] * 12)
+    long_question = " ".join(["Can you unpack the AI rollout in more detail?"] * 10)
+    bank_data = {
+        "ticker": "RY-CA",
+        "company_name": "Royal Bank of Canada",
+        "fiscal_quarter": "Q1",
+        "fiscal_year": 2026,
+        "md_blocks": [
+            {
+                "speaker": "Chief Executive Officer",
+                "speaker_title": "CEO",
+                "sentences": [
+                    {
+                        "sid": "md_low",
+                        "text": long_quote,
+                        "verbatim_text": long_quote,
+                        "primary": "",
+                        "selected_bucket_id": "",
+                        "candidate_bucket_ids": [],
+                        "scores": {},
+                        "importance_score": 1.0,
+                        "status": "candidate",
+                        "source_block_id": "RY-CA_MD_1",
+                        "parent_record_id": "RY-CA_MD_1",
+                        "transcript_section": "MD",
+                        "emerging_topic": True,
+                    },
+                    {
+                        "sid": "md_rejected",
+                        "text": "Legacy sentence classification missed this evidence.",
+                        "verbatim_text": "Legacy sentence classification missed this evidence.",
+                        "primary": "",
+                        "selected_bucket_id": "",
+                        "candidate_bucket_ids": [],
+                        "scores": {},
+                        "importance_score": 0.0,
+                        "status": "rejected",
+                        "source_block_id": "RY-CA_MD_1",
+                        "parent_record_id": "RY-CA_MD_1",
+                        "transcript_section": "MD",
+                        "emerging_topic": False,
+                    },
+                ],
+            }
+        ],
+        "qa_conversations": [
+            {
+                "id": "RY-CA_QA_1",
+                "executive_name": "Chief Financial Officer",
+                "executive_title": "CFO",
+                "question_sentences": [
+                    {
+                        "sid": "qa_q1",
+                        "text": long_question,
+                        "verbatim_text": long_question,
+                    }
+                ],
+                "answer_sentences": [
+                    {
+                        "sid": "qa_a1",
+                        "text": long_quote,
+                        "verbatim_text": long_quote,
+                        "primary": "",
+                        "selected_bucket_id": "",
+                        "candidate_bucket_ids": [],
+                        "scores": {},
+                        "importance_score": 1.5,
+                        "status": "candidate",
+                        "source_block_id": "RY-CA_QA_1",
+                        "parent_record_id": "RY-CA_QA_1",
+                        "transcript_section": "QA",
+                        "emerging_topic": True,
+                    }
+                ],
+            }
+        ],
+    }
+    categories = [
+        {
+            "transcript_sections": "ALL",
+            "report_section": "Results Summary",
+            "category_name": "Efficiency",
+            "category_description": "Productivity and cost discipline.",
+            "example_1": "",
+            "example_2": "",
+            "example_3": "",
+        }
+    ]
+
+    mock_tool = AsyncMock(return_value={"proposals": []})
+
+    with patch(
+        "aegis.etls.call_summary_editor.interactive_pipeline._call_tool",
+        new=mock_tool,
+    ):
+        review = await analyze_config_coverage(
+            bank_data=bank_data,
+            categories=categories,
+            min_importance=4.0,
+            context={"execution_id": "test-exec"},
+            llm_params={"model": "gpt-test"},
+        )
+
+    assert review == {"config_change_proposals": []}
+    prompt_messages = mock_tool.await_args.kwargs["messages"]
+    user_prompt = next(message["content"] for message in prompt_messages if message["role"] == "user")
+    assert "<id>md_low</id>" in user_prompt
+    assert "<id>md_rejected</id>" in user_prompt
+    assert f"<quote>{long_quote}</quote>" in user_prompt
+    assert f"<question_context>{long_question}</question_context>" in user_prompt
 
 
 @pytest.mark.asyncio
@@ -373,15 +566,21 @@ async def test_classify_qa_conversation_classifies_question_sentences_individual
             fiscal_year=2026,
             fiscal_quarter="Q1",
             report_inclusion_threshold=4.0,
+            selected_importance_threshold=6.5,
+            candidate_importance_threshold=4.0,
+            min_bucket_score_for_assignment=6.0,
             context={"execution_id": "test-exec"},
             llm_params={"model": "gpt-test"},
         )
 
     assert result["question_sentences"][0]["primary"] == "bucket_0"
     assert result["question_sentences"][0]["importance_score"] == 7.2
+    assert result["question_sentences"][0]["source_block_id"] == "RY-CA_QA_1"
+    assert result["question_sentences"][0]["status"] == "selected"
     assert result["question_sentences"][1]["primary"] == "bucket_1"
     assert result["question_sentences"][1]["importance_score"] == 6.8
     assert result["answer_sentences"][0]["primary"] == "bucket_0"
+    assert result["answer_sentences"][0]["verbatim_text"] == "CET1 should remain strong."
     assert result["answer_sentences"][1]["primary"] == "bucket_1"
 
 
@@ -434,10 +633,159 @@ async def test_classify_qa_conversation_prompt_mentions_auto_include_threshold()
             fiscal_year=2026,
             fiscal_quarter="Q1",
             report_inclusion_threshold=4.0,
+            selected_importance_threshold=6.5,
+            candidate_importance_threshold=4.0,
+            min_bucket_score_for_assignment=6.0,
             context={"execution_id": "test-exec"},
             llm_params={"model": "gpt-test"},
         )
 
     prompt_messages = mock_call_tool.await_args.kwargs["messages"]
-    user_prompt = next(message["content"] for message in prompt_messages if message["role"] == "user")
-    assert "Scores >= 4.0 are auto-included in the draft report for analyst review." in user_prompt
+    user_prompt = next(
+        message["content"] for message in prompt_messages if message["role"] == "user"
+    )
+    assert "Scores >= 4.0 should remain visible for analyst review at minimum." in user_prompt
+
+
+@pytest.mark.asyncio
+async def test_classify_qa_conversation_keeps_weak_bucket_match_as_unmapped_candidate():
+    categories = [
+        {
+            "transcript_sections": "QA",
+            "report_section": "Earnings Call Q&A",
+            "category_name": "Capital",
+            "category_description": "Capital and CET1 discussion.",
+        }
+    ]
+    conv_blocks = [
+        {
+            "speaker": "Analyst",
+            "speaker_affiliation": "Big Bank",
+            "speaker_title": "",
+            "speaker_type_hint": "q",
+            "paragraphs": ["Can you talk about the AI rollout?"],
+        },
+        {
+            "speaker": "Chief Financial Officer",
+            "speaker_affiliation": "Royal Bank of Canada",
+            "speaker_title": "CFO",
+            "speaker_type_hint": "a",
+            "paragraphs": ["We are scaling AI assistants across operations."],
+        },
+    ]
+
+    with patch(
+        "aegis.etls.call_summary_editor.interactive_pipeline._call_tool",
+        new=AsyncMock(
+            return_value={
+                "primary_bucket_index": 0,
+                "question_sentences": [
+                    {
+                        "index": 1,
+                        "scores": [{"bucket_index": 0, "score": 4.2}],
+                        "importance_score": 6.0,
+                        "condensed": "Can you talk about the AI rollout?",
+                    }
+                ],
+                "answer_sentences": [
+                    {
+                        "index": 1,
+                        "scores": [{"bucket_index": 0, "score": 4.3}],
+                        "importance_score": 6.4,
+                        "condensed": "We are scaling AI assistants across operations.",
+                    }
+                ],
+            }
+        ),
+    ):
+        result = await classify_qa_conversation(
+            conv_idx=1,
+            conv_blocks=conv_blocks,
+            ticker="RY-CA",
+            categories=categories,
+            categories_text_qa="",
+            company_name="Royal Bank of Canada",
+            fiscal_year=2026,
+            fiscal_quarter="Q1",
+            report_inclusion_threshold=4.0,
+            selected_importance_threshold=6.5,
+            candidate_importance_threshold=4.0,
+            min_bucket_score_for_assignment=6.0,
+            context={"execution_id": "test-exec"},
+            llm_params={"model": "gpt-test"},
+        )
+
+    assert result["answer_sentences"][0]["selected_bucket_id"] == ""
+    assert result["answer_sentences"][0]["candidate_bucket_ids"] == ["bucket_0"]
+    assert result["answer_sentences"][0]["status"] == "candidate"
+    assert result["answer_sentences"][0]["emerging_topic"] is True
+    assert result["primary_bucket"] == ""
+
+
+@pytest.mark.asyncio
+async def test_classify_qa_conversation_missing_sentence_results_are_rejected_not_emerging():
+    categories = [
+        {
+            "transcript_sections": "QA",
+            "report_section": "Earnings Call Q&A",
+            "category_name": "Capital",
+            "category_description": "Capital and CET1 discussion.",
+        }
+    ]
+    conv_blocks = [
+        {
+            "speaker": "Analyst",
+            "speaker_affiliation": "Big Bank",
+            "speaker_title": "",
+            "speaker_type_hint": "q",
+            "paragraphs": ["How are you thinking about CET1?"],
+        },
+        {
+            "speaker": "Chief Financial Officer",
+            "speaker_affiliation": "Royal Bank of Canada",
+            "speaker_title": "CFO",
+            "speaker_type_hint": "a",
+            "paragraphs": ["CET1 should remain strong."],
+        },
+    ]
+
+    with patch(
+        "aegis.etls.call_summary_editor.interactive_pipeline._call_tool",
+        new=AsyncMock(
+            return_value={
+                "primary_bucket_index": 0,
+                "question_sentences": [],
+                "answer_sentences": [],
+            }
+        ),
+    ):
+        result = await classify_qa_conversation(
+            conv_idx=1,
+            conv_blocks=conv_blocks,
+            ticker="RY-CA",
+            categories=categories,
+            categories_text_qa="",
+            company_name="Royal Bank of Canada",
+            fiscal_year=2026,
+            fiscal_quarter="Q1",
+            report_inclusion_threshold=4.0,
+            selected_importance_threshold=6.5,
+            candidate_importance_threshold=4.0,
+            min_bucket_score_for_assignment=6.0,
+            context={"execution_id": "test-exec"},
+            llm_params={"model": "gpt-test"},
+        )
+
+    assert result["primary_bucket"] == ""
+    assert result["question_sentences"][0]["status"] == "rejected"
+    assert result["question_sentences"][0]["emerging_topic"] is False
+    assert (
+        result["question_sentences"][0]["classification_error"]
+        == "missing_sentence_classification"
+    )
+    assert result["answer_sentences"][0]["status"] == "rejected"
+    assert result["answer_sentences"][0]["emerging_topic"] is False
+    assert (
+        result["answer_sentences"][0]["classification_error"]
+        == "missing_sentence_classification"
+    )

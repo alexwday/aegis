@@ -1,31 +1,48 @@
-# Call Summary ETL Configuration
+# Call Summary Editor ETL Configuration
+#
+# Five LLM stages run per bank:
+#   qa_boundary         - group raw Q&A speaker blocks into analyst exchanges
+#   md_classification   - sentence-level classify MD paragraphs into buckets/evidence states
+#   qa_classification   - sentence-level classify Q&A exchanges into buckets/evidence states
+#   headline            - optional headline generation from selected evidence
+#   config_review       - structured config change proposals from transcript evidence
 
-# LLM Model Configuration
-# Models are referenced from aegis.utils.settings.config
-# Tiers: small, medium, large
 models:
-  research_plan:
-    tier: large  # Uses config.llm.large.model
-  category_extraction:
-    tier: medium  # Uses config.llm.medium.model
-  deduplication:
-    tier: medium  # Uses config.llm.medium.model
+  # Tier names resolve to aegis.utils.settings.config.llm.{tier}.model (small/medium/large)
+  qa_boundary:       {tier: medium}
+  md_classification: {tier: medium}
+  qa_classification: {tier: medium}
+  headline:          {tier: medium}
+  config_review:     {tier: medium}
 
-# LLM Parameters
 llm:
   temperature: 0.1
+  # Per-stage token budgets. `default` is used when a stage key is missing.
   max_tokens:
-    research_plan: 32768
-    category_extraction: 32768
-    deduplication: 32768
-    default: 32768
+    qa_boundary:       4096
+    md_classification: 32768
+    qa_classification: 32768
+    headline:          2048
+    config_review:     4096
+    default:           32768
 
-# Concurrency Configuration
 concurrency:
+  # Bounds concurrent MD block + QA conversation classifications per bank.
   max_concurrent_extractions: 5
 
-# Retry Configuration
-retry:
-  max_retries: 3
-  base_delay: 1.0
-  max_delay: 10.0
+pipeline:
+  # min_importance: legacy floor for evidence to remain visible in config review
+  # and optional headline generation. Report inclusion is driven by explicit
+  # sentence status (`selected` / `candidate` / `rejected`) instead.
+  min_importance: 4.0
+  # Initial sentence status thresholds for the recall-first review workflow.
+  selected_importance_threshold: 6.5
+  candidate_importance_threshold: 4.0
+  # Minimum existing-bucket score required before evidence is auto-assigned to
+  # an existing category. Lower-scoring evidence remains unmapped for review.
+  min_bucket_score_for_assignment: 6.0
+  # Optional headline generation; disabled by default until evidence is finalized.
+  enable_headlines: false
+  # Maximum number of sample snippets fed to the headline LLM per bucket.
+  # Higher = richer headlines but larger prompt cost.
+  headline_sample_size: 8

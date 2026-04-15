@@ -49,7 +49,8 @@ def test_parse_transcript_xml_and_extract_raw_blocks():
       <meta>
         <title>Royal Bank of Canada Q3 2024 Earnings Call</title>
         <participants>
-          <participant id=\"p1\" title=\"Chief Executive Officer\" affiliation=\"Royal Bank of Canada\">Dave McKay</participant>
+          <participant id=\"p1\" title=\"Chief Executive Officer\"
+              affiliation=\"Royal Bank of Canada\">Dave McKay</participant>
           <participant id=\"p2\" title=\"Analyst\" affiliation=\"Big Bank\">John Doe</participant>
         </participants>
       </meta>
@@ -89,3 +90,40 @@ def test_parse_transcript_xml_and_extract_raw_blocks():
     assert len(qa_blocks) == 2
     assert qa_blocks[0]["speaker_type_hint"] == "q"
     assert qa_blocks[1]["speaker_affiliation"] == "Royal Bank of Canada"
+
+
+def test_extract_raw_blocks_normalizes_alternate_section_names():
+    parsed = {
+        "participants": {
+            "p1": {
+                "name": "Jane Doe",
+                "title": "Chief Executive Officer",
+                "affiliation": "Royal Bank of Canada",
+            },
+            "p2": {
+                "name": "John Analyst",
+                "title": "Analyst",
+                "affiliation": "Big Bank",
+            },
+        },
+        "sections": [
+            {
+                "name": "Prepared Remarks",
+                "speakers": [{"speaker_id": "p1", "speaker_type": "a", "paragraphs": ["Intro"]}],
+            },
+            {
+                "name": "Questions and Answers",
+                "speakers": [
+                    {"speaker_id": "p2", "speaker_type": "q", "paragraphs": ["Question"]},
+                    {"speaker_id": "p1", "speaker_type": "a", "paragraphs": ["Answer"]},
+                ],
+            },
+        ],
+    }
+
+    md_blocks, qa_blocks = extract_raw_blocks(parsed, "RY-CA")
+
+    assert len(md_blocks) == 1
+    assert md_blocks[0]["speaker"] == "Jane Doe"
+    assert len(qa_blocks) == 2
+    assert qa_blocks[0]["speaker"] == "John Analyst"

@@ -27,29 +27,20 @@ BUCKET_COLORS: List[Tuple[str, str]] = [
     ("#E8EAF6", "#1A237E"),
 ]
 OTHER_COLOR: Tuple[str, str] = ("#FAFAFA", "#9E9E9E")
-DEFAULT_BANNER_PATH = (
-    Path(__file__).resolve().parent.parent / "call_summary_editor_mock" / "banner.svg"
-)
-MOCK_MAIN_PATH = (
-    Path(__file__).resolve().parent.parent
-    / "call_summary_editor_mock"
-    / "main_call_summary.py"
-)
+_MODULE_DIR = Path(__file__).resolve().parent
+DEFAULT_BANNER_PATH = _MODULE_DIR / "templates" / "banner.svg"
+TEMPLATE_PATH = _MODULE_DIR / "templates" / "report.html"
 
 
 @lru_cache(maxsize=1)
 def _load_html_template() -> str:
-    text = MOCK_MAIN_PATH.read_text(encoding="utf-8")
-    start_marker = 'HTML_TEMPLATE = r"""'
-    end_marker = '\n\n# ============================================================\n# HTML GENERATION'
-    start = text.find(start_marker)
-    end = text.find(end_marker, start)
-    if start == -1 or end == -1:
-        raise ValueError(f"Could not extract HTML_TEMPLATE from {MOCK_MAIN_PATH}")
-    return text[start + len(start_marker) : end].rstrip().removesuffix('"""')
+    if not TEMPLATE_PATH.exists():
+        raise FileNotFoundError(f"HTML template not found at {TEMPLATE_PATH}")
+    return TEMPLATE_PATH.read_text(encoding="utf-8")
 
 
 def load_banner_b64(path: Path) -> Optional[str]:
+    """Return the banner file encoded as a `data:` URL, or None if missing."""
     if not path.exists():
         return None
     data = base64.b64encode(path.read_bytes()).decode()
@@ -96,8 +87,7 @@ def build_report_state(
     bank_states = {
         ticker: {
             "sentence_user_primary": {},
-            "excluded_sentences": [],
-            "force_included_sentences": [],
+            "sentence_status_overrides": {},
             "subquote_bucket_overrides": {},
             "bucket_subquote_order": {},
             "subquote_formats": {},
@@ -105,27 +95,38 @@ def build_report_state(
         for ticker in banks_data
     }
 
-    config_review_state = {"by_bank": {}}
+    config_change_proposals_state = {"by_bank": {}}
     for ticker in banks_data:
         bank_review = raw_config_reviews.get(ticker, {})
-        existing_updates = []
-        for idx, suggestion in enumerate(bank_review.get("existing_section_updates", []), start=1):
-            proposed_row = suggestion.get("proposed_config_row", {})
-            existing_updates.append(
+        proposals = []
+        for idx, proposal in enumerate(bank_review.get("config_change_proposals", []), start=1):
+            current_row = proposal.get("current_row", {})
+            proposed_row = proposal.get("proposed_row", {})
+            proposals.append(
                 {
-                    "id": suggestion.get("id") or f"{ticker}_existing_{idx}",
-                    "bucket_index": suggestion.get("bucket_index"),
-                    "bucket_id": suggestion.get("bucket_id"),
-                    "category_name": suggestion.get("category_name")
-                    or proposed_row.get("category_name", ""),
-                    "gap_summary": suggestion.get("gap_summary", ""),
-                    "why_update": suggestion.get("why_update", ""),
-                    "supporting_evidence": [
-                        evidence
-                        for evidence in suggestion.get("supporting_evidence", [])
-                        if evidence
+                    "id": proposal.get("id") or f"{ticker}_proposal_{idx}",
+                    "change_type": proposal.get("change_type", "update_existing"),
+                    "change_summary": proposal.get("change_summary", ""),
+                    "target_bucket_index": proposal.get("target_bucket_index", -1),
+                    "target_bucket_id": proposal.get("target_bucket_id"),
+                    "target_category_name": proposal.get("target_category_name", ""),
+                    "suggested_subtitle": proposal.get("suggested_subtitle", ""),
+                    "linked_evidence_ids": [
+                        evidence_id
+                        for evidence_id in proposal.get("linked_evidence_ids", [])
+                        if evidence_id
                     ],
-                    "proposed_config_row": {
+                    "adopted_bucket_id": proposal.get("adopted_bucket_id"),
+                    "current_row": {
+                        "transcript_sections": current_row.get("transcript_sections", "ALL"),
+                        "report_section": current_row.get("report_section", "Results Summary"),
+                        "category_name": current_row.get("category_name", ""),
+                        "category_description": current_row.get("category_description", ""),
+                        "example_1": current_row.get("example_1", ""),
+                        "example_2": current_row.get("example_2", ""),
+                        "example_3": current_row.get("example_3", ""),
+                    },
+                    "proposed_row": {
                         "transcript_sections": proposed_row.get("transcript_sections", "ALL"),
                         "report_section": proposed_row.get("report_section", "Results Summary"),
                         "category_name": proposed_row.get("category_name", ""),
@@ -134,41 +135,20 @@ def build_report_state(
                         "example_2": proposed_row.get("example_2", ""),
                         "example_3": proposed_row.get("example_3", ""),
                     },
-                }
-            )
-
-        new_section_suggestions = []
-        for idx, suggestion in enumerate(bank_review.get("new_section_suggestions", []), start=1):
-            proposed_row = suggestion.get("proposed_config_row", {})
-            new_section_suggestions.append(
-                {
-                    "id": suggestion.get("id") or f"{ticker}_new_{idx}",
-                    "category_name": suggestion.get("category_name")
-                    or proposed_row.get("category_name", ""),
-                    "why_new_section": suggestion.get("why_new_section", ""),
-                    "supporting_evidence": [
-                        evidence
-                        for evidence in suggestion.get("supporting_evidence", [])
-                        if evidence
+                    "supporting_quotes": [
+                        {
+                            "evidence_id": quote.get("evidence_id", ""),
+                            "quote": quote.get("quote", ""),
+                            "speaker": quote.get("speaker", ""),
+                            "transcript_section": quote.get("transcript_section", ""),
+                        }
+                        for quote in proposal.get("supporting_quotes", [])
+                        if quote
                     ],
-                    "suggested_subtitle": suggestion.get("suggested_subtitle", ""),
-                    "adopted_bucket_id": suggestion.get("adopted_bucket_id"),
-                    "proposed_config_row": {
-                        "transcript_sections": proposed_row.get("transcript_sections", "ALL"),
-                        "report_section": proposed_row.get("report_section", "Results Summary"),
-                        "category_name": proposed_row.get("category_name", ""),
-                        "category_description": proposed_row.get("category_description", ""),
-                        "example_1": proposed_row.get("example_1", ""),
-                        "example_2": proposed_row.get("example_2", ""),
-                        "example_3": proposed_row.get("example_3", ""),
-                    },
                 }
             )
 
-        config_review_state["by_bank"][ticker] = {
-            "existing_section_updates": existing_updates,
-            "new_section_suggestions": new_section_suggestions,
-        }
+        config_change_proposals_state["by_bank"][ticker] = {"proposals": proposals}
 
     return {
         "meta": {
@@ -185,7 +165,7 @@ def build_report_state(
         "banner_visible": True,
         "banner_src": None,
         "bucket_user_titles": {},
-        "config_review": config_review_state,
+        "config_change_proposals": config_change_proposals_state,
         "next_bucket_seq": len(categories),
     }
 
@@ -199,7 +179,15 @@ def generate_html(
     banner_path: Optional[Path] = None,
 ) -> str:
     """Render the mock HTML shell with injected report state."""
-    state_json = json.dumps(state, ensure_ascii=False, indent=2).replace("</script>", "<\\/script>")
+    state_json = json.dumps(state, ensure_ascii=False, indent=2).translate(
+        {
+            ord("<"): "\\u003c",
+            ord(">"): "\\u003e",
+            ord("&"): "\\u0026",
+            ord("\u2028"): "\\u2028",
+            ord("\u2029"): "\\u2029",
+        }
+    )
     html = _load_html_template()
     html = html.replace("__PERIOD__", f"{fiscal_quarter} {fiscal_year}")
     html = html.replace("__MIN_IMPORTANCE__", str(min_importance))

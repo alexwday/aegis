@@ -13,7 +13,7 @@ import asyncio
 import json
 import re
 from collections import defaultdict
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -91,32 +91,33 @@ class ProposedConfigRow(BaseModel):
     example_3: str = ""
 
 
-class ExistingSectionCoverageSuggestion(BaseModel):
-    """Suggestion to strengthen an existing config category."""
+class SupportingQuote(BaseModel):
+    """Verbatim quote linked to a source evidence record."""
 
-    bucket_index: int = Field(description="0-based existing category index")
-    category_name: str
-    gap_summary: str
-    why_update: str
-    supporting_evidence: List[str] = Field(default_factory=list)
-    proposed_config_row: ProposedConfigRow
+    evidence_id: str
+    quote: str
+    speaker: str = ""
+    transcript_section: str = ""
 
 
-class NewSectionSuggestion(BaseModel):
-    """Suggestion to add a new config category."""
+class ConfigChangeProposal(BaseModel):
+    """Structured config change proposal for the editor UI."""
 
-    category_name: str
-    why_new_section: str
-    supporting_evidence: List[str] = Field(default_factory=list)
+    change_type: Literal["update_existing", "new_category"]
+    change_summary: str
+    target_bucket_index: int = -1
+    target_category_name: str = ""
     suggested_subtitle: str = ""
-    proposed_config_row: ProposedConfigRow
+    linked_evidence_ids: List[str] = Field(default_factory=list)
+    current_row: ProposedConfigRow
+    proposed_row: ProposedConfigRow
+    supporting_quotes: List[SupportingQuote] = Field(default_factory=list)
 
 
 class ConfigReviewResult(BaseModel):
-    """Coverage review output for the current transcript against the config sheet."""
+    """Structured config proposals for the current transcript."""
 
-    existing_section_updates: List[ExistingSectionCoverageSuggestion] = Field(default_factory=list)
-    new_section_suggestions: List[NewSectionSuggestion] = Field(default_factory=list)
+    proposals: List[ConfigChangeProposal] = Field(default_factory=list)
 
 
 _SENTENCE_RESULT_SCHEMA = {
@@ -290,73 +291,87 @@ _CONFIG_ROW_SCHEMA = {
     "additionalProperties": False,
 }
 
+_SUPPORTING_QUOTE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "evidence_id": {"type": "string"},
+        "quote": {"type": "string"},
+        "speaker": {"type": "string"},
+        "transcript_section": {"type": "string"},
+    },
+    "required": ["evidence_id", "quote", "speaker", "transcript_section"],
+    "additionalProperties": False,
+}
+
 TOOL_CONFIG_REVIEW = {
     "type": "function",
     "function": {
-        "name": "review_category_config_coverage",
+        "name": "propose_config_changes",
         "strict": True,
         "description": (
-            "Call this tool when a classified transcript needs a config-sheet coverage review. "
-            "It returns suggested updates to existing rows and proposed net-new category rows in a "
-            "copy-ready config-sheet format. Use it after transcript classification, not before."
+            "Call this tool when transcript evidence needs structured config change proposals. "
+            "It returns update_existing and new_category proposals with linked evidence ids, "
+            "supporting verbatim quotes, and copy-ready rows for the config UI."
         ),
         "parameters": {
             "type": "object",
             "properties": {
-                "existing_section_updates": {
+                "proposals": {
                     "type": "array",
                     "items": {
                         "type": "object",
                         "properties": {
-                            "bucket_index": {"type": "integer"},
-                            "category_name": {"type": "string"},
-                            "gap_summary": {"type": "string"},
-                            "why_update": {"type": "string"},
-                            "supporting_evidence": {
-                                "type": "array",
-                                "items": {"type": "string"},
+                            "change_type": {
+                                "type": "string",
+                                "enum": ["update_existing", "new_category"],
                             },
-                            "proposed_config_row": _CONFIG_ROW_SCHEMA,
-                        },
-                        "required": [
-                            "bucket_index",
-                            "category_name",
-                            "gap_summary",
-                            "why_update",
-                            "supporting_evidence",
-                            "proposed_config_row",
-                        ],
-                        "additionalProperties": False,
-                    },
-                },
-                "new_section_suggestions": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "category_name": {"type": "string"},
-                            "why_new_section": {"type": "string"},
-                            "supporting_evidence": {
-                                "type": "array",
-                                "items": {"type": "string"},
-                            },
+                            "change_summary": {"type": "string"},
+                            "target_bucket_index": {"type": "integer"},
+                            "target_category_name": {"type": "string"},
                             "suggested_subtitle": {"type": "string"},
-                            "proposed_config_row": _CONFIG_ROW_SCHEMA,
+                            "linked_evidence_ids": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                            },
+                            "current_row": _CONFIG_ROW_SCHEMA,
+                            "proposed_row": _CONFIG_ROW_SCHEMA,
+                            "supporting_quotes": {
+                                "type": "array",
+                                "items": _SUPPORTING_QUOTE_SCHEMA,
+                            },
                         },
                         "required": [
-                            "category_name",
-                            "why_new_section",
-                            "supporting_evidence",
+                            "change_type",
+                            "change_summary",
+                            "target_bucket_index",
+                            "target_category_name",
                             "suggested_subtitle",
-                            "proposed_config_row",
+                            "linked_evidence_ids",
+                            "current_row",
+                            "proposed_row",
+                            "supporting_quotes",
                         ],
                         "additionalProperties": False,
                     },
                 },
             },
-            "required": ["existing_section_updates", "new_section_suggestions"],
+            "required": ["proposals"],
             "additionalProperties": False,
         },
+    },
+}
+
+TOOL_EMERGING_TOPIC_REVIEW = {
+    "type": "function",
+    "function": {
+        "name": "extract_emerging_topic_proposals",
+        "strict": True,
+        "description": (
+            "Call this tool when uncovered transcript evidence from the second pass needs "
+            "structured emerging-topic proposals. It returns update_existing or new_category "
+            "proposals with linked evidence ids, verbatim quotes, and copy-ready rows."
+        ),
+        "parameters": TOOL_CONFIG_REVIEW["function"]["parameters"],
     },
 }
 
@@ -377,7 +392,9 @@ def split_sentences(text: str) -> List[str]:
     return [part.strip() for part in parts if part.strip()]
 
 
-def format_categories_for_prompt(categories: List[Dict[str, Any]], section_filter: str = "ALL") -> str:
+def format_categories_for_prompt(
+    categories: List[Dict[str, Any]], section_filter: str = "ALL"
+) -> str:
     """Format categories as XML for prompt injection."""
     parts = []
     for idx, category in enumerate(categories):
@@ -425,15 +442,15 @@ def _importance_scale_guidance(report_inclusion_threshold: float) -> str:
     """Return prompt guidance for the 0-10 importance scale."""
     threshold = f"{float(report_inclusion_threshold):.1f}"
     return (
-        "Use `importance_score` as the draft auto-inclusion score for the report editor.\n"
-        f"- Scores >= {threshold} are auto-included in the draft report for analyst review.\n"
-        f"- Scores just below {threshold} should be reserved for content that is mostly low-value, "
-        "procedural, repetitive, or not worth surfacing by default.\n"
-        f"- If a sentence is at least semi-important and you want the user to review it in the "
-        f"draft, score it at or above {threshold}.\n"
+        "Use `importance_score` to rank evidence for the editor's recall-first workflow.\n"
+        f"- Scores >= {threshold} should remain visible for analyst review at minimum.\n"
+        "- Lower scores should be reserved for content that is mostly low-value, procedural, "
+        "repetitive, or not worth surfacing by default.\n"
+        "- Give higher scores when the quote is exact, specific, and likely worth keeping "
+        "verbatim in the draft.\n"
         "- 0-1: ceremonial, legal boilerplate, operator instructions, or procedural remarks.\n"
         "- 2-3: low-signal detail that usually does not belong in the draft by default.\n"
-        "- 4-6: meaningful report-worthy content that should usually appear for review.\n"
+        "- 4-6: meaningful report-worthy content that should stay visible for review.\n"
         "- 7-8: clearly important takeaway.\n"
         "- 9-10: headline-level or must-keep takeaway."
     )
@@ -494,12 +511,17 @@ async def _call_tool(
             response_time=metrics.get("response_time", 0),
         )
 
-    tool_calls = response.get("choices", [{}])[0].get("message", {}).get("tool_calls", [])
+    choices = response.get("choices") or []
+    message = choices[0].get("message", {}) if choices else {}
+    finish_reason = choices[0].get("finish_reason", "") if choices else ""
+    tool_calls = message.get("tool_calls") or []
     if not tool_calls:
         logger.warning(
             "etl.call_summary_editor.tool_call_missing",
             execution_id=context["execution_id"],
             stage=label,
+            finish_reason=finish_reason,
+            choices_present=bool(choices),
         )
         return None
 
@@ -515,6 +537,7 @@ async def _call_tool(
             execution_id=context["execution_id"],
             stage=label,
             error=str(exc),
+            finish_reason=finish_reason,
         )
         return None
 
@@ -534,20 +557,34 @@ def _fallback_bucket_id(applicable_ids: List[str]) -> str:
     return applicable_ids[0] if applicable_ids else ""
 
 
-def _primary_from_scores(scores: Dict[str, float], applicable_ids: List[str]) -> str:
-    """Pick the highest-scoring applicable bucket, else the first applicable bucket."""
-    best_id = ""
-    best_score: Optional[float] = None
-    for bucket_id in applicable_ids:
-        score = scores.get(bucket_id)
-        if score is None:
-            continue
-        if best_score is None or score > best_score:
-            best_score = score
-            best_id = bucket_id
-    if best_id and best_score is not None:
-        return best_id
-    return _fallback_bucket_id(applicable_ids)
+def _sorted_candidate_bucket_ids(
+    scores: Dict[str, float],
+    applicable_ids: List[str],
+) -> List[str]:
+    """Return scored applicable buckets sorted by descending model score."""
+    ranked = [
+        (bucket_id, float(scores.get(bucket_id, 0.0)))
+        for bucket_id in applicable_ids
+        if float(scores.get(bucket_id, 0.0)) > 0.0
+    ]
+    ranked.sort(key=lambda item: (-item[1], item[0]))
+    return [bucket_id for bucket_id, _score in ranked]
+
+
+def _primary_from_scores(
+    scores: Dict[str, float],
+    applicable_ids: List[str],
+    min_bucket_score_for_assignment: float = 0.0,
+) -> str:
+    """Pick the highest-scoring applicable bucket only when it clears assignment quality."""
+    candidate_ids = _sorted_candidate_bucket_ids(scores, applicable_ids)
+    if not candidate_ids:
+        return ""
+
+    best_id = candidate_ids[0]
+    if float(scores.get(best_id, 0.0)) < float(min_bucket_score_for_assignment):
+        return ""
+    return best_id
 
 
 def _bucket_score(scores: Dict[str, float], bucket_id: str) -> float:
@@ -617,31 +654,102 @@ def _normalise_config_row(raw_row: Any) -> Dict[str, str]:
     }
 
 
+def _empty_config_row() -> Dict[str, str]:
+    """Return an empty config row payload."""
+    return {
+        "transcript_sections": "ALL",
+        "report_section": "Results Summary",
+        "category_name": "",
+        "category_description": "",
+        "example_1": "",
+        "example_2": "",
+        "example_3": "",
+    }
+
+
+def _initial_sentence_status(
+    *,
+    importance_score: float,
+    selected_bucket_id: str,
+    candidate_bucket_ids: List[str],
+    selected_importance_threshold: float,
+    candidate_importance_threshold: float,
+) -> str:
+    """Assign the initial recall-first review status for one sentence."""
+    if selected_bucket_id and importance_score >= selected_importance_threshold:
+        return "selected"
+    if importance_score >= candidate_importance_threshold or candidate_bucket_ids:
+        return "candidate"
+    return "rejected"
+
+
 def _make_sentence_record(
     sentence_id: str,
     text: str,
     llm_result: Optional[SentenceResult],
     categories: List[Dict[str, Any]],
     applicable_ids: List[str],
+    *,
+    transcript_section: str,
+    source_block_id: str,
+    parent_record_id: str,
+    selected_importance_threshold: float,
+    candidate_importance_threshold: float,
+    min_bucket_score_for_assignment: float,
 ) -> Dict[str, Any]:
     if llm_result is None:
-        fallback_bucket = _fallback_bucket_id(applicable_ids)
+        candidate_bucket_ids: List[str] = []
+        selected_bucket_id = ""
         return {
             "sid": sentence_id,
             "text": text,
-            "primary": fallback_bucket,
+            "verbatim_text": text,
+            "sentence_ids": [sentence_id],
+            "span_id": sentence_id,
+            "source_block_id": source_block_id,
+            "parent_record_id": parent_record_id,
+            "transcript_section": transcript_section,
+            "primary": selected_bucket_id,
+            "selected_bucket_id": selected_bucket_id,
+            "candidate_bucket_ids": candidate_bucket_ids,
             "scores": {},
             "importance_score": 0.0,
+            "status": "rejected",
+            "emerging_topic": False,
+            "classification_error": "missing_sentence_classification",
             "condensed": text,
         }
 
     scores = _normalise_scores(llm_result.scores, categories)
+    candidate_bucket_ids = _sorted_candidate_bucket_ids(scores, applicable_ids)
+    selected_bucket_id = _primary_from_scores(
+        scores,
+        applicable_ids,
+        min_bucket_score_for_assignment=min_bucket_score_for_assignment,
+    )
+    importance_score = round(float(llm_result.importance_score), 1)
     return {
         "sid": sentence_id,
         "text": text,
-        "primary": _primary_from_scores(scores, applicable_ids),
+        "verbatim_text": text,
+        "sentence_ids": [sentence_id],
+        "span_id": sentence_id,
+        "source_block_id": source_block_id,
+        "parent_record_id": parent_record_id,
+        "transcript_section": transcript_section,
+        "primary": selected_bucket_id,
+        "selected_bucket_id": selected_bucket_id,
+        "candidate_bucket_ids": candidate_bucket_ids,
         "scores": scores,
-        "importance_score": round(float(llm_result.importance_score), 1),
+        "importance_score": importance_score,
+        "status": _initial_sentence_status(
+            importance_score=importance_score,
+            selected_bucket_id=selected_bucket_id,
+            candidate_bucket_ids=candidate_bucket_ids,
+            selected_importance_threshold=selected_importance_threshold,
+            candidate_importance_threshold=candidate_importance_threshold,
+        ),
+        "emerging_topic": not bool(selected_bucket_id),
         "condensed": llm_result.condensed or text,
     }
 
@@ -680,7 +788,9 @@ def _format_block_preview(paragraphs: List[str], max_paragraph_chars: int = 900)
     """Format a large preview for a QA speaker block without numeric labels."""
     preview_parts = []
     for paragraph in paragraphs:
-        preview_parts.append(f"<paragraph>{_preview_text(paragraph, max_paragraph_chars)}</paragraph>")
+        preview_parts.append(
+            f"<paragraph>{_preview_text(paragraph, max_paragraph_chars)}</paragraph>"
+        )
     return "\n".join(preview_parts)
 
 
@@ -827,15 +937,14 @@ async def detect_qa_boundaries(
         "3. Use the block content and speaker metadata when a type hint is ambiguous.\n"
         "4. Keep each conversation as a contiguous run of block indices.\n"
         "5. Only the integers inside `<index>` tags are valid block indices.\n"
-        "6. Ignore any numbers that appear inside speaker names, titles, affiliations, or preview text.\n"
+        "6. Ignore any numbers that appear inside speaker names, titles, affiliations, "
+        "or preview text.\n"
         "7. Return the grouped indices with the provided tool.\n\n"
         "## Indexed Blocks\n"
         f"{_xml_block('qa_block_index', '\n\n'.join(block_lines))}"
     )
-    block_by_index = {idx: block for idx, block in enumerate(qa_raw_blocks, start=1)}
-    block_id_to_index = {
-        block["id"]: idx for idx, block in enumerate(qa_raw_blocks, start=1)
-    }
+    block_by_index = dict(enumerate(qa_raw_blocks, start=1))
+    block_id_to_index = {block["id"]: idx for idx, block in enumerate(qa_raw_blocks, start=1)}
     base_messages = [
         {"role": "developer", "content": system_prompt},
         {"role": "user", "content": user_prompt},
@@ -922,20 +1031,13 @@ async def detect_qa_boundaries(
                 }
             ]
 
-    if last_parseable_indices is not None:
-        logger.warning(
-            "etl.call_summary_editor.qa_boundary_using_last_attempt",
-            execution_id=context["execution_id"],
-            errors=last_validation_errors,
-        )
-        return _materialize_qa_conversations(last_parseable_indices, block_by_index)
-
     raise RuntimeError(
-        "Q&A boundary detection failed after 3 attempts with no parseable tool response"
+        "Q&A boundary detection failed validation after 3 attempts: "
+        + "; ".join(last_validation_errors or ["No parseable tool response returned"])
     )
 
 
-async def classify_md_block(
+async def classify_md_block(  # pylint: disable=unused-argument
     *,
     block_raw: Dict[str, Any],
     categories: List[Dict[str, Any]],
@@ -944,10 +1046,17 @@ async def classify_md_block(
     fiscal_year: int,
     fiscal_quarter: str,
     report_inclusion_threshold: float,
+    selected_importance_threshold: float,
+    candidate_importance_threshold: float,
+    min_bucket_score_for_assignment: float,
     context: Dict[str, Any],
     llm_params: Dict[str, Any],
 ) -> Dict[str, Any]:
-    """Classify one MD speaker block sentence-by-sentence."""
+    """Classify one MD speaker block sentence-by-sentence.
+
+    `company_name`, `fiscal_year`, and `fiscal_quarter` are currently unused but
+    reserved for prompt enrichment (banks + periods in the system message).
+    """
     block_id = block_raw["id"]
     paragraphs = block_raw["paragraphs"]
     applicable_ids = applicable_bucket_ids(categories, "MD")
@@ -972,7 +1081,9 @@ async def classify_md_block(
             if idx < para_idx:
                 context_lines.append(f"[Paragraph {idx + 1} - previously classified]")
                 context_lines.append(
-                    prior_para_summaries[idx] if idx < len(prior_para_summaries) else paragraph[:200]
+                    prior_para_summaries[idx]
+                    if idx < len(prior_para_summaries)
+                    else paragraph[:200]
                 )
             elif idx == para_idx:
                 context_lines.append(f"\n[Paragraph {idx + 1} - CLASSIFY THESE SENTENCES:]")
@@ -984,8 +1095,9 @@ async def classify_md_block(
 
         system_prompt = (
             "You are a sentence classifier for earnings call Management Discussion sections. "
-            "Assign each indexed sentence to the best report buckets and score its investor-relations "
-            "importance using the category sheet and speaker context. Always use the provided tool."
+            "Assign each indexed sentence to the best report buckets and score its "
+            "investor-relations importance using the category sheet and speaker context. "
+            "Always use the provided tool."
         )
         user_prompt = (
             "## Task\n"
@@ -996,7 +1108,8 @@ async def classify_md_block(
             f"{_importance_scale_guidance(report_inclusion_threshold)}\n\n"
             "## Rules\n"
             "1. Return one result for every S-numbered sentence in the current paragraph.\n"
-            "2. Use up to the top 3 bucket-score pairs for each sentence, ordered by score descending.\n"
+            "2. Use up to the top 3 bucket-score pairs for each sentence, "
+            "ordered by score descending.\n"
             "3. Score importance from 0 to 10 using the inclusion guidance above.\n"
             "4. Keep `condensed` faithful to the sentence while removing filler.\n"
             "5. Keep the `index` aligned to the S-number shown in the current paragraph.\n\n"
@@ -1049,6 +1162,12 @@ async def classify_md_block(
                 llm_results_by_idx.get(sent_idx),
                 categories,
                 applicable_ids,
+                transcript_section="MD",
+                source_block_id=block_id,
+                parent_record_id=block_id,
+                selected_importance_threshold=selected_importance_threshold,
+                candidate_importance_threshold=candidate_importance_threshold,
+                min_bucket_score_for_assignment=min_bucket_score_for_assignment,
             )
             record["para_idx"] = para_idx
             sentence_records.append(record)
@@ -1066,7 +1185,7 @@ async def classify_md_block(
     }
 
 
-async def classify_qa_conversation(
+async def classify_qa_conversation(  # pylint: disable=unused-argument
     *,
     conv_idx: int,
     conv_blocks: List[Dict[str, Any]],
@@ -1077,10 +1196,17 @@ async def classify_qa_conversation(
     fiscal_year: int,
     fiscal_quarter: str,
     report_inclusion_threshold: float,
+    selected_importance_threshold: float,
+    candidate_importance_threshold: float,
+    min_bucket_score_for_assignment: float,
     context: Dict[str, Any],
     llm_params: Dict[str, Any],
 ) -> Dict[str, Any]:
-    """Classify one QA exchange at sentence level."""
+    """Classify one QA exchange at sentence level.
+
+    `company_name`, `fiscal_year`, and `fiscal_quarter` are currently unused but
+    reserved for prompt enrichment — keep them in the public signature.
+    """
     conv_id = f"{ticker}_QA_{conv_idx}"
     applicable_ids = applicable_bucket_ids(categories, "QA")
 
@@ -1090,11 +1216,15 @@ async def classify_qa_conversation(
         question_blocks, answer_blocks = conv_blocks[:1], conv_blocks[1:]
 
     analyst_name = question_blocks[0]["speaker"] if question_blocks else "Analyst"
-    analyst_affiliation = question_blocks[0].get("speaker_affiliation", "") if question_blocks else ""
+    analyst_affiliation = (
+        question_blocks[0].get("speaker_affiliation", "") if question_blocks else ""
+    )
     executive_name = answer_blocks[0]["speaker"] if answer_blocks else "Executive"
     executive_title = answer_blocks[0].get("speaker_title", "") if answer_blocks else ""
 
-    question_text = " ".join(paragraph for block in question_blocks for paragraph in block["paragraphs"])
+    question_text = " ".join(
+        paragraph for block in question_blocks for paragraph in block["paragraphs"]
+    )
     question_sentences = split_sentences(question_text)
     question_para_indices: List[int] = []
     para_idx = 0
@@ -1143,7 +1273,8 @@ async def classify_qa_conversation(
         "## Rules\n"
         "1. Set `primary_bucket_index` to the single best existing bucket for the full exchange.\n"
         "2. Return one result for every `QS` and `AS` sentence shown below.\n"
-        "3. Use up to the top 3 bucket-score pairs for each sentence, ordered by score descending.\n"
+        "3. Use up to the top 3 bucket-score pairs for each sentence, "
+        "ordered by score descending.\n"
         "4. Score importance from 0 to 10 using the inclusion guidance above.\n"
         "5. Keep `condensed` faithful to the source sentence while removing filler.\n"
         "6. Keep each `index` aligned to the numbered `QS` or `AS` sentence.\n\n"
@@ -1163,7 +1294,7 @@ async def classify_qa_conversation(
         llm_params=llm_params,
     )
 
-    primary_bucket = _fallback_bucket_id(applicable_ids)
+    primary_bucket = ""
     question_records: List[Dict[str, Any]] = []
     answer_records: List[Dict[str, Any]] = []
     if raw:
@@ -1180,6 +1311,12 @@ async def classify_qa_conversation(
                     question_by_idx.get(idx),
                     categories,
                     applicable_ids,
+                    transcript_section="QA",
+                    source_block_id=question_blocks[0].get("id", conv_id) if question_blocks else conv_id,
+                    parent_record_id=conv_id,
+                    selected_importance_threshold=selected_importance_threshold,
+                    candidate_importance_threshold=candidate_importance_threshold,
+                    min_bucket_score_for_assignment=min_bucket_score_for_assignment,
                 )
                 record["para_idx"] = (
                     question_para_indices[idx - 1] if idx - 1 < len(question_para_indices) else 0
@@ -1194,6 +1331,12 @@ async def classify_qa_conversation(
                     answer_by_idx.get(idx),
                     categories,
                     applicable_ids,
+                    transcript_section="QA",
+                    source_block_id=answer_blocks[0].get("id", conv_id) if answer_blocks else conv_id,
+                    parent_record_id=conv_id,
+                    selected_importance_threshold=selected_importance_threshold,
+                    candidate_importance_threshold=candidate_importance_threshold,
+                    min_bucket_score_for_assignment=min_bucket_score_for_assignment,
                 )
                 record["para_idx"] = (
                     answer_para_indices[idx - 1] if idx - 1 < len(answer_para_indices) else 0
@@ -1209,42 +1352,60 @@ async def classify_qa_conversation(
 
     if not question_records:
         for idx, sentence in enumerate(question_sentences):
-            question_records.append(
-                {
-                    "sid": f"{conv_id}_qs{idx}",
-                    "text": sentence,
-                    "primary": _fallback_bucket_id(applicable_ids),
-                    "scores": {},
-                    "importance_score": 0.0,
-                    "condensed": sentence,
-                    "para_idx": question_para_indices[idx] if idx < len(question_para_indices) else 0,
-                }
+            record = _make_sentence_record(
+                f"{conv_id}_qs{idx}",
+                sentence,
+                None,
+                categories,
+                applicable_ids,
+                transcript_section="QA",
+                source_block_id=question_blocks[0].get("id", conv_id) if question_blocks else conv_id,
+                parent_record_id=conv_id,
+                selected_importance_threshold=selected_importance_threshold,
+                candidate_importance_threshold=candidate_importance_threshold,
+                min_bucket_score_for_assignment=min_bucket_score_for_assignment,
             )
+            record["para_idx"] = question_para_indices[idx] if idx < len(question_para_indices) else 0
+            question_records.append(record)
 
     if not answer_records:
         for idx, sentence in enumerate(answer_sentences_raw):
-            answer_records.append(
-                {
-                    "sid": f"{conv_id}_as{idx}",
-                    "text": sentence,
-                    "primary": _fallback_bucket_id(applicable_ids),
-                    "scores": {},
-                    "importance_score": 0.0,
-                    "condensed": sentence,
-                    "para_idx": answer_para_indices[idx] if idx < len(answer_para_indices) else 0,
-                }
+            record = _make_sentence_record(
+                f"{conv_id}_as{idx}",
+                sentence,
+                None,
+                categories,
+                applicable_ids,
+                transcript_section="QA",
+                source_block_id=answer_blocks[0].get("id", conv_id) if answer_blocks else conv_id,
+                parent_record_id=conv_id,
+                selected_importance_threshold=selected_importance_threshold,
+                candidate_importance_threshold=candidate_importance_threshold,
+                min_bucket_score_for_assignment=min_bucket_score_for_assignment,
             )
+            record["para_idx"] = answer_para_indices[idx] if idx < len(answer_para_indices) else 0
+            answer_records.append(record)
+
+    supported_answer_bucket_ids = {
+        sentence.get("selected_bucket_id") or sentence.get("primary", "")
+        for sentence in answer_records
+        if sentence.get("selected_bucket_id") or sentence.get("primary", "")
+    }
+    if primary_bucket not in supported_answer_bucket_ids:
+        primary_bucket = ""
 
     if primary_bucket not in applicable_ids:
         answer_bucket_totals: Dict[str, Dict[str, float]] = defaultdict(
             lambda: {"count": 0.0, "importance": 0.0, "score": 0.0}
         )
-        for sentence in answer_records or question_records:
-            bucket_id = sentence.get("primary") or _fallback_bucket_id(applicable_ids)
+        for sentence in answer_records:
+            bucket_id = sentence.get("selected_bucket_id") or sentence.get("primary", "")
             if not bucket_id:
                 continue
             answer_bucket_totals[bucket_id]["count"] += 1.0
-            answer_bucket_totals[bucket_id]["importance"] += float(sentence.get("importance_score", 0.0))
+            answer_bucket_totals[bucket_id]["importance"] += float(
+                sentence.get("importance_score", 0.0)
+            )
             answer_bucket_totals[bucket_id]["score"] += _bucket_score(
                 sentence.get("scores", {}),
                 bucket_id,
@@ -1259,6 +1420,14 @@ async def classify_qa_conversation(
                     item[0],
                 ),
             )[0]
+        else:
+            logger.warning(
+                "etl.call_summary_editor.qa_primary_bucket_unresolved",
+                execution_id=context["execution_id"],
+                conversation_id=conv_id,
+                reason="no answer records available to derive primary bucket",
+                fallback_bucket="",
+            )
 
     return {
         "id": conv_id,
@@ -1286,6 +1455,9 @@ async def build_interactive_bank_data(
     md_llm_params: Dict[str, Any],
     qa_llm_params: Dict[str, Any],
     report_inclusion_threshold: float,
+    selected_importance_threshold: float,
+    candidate_importance_threshold: float,
+    min_bucket_score_for_assignment: float,
     max_concurrent_md_blocks: int = 1,
 ) -> Dict[str, Any]:
     """Convert one bank's raw XML transcript blocks into mock-style bank state."""
@@ -1321,49 +1493,152 @@ async def build_interactive_bank_data(
                 total_blocks=len(md_raw_blocks),
                 block_id=block["id"],
             )
-            return await classify_md_block(
-                block_raw=block,
-                categories=categories,
-                categories_text_md=categories_text_md,
-                company_name=company_name,
-                fiscal_year=fiscal_year,
-                fiscal_quarter=fiscal_quarter,
-                report_inclusion_threshold=report_inclusion_threshold,
-                context=context,
-                llm_params=md_llm_params,
-            )
+            try:
+                return await classify_md_block(
+                    block_raw=block,
+                    categories=categories,
+                    categories_text_md=categories_text_md,
+                    company_name=company_name,
+                    fiscal_year=fiscal_year,
+                    fiscal_quarter=fiscal_quarter,
+                    report_inclusion_threshold=report_inclusion_threshold,
+                    selected_importance_threshold=selected_importance_threshold,
+                    candidate_importance_threshold=candidate_importance_threshold,
+                    min_bucket_score_for_assignment=min_bucket_score_for_assignment,
+                    context=context,
+                    llm_params=md_llm_params,
+                )
+            except Exception as exc:  # pylint: disable=broad-except
+                logger.error(
+                    "etl.call_summary_editor.md_block_failed",
+                    execution_id=context["execution_id"],
+                    ticker=ticker,
+                    block_index=block_index,
+                    block_id=block["id"],
+                    error=str(exc),
+                    exc_info=True,
+                )
+                return {
+                    "id": block["id"],
+                    "speaker": block.get("speaker", ""),
+                    "speaker_title": block.get("speaker_title", ""),
+                    "speaker_affiliation": block.get("speaker_affiliation", ""),
+                    "sentences": [],
+                    "classification_error": str(exc),
+                }
 
-    processed_md = await asyncio.gather(
-        *[
-            _process_md_block(idx, block)
-            for idx, block in enumerate(md_raw_blocks, start=1)
-        ]
+    md_results = await asyncio.gather(
+        *[_process_md_block(idx, block) for idx, block in enumerate(md_raw_blocks, start=1)],
+        return_exceptions=True,
     )
 
-    processed_qa = []
-    for idx, conversation in enumerate(qa_conversations_raw, start=1):
-        logger.info(
-            "etl.call_summary_editor.qa_conversation_started",
-            execution_id=context["execution_id"],
-            ticker=ticker,
-            conversation_index=idx,
-            total_conversations=len(qa_conversations_raw),
-        )
-        processed_qa.append(
-            await classify_qa_conversation(
-                conv_idx=idx,
-                conv_blocks=conversation,
+    processed_md: List[Dict[str, Any]] = []
+    for idx, result in enumerate(md_results, start=1):
+        if isinstance(result, BaseException):
+            block = md_raw_blocks[idx - 1]
+            logger.error(
+                "etl.call_summary_editor.md_block_unhandled_exception",
+                execution_id=context["execution_id"],
                 ticker=ticker,
-                categories=categories,
-                categories_text_qa=categories_text_qa,
-                company_name=company_name,
-                fiscal_year=fiscal_year,
-                fiscal_quarter=fiscal_quarter,
-                report_inclusion_threshold=report_inclusion_threshold,
-                context=context,
-                llm_params=qa_llm_params,
+                block_index=idx,
+                block_id=block.get("id", ""),
+                error=str(result),
             )
-        )
+            processed_md.append(
+                {
+                    "id": block.get("id", f"{ticker}_MD_{idx}"),
+                    "speaker": block.get("speaker", ""),
+                    "speaker_title": block.get("speaker_title", ""),
+                    "speaker_affiliation": block.get("speaker_affiliation", ""),
+                    "sentences": [],
+                    "classification_error": str(result),
+                }
+            )
+        else:
+            processed_md.append(result)
+
+    async def _process_qa_conversation(
+        conv_idx: int, conversation: List[Dict[str, Any]]
+    ) -> Dict[str, Any]:
+        async with semaphore:
+            logger.info(
+                "etl.call_summary_editor.qa_conversation_started",
+                execution_id=context["execution_id"],
+                ticker=ticker,
+                conversation_index=conv_idx,
+                total_conversations=len(qa_conversations_raw),
+            )
+            try:
+                return await classify_qa_conversation(
+                    conv_idx=conv_idx,
+                    conv_blocks=conversation,
+                    ticker=ticker,
+                    categories=categories,
+                    categories_text_qa=categories_text_qa,
+                    company_name=company_name,
+                    fiscal_year=fiscal_year,
+                    fiscal_quarter=fiscal_quarter,
+                    report_inclusion_threshold=report_inclusion_threshold,
+                    selected_importance_threshold=selected_importance_threshold,
+                    candidate_importance_threshold=candidate_importance_threshold,
+                    min_bucket_score_for_assignment=min_bucket_score_for_assignment,
+                    context=context,
+                    llm_params=qa_llm_params,
+                )
+            except Exception as exc:  # pylint: disable=broad-except
+                logger.error(
+                    "etl.call_summary_editor.qa_conversation_failed",
+                    execution_id=context["execution_id"],
+                    ticker=ticker,
+                    conversation_index=conv_idx,
+                    error=str(exc),
+                    exc_info=True,
+                )
+                return {
+                    "id": f"{ticker}_QA_{conv_idx}",
+                    "primary_bucket": "",
+                    "analyst_name": "Analyst",
+                    "analyst_affiliation": "",
+                    "executive_name": "Executive",
+                    "executive_title": "",
+                    "question_sentences": [],
+                    "answer_sentences": [],
+                    "classification_error": str(exc),
+                }
+
+    qa_results = await asyncio.gather(
+        *[
+            _process_qa_conversation(idx, conversation)
+            for idx, conversation in enumerate(qa_conversations_raw, start=1)
+        ],
+        return_exceptions=True,
+    )
+
+    processed_qa: List[Dict[str, Any]] = []
+    for idx, result in enumerate(qa_results, start=1):
+        if isinstance(result, BaseException):
+            logger.error(
+                "etl.call_summary_editor.qa_conversation_unhandled_exception",
+                execution_id=context["execution_id"],
+                ticker=ticker,
+                conversation_index=idx,
+                error=str(result),
+            )
+            processed_qa.append(
+                {
+                    "id": f"{ticker}_QA_{idx}",
+                    "primary_bucket": "",
+                    "analyst_name": "Analyst",
+                    "analyst_affiliation": "",
+                    "executive_name": "Executive",
+                    "executive_title": "",
+                    "question_sentences": [],
+                    "answer_sentences": [],
+                    "classification_error": str(result),
+                }
+            )
+        else:
+            processed_qa.append(result)
 
     return {
         "ticker": ticker,
@@ -1376,81 +1651,154 @@ async def build_interactive_bank_data(
     }
 
 
-def _build_config_review_digest(
+def _collect_config_review_evidence(
     bank_data: Dict[str, Any],
-    categories: List[Dict[str, Any]],
-    min_importance: float,
-    max_items: int = 48,
-) -> str:
-    """Build a transcript digest for config coverage review."""
-    entries: List[str] = []
+) -> tuple[List[Dict[str, Any]], Dict[str, Dict[str, Any]]]:
+    """Collect canonical evidence rows used by the config-review passes."""
 
-    for block_index, block in enumerate(bank_data.get("md_blocks", []), start=1):
-        notable = [
-            sentence
-            for sentence in block.get("sentences", [])
-            if sentence.get("importance_score", 0) >= min_importance
-        ]
-        if not notable:
-            continue
+    evidence_rows: List[Dict[str, Any]] = []
+    evidence_index: Dict[str, Dict[str, Any]] = {}
+    seen_ids = set()
 
+    for block in bank_data.get("md_blocks", []):
         speaker_line = block.get("speaker", "Unknown Speaker")
         if block.get("speaker_title"):
             speaker_line += f", {block['speaker_title']}"
 
-        lines = [f"[MD Block {block_index}] {speaker_line}"]
-        for sentence in sorted(
-            notable,
-            key=lambda item: (
-                float(item.get("importance_score", 0)),
-                _bucket_score(item.get("scores", {}), item.get("primary", "")),
-            ),
-            reverse=True,
-        )[:4]:
-            bucket_name = _bucket_name(sentence.get("primary", ""), categories)
-            text = sentence.get("condensed") or sentence.get("text", "")
-            lines.append(
-                f"- importance={float(sentence.get('importance_score', 0)):.1f} | "
-                f"bucket={bucket_name} | {_preview_text(text, 320)}"
-            )
-        entries.append("\n".join(lines))
+        for sentence in block.get("sentences", []):
+            evidence_id = sentence.get("sid")
+            if not evidence_id or evidence_id in seen_ids:
+                continue
+            seen_ids.add(evidence_id)
+            row = {
+                "evidence_id": evidence_id,
+                "status": sentence.get("status", "candidate"),
+                "speaker": speaker_line,
+                "transcript_section": "MD",
+                "source_block_id": sentence.get("source_block_id") or block.get("id", ""),
+                "parent_record_id": sentence.get("parent_record_id") or block.get("id", ""),
+                "selected_bucket_id": sentence.get("selected_bucket_id", ""),
+                "candidate_bucket_ids": sentence.get("candidate_bucket_ids", []),
+                "importance_score": float(sentence.get("importance_score", 0.0)),
+                "quote": sentence.get("verbatim_text") or sentence.get("text", ""),
+                "question_context": "",
+                "emerging_topic": bool(sentence.get("emerging_topic")),
+                "classification_error": str(sentence.get("classification_error", "")).strip(),
+            }
+            evidence_rows.append(row)
+            evidence_index[evidence_id] = row
 
-    for conversation_index, conversation in enumerate(bank_data.get("qa_conversations", []), start=1):
-        notable_answers = [
-            sentence
-            for sentence in conversation.get("answer_sentences", [])
-            if sentence.get("importance_score", 0) >= min_importance
-        ]
-        if not notable_answers and not conversation.get("question_sentences"):
-            continue
-
+    for conversation in bank_data.get("qa_conversations", []):
         question_text = " ".join(
-            sentence.get("text", "") for sentence in conversation.get("question_sentences", [])
+            sentence.get("verbatim_text") or sentence.get("text", "")
+            for sentence in conversation.get("question_sentences", [])
         ).strip()
-        lines = [
-            f"[QA Conversation {conversation_index}] "
-            f"Q: {_preview_text(question_text, 320) if question_text else 'Question unavailable'}"
-        ]
-        lines.append(
-            f"Current conversation bucket: {_bucket_name(conversation.get('primary_bucket', ''), categories)}"
-        )
-        for sentence in sorted(
-            notable_answers,
-            key=lambda item: (
-                float(item.get("importance_score", 0)),
-                _bucket_score(item.get("scores", {}), item.get("primary", "")),
-            ),
-            reverse=True,
-        )[:4]:
-            bucket_name = _bucket_name(sentence.get("primary", ""), categories)
-            text = sentence.get("condensed") or sentence.get("text", "")
-            lines.append(
-                f"- importance={float(sentence.get('importance_score', 0)):.1f} | "
-                f"bucket={bucket_name} | {_preview_text(text, 320)}"
-            )
-        entries.append("\n".join(lines))
+        executive_line = conversation.get("executive_name", "Executive")
+        if conversation.get("executive_title"):
+            executive_line += f", {conversation['executive_title']}"
 
-    return "\n\n".join(entries[:max_items])
+        for sentence in conversation.get("answer_sentences", []):
+            evidence_id = sentence.get("sid")
+            if not evidence_id or evidence_id in seen_ids:
+                continue
+            seen_ids.add(evidence_id)
+            row = {
+                "evidence_id": evidence_id,
+                "status": sentence.get("status", "candidate"),
+                "speaker": executive_line,
+                "transcript_section": "QA",
+                "source_block_id": sentence.get("source_block_id") or conversation.get("id", ""),
+                "parent_record_id": sentence.get("parent_record_id") or conversation.get("id", ""),
+                "selected_bucket_id": sentence.get("selected_bucket_id", ""),
+                "candidate_bucket_ids": sentence.get("candidate_bucket_ids", []),
+                "importance_score": float(sentence.get("importance_score", 0.0)),
+                "quote": sentence.get("verbatim_text") or sentence.get("text", ""),
+                "question_context": question_text,
+                "emerging_topic": bool(sentence.get("emerging_topic")),
+                "classification_error": str(sentence.get("classification_error", "")).strip(),
+            }
+            evidence_rows.append(row)
+            evidence_index[evidence_id] = row
+
+    return evidence_rows, evidence_index
+
+
+def _sorted_evidence_rows(evidence_rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Return evidence rows ordered for stable prompt construction."""
+    return sorted(
+        evidence_rows,
+        key=lambda item: (
+            0 if item["status"] == "selected" else 1 if item["status"] == "candidate" else 2,
+            0 if item["emerging_topic"] else 1,
+            -item["importance_score"],
+            item["evidence_id"],
+        ),
+    )
+
+
+def _serialise_evidence_digest(
+    evidence_rows: List[Dict[str, Any]],
+    categories: List[Dict[str, Any]],
+    *,
+    max_items: Optional[int] = None,
+) -> str:
+    """Serialize evidence rows into an XML-style digest for prompt injection."""
+    digest_rows = []
+    digest_rows_source = _sorted_evidence_rows(evidence_rows)
+    if max_items is not None and max_items > 0:
+        digest_rows_source = digest_rows_source[:max_items]
+
+    for row in digest_rows_source:
+        selected_bucket = _bucket_name(row["selected_bucket_id"], categories)
+        candidate_names = ", ".join(
+            _bucket_name(bucket_id, categories) for bucket_id in row["candidate_bucket_ids"]
+        ) or "None"
+        lines = [
+            "<evidence>",
+            f"  <id>{row['evidence_id']}</id>",
+            f"  <status>{row['status']}</status>",
+            f"  <transcript_section>{row['transcript_section']}</transcript_section>",
+            f"  <speaker>{row['speaker']}</speaker>",
+            f"  <source_block_id>{row['source_block_id']}</source_block_id>",
+            f"  <selected_bucket>{selected_bucket}</selected_bucket>",
+            f"  <candidate_buckets>{candidate_names}</candidate_buckets>",
+            f"  <emerging_topic>{str(row['emerging_topic']).lower()}</emerging_topic>",
+            f"  <importance_score>{row['importance_score']:.1f}</importance_score>",
+        ]
+        if row["classification_error"]:
+            lines.append(f"  <classification_error>{row['classification_error']}</classification_error>")
+        if row["question_context"]:
+            lines.append(f"  <question_context>{row['question_context']}</question_context>")
+        lines.append(f"  <quote>{row['quote']}</quote>")
+        lines.append("</evidence>")
+        digest_rows.append("\n".join(lines))
+
+    return "\n\n".join(digest_rows)
+
+
+def _build_config_review_digest(
+    bank_data: Dict[str, Any],
+    categories: List[Dict[str, Any]],
+    min_importance: float,
+    max_items: Optional[int] = None,
+) -> tuple[str, Dict[str, Dict[str, Any]]]:
+    """Build a full verbatim evidence digest and index for config change proposals."""
+    del min_importance
+    evidence_rows, evidence_index = _collect_config_review_evidence(bank_data)
+    return _serialise_evidence_digest(evidence_rows, categories, max_items=max_items), evidence_index
+
+
+def _category_to_row(category: Dict[str, Any]) -> Dict[str, str]:
+    """Convert one bucket config category into a row payload."""
+    return {
+        "transcript_sections": str(category.get("transcript_sections", "ALL")).strip(),
+        "report_section": str(category.get("report_section", "Results Summary")).strip(),
+        "category_name": str(category.get("category_name", "")).strip(),
+        "category_description": str(category.get("category_description", "")).strip(),
+        "example_1": str(category.get("example_1", "")).strip(),
+        "example_2": str(category.get("example_2", "")).strip(),
+        "example_3": str(category.get("example_3", "")).strip(),
+    }
 
 
 async def analyze_config_coverage(
@@ -1462,155 +1810,320 @@ async def analyze_config_coverage(
     llm_params: Dict[str, Any],
 ) -> Dict[str, Any]:
     """Review transcript coverage against the current input config sheet."""
-    transcript_digest = _build_config_review_digest(bank_data, categories, min_importance)
-    if not transcript_digest:
-        return {"existing_section_updates": [], "new_section_suggestions": []}
+
+    def _existing_category_rows(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        return [row for row in rows if row.get("selected_bucket_id")]
+
+    def _emerging_topic_rows(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        return [
+            row
+            for row in rows
+            if not row.get("selected_bucket_id")
+            and not row.get("classification_error")
+        ]
+
+    def _proposal_dedupe_key(proposal: Dict[str, Any]) -> tuple[Any, ...]:
+        target = (
+            proposal["target_bucket_index"]
+            if proposal["change_type"] == "update_existing"
+            else proposal["proposed_row"]["category_name"].strip().lower()
+        )
+        return (
+            proposal["change_type"],
+            target,
+            proposal["proposed_row"]["category_description"],
+            tuple(proposal["linked_evidence_ids"]),
+        )
+
+    def _materialize_config_proposals(
+        *,
+        result: ConfigReviewResult,
+        evidence_index: Dict[str, Dict[str, Any]],
+        allowed_change_types: Optional[set[str]],
+        proposal_id_prefix: str,
+    ) -> List[Dict[str, Any]]:
+        proposals: List[Dict[str, Any]] = []
+        seen_proposals = set()
+        existing_names = {
+            category.get("category_name", "").strip().lower() for category in categories
+        }
+
+        for idx, proposal in enumerate(result.proposals[:6], start=1):
+            change_type = proposal.change_type
+            if allowed_change_types and change_type not in allowed_change_types:
+                continue
+
+            target_bucket_index = proposal.target_bucket_index
+            target_category_name = proposal.target_category_name.strip()
+
+            current_row = _empty_config_row()
+            bucket_id = None
+            if change_type == "update_existing":
+                if not 0 <= target_bucket_index < len(categories):
+                    target_bucket_index = next(
+                        (
+                            bucket_idx
+                            for bucket_idx, category in enumerate(categories)
+                            if category.get("category_name", "").strip() == target_category_name
+                        ),
+                        -1,
+                    )
+                if not 0 <= target_bucket_index < len(categories):
+                    continue
+                base_category = categories[target_bucket_index]
+                current_row = _category_to_row(base_category)
+                bucket_id = f"bucket_{target_bucket_index}"
+                target_category_name = current_row["category_name"]
+
+            proposed_row = _normalise_config_row(proposal.proposed_row)
+            if change_type == "update_existing":
+                proposed_row = {
+                    "transcript_sections": current_row["transcript_sections"],
+                    "report_section": current_row["report_section"],
+                    "category_name": current_row["category_name"],
+                    "category_description": proposed_row["category_description"]
+                    or current_row["category_description"],
+                    "example_1": proposed_row["example_1"] or current_row["example_1"],
+                    "example_2": proposed_row["example_2"] or current_row["example_2"],
+                    "example_3": proposed_row["example_3"] or current_row["example_3"],
+                }
+            elif not proposed_row["category_name"] or not proposed_row["category_description"]:
+                continue
+
+            dedupe_name = proposed_row["category_name"].strip().lower()
+            if change_type == "new_category" and dedupe_name in existing_names:
+                continue
+
+            linked_evidence_ids = [
+                evidence_id
+                for evidence_id in proposal.linked_evidence_ids
+                if evidence_id in evidence_index
+            ]
+            if not linked_evidence_ids:
+                linked_evidence_ids = [
+                    quote.evidence_id
+                    for quote in proposal.supporting_quotes
+                    if quote.evidence_id in evidence_index
+                ]
+            linked_evidence_ids = list(dict.fromkeys(linked_evidence_ids))[:12]
+            if not linked_evidence_ids:
+                continue
+
+            supporting_quotes: List[Dict[str, str]] = []
+            seen_quote_ids = set()
+            for quote in proposal.supporting_quotes:
+                if quote.evidence_id not in evidence_index or quote.evidence_id in seen_quote_ids:
+                    continue
+                evidence = evidence_index[quote.evidence_id]
+                supporting_quotes.append(
+                    {
+                        "evidence_id": quote.evidence_id,
+                        "quote": evidence.get("quote", quote.quote).strip(),
+                        "speaker": evidence.get("speaker", quote.speaker).strip(),
+                        "transcript_section": evidence.get(
+                            "transcript_section",
+                            quote.transcript_section,
+                        ).strip(),
+                    }
+                )
+                seen_quote_ids.add(quote.evidence_id)
+
+            for evidence_id in linked_evidence_ids:
+                if evidence_id in seen_quote_ids:
+                    continue
+                evidence = evidence_index[evidence_id]
+                supporting_quotes.append(
+                    {
+                        "evidence_id": evidence_id,
+                        "quote": evidence.get("quote", "").strip(),
+                        "speaker": evidence.get("speaker", "").strip(),
+                        "transcript_section": evidence.get("transcript_section", "").strip(),
+                    }
+                )
+                seen_quote_ids.add(evidence_id)
+                if len(supporting_quotes) >= 4:
+                    break
+
+            materialized = {
+                "id": f"{bank_data.get('ticker', 'bank')}_{proposal_id_prefix}_{idx}",
+                "change_type": change_type,
+                "change_summary": proposal.change_summary.strip(),
+                "target_bucket_index": target_bucket_index,
+                "target_bucket_id": bucket_id,
+                "target_category_name": target_category_name or proposed_row["category_name"],
+                "suggested_subtitle": proposal.suggested_subtitle.strip(),
+                "linked_evidence_ids": linked_evidence_ids,
+                "current_row": current_row,
+                "proposed_row": proposed_row,
+                "supporting_quotes": supporting_quotes[:4],
+            }
+            dedupe_key = _proposal_dedupe_key(materialized)
+            if dedupe_key in seen_proposals:
+                continue
+            seen_proposals.add(dedupe_key)
+            proposals.append(materialized)
+
+        return proposals
+
+    evidence_rows, evidence_index = _collect_config_review_evidence(bank_data)
+    if not evidence_rows:
+        return {"config_change_proposals": []}
 
     categories_text = format_categories_for_prompt(categories, "ALL")
     company_name = bank_data.get("company_name", "the company")
     fiscal_quarter = bank_data.get("fiscal_quarter", "")
     fiscal_year = bank_data.get("fiscal_year", "")
-    system_prompt = (
-        "You are a config-review analyst for investor-relations call summary category sheets. "
-        "Review the classified transcript against the current sheet and identify the highest-signal "
-        "gaps in existing rows or missing categories. Always use the provided tool."
-    )
-    user_prompt = (
-        "## Task\n"
-        f"Review {company_name}'s {fiscal_quarter} {fiscal_year} transcript against the current "
-        "category config sheet.\n\n"
-        "## Decision Criteria\n"
-        "Use `existing_section_updates` when the evidence clearly belongs in an existing category "
-        "but the row description or examples need stronger coverage. Use `new_section_suggestions` "
-        "when the content is important and should likely become its own category.\n\n"
-        "## Rules\n"
-        "1. Return only high-signal suggestions that would improve future runs.\n"
-        "2. Keep an existing category's identity unchanged when suggesting an update to that row.\n"
-        "3. Make every `proposed_config_row` copy-ready for the input XLSX.\n"
-        "4. Use `transcript_sections` as MD, QA, or ALL and `report_section` as Results Summary or Earnings Call Q&A.\n"
-        "5. Avoid duplicates and cap each suggestion list at 5 items.\n\n"
-        "## Current Category Sheet\n"
-        f"{_xml_block('categories', categories_text)}\n\n"
-        "## Transcript Evidence Digest\n"
-        f"{_xml_block('transcript_digest', transcript_digest)}"
-    )
-    raw = await _call_tool(
-        messages=[
-            {"role": "developer", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ],
-        tool=TOOL_CONFIG_REVIEW,
-        label="config_review",
-        context=context,
-        llm_params=llm_params,
-    )
-    if not raw:
-        return {"existing_section_updates": [], "new_section_suggestions": []}
 
-    try:
-        result = ConfigReviewResult.model_validate(raw)
-    except Exception as exc:
-        logger.warning(
-            "etl.call_summary_editor.config_review_parse_error",
-            execution_id=context["execution_id"],
-            error=str(exc),
+    mapped_rows = _existing_category_rows(evidence_rows)
+    uncovered_rows = _emerging_topic_rows(evidence_rows)
+    combined_proposals: List[Dict[str, Any]] = []
+    seen_combined_keys = set()
+
+    if mapped_rows:
+        mapped_digest = _serialise_evidence_digest(mapped_rows, categories)
+        raw_existing = await _call_tool(
+            messages=[
+                {
+                    "role": "developer",
+                    "content": (
+                        "You are a config-review analyst for investor-relations transcript editors. "
+                        "Review mapped verbatim evidence against the current category sheet and "
+                        "propose only `update_existing` changes for existing rows. Do not create "
+                        "new categories in this pass. Always use the provided tool."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": (
+                        "## Task\n"
+                        f"Review {company_name}'s {fiscal_quarter} {fiscal_year} mapped transcript "
+                        "evidence against the current category config sheet and return only "
+                        "`update_existing` proposals.\n\n"
+                        "## Rules\n"
+                        "1. Return only `update_existing` proposals in this pass.\n"
+                        "2. Use only evidence ids from the digest below.\n"
+                        "3. Keep `supporting_quotes` verbatim.\n"
+                        "4. Use the current category index for `target_bucket_index`.\n"
+                        "5. Make every `proposed_row` copy-ready for the config UI.\n"
+                        "6. Avoid duplicates and cap the response at 4 proposals.\n\n"
+                        "## Current Category Sheet\n"
+                        f"{_xml_block('categories', categories_text)}\n\n"
+                        "## Mapped Evidence Digest\n"
+                        f"{_xml_block('mapped_evidence', mapped_digest)}"
+                    ),
+                },
+            ],
+            tool=TOOL_CONFIG_REVIEW,
+            label="config_review_existing",
+            context=context,
+            llm_params=llm_params,
         )
-        return {"existing_section_updates": [], "new_section_suggestions": []}
+        if raw_existing:
+            try:
+                existing_result = ConfigReviewResult.model_validate(raw_existing)
+            except Exception as exc:
+                logger.warning(
+                    "etl.call_summary_editor.config_review_existing_parse_error",
+                    execution_id=context["execution_id"],
+                    error=str(exc),
+                )
+            else:
+                for proposal in _materialize_config_proposals(
+                    result=existing_result,
+                    evidence_index=evidence_index,
+                    allowed_change_types={"update_existing"},
+                    proposal_id_prefix="existing",
+                ):
+                    key = _proposal_dedupe_key(proposal)
+                    if key in seen_combined_keys:
+                        continue
+                    seen_combined_keys.add(key)
+                    combined_proposals.append(proposal)
 
-    existing_updates: List[Dict[str, Any]] = []
-    seen_existing = set()
-    for suggestion in result.existing_section_updates[:5]:
-        bucket_index = suggestion.bucket_index
-        if not 0 <= bucket_index < len(categories):
-            bucket_index = next(
-                (
-                    idx
-                    for idx, category in enumerate(categories)
-                    if category.get("category_name") == suggestion.category_name
-                ),
-                -1,
-            )
-        if not 0 <= bucket_index < len(categories):
-            continue
-
-        base_category = categories[bucket_index]
-        row = _normalise_config_row(suggestion.proposed_config_row)
-        merged_row = {
-            "transcript_sections": base_category.get("transcript_sections", "ALL"),
-            "report_section": base_category.get("report_section", "Results Summary"),
-            "category_name": base_category.get("category_name", row["category_name"]),
-            "category_description": row["category_description"]
-            or base_category.get("category_description", ""),
-            "example_1": row["example_1"] or base_category.get("example_1", ""),
-            "example_2": row["example_2"] or base_category.get("example_2", ""),
-            "example_3": row["example_3"] or base_category.get("example_3", ""),
-        }
-        dedupe_key = (
-            bucket_index,
-            merged_row["category_description"],
-            merged_row["example_1"],
-            merged_row["example_2"],
-            merged_row["example_3"],
+    if uncovered_rows:
+        uncovered_digest = _serialise_evidence_digest(uncovered_rows, categories)
+        raw_emerging = await _call_tool(
+            messages=[
+                {
+                    "role": "developer",
+                    "content": (
+                        "You are a second-pass emerging-topic extractor for investor-relations "
+                        "transcript editors. Review uncovered verbatim evidence that remained "
+                        "unmapped after the first-pass category extraction. Group that evidence "
+                        "into the fewest high-signal themes and return structured proposals. Use "
+                        "`update_existing` when the taxonomy is close but incomplete, and "
+                        "`new_category` when the uncovered evidence deserves its own row. Always "
+                        "use the provided tool."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": (
+                        "## Task\n"
+                        f"Review {company_name}'s {fiscal_quarter} {fiscal_year} uncovered "
+                        "transcript evidence and return second-pass emerging-topic proposals.\n\n"
+                        "## Rules\n"
+                        "1. Focus only on the uncovered evidence shown below.\n"
+                        "2. Use `update_existing` when the evidence should map to an existing "
+                        "category after widening the row.\n"
+                        "3. Use `new_category` when the evidence should become its own category.\n"
+                        "4. `linked_evidence_ids` must use only ids from the digest below.\n"
+                        "5. Keep `supporting_quotes` verbatim and aligned to the linked evidence.\n"
+                        "6. Make every `proposed_row` copy-ready for the config UI.\n"
+                        "7. Avoid duplicates and cap the response at 4 proposals.\n\n"
+                        "## Current Category Sheet\n"
+                        f"{_xml_block('categories', categories_text)}\n\n"
+                        "## Uncovered Evidence Digest\n"
+                        f"{_xml_block('uncovered_evidence', uncovered_digest)}"
+                    ),
+                },
+            ],
+            tool=TOOL_EMERGING_TOPIC_REVIEW,
+            label="config_review_emerging",
+            context=context,
+            llm_params=llm_params,
         )
-        if dedupe_key in seen_existing:
-            continue
-        seen_existing.add(dedupe_key)
-        existing_updates.append(
-            {
-                "bucket_index": bucket_index,
-                "bucket_id": f"bucket_{bucket_index}",
-                "category_name": base_category.get("category_name", suggestion.category_name),
-                "gap_summary": suggestion.gap_summary.strip(),
-                "why_update": suggestion.why_update.strip(),
-                "supporting_evidence": [
-                    evidence.strip()
-                    for evidence in suggestion.supporting_evidence
-                    if evidence and evidence.strip()
-                ][:3],
-                "proposed_config_row": merged_row,
-            }
-        )
+        if raw_emerging:
+            try:
+                emerging_result = ConfigReviewResult.model_validate(raw_emerging)
+            except Exception as exc:
+                logger.warning(
+                    "etl.call_summary_editor.config_review_emerging_parse_error",
+                    execution_id=context["execution_id"],
+                    error=str(exc),
+                )
+            else:
+                for proposal in _materialize_config_proposals(
+                    result=emerging_result,
+                    evidence_index=evidence_index,
+                    allowed_change_types={"update_existing", "new_category"},
+                    proposal_id_prefix="emerging",
+                ):
+                    key = _proposal_dedupe_key(proposal)
+                    if key in seen_combined_keys:
+                        continue
+                    seen_combined_keys.add(key)
+                    combined_proposals.append(proposal)
 
-    new_section_suggestions: List[Dict[str, Any]] = []
-    seen_new = set()
-    existing_names = {category.get("category_name", "").strip().lower() for category in categories}
-    for suggestion in result.new_section_suggestions[:5]:
-        row = _normalise_config_row(suggestion.proposed_config_row)
-        if not row["category_name"] or not row["category_description"]:
-            continue
-        dedupe_name = row["category_name"].strip().lower()
-        dedupe_key = (dedupe_name, row["report_section"], row["transcript_sections"])
-        if dedupe_name in existing_names or dedupe_key in seen_new:
-            continue
-        seen_new.add(dedupe_key)
-        new_section_suggestions.append(
-            {
-                "category_name": row["category_name"],
-                "why_new_section": suggestion.why_new_section.strip(),
-                "supporting_evidence": [
-                    evidence.strip()
-                    for evidence in suggestion.supporting_evidence
-                    if evidence and evidence.strip()
-                ][:3],
-                "suggested_subtitle": suggestion.suggested_subtitle.strip(),
-                "proposed_config_row": row,
-            }
-        )
-
-    return {
-        "existing_section_updates": existing_updates,
-        "new_section_suggestions": new_section_suggestions,
-    }
+    return {"config_change_proposals": combined_proposals[:6]}
 
 
-def _build_auto_include_candidates(bank_data: Dict[str, Any]) -> Dict[str, List[Dict[str, Any]]]:
-    """Build subquote-like report candidates grouped by assigned bucket."""
+def _build_auto_include_candidates(  # pylint: disable=too-many-branches
+    bank_data: Dict[str, Any],
+) -> Dict[str, List[Dict[str, Any]]]:
+    """Build selected evidence groups grouped by assigned bucket."""
+    # pylint: disable=unsubscriptable-object,unsupported-assignment-operation
     candidates: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
 
     for block in bank_data.get("md_blocks", []):
         current: Optional[Dict[str, Any]] = None
         for sentence in block.get("sentences", []):
-            bucket_id = sentence.get("primary")
+            if sentence.get("status") != "selected":
+                if current:
+                    candidates[current["bucket_id"]].append(current)
+                    current = None
+                continue
+            bucket_id = sentence.get("selected_bucket_id") or sentence.get("primary")
             if not bucket_id:
                 continue
             if not current or current["bucket_id"] != bucket_id:
@@ -1620,7 +2133,7 @@ def _build_auto_include_candidates(bank_data: Dict[str, Any]) -> Dict[str, List[
                     "bucket_id": bucket_id,
                     "importance": float(sentence.get("importance_score", 0.0)),
                     "bucket_score": _bucket_score(sentence.get("scores", {}), bucket_id),
-                    "text": sentence.get("condensed") or sentence.get("text", ""),
+                    "text": sentence.get("verbatim_text") or sentence.get("text", ""),
                 }
             else:
                 current["importance"] = max(
@@ -1631,7 +2144,7 @@ def _build_auto_include_candidates(bank_data: Dict[str, Any]) -> Dict[str, List[
                     current["bucket_score"],
                     _bucket_score(sentence.get("scores", {}), bucket_id),
                 )
-                extra_text = sentence.get("condensed") or sentence.get("text", "")
+                extra_text = sentence.get("verbatim_text") or sentence.get("text", "")
                 if extra_text:
                     current["text"] = f"{current['text']} {extra_text}".strip()
         if current:
@@ -1640,7 +2153,12 @@ def _build_auto_include_candidates(bank_data: Dict[str, Any]) -> Dict[str, List[
     for conversation in bank_data.get("qa_conversations", []):
         current = None
         for sentence in conversation.get("answer_sentences", []):
-            bucket_id = sentence.get("primary")
+            if sentence.get("status") != "selected":
+                if current:
+                    candidates[current["bucket_id"]].append(current)
+                    current = None
+                continue
+            bucket_id = sentence.get("selected_bucket_id") or sentence.get("primary")
             if not bucket_id:
                 continue
             if not current or current["bucket_id"] != bucket_id:
@@ -1650,7 +2168,7 @@ def _build_auto_include_candidates(bank_data: Dict[str, Any]) -> Dict[str, List[
                     "bucket_id": bucket_id,
                     "importance": float(sentence.get("importance_score", 0.0)),
                     "bucket_score": _bucket_score(sentence.get("scores", {}), bucket_id),
-                    "text": sentence.get("condensed") or sentence.get("text", ""),
+                    "text": sentence.get("verbatim_text") or sentence.get("text", ""),
                 }
             else:
                 current["importance"] = max(
@@ -1661,7 +2179,7 @@ def _build_auto_include_candidates(bank_data: Dict[str, Any]) -> Dict[str, List[
                     current["bucket_score"],
                     _bucket_score(sentence.get("scores", {}), bucket_id),
                 )
-                extra_text = sentence.get("condensed") or sentence.get("text", "")
+                extra_text = sentence.get("verbatim_text") or sentence.get("text", "")
                 if extra_text:
                     current["text"] = f"{current['text']} {extra_text}".strip()
         if current:
@@ -1674,21 +2192,13 @@ def collect_headline_samples(
     banks_data: Dict[str, Dict[str, Any]],
     min_importance: float,
 ) -> Dict[str, List[str]]:
-    """Collect all report-included snippets for bucket-level headline generation."""
+    """Collect selected report snippets for optional bucket headline generation."""
     samples: Dict[str, List[str]] = defaultdict(list)
     for bank_data in banks_data.values():
         candidates_by_bucket = _build_auto_include_candidates(bank_data)
         for bucket_id, candidates in candidates_by_bucket.items():
-            eligible = [
-                candidate
-                for candidate in candidates
-                if candidate["importance"] >= min_importance
-            ]
-            if not eligible:
-                continue
-
             ranked = sorted(
-                eligible,
+                candidates,
                 key=lambda item: (
                     item["importance"],
                     item["bucket_score"],
@@ -1709,6 +2219,7 @@ async def generate_bucket_headlines(
     min_importance: float,
     context: Dict[str, Any],
     llm_params: Dict[str, Any],
+    sample_size: int = 8,
 ) -> Dict[str, str]:
     """Generate bucket headlines mirroring the mock editor workflow."""
     samples_by_bucket = collect_headline_samples(banks_data, min_importance)
@@ -1720,7 +2231,7 @@ async def generate_bucket_headlines(
         if not samples:
             continue
 
-        sample_text = "\n\n---\n\n".join(samples[:8])
+        sample_text = "\n\n---\n\n".join(samples[:sample_size])
         system_prompt = (
             "You are a headline writer for investor-relations earnings summaries. "
             "Turn already-selected bucket content into a short factual headline that reflects what "
@@ -1730,7 +2241,8 @@ async def generate_bucket_headlines(
             "## Task\n"
             f"Generate a 5-10 word headline for the '{category['category_name']}' bucket.\n\n"
             "## Decision Criteria\n"
-            "The headline should be specific, factual, and driven by the sample content rather than "
+            "The headline should be specific, factual, and driven by the sample content "
+            "rather than "
             "generic financial language.\n\n"
             "## Rules\n"
             "1. Capture the most important shared point across the sample content.\n"
@@ -1760,5 +2272,5 @@ def count_included_categories(
     banks_data: Dict[str, Dict[str, Any]],
     min_importance: float,
 ) -> int:
-    """Count buckets with at least one auto-included report sample."""
+    """Count buckets with at least one selected report sample."""
     return len(collect_headline_samples(banks_data, min_importance))
