@@ -29,6 +29,10 @@ def custom_renderer(_, __, event_dict: Dict[str, Any]) -> str:
     Returns:
         Formatted log string for console output.
     """
+    # Keep internal correlation ids out of console output. They remain available
+    # in-process for workflow plumbing, but they add noise during local ETL runs.
+    event_dict.pop("execution_id", None)
+
     # Extract components
     timestamp = event_dict.pop("timestamp", "")
     level = event_dict.pop("level", "").upper()

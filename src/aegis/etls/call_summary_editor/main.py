@@ -255,7 +255,7 @@ def load_categories_from_xlsx(bank_type: str, execution_id: str) -> List[Dict[st
 
     Args:
         bank_type: Either "Canadian_Banks" or "US_Banks"
-        execution_id: Execution ID for logging
+        execution_id: Execution ID reserved for call compatibility
 
     Returns:
         List of dictionaries with transcript_sections, category_name, category_description,
@@ -266,6 +266,7 @@ def load_categories_from_xlsx(bank_type: str, execution_id: str) -> List[Dict[st
         if bank_type == "Canadian_Banks"
         else "us_banks_categories.xlsx"
     )
+    del execution_id
 
     current_dir = os.path.dirname(os.path.abspath(__file__))
     xlsx_path = os.path.join(current_dir, "config", "categories", file_name)
@@ -326,18 +327,17 @@ def load_categories_from_xlsx(bank_type: str, execution_id: str) -> List[Dict[st
             raise ValueError(f"No categories in {file_name}")
 
         logger.info(
-            "etl.call_summary_editor.categories_loaded",
-            execution_id=execution_id,
+            "Loaded category configuration",
+            bank_type=bank_type,
             file_name=file_name,
-            num_categories=len(categories),
+            categories=len(categories),
         )
         return categories
 
     except Exception as e:
         error_msg = f"Failed to load categories from {xlsx_path}: {str(e)}"
         logger.error(
-            "etl.call_summary_editor.categories_load_error",
-            execution_id=execution_id,
+            "Failed to load category configuration",
             xlsx_path=xlsx_path,
             error=str(e),
         )
@@ -438,7 +438,6 @@ def _generate_interactive_report(
     bank_info = etl_context["bank_info"]
     quarter = etl_context["quarter"]
     fiscal_year = etl_context["fiscal_year"]
-    execution_id = etl_context["execution_id"]
 
     output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "output")
     os.makedirs(output_dir, exist_ok=True)
@@ -457,7 +456,13 @@ def _generate_interactive_report(
     with open(filepath, "w", encoding="utf-8") as handle:
         handle.write(html_content)
 
-    logger.info("etl.call_summary_editor.html_saved", execution_id=execution_id, filepath=filepath)
+    logger.info(
+        "Saved interactive HTML report",
+        filepath=filepath,
+        bank=bank_info["bank_symbol"],
+        fiscal_year=fiscal_year,
+        quarter=quarter,
+    )
     return filepath, html_filename
 
 
@@ -564,11 +569,13 @@ async def _save_interactive_report_to_database(
         await conn.commit()
 
     logger.info(
-        "etl.call_summary_editor.database_saved",
-        execution_id=execution_id,
+        "Saved report metadata to database",
         filepath=filepath,
         total_categories=total_categories,
         included_categories=included_categories,
+        bank=bank_info["bank_symbol"],
+        fiscal_year=fiscal_year,
+        quarter=quarter,
     )
 
 
@@ -592,10 +599,10 @@ async def generate_call_summary(  # pylint: disable=too-many-statements
     """
     marks = [("start", time.monotonic())]
     execution_id = str(uuid.uuid4())
+    completed = False
     logger.info(
-        "etl.call_summary_editor.started",
-        execution_id=execution_id,
-        bank_name=bank_name,
+        "Starting call summary editor ETL",
+        bank=bank_name,
         fiscal_year=fiscal_year,
         quarter=quarter,
     )
@@ -603,15 +610,19 @@ async def generate_call_summary(  # pylint: disable=too-many-statements
     nas_conn = None
     try:
         bank_info = get_bank_info_from_config(bank_name)
+        logger.info(
+            "Resolved bank target",
+            bank=bank_info["bank_name"],
+            ticker=bank_info.get("full_ticker") or bank_info["bank_symbol"],
+            bank_type=bank_info["bank_type"],
+        )
 
         ssl_config = setup_ssl()
         auth_config = await setup_authentication(execution_id, ssl_config)
 
         if not auth_config["success"]:
             error_msg = f"Authentication failed: {auth_config.get('error', 'Unknown error')}"
-            logger.error(
-                "etl.call_summary_editor.auth_failed", execution_id=execution_id, error=error_msg
-            )
+            logger.error("Authentication setup failed", error=error_msg)
             raise CallSummarySystemError(error_msg)
 
         context = {
@@ -619,7 +630,13 @@ async def generate_call_summary(  # pylint: disable=too-many-statements
             "auth_config": auth_config,
             "ssl_config": ssl_config,
             "_llm_costs": [],
+            "suppress_llm_console_logs": True,
         }
+        logger.info(
+            "Runtime setup complete",
+            auth_method=auth_config.get("method", "unknown"),
+            max_concurrent_extractions=etl_config.max_concurrent_extractions,
+        )
         marks.append(("setup", time.monotonic()))
 
         categories = load_categories_from_xlsx(bank_info["bank_type"], execution_id)
@@ -628,12 +645,19 @@ async def generate_call_summary(  # pylint: disable=too-many-statements
         candidate_importance_threshold = etl_config.candidate_importance_threshold
         min_bucket_score_for_assignment = etl_config.min_bucket_score_for_assignment
 
+        logger.info(
+            "Searching NAS for transcript XML",
+            bank=bank_info["bank_name"],
+            fiscal_year=fiscal_year,
+            quarter=quarter,
+        )
         nas_conn = get_nas_connection()
         xml_result = find_transcript_xml(nas_conn, bank_info, fiscal_year, quarter)
         if xml_result is None:
             raise CallSummaryUserError(
                 f"No transcript XML found for {bank_info['bank_name']} {quarter} {fiscal_year}"
             )
+        logger.info("Loaded transcript XML", path=xml_result.file_path)
         marks.append(("retrieval", time.monotonic()))
 
         parsed_transcript = parse_transcript_xml(xml_result.xml_bytes)
@@ -647,6 +671,12 @@ async def generate_call_summary(  # pylint: disable=too-many-statements
             raise CallSummaryUserError(
                 f"Transcript XML contained no usable content for {period_label}"
             )
+        logger.info(
+            "Transcript parsed",
+            title=parsed_transcript.get("title", "") or period_label,
+            md_blocks=len(md_raw_blocks),
+            qa_speaker_blocks=len(qa_raw_blocks),
+        )
         marks.append(("parse", time.monotonic()))
 
         qa_boundary_llm_params = etl_config.get_stage_params("qa_boundary")
@@ -741,9 +771,10 @@ async def generate_call_summary(  # pylint: disable=too-many-statements
 
         cost_summary = _get_total_llm_cost(context)
         logger.info(
-            "etl.call_summary_editor.completed",
-            execution_id=execution_id,
-            num_categories=included_categories,
+            "Call summary editor ETL complete",
+            bank=bank_info["bank_name"],
+            included_categories=included_categories,
+            total_categories=total_categories,
             llm_calls=cost_summary["llm_calls"],
             total_tokens=cost_summary["total_tokens"],
             total_cost=cost_summary["total_cost"],
@@ -751,6 +782,7 @@ async def generate_call_summary(  # pylint: disable=too-many-statements
             transcript_path=xml_result.file_path,
             **_timing_summary(marks),
         )
+        completed = True
 
         return CallSummaryResult(
             filepath=filepath,
@@ -763,13 +795,12 @@ async def generate_call_summary(  # pylint: disable=too-many-statements
     except CallSummaryError:
         raise
     except (ValueError, RuntimeError) as exc:
-        logger.error("etl.call_summary_editor.error", execution_id=execution_id, error=str(exc))
+        logger.error("Call summary editor failed", error=str(exc))
         raise CallSummaryUserError(str(exc)) from exc
     except Exception as exc:
         error_msg = f"Error generating call summary: {str(exc)}"
         logger.error(
-            "etl.call_summary_editor.unexpected_error",
-            execution_id=execution_id,
+            "Call summary editor crashed",
             error=str(exc),
             exc_info=True,
         )
@@ -777,10 +808,9 @@ async def generate_call_summary(  # pylint: disable=too-many-statements
     finally:
         # Always report LLM spend so partial-run costs are visible on failure.
         partial = _get_total_llm_cost(context) if "context" in locals() else None
-        if partial and partial.get("llm_calls", 0) > 0:
+        if not completed and partial and partial.get("llm_calls", 0) > 0:
             logger.info(
-                "etl.call_summary_editor.llm_spend_final",
-                execution_id=execution_id,
+                "Partial LLM spend before exit",
                 llm_calls=partial["llm_calls"],
                 total_tokens=partial["total_tokens"],
                 total_cost=partial["total_cost"],
@@ -908,7 +938,9 @@ def main():
         sys.exit(0)
 
     if not args.bank or args.year is None or not args.quarter:
-        parser.error("--bank, --year, and --quarter are required unless using the benchmark command")
+        parser.error(
+            "--bank, --year, and --quarter are required unless using the " "benchmark command"
+        )
 
     if args.preflight:
         print(f"\n🔍 Preflight check: {args.bank} {args.quarter} {args.year}\n")
@@ -918,8 +950,6 @@ def main():
         for key, value in status.items():
             print(f"  {key}: {value}")
         sys.exit(0 if status["ok"] else 1)
-
-    print(f"\n🔄 Generating report for {args.bank} {args.quarter} {args.year}...\n")
 
     try:
         result = asyncio.run(

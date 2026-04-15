@@ -489,6 +489,67 @@ def _append_metrics(context: Dict[str, Any], metrics: Dict[str, Any]) -> None:
     )
 
 
+def _summarise_sentence_statuses(records: List[Dict[str, Any]]) -> Dict[str, int]:
+    """Count review statuses across sentence records."""
+    summary = {"selected": 0, "candidate": 0, "rejected": 0, "errors": 0}
+    for record in records:
+        status = str(record.get("status", "rejected")).lower()
+        if status in summary:
+            summary[status] += 1
+        else:
+            summary["rejected"] += 1
+        if record.get("classification_error"):
+            summary["errors"] += 1
+    return summary
+
+
+def _summarise_md_results(processed_md: List[Dict[str, Any]]) -> Dict[str, int]:
+    """Aggregate Management Discussion classification output for logging."""
+    sentences = [sentence for block in processed_md for sentence in block.get("sentences", [])]
+    summary = _summarise_sentence_statuses(sentences)
+    return {
+        "blocks": len(processed_md),
+        "sentences": len(sentences),
+        "errored_blocks": sum(1 for block in processed_md if block.get("classification_error")),
+        **summary,
+    }
+
+
+def _summarise_qa_results(processed_qa: List[Dict[str, Any]]) -> Dict[str, int]:
+    """Aggregate Q&A classification output for logging."""
+    question_sentences = [
+        sentence
+        for conversation in processed_qa
+        for sentence in conversation.get("question_sentences", [])
+    ]
+    answer_sentences = [
+        sentence
+        for conversation in processed_qa
+        for sentence in conversation.get("answer_sentences", [])
+    ]
+    answer_summary = _summarise_sentence_statuses(answer_sentences)
+    return {
+        "conversations": len(processed_qa),
+        "question_sentences": len(question_sentences),
+        "answer_sentences": len(answer_sentences),
+        "errored_conversations": sum(
+            1 for conversation in processed_qa if conversation.get("classification_error")
+        ),
+        "selected": answer_summary["selected"],
+        "candidate": answer_summary["candidate"],
+        "rejected": answer_summary["rejected"],
+        "errors": answer_summary["errors"],
+    }
+
+
+def _summarise_validation_errors(errors: List[str], limit: int = 2) -> str:
+    """Collapse validation errors into a short log-friendly preview."""
+    preview = "; ".join(errors[:limit])
+    if len(errors) > limit:
+        preview += f" (+{len(errors) - limit} more)"
+    return preview
+
+
 async def _call_tool(
     *,
     messages: List[Dict[str, str]],
@@ -513,15 +574,6 @@ async def _call_tool(
     metrics = response.get("metrics", {})
     if metrics:
         _append_metrics(context, metrics)
-        logger.info(
-            "etl.call_summary_editor.llm_usage",
-            execution_id=context["execution_id"],
-            stage=label,
-            prompt_tokens=metrics.get("prompt_tokens", 0),
-            completion_tokens=metrics.get("completion_tokens", 0),
-            total_cost=metrics.get("total_cost", 0),
-            response_time=metrics.get("response_time", 0),
-        )
 
     choices = response.get("choices") or []
     message = choices[0].get("message", {}) if choices else {}
@@ -529,10 +581,9 @@ async def _call_tool(
     tool_calls = message.get("tool_calls") or []
     if not tool_calls:
         logger.warning(
-            "etl.call_summary_editor.tool_call_missing",
-            execution_id=context["execution_id"],
+            "LLM tool response missing structured output",
             stage=label,
-            finish_reason=finish_reason,
+            finish_reason=finish_reason or "unknown",
             choices_present=bool(choices),
         )
         return None
@@ -545,11 +596,10 @@ async def _call_tool(
         return json.loads(arguments)
     except json.JSONDecodeError as exc:
         logger.warning(
-            "etl.call_summary_editor.tool_call_parse_error",
-            execution_id=context["execution_id"],
+            "LLM tool response could not be parsed",
             stage=label,
             error=str(exc),
-            finish_reason=finish_reason,
+            finish_reason=finish_reason or "unknown",
         )
         return None
 
@@ -971,6 +1021,7 @@ async def detect_qa_boundaries(
         return []
 
     del categories_text_qa  # Boundary detection is transcript-structure work, not topic work.
+    logger.info("Finding Q&A conversation boundaries", qa_speaker_blocks=len(qa_raw_blocks))
 
     block_entries = _build_qa_block_index(qa_raw_blocks)
     block_lines = []
@@ -1012,7 +1063,6 @@ async def detect_qa_boundaries(
     messages = list(base_messages)
 
     max_attempts = 3
-    last_parseable_indices: Optional[List[List[int]]] = None
     last_validation_errors: List[str] = []
 
     for attempt in range(max_attempts):
@@ -1042,10 +1092,10 @@ async def detect_qa_boundaries(
             result = QABoundaryResult.model_validate(raw)
         except Exception as exc:
             logger.warning(
-                "etl.call_summary_editor.qa_boundary_parse_error",
-                execution_id=context["execution_id"],
+                "Q&A boundary response could not be validated",
                 error=str(exc),
                 attempt=attempt + 1,
+                max_attempts=max_attempts,
             )
             last_validation_errors = [f"Tool output schema validation failed: {exc}"]
             if attempt < max_attempts - 1:
@@ -1065,19 +1115,23 @@ async def detect_qa_boundaries(
             _resolve_block_indices(conversation, block_id_to_index)
             for conversation in result.conversations
         ]
-        last_parseable_indices = conversation_indices
         validation_errors = _validate_qa_boundary_indices(
             conversation_indices,
             len(qa_raw_blocks),
         )
         if not validation_errors:
+            logger.info(
+                "Q&A conversation boundaries resolved",
+                conversations=len(conversation_indices),
+                qa_speaker_blocks=len(qa_raw_blocks),
+            )
             return _materialize_qa_conversations(conversation_indices, block_by_index)
 
         logger.warning(
-            "etl.call_summary_editor.qa_boundary_validation_failed",
-            execution_id=context["execution_id"],
+            "Q&A boundary response failed validation",
             attempt=attempt + 1,
-            errors=validation_errors,
+            max_attempts=max_attempts,
+            issues=_summarise_validation_errors(validation_errors),
         )
         last_validation_errors = validation_errors
         if attempt < max_attempts - 1:
@@ -1131,6 +1185,9 @@ async def classify_md_block(  # pylint: disable=unused-argument
     sentence_records: List[Dict[str, Any]] = []
     prior_para_summaries: List[str] = []
     global_sent_idx = 0
+    parse_error_count = 0
+    parse_error_paragraphs = set()
+    last_parse_error = ""
 
     for para_idx, para_sentences in enumerate(all_para_sentences):
         if not para_sentences:
@@ -1204,13 +1261,9 @@ async def classify_md_block(  # pylint: disable=unused-argument
                             condensed=sentence_raw.get("condensed", ""),
                         )
                     except Exception as exc:
-                        logger.warning(
-                            "etl.call_summary_editor.md_sentence_parse_error",
-                            execution_id=context["execution_id"],
-                            block_id=block_id,
-                            paragraph_index=para_idx,
-                            error=str(exc),
-                        )
+                        parse_error_count += 1
+                        parse_error_paragraphs.add(para_idx + 1)
+                        last_parse_error = str(exc)
                         continue
                 llm_results_by_idx[result.index] = result
 
@@ -1236,6 +1289,16 @@ async def classify_md_block(  # pylint: disable=unused-argument
             global_sent_idx += 1
 
         prior_para_summaries.append(f"  [{', '.join(labels)}] {paragraphs[para_idx][:120]}...")
+
+    if parse_error_count:
+        logger.warning(
+            "Management discussion block had parse fallbacks",
+            block_id=block_id,
+            speaker=block_raw["speaker"],
+            paragraphs=sorted(parse_error_paragraphs),
+            parse_errors=parse_error_count,
+            last_error=last_parse_error,
+        )
 
     return {
         "id": block_id,
@@ -1374,7 +1437,9 @@ async def classify_qa_conversation(  # pylint: disable=unused-argument
                     categories,
                     applicable_ids,
                     transcript_section="QA",
-                    source_block_id=question_blocks[0].get("id", conv_id) if question_blocks else conv_id,
+                    source_block_id=(
+                        question_blocks[0].get("id", conv_id) if question_blocks else conv_id
+                    ),
                     parent_record_id=conv_id,
                     selected_importance_threshold=selected_importance_threshold,
                     candidate_importance_threshold=candidate_importance_threshold,
@@ -1394,7 +1459,9 @@ async def classify_qa_conversation(  # pylint: disable=unused-argument
                     categories,
                     applicable_ids,
                     transcript_section="QA",
-                    source_block_id=answer_blocks[0].get("id", conv_id) if answer_blocks else conv_id,
+                    source_block_id=(
+                        answer_blocks[0].get("id", conv_id) if answer_blocks else conv_id
+                    ),
                     parent_record_id=conv_id,
                     selected_importance_threshold=selected_importance_threshold,
                     candidate_importance_threshold=candidate_importance_threshold,
@@ -1406,9 +1473,8 @@ async def classify_qa_conversation(  # pylint: disable=unused-argument
                 answer_records.append(record)
         except Exception as exc:
             logger.warning(
-                "etl.call_summary_editor.qa_parse_error",
-                execution_id=context["execution_id"],
-                conversation_id=conv_id,
+                "Q&A conversation response could not be parsed",
+                conversation=conv_id,
                 error=str(exc),
             )
 
@@ -1421,13 +1487,17 @@ async def classify_qa_conversation(  # pylint: disable=unused-argument
                 categories,
                 applicable_ids,
                 transcript_section="QA",
-                source_block_id=question_blocks[0].get("id", conv_id) if question_blocks else conv_id,
+                source_block_id=(
+                    question_blocks[0].get("id", conv_id) if question_blocks else conv_id
+                ),
                 parent_record_id=conv_id,
                 selected_importance_threshold=selected_importance_threshold,
                 candidate_importance_threshold=candidate_importance_threshold,
                 min_bucket_score_for_assignment=min_bucket_score_for_assignment,
             )
-            record["para_idx"] = question_para_indices[idx] if idx < len(question_para_indices) else 0
+            record["para_idx"] = (
+                question_para_indices[idx] if idx < len(question_para_indices) else 0
+            )
             question_records.append(record)
 
     if not answer_records:
@@ -1484,11 +1554,9 @@ async def classify_qa_conversation(  # pylint: disable=unused-argument
             )[0]
         else:
             logger.warning(
-                "etl.call_summary_editor.qa_primary_bucket_unresolved",
-                execution_id=context["execution_id"],
-                conversation_id=conv_id,
+                "Q&A conversation could not resolve a primary bucket",
+                conversation=conv_id,
                 reason="no answer records available to derive primary bucket",
-                fallback_bucket="",
             )
 
     return {
@@ -1527,11 +1595,12 @@ async def build_interactive_bank_data(
     company_name = bank_info["bank_name"]
 
     logger.info(
-        "etl.call_summary_editor.raw_blocks_extracted",
-        execution_id=context["execution_id"],
+        "Starting transcript classification",
         ticker=ticker,
         md_blocks=len(md_raw_blocks),
-        qa_raw_blocks=len(qa_raw_blocks),
+        qa_speaker_blocks=len(qa_raw_blocks),
+        categories=len(categories),
+        max_concurrent_md_blocks=max(1, max_concurrent_md_blocks),
     )
 
     categories_text_md = format_categories_for_prompt(categories, "MD")
@@ -1544,17 +1613,15 @@ async def build_interactive_bank_data(
     )
 
     semaphore = asyncio.Semaphore(max(1, max_concurrent_md_blocks))
+    logger.info(
+        "Classifying Management Discussion blocks",
+        ticker=ticker,
+        blocks=len(md_raw_blocks),
+        max_concurrent_md_blocks=max(1, max_concurrent_md_blocks),
+    )
 
     async def _process_md_block(block_index: int, block: Dict[str, Any]) -> Dict[str, Any]:
         async with semaphore:
-            logger.info(
-                "etl.call_summary_editor.md_block_started",
-                execution_id=context["execution_id"],
-                ticker=ticker,
-                block_index=block_index,
-                total_blocks=len(md_raw_blocks),
-                block_id=block["id"],
-            )
             try:
                 return await classify_md_block(
                     block_raw=block,
@@ -1572,8 +1639,7 @@ async def build_interactive_bank_data(
                 )
             except Exception as exc:  # pylint: disable=broad-except
                 logger.error(
-                    "etl.call_summary_editor.md_block_failed",
-                    execution_id=context["execution_id"],
+                    "Management Discussion block classification failed",
                     ticker=ticker,
                     block_index=block_index,
                     block_id=block["id"],
@@ -1599,8 +1665,7 @@ async def build_interactive_bank_data(
         if isinstance(result, BaseException):
             block = md_raw_blocks[idx - 1]
             logger.error(
-                "etl.call_summary_editor.md_block_unhandled_exception",
-                execution_id=context["execution_id"],
+                "Management Discussion block raised an unhandled exception",
                 ticker=ticker,
                 block_index=idx,
                 block_id=block.get("id", ""),
@@ -1619,17 +1684,29 @@ async def build_interactive_bank_data(
         else:
             processed_md.append(result)
 
+    md_summary = _summarise_md_results(processed_md)
+    logger.info(
+        "Management Discussion classification complete",
+        ticker=ticker,
+        blocks=md_summary["blocks"],
+        sentences=md_summary["sentences"],
+        selected=md_summary["selected"],
+        candidate=md_summary["candidate"],
+        rejected=md_summary["rejected"],
+        errored_blocks=md_summary["errored_blocks"],
+        sentence_errors=md_summary["errors"],
+    )
+
+    logger.info(
+        "Classifying Q&A conversations",
+        ticker=ticker,
+        conversations=len(qa_conversations_raw),
+    )
+
     async def _process_qa_conversation(
         conv_idx: int, conversation: List[Dict[str, Any]]
     ) -> Dict[str, Any]:
         async with semaphore:
-            logger.info(
-                "etl.call_summary_editor.qa_conversation_started",
-                execution_id=context["execution_id"],
-                ticker=ticker,
-                conversation_index=conv_idx,
-                total_conversations=len(qa_conversations_raw),
-            )
             try:
                 return await classify_qa_conversation(
                     conv_idx=conv_idx,
@@ -1649,8 +1726,7 @@ async def build_interactive_bank_data(
                 )
             except Exception as exc:  # pylint: disable=broad-except
                 logger.error(
-                    "etl.call_summary_editor.qa_conversation_failed",
-                    execution_id=context["execution_id"],
+                    "Q&A conversation classification failed",
                     ticker=ticker,
                     conversation_index=conv_idx,
                     error=str(exc),
@@ -1680,8 +1756,7 @@ async def build_interactive_bank_data(
     for idx, result in enumerate(qa_results, start=1):
         if isinstance(result, BaseException):
             logger.error(
-                "etl.call_summary_editor.qa_conversation_unhandled_exception",
-                execution_id=context["execution_id"],
+                "Q&A conversation raised an unhandled exception",
                 ticker=ticker,
                 conversation_index=idx,
                 error=str(result),
@@ -1836,14 +1911,17 @@ def _serialise_evidence_digest(
 
     for row in digest_rows_source:
         selected_bucket = _bucket_name(row["selected_bucket_id"], categories)
-        candidate_names = ", ".join(
-            _bucket_name(bucket_id, categories) for bucket_id in row["candidate_bucket_ids"]
-        ) or "None"
+        candidate_names = (
+            ", ".join(
+                _bucket_name(bucket_id, categories) for bucket_id in row["candidate_bucket_ids"]
+            )
+            or "None"
+        )
         lines = [
             "<evidence>",
             f"  <id>{row['evidence_id']}</id>",
             f"  <status>{row['status']}</status>",
-            f"  <transcript_section>{row['transcript_section']}</transcript_section>",
+            ("  <transcript_section>" f"{row['transcript_section']}</transcript_section>"),
             f"  <speaker>{row['speaker']}</speaker>",
             f"  <source_block_id>{row['source_block_id']}</source_block_id>",
             f"  <selected_bucket>{selected_bucket}</selected_bucket>",
@@ -1852,7 +1930,9 @@ def _serialise_evidence_digest(
             f"  <importance_score>{row['importance_score']:.1f}</importance_score>",
         ]
         if row["classification_error"]:
-            lines.append(f"  <classification_error>{row['classification_error']}</classification_error>")
+            lines.append(
+                f"  <classification_error>{row['classification_error']}</classification_error>"
+            )
         if row["question_context"]:
             lines.append(f"  <question_context>{row['question_context']}</question_context>")
         lines.append(f"  <quote>{row['quote']}</quote>")
@@ -1871,7 +1951,10 @@ def _build_config_review_digest(
     """Build a full verbatim evidence digest and index for config change proposals."""
     del min_importance
     evidence_rows, evidence_index = _collect_config_review_evidence(bank_data)
-    return _serialise_evidence_digest(evidence_rows, categories, max_items=max_items), evidence_index
+    return (
+        _serialise_evidence_digest(evidence_rows, categories, max_items=max_items),
+        evidence_index,
+    )
 
 
 def _category_to_row(category: Dict[str, Any]) -> Dict[str, str]:
@@ -1904,8 +1987,7 @@ async def analyze_config_coverage(
         return [
             row
             for row in rows
-            if not row.get("selected_bucket_id")
-            and not row.get("classification_error")
+            if not row.get("selected_bucket_id") and not row.get("classification_error")
         ]
 
     def _proposal_dedupe_key(proposal: Dict[str, Any]) -> tuple[Any, ...]:
@@ -2053,6 +2135,7 @@ async def analyze_config_coverage(
 
     evidence_rows, evidence_index = _collect_config_review_evidence(bank_data)
     if not evidence_rows:
+        logger.info("Skipping config review because no evidence was captured")
         return {"config_change_proposals": []}
 
     categories_text = format_categories_for_prompt(categories, "ALL")
@@ -2065,6 +2148,14 @@ async def analyze_config_coverage(
     combined_proposals: List[Dict[str, Any]] = []
     seen_combined_keys = set()
 
+    logger.info(
+        "Reviewing category coverage",
+        ticker=bank_data.get("ticker", ""),
+        evidence_rows=len(evidence_rows),
+        mapped_rows=len(mapped_rows),
+        uncovered_rows=len(uncovered_rows),
+    )
+
     if mapped_rows:
         mapped_digest = _serialise_evidence_digest(mapped_rows, categories)
         raw_existing = await _call_tool(
@@ -2072,7 +2163,8 @@ async def analyze_config_coverage(
                 {
                     "role": "developer",
                     "content": (
-                        "You are a config-review analyst for investor-relations transcript editors. "
+                        "You are a config-review analyst for investor-relations "
+                        "transcript editors. "
                         "Review mapped verbatim evidence against the current category sheet and "
                         "propose only `update_existing` changes for existing rows. Do not create "
                         "new categories in this pass. Always use the provided tool."
@@ -2109,8 +2201,7 @@ async def analyze_config_coverage(
                 existing_result = ConfigReviewResult.model_validate(raw_existing)
             except Exception as exc:
                 logger.warning(
-                    "etl.call_summary_editor.config_review_existing_parse_error",
-                    execution_id=context["execution_id"],
+                    "Existing-category review response could not be parsed",
                     error=str(exc),
                 )
             else:
@@ -2174,8 +2265,7 @@ async def analyze_config_coverage(
                 emerging_result = ConfigReviewResult.model_validate(raw_emerging)
             except Exception as exc:
                 logger.warning(
-                    "etl.call_summary_editor.config_review_emerging_parse_error",
-                    execution_id=context["execution_id"],
+                    "Emerging-topic review response could not be parsed",
                     error=str(exc),
                 )
             else:
@@ -2191,7 +2281,19 @@ async def analyze_config_coverage(
                     seen_combined_keys.add(key)
                     combined_proposals.append(proposal)
 
-    return {"config_change_proposals": combined_proposals[:6]}
+    final_proposals = combined_proposals[:6]
+    logger.info(
+        "Config review complete",
+        ticker=bank_data.get("ticker", ""),
+        proposals=len(final_proposals),
+        update_existing=sum(
+            1 for proposal in final_proposals if proposal.get("change_type") == "update_existing"
+        ),
+        new_category=sum(
+            1 for proposal in final_proposals if proposal.get("change_type") == "new_category"
+        ),
+    )
+    return {"config_change_proposals": final_proposals}
 
 
 def _build_auto_include_candidates(  # pylint: disable=too-many-branches
@@ -2311,6 +2413,16 @@ async def generate_bucket_headlines(
     samples_by_bucket = collect_headline_samples(banks_data, min_importance)
     headlines: Dict[str, str] = {}
 
+    if not samples_by_bucket:
+        logger.info("Skipping bucket headline generation because no selected content was found")
+        return headlines
+
+    logger.info(
+        "Generating bucket headlines",
+        candidate_buckets=len(samples_by_bucket),
+        sample_size=sample_size,
+    )
+
     for idx, category in enumerate(categories):
         bucket_id = f"bucket_{idx}"
         samples = samples_by_bucket.get(bucket_id, [])
@@ -2351,6 +2463,11 @@ async def generate_bucket_headlines(
         if raw and raw.get("headline"):
             headlines[bucket_id] = raw["headline"].strip().strip("\"'")
 
+    logger.info(
+        "Bucket headline generation complete",
+        candidate_buckets=len(samples_by_bucket),
+        generated_headlines=len(headlines),
+    )
     return headlines
 
 

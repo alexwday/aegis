@@ -18,6 +18,11 @@ from ..utils.settings import config
 _async_client_cache: Dict[str, AsyncOpenAI] = {}
 
 
+def _llm_console_logging_enabled(context: Dict[str, Any]) -> bool:
+    """Return whether routine LLM request logs should be emitted."""
+    return not bool(context.get("suppress_llm_console_logs", False))
+
+
 # Cost tracking utilities integrated directly
 def _calculate_cost(
     usage: Dict,
@@ -139,7 +144,8 @@ def _calculate_and_log_metrics(
         **_format_cost_for_logging(metrics),
     }
 
-    context["logger"].info(f"LLM {operation_type} successful", **log_data)
+    if _llm_console_logging_enabled(context):
+        context["logger"].info(f"LLM {operation_type} successful", **log_data)
 
     return metrics
 
@@ -174,7 +180,8 @@ def _calculate_embedding_metrics(
         **_format_cost_for_logging(metrics),
     }
 
-    context["logger"].info(f"{operation_type} successful", **log_data)
+    if _llm_console_logging_enabled(context):
+        context["logger"].info(f"{operation_type} successful", **log_data)
 
     return metrics
 
@@ -237,7 +244,10 @@ def _get_model_config(
     )
 
 
-async def _get_or_create_async_client(auth_token: str, ssl_config: Optional[Dict[str, Any]] = None) -> AsyncOpenAI:
+async def _get_or_create_async_client(
+    auth_token: str,
+    ssl_config: Optional[Dict[str, Any]] = None,
+) -> AsyncOpenAI:
     """
     Get or create an async OpenAI client with proper configuration.
 
@@ -277,8 +287,7 @@ async def _get_or_create_async_client(auth_token: str, ssl_config: Optional[Dict
 
     # Create httpx client with SSL configuration
     http_client = httpx.AsyncClient(
-        timeout=httpx.Timeout(180.0, connect=5.0),
-        **httpx_client_kwargs
+        timeout=httpx.Timeout(180.0, connect=5.0), **httpx_client_kwargs
     )
 
     # Create AsyncOpenAI client with configured httpx client
@@ -340,28 +349,28 @@ async def complete(
         llm_params.get("model"), llm_params.get("temperature"), llm_params.get("max_tokens")
     )
 
-    logger.info(
-        "Generating async LLM completion",
-        execution_id=context["execution_id"],
-        model=model,
-        temperature=temperature,
-        max_tokens=max_tokens,
-        message_count=len(messages),
-    )
+    if _llm_console_logging_enabled(context):
+        logger.info(
+            "Generating async LLM completion",
+            execution_id=context["execution_id"],
+            model=model,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            message_count=len(messages),
+        )
 
     try:
         client = await _get_or_create_async_client(
-            context["auth_config"].get("token", "no-token"),
-            context.get("ssl_config")
+            context["auth_config"].get("token", "no-token"), context.get("ssl_config")
         )
 
         # Check if it's an o-series model (reasoning models)
         # These models don't support the temperature parameter
         is_o_series = (
-            model in ['o1', 'o3', 'o4'] or
-            model.startswith('o1-') or
-            model.startswith('o3-') or
-            model.startswith('o4-')
+            model in ["o1", "o3", "o4"]
+            or model.startswith("o1-")
+            or model.startswith("o3-")
+            or model.startswith("o4-")
         )
 
         # Build API parameters based on model type
@@ -380,11 +389,9 @@ async def complete(
             api_params["max_tokens"] = max_tokens
 
         # Add any extra parameters
-        api_params.update({
-            k: v
-            for k, v in llm_params.items()
-            if k not in ["model", "temperature", "max_tokens"]
-        })
+        api_params.update(
+            {k: v for k, v in llm_params.items() if k not in ["model", "temperature", "max_tokens"]}
+        )
 
         # Time the API call
         with ResponseTimer() as timer:
@@ -402,6 +409,7 @@ async def complete(
                 "response_time": timer.elapsed,
                 "execution_id": context["execution_id"],
                 "logger": logger,
+                "suppress_llm_console_logs": context.get("suppress_llm_console_logs", False),
             },
             operation_type="async completion",
         )
@@ -455,19 +463,19 @@ async def stream(
         llm_params.get("model"), llm_params.get("temperature"), llm_params.get("max_tokens")
     )
 
-    logger.info(
-        "Starting async LLM streaming",
-        execution_id=context["execution_id"],
-        model=model,
-        temperature=temperature,
-        max_tokens=max_tokens,
-        message_count=len(messages),
-    )
+    if _llm_console_logging_enabled(context):
+        logger.info(
+            "Starting async LLM streaming",
+            execution_id=context["execution_id"],
+            model=model,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            message_count=len(messages),
+        )
 
     try:
         client = await _get_or_create_async_client(
-            context["auth_config"].get("token", "no-token"),
-            context.get("ssl_config")
+            context["auth_config"].get("token", "no-token"), context.get("ssl_config")
         )
 
         # Start timing
@@ -476,10 +484,10 @@ async def stream(
         # Check if it's an o-series model (reasoning models)
         # These models don't support the temperature parameter
         is_o_series = (
-            model in ['o1', 'o3', 'o4'] or
-            model.startswith('o1-') or
-            model.startswith('o3-') or
-            model.startswith('o4-')
+            model in ["o1", "o3", "o4"]
+            or model.startswith("o1-")
+            or model.startswith("o3-")
+            or model.startswith("o4-")
         )
 
         # Build API parameters based on model type
@@ -499,11 +507,9 @@ async def stream(
             api_params["max_tokens"] = max_tokens
 
         # Add any extra parameters
-        api_params.update({
-            k: v
-            for k, v in llm_params.items()
-            if k not in ["model", "temperature", "max_tokens"]
-        })
+        api_params.update(
+            {k: v for k, v in llm_params.items() if k not in ["model", "temperature", "max_tokens"]}
+        )
 
         # Create async stream
         stream_response = await client.chat.completions.create(**api_params)
@@ -534,10 +540,11 @@ async def stream(
                     "response_time": elapsed,
                     "execution_id": context["execution_id"],
                     "logger": logger,
+                    "suppress_llm_console_logs": context.get("suppress_llm_console_logs", False),
                 },
                 operation_type=f"async streaming completed (chunks={chunk_count})",
             )
-        else:
+        elif _llm_console_logging_enabled(context):
             logger.info(
                 "Async LLM streaming completed",
                 execution_id=context["execution_id"],
@@ -598,29 +605,29 @@ async def complete_with_tools(
         default_tier="large",  # Tools need better reasoning
     )
 
-    logger.info(
-        "Generating async LLM completion with tools",
-        execution_id=context["execution_id"],
-        model=model,
-        temperature=temperature,
-        max_tokens=max_tokens,
-        message_count=len(messages),
-        tool_count=len(tools),
-    )
+    if _llm_console_logging_enabled(context):
+        logger.info(
+            "Generating async LLM completion with tools",
+            execution_id=context["execution_id"],
+            model=model,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            message_count=len(messages),
+            tool_count=len(tools),
+        )
 
     try:
         client = await _get_or_create_async_client(
-            context["auth_config"].get("token", "no-token"),
-            context.get("ssl_config")
+            context["auth_config"].get("token", "no-token"), context.get("ssl_config")
         )
 
         # Check if it's an o-series model (reasoning models)
         # These models don't support temperature parameter
         is_o_series = (
-            model in ['o1', 'o3', 'o4'] or
-            model.startswith('o1-') or
-            model.startswith('o3-') or
-            model.startswith('o4-')
+            model in ["o1", "o3", "o4"]
+            or model.startswith("o1-")
+            or model.startswith("o3-")
+            or model.startswith("o4-")
         )
 
         # Build API parameters based on model type
@@ -640,11 +647,9 @@ async def complete_with_tools(
             api_params["max_tokens"] = max_tokens
 
         # Add any extra parameters
-        api_params.update({
-            k: v
-            for k, v in llm_params.items()
-            if k not in ["model", "temperature", "max_tokens"]
-        })
+        api_params.update(
+            {k: v for k, v in llm_params.items() if k not in ["model", "temperature", "max_tokens"]}
+        )
 
         # Time the API call
         with ResponseTimer() as timer:
@@ -667,6 +672,7 @@ async def complete_with_tools(
                 "response_time": timer.elapsed,
                 "execution_id": context["execution_id"],
                 "logger": logger,
+                "suppress_llm_console_logs": context.get("suppress_llm_console_logs", False),
             },
             operation_type=f"async tool completion (has_tool_calls={has_tool_calls})",
         )
@@ -729,18 +735,18 @@ async def embed(
     if "text-embedding-3" in model and dimensions:
         kwargs["dimensions"] = dimensions
 
-    logger.info(
-        "Generating async text embedding",
-        execution_id=context["execution_id"],
-        model=model,
-        dimensions=dimensions if "text-embedding-3" in model else "default",
-        input_length=len(input_text),
-    )
+    if _llm_console_logging_enabled(context):
+        logger.info(
+            "Generating async text embedding",
+            execution_id=context["execution_id"],
+            model=model,
+            dimensions=dimensions if "text-embedding-3" in model else "default",
+            input_length=len(input_text),
+        )
 
     try:
         client = await _get_or_create_async_client(
-            context["auth_config"].get("token", "no-token"),
-            context.get("ssl_config")
+            context["auth_config"].get("token", "no-token"), context.get("ssl_config")
         )
 
         # Time the API call
@@ -759,6 +765,7 @@ async def embed(
                 "execution_id": context["execution_id"],
                 "logger": logger,
                 "vector_info": {"vector_length": len(response_dict["data"][0]["embedding"])},
+                "suppress_llm_console_logs": context.get("suppress_llm_console_logs", False),
             },
             operation_type="Async embedding generation",
         )
@@ -820,19 +827,19 @@ async def embed_batch(
     if "text-embedding-3" in model and dimensions:
         kwargs["dimensions"] = dimensions
 
-    logger.info(
-        "Generating async batch embeddings",
-        execution_id=context["execution_id"],
-        model=model,
-        dimensions=dimensions if "text-embedding-3" in model else "default",
-        batch_size=len(input_texts),
-        total_chars=sum(len(text) for text in input_texts),
-    )
+    if _llm_console_logging_enabled(context):
+        logger.info(
+            "Generating async batch embeddings",
+            execution_id=context["execution_id"],
+            model=model,
+            dimensions=dimensions if "text-embedding-3" in model else "default",
+            batch_size=len(input_texts),
+            total_chars=sum(len(text) for text in input_texts),
+        )
 
     try:
         client = await _get_or_create_async_client(
-            context["auth_config"].get("token", "no-token"),
-            context.get("ssl_config")
+            context["auth_config"].get("token", "no-token"), context.get("ssl_config")
         )
 
         # Time the API call
@@ -856,6 +863,7 @@ async def embed_batch(
                         len(response_dict["data"][0]["embedding"]) if response_dict["data"] else 0
                     ),
                 },
+                "suppress_llm_console_logs": context.get("suppress_llm_console_logs", False),
             },
             operation_type="Async batch embedding generation",
         )
@@ -891,12 +899,13 @@ async def check_connection(context: Dict[str, Any]) -> Dict[str, Any]:
     """
     logger = get_logger()
 
-    logger.info(
-        "Testing async LLM connection",
-        execution_id=context["execution_id"],
-        auth_method=context["auth_config"].get("method"),
-        base_url=config.llm.base_url,
-    )
+    if _llm_console_logging_enabled(context):
+        logger.info(
+            "Testing async LLM connection",
+            execution_id=context["execution_id"],
+            auth_method=context["auth_config"].get("method"),
+            base_url=config.llm.base_url,
+        )
 
     test_messages = [
         {"role": "system", "content": "You are a helpful assistant."},
@@ -925,11 +934,12 @@ async def check_connection(context: Dict[str, Any]) -> Dict[str, Any]:
             "base_url": config.llm.base_url,
         }
 
-        logger.info(
-            "Async LLM connection test successful",
-            execution_id=context["execution_id"],
-            response=content,
-        )
+        if _llm_console_logging_enabled(context):
+            logger.info(
+                "Async LLM connection test successful",
+                execution_id=context["execution_id"],
+                response=content,
+            )
 
         return result
 
@@ -959,8 +969,6 @@ async def close_all_clients():
     This should be called during application shutdown to ensure
     proper cleanup of async resources.
     """
-    global _async_client_cache
-
     logger = get_logger()
     logger.info(f"Closing {len(_async_client_cache)} async LLM client(s)")
 

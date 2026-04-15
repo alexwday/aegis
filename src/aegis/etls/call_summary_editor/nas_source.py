@@ -100,7 +100,7 @@ def nas_list_files(conn: SMBConnection, path: str) -> List[Any]:
     try:
         return conn.listPath(_nas_share(), _nas_full(path))
     except Exception as exc:
-        logger.warning("etl.call_summary_editor.nas_list_failed", path=path, error=str(exc))
+        logger.warning("Failed to list NAS directory", path=path, error=str(exc))
         return []
 
 
@@ -113,11 +113,7 @@ def nas_download_file(conn: SMBConnection, path: str) -> Optional[bytes]:
         conn.retrieveFile(_nas_share(), _nas_full(path), buf)
         return buf.getvalue()
     except Exception as exc:
-        logger.warning(
-            "etl.call_summary_editor.nas_download_failed",
-            path=path,
-            error=str(exc),
-        )
+        logger.warning("Failed to download NAS file", path=path, error=str(exc))
         return None
 
 
@@ -177,6 +173,13 @@ def find_transcript_xml(
     if not xml_bytes:
         return None
 
+    logger.info(
+        "Selected transcript XML",
+        path=file_path,
+        candidate_files=len(parsed),
+        transcript_type=selected["transcript_type"],
+        version_id=selected["version_id"],
+    )
     return TranscriptXmlResult(file_path=file_path, xml_bytes=xml_bytes)
 
 
@@ -268,7 +271,7 @@ def parse_transcript_xml(xml_bytes: bytes) -> Optional[Dict[str, Any]]:
         return {"title": title, "participants": participants, "sections": sections}
     except ET.ParseError as exc:
         logger.exception(
-            "etl.call_summary_editor.xml_parse_failed",
+            "Transcript XML parsing failed",
             error=str(exc),
             byte_size=len(xml_bytes),
         )
@@ -283,6 +286,8 @@ def extract_raw_blocks(
     md_blocks: List[Dict[str, Any]] = []
     qa_blocks: List[Dict[str, Any]] = []
     block_counter = 0
+    skipped_sections: List[str] = []
+    dropped_speaker_blocks = 0
 
     for section in parsed.get("sections", []):
         section_name = section.get("name", "")
@@ -294,12 +299,8 @@ def extract_raw_blocks(
             speaker_count = sum(
                 1 for speaker in section.get("speakers", []) if speaker.get("paragraphs")
             )
-            logger.warning(
-                "etl.call_summary_editor.xml_unknown_section_skipped",
-                ticker=ticker,
-                section_name=section_name,
-                dropped_speaker_blocks=speaker_count,
-            )
+            skipped_sections.append(section_name or "<unnamed>")
+            dropped_speaker_blocks += speaker_count
             continue
 
         for speaker in section.get("speakers", []):
@@ -323,5 +324,14 @@ def extract_raw_blocks(
                 md_blocks.append(record)
             else:
                 qa_blocks.append(record)
+
+    if skipped_sections:
+        logger.warning(
+            "Skipped unsupported transcript sections",
+            ticker=ticker,
+            skipped_sections=", ".join(skipped_sections[:3]),
+            skipped_section_count=len(skipped_sections),
+            dropped_speaker_blocks=dropped_speaker_blocks,
+        )
 
     return md_blocks, qa_blocks
