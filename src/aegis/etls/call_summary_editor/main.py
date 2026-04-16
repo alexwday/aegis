@@ -349,17 +349,26 @@ def load_categories_from_xlsx(bank_type: str, execution_id: str) -> List[Dict[st
     if not categories:
         raise ValueError(f"No categories in {file_name}")
 
-    # category_name doubles as the bucket label downstream; duplicates would
-    # silently collapse two configured buckets into the same id.
-    seen_names: Dict[str, int] = {}
+    # Bucket ids are positional (`bucket_0`, `bucket_1`, ...), so two rows with
+    # the same `category_name` do not actually collide at the id level. They
+    # only become ambiguous when they appear in the *same* report section,
+    # since that is the UI grouping a user sees. Allow the same name (e.g.
+    # "Expenses") to be reused across different report sections — Results
+    # Summary vs Earnings Call Q&A — while still rejecting same-name,
+    # same-section rows that would produce two indistinguishable groups.
+    seen_names: Dict[tuple, int] = {}
     for idx, category in enumerate(categories, start=2):  # +2 for header + 1-based row
-        normalized = category["category_name"].strip().lower()
-        if normalized in seen_names:
+        key = (
+            category["report_section"].strip().lower(),
+            category["category_name"].strip().lower(),
+        )
+        if key in seen_names:
             raise ValueError(
                 f"Duplicate category_name '{category['category_name']}' "
-                f"in {file_name} (rows {seen_names[normalized]} and {idx})"
+                f"in report_section '{category['report_section']}' "
+                f"in {file_name} (rows {seen_names[key]} and {idx})"
             )
-        seen_names[normalized] = idx
+        seen_names[key] = idx
 
     logger.info(
         "Loaded category configuration",
