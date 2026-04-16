@@ -23,7 +23,13 @@ llm:
     md_classification: 32768
     qa_classification: 32768
     headline:          2048
-    config_review:     4096
+    # Each proposal carries two full config rows (7 fields each) plus up to 4
+    # supporting quotes, and we ask for up to 4 proposals per pass. That packs
+    # close to 3k output tokens in the worst case before JSON/tool-call wrapping
+    # and reasoning overhead, which blew past the previous 4096 cap and tripped
+    # `finish_reason: length` — the tool call would arrive truncated with no
+    # parseable `tool_calls`. 16384 gives enough headroom for both passes.
+    config_review:     16384
     default:           32768
 
 concurrency:
