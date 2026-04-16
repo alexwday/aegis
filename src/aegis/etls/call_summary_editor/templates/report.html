@@ -702,11 +702,14 @@ function computeIncludedSids(bankId) {
       if (getSentenceReviewStatus(sent.sid) === 'selected') inc.add(sent.sid);
     });
   });
+  // Analyst question sentences are deliberately omitted from the inclusion
+  // set. They are context-only (status="context") and never become a finding
+  // on their own; the analyst_question_summary on the conversation provides
+  // the prefix line that contextualises the executive findings.
   (bank.qa_conversations || []).forEach(conv => {
     (conv.answer_sentences || []).forEach(sent => {
       if (getSentenceReviewStatus(sent.sid) === 'selected') {
         inc.add(sent.sid);
-        (conv.question_sentences || []).forEach(qSent => inc.add(qSent.sid));
       }
     });
   });
@@ -782,19 +785,63 @@ function renderTranscriptBodyBlocks() {
   if (bank.qa_conversations && bank.qa_conversations.length) {
     html += `<div class="t-section-header">Questions &amp; Answers</div>`;
     bank.qa_conversations.forEach((conv, ci) => {
-      const qSentHtml = tSpansWithParas(conv.question_sentences, 'qa', inc);
-      const aSentHtml = tSpansWithParas(conv.answer_sentences, 'qa', inc);
-      const qLabel = conv.analyst_name + (conv.analyst_affiliation ? ` (${conv.analyst_affiliation})` : '');
-      const aLabel = conv.executive_name + (conv.executive_title ? `, ${conv.executive_title}` : '');
-      html += `<div class="t-qa-group">
-        <div class="t-qa-num-label">Question ${ci+1}</div>
-        <div class="t-qa-q"><span class="qa-lbl q">Q</span><span class="qa-person">${esc(qLabel)}</span>
-          <div class="t-qa-text">${qSentHtml}</div></div>
-        <div class="t-qa-a"><span class="qa-lbl a">A</span><span class="qa-person">${esc(aLabel)}</span>
-          <div class="t-qa-text">${aSentHtml}</div></div></div>`;
+      html += renderQAConvBlocks(conv, inc, ci);
     });
   }
   document.getElementById('transcript-body').innerHTML = html;
+}
+
+// Build the per-turn rows for the Blocks view, preserving the back-and-forth
+// order of the original transcript. Falls back to the legacy
+// question_sentences/answer_sentences split when an older saved state has no
+// `turns` array (e.g. a report rendered before turn ordering was added).
+function _qaConvTurns(conv) {
+  if (Array.isArray(conv.turns) && conv.turns.length) return conv.turns;
+  const turns = [];
+  if ((conv.question_sentences || []).length) {
+    turns.push({
+      role: 'q',
+      speaker: conv.analyst_name || 'Analyst',
+      speaker_title: '',
+      speaker_affiliation: conv.analyst_affiliation || '',
+      sentences: conv.question_sentences,
+    });
+  }
+  if ((conv.answer_sentences || []).length) {
+    turns.push({
+      role: 'a',
+      speaker: conv.executive_name || 'Executive',
+      speaker_title: conv.executive_title || '',
+      speaker_affiliation: '',
+      sentences: conv.answer_sentences,
+    });
+  }
+  return turns;
+}
+
+function _qaTurnLabel(turn) {
+  if (turn.role === 'q') {
+    const name = turn.speaker || 'Analyst';
+    return turn.speaker_affiliation ? `${name} (${turn.speaker_affiliation})` : name;
+  }
+  const name = turn.speaker || 'Executive';
+  return turn.speaker_title ? `${name}, ${turn.speaker_title}` : name;
+}
+
+function renderQAConvBlocks(conv, inc, convIdx) {
+  const turns = _qaConvTurns(conv);
+  const turnsHtml = turns.map(turn => {
+    const label = _qaTurnLabel(turn);
+    const sentHtml = tSpansWithParas(turn.sentences || [], 'qa', inc);
+    const cls = turn.role === 'q' ? 't-qa-q' : 't-qa-a';
+    const lblCls = turn.role === 'q' ? 'q' : 'a';
+    const lblText = turn.role === 'q' ? 'Q' : 'A';
+    return `<div class="${cls}"><span class="qa-lbl ${lblCls}">${lblText}</span><span class="qa-person">${esc(label)}</span>
+      <div class="t-qa-text">${sentHtml}</div></div>`;
+  }).join('');
+  return `<div class="t-qa-group">
+    <div class="t-qa-num-label">Question ${convIdx + 1}</div>
+    ${turnsHtml}</div>`;
 }
 
 // ── View: Classified (sub-grouped by category within each block) ──
@@ -829,25 +876,32 @@ function renderMDBlockClassified(blk, inc) {
     ${groupsHtml}</div>`;
 }
 function renderQAConvClassified(conv, inc, convIdx) {
-  const qSpans = tSpansWithParas(conv.question_sentences, 'qa', inc);
-  const aGroups = groupByCat(conv.answer_sentences);
-  const aHtml = aGroups.map(g => {
-    const bkt = getBucket(g.bid);
-    const grpInc = g.sents.some(s => inc.has(s.sid));
-    const cls = grpInc ? '' : ' t-grp-excl';
-    const spans = tSpansWithParas(g.sents, 'qa', inc);
-    return `<div class="t-class-group${cls}" style="border-left-color:${bkt.color_accent};background:${grpInc?bkt.color_bg:'#FAFAFA'}">
-      <div class="t-class-label" style="color:${bkt.color_accent}"><span class="t-gbullet">&bull;</span> ${esc(bucketLabel(bkt))}</div>
-      <div class="t-block-text">${spans}</div></div>`;
+  const turns = _qaConvTurns(conv);
+  const turnsHtml = turns.map(turn => {
+    const label = _qaTurnLabel(turn);
+    if (turn.role === 'q') {
+      // Analyst turns are context-only: render them as plain spans, no
+      // category sub-grouping, since they have no bucket assignment.
+      const spans = tSpansWithParas(turn.sentences || [], 'qa', inc);
+      return `<div class="t-qa-q"><span class="qa-lbl q">Q</span><span class="qa-person">${esc(label)}</span>
+        <div class="t-qa-text">${spans}</div></div>`;
+    }
+    const groups = groupByCat(turn.sentences || []);
+    const groupsHtml = groups.map(g => {
+      const bkt = getBucket(g.bid);
+      const grpInc = g.sents.some(s => inc.has(s.sid));
+      const cls = grpInc ? '' : ' t-grp-excl';
+      const spans = tSpansWithParas(g.sents, 'qa', inc);
+      return `<div class="t-class-group${cls}" style="border-left-color:${bkt.color_accent};background:${grpInc?bkt.color_bg:'#FAFAFA'}">
+        <div class="t-class-label" style="color:${bkt.color_accent}"><span class="t-gbullet">&bull;</span> ${esc(bucketLabel(bkt))}</div>
+        <div class="t-block-text">${spans}</div></div>`;
+    }).join('');
+    return `<div class="t-qa-a"><span class="qa-lbl a">A</span><span class="qa-person">${esc(label)}</span>
+      ${groupsHtml}</div>`;
   }).join('');
-  const qLabel = conv.analyst_name + (conv.analyst_affiliation ? ` (${conv.analyst_affiliation})` : '');
-  const aLabel = conv.executive_name + (conv.executive_title ? `, ${conv.executive_title}` : '');
   return `<div class="t-qa-group">
-    <div class="t-qa-num-label">Question ${convIdx+1}</div>
-    <div class="t-qa-q"><span class="qa-lbl q">Q</span><span class="qa-person">${esc(qLabel)}</span>
-      <div class="t-qa-text">${qSpans}</div></div>
-    <div class="t-qa-a"><span class="qa-lbl a">A</span><span class="qa-person">${esc(aLabel)}</span>
-      ${aHtml}</div></div>`;
+    <div class="t-qa-num-label">Question ${convIdx + 1}</div>
+    ${turnsHtml}</div>`;
 }
 
 // ── View: By Category ──
@@ -858,8 +912,10 @@ function renderTranscriptBodyByCategory() {
   (bank.md_blocks || []).forEach(blk => {
     blk.sentences.forEach(s => allSents.push({sent:s, type:'md', speaker:blk.speaker, speakerTitle:blk.speaker_title||'', blkId:blk.id}));
   });
+  // By-category view skips analyst question sentences entirely: they are
+  // context-only (status="context") and don't belong to any bucket, so
+  // including them here would just produce empty groups under "Other".
   (bank.qa_conversations || []).forEach(conv => {
-    conv.question_sentences.forEach(s => allSents.push({sent:s, type:'qa-q', speaker:conv.analyst_name, speakerTitle:conv.analyst_affiliation||'', blkId:conv.id}));
     conv.answer_sentences.forEach(s => allSents.push({sent:s, type:'qa-a', speaker:conv.executive_name, speakerTitle:conv.executive_title||'', blkId:conv.id}));
   });
   const byBucket = {};
@@ -997,7 +1053,7 @@ function showSentencePopover(evt, el) {
   const readonly = !bucketState.context.editable;
   const currentStatus = getSentenceReviewStatus(sid);
   document.getElementById('s-pop-note').textContent = readonly
-    ? 'Question sentence is scored individually, but analyst context is read-only in the report.'
+    ? 'Analyst question sentences are context only \u2014 they are not classified into a category and never become a finding on their own.'
     : `Current review status: ${currentStatus}. Click a category to promote it into the report.`;
 
   const curPrimary = effectivePrimary(sid);
@@ -1220,6 +1276,7 @@ function computeQASubquotes(conv, bs) {
         analyst_affiliation: conv.analyst_affiliation,
         executive_name: conv.executive_name,
         executive_title: conv.executive_title,
+        analyst_question_summary: conv.analyst_question_summary || '',
         effective_bucket: effectiveBucket,
         question_sentences: conv.question_sentences || [],
         answer_sentences: [sent],
@@ -1584,14 +1641,27 @@ function renderSubquoteCard(sq, bucket) {
   const attribTitle = isMD ? (sq.speaker_title || '') : (sq.executive_title || '');
   const attribLine = attribTitle ? `${attribName}, ${attribTitle}` : attribName;
 
-  // QA card shows question as context above answer text
-  const qaContextHtml = !isMD ? `
+  // QA card shows the analyst question as context above the executive
+  // answer text. Prefer the model-generated `analyst_question_summary` (a
+  // single short clause) over the raw verbatim question, which can run on
+  // for paragraphs and bury the actual context. The verbatim text is kept
+  // as the title attribute so the user can hover to see the original.
+  let qaContextHtml = '';
+  if (!isMD) {
+    const verbatim = (sq.question_sentences || []).map(s => s.text).join(' ');
+    const summary = (sq.analyst_question_summary || '').trim();
+    const contextLine = summary
+      ? `In response to the analyst question: ${esc(summary)}`
+      : `In response to the analyst question: ${esc(verbatim)}`;
+    const verbatimTitle = summary ? ` title="${escAttr(verbatim)}"` : '';
+    qaContextHtml = `
     <div class="qa-card-q">
       <span class="qa-lbl q">Q</span>
       <strong>${esc(sq.analyst_name||'Analyst')}</strong>
       ${sq.analyst_affiliation ? `<span style="color:#65676B"> (${esc(sq.analyst_affiliation)})</span>` : ''}
-      <div class="qa-card-q-text">${sq.question_sentences.map(s=>esc(s.text)).join(' ')}</div>
-    </div>` : '';
+      <div class="qa-card-q-text"${verbatimTitle}>${contextLine}</div>
+    </div>`;
+  }
 
   return `
 <div class="q-card" data-subquote-id="${sq.id}">

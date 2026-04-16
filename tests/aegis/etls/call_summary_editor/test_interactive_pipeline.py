@@ -489,7 +489,15 @@ async def test_analyze_config_coverage_uses_full_verbatim_evidence_without_impor
 
 
 @pytest.mark.asyncio
-async def test_classify_qa_conversation_classifies_question_sentences_individually():
+async def test_classify_qa_conversation_treats_question_sentences_as_context_only():
+    """Analyst question sentences must never receive a bucket assignment.
+
+    Analysts say arbitrary things (greetings, unrelated questions, follow-ups)
+    and we deliberately do not summarise them as standalone findings. Question
+    records exist so they still render in the transcript, but they carry no
+    primary bucket, no scores, no importance, and a dedicated ``"context"``
+    status that distinguishes deliberate omission from a parse failure.
+    """
     categories = [
         {
             "transcript_sections": "QA",
@@ -526,20 +534,7 @@ async def test_classify_qa_conversation_classifies_question_sentences_individual
         new=AsyncMock(
             return_value={
                 "primary_bucket_index": 0,
-                "question_sentences": [
-                    {
-                        "index": 1,
-                        "scores": [{"bucket_index": 0, "score": 8.4}],
-                        "importance_score": 7.2,
-                        "condensed": "How are you thinking about CET1?",
-                    },
-                    {
-                        "index": 2,
-                        "scores": [{"bucket_index": 1, "score": 7.9}],
-                        "importance_score": 6.8,
-                        "condensed": "What about expenses?",
-                    },
-                ],
+                "analyst_question_summary": "on CET1 capital and expense outlook",
                 "answer_sentences": [
                     {
                         "index": 1,
@@ -574,15 +569,25 @@ async def test_classify_qa_conversation_classifies_question_sentences_individual
             llm_params={"model": "gpt-test"},
         )
 
-    assert result["question_sentences"][0]["primary"] == "bucket_0"
-    assert result["question_sentences"][0]["importance_score"] == 7.2
-    assert result["question_sentences"][0]["source_block_id"] == "RY-CA_QA_1"
-    assert result["question_sentences"][0]["status"] == "selected"
-    assert result["question_sentences"][1]["primary"] == "bucket_1"
-    assert result["question_sentences"][1]["importance_score"] == 6.8
+    # Question sentences are context-only: no bucket, no scores, dedicated status.
+    for question_record in result["question_sentences"]:
+        assert question_record["primary"] == ""
+        assert question_record["selected_bucket_id"] == ""
+        assert question_record["candidate_bucket_ids"] == []
+        assert question_record["scores"] == {}
+        assert question_record["importance_score"] == 0.0
+        assert question_record["status"] == "context"
+        assert question_record["emerging_topic"] is False
+    # Answer sentences continue to be classified normally.
     assert result["answer_sentences"][0]["primary"] == "bucket_0"
     assert result["answer_sentences"][0]["verbatim_text"] == "CET1 should remain strong."
     assert result["answer_sentences"][1]["primary"] == "bucket_1"
+    # Analyst question summary is surfaced for the report card prefix.
+    assert result["analyst_question_summary"] == "on CET1 capital and expense outlook"
+    # Turns preserve back-and-forth order with role tags.
+    assert [turn["role"] for turn in result["turns"]] == ["q", "a"]
+    assert result["turns"][0]["sentences"][0]["status"] == "context"
+    assert result["turns"][1]["sentences"][0]["primary"] == "bucket_0"
 
 
 @pytest.mark.asyncio
@@ -615,7 +620,7 @@ async def test_classify_qa_conversation_prompt_mentions_auto_include_threshold()
     mock_call_tool = AsyncMock(
         return_value={
             "primary_bucket_index": 0,
-            "question_sentences": [],
+            "analyst_question_summary": "on CET1 outlook",
             "answer_sentences": [],
         }
     )
@@ -681,14 +686,7 @@ async def test_classify_qa_conversation_rescales_normalized_bucket_scores():
         new=AsyncMock(
             return_value={
                 "primary_bucket_index": 0,
-                "question_sentences": [
-                    {
-                        "index": 1,
-                        "scores": [{"bucket_index": 0, "score": 0.82}],
-                        "importance_score": 7.0,
-                        "condensed": "How are you thinking about CET1?",
-                    }
-                ],
+                "analyst_question_summary": "on CET1 outlook",
                 "answer_sentences": [
                     {
                         "index": 1,
@@ -795,14 +793,7 @@ async def test_classify_qa_conversation_keeps_weak_bucket_match_as_unmapped_cand
         new=AsyncMock(
             return_value={
                 "primary_bucket_index": 0,
-                "question_sentences": [
-                    {
-                        "index": 1,
-                        "scores": [{"bucket_index": 0, "score": 4.2}],
-                        "importance_score": 6.0,
-                        "condensed": "Can you talk about the AI rollout?",
-                    }
-                ],
+                "analyst_question_summary": "on the AI rollout",
                 "answer_sentences": [
                     {
                         "index": 1,
@@ -870,7 +861,7 @@ async def test_classify_qa_conversation_missing_sentence_results_are_rejected_no
         new=AsyncMock(
             return_value={
                 "primary_bucket_index": 0,
-                "question_sentences": [],
+                "analyst_question_summary": "on CET1 outlook",
                 "answer_sentences": [],
             }
         ),
@@ -893,12 +884,13 @@ async def test_classify_qa_conversation_missing_sentence_results_are_rejected_no
         )
 
     assert result["primary_bucket"] == ""
-    assert result["question_sentences"][0]["status"] == "rejected"
+    # Question records are context-only regardless of LLM response shape \u2014
+    # no classification_error, no rejected status.
+    assert result["question_sentences"][0]["status"] == "context"
     assert result["question_sentences"][0]["emerging_topic"] is False
-    assert (
-        result["question_sentences"][0]["classification_error"]
-        == "missing_sentence_classification"
-    )
+    assert "classification_error" not in result["question_sentences"][0]
+    # Answer records that the model failed to address still fall back to
+    # rejected, since the LLM was supposed to classify them.
     assert result["answer_sentences"][0]["status"] == "rejected"
     assert result["answer_sentences"][0]["emerging_topic"] is False
     assert (

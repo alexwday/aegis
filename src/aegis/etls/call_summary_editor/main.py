@@ -275,73 +275,99 @@ def load_categories_from_xlsx(bank_type: str, execution_id: str) -> List[Dict[st
         raise FileNotFoundError(f"Categories file not found: {xlsx_path}")
 
     try:
+        # Inspect sheet inventory before reading so we can warn when the
+        # workbook contains additional sheets that the loader silently ignores
+        # (e.g. an analyst added a "Q4 categories" tab that nothing reads).
+        all_sheets = pd.ExcelFile(xlsx_path).sheet_names
         df = pd.read_excel(xlsx_path, sheet_name=0)
-
-        # Required columns for standard format
-        required_columns = ["transcript_sections", "category_name", "category_description"]
-        missing_columns = [col for col in required_columns if col not in df.columns]
-        if missing_columns:
-            raise ValueError(f"Missing required columns in {file_name}: {missing_columns}")
-
-        # Optional columns with defaults for backward compatibility
-        optional_columns = ["example_1", "example_2", "example_3"]
-        for col in optional_columns:
-            if col not in df.columns:
-                df[col] = ""  # Add empty column if not present
-
-        # Ensure report_section column exists even for legacy sheets
-        if "report_section" not in df.columns:
-            df["report_section"] = "Results Summary"
-
-        # Convert to list of dicts, ensuring all required fields are non-empty
-        categories = []
-        for idx, row in df.iterrows():
-            for field in required_columns:
-                if pd.isna(row[field]) or str(row[field]).strip() == "":
-                    raise ValueError(f"Missing value for '{field}' in {file_name} (row {idx + 2})")
-
-            transcript_sections = str(row["transcript_sections"]).strip()
-            valid_sections = VALID_SECTION_KEYS
-            if transcript_sections not in valid_sections:
-                raise ValueError(
-                    f"Invalid transcript_sections '{transcript_sections}' "
-                    f"in {file_name} (row {idx + 2}). Must be one of: {valid_sections}"
-                )
-
-            category = {
-                "transcript_sections": transcript_sections,
-                "report_section": (
-                    str(row["report_section"]).strip()
-                    if pd.notna(row["report_section"])
-                    else "Results Summary"
-                ),
-                "category_name": str(row["category_name"]).strip(),
-                "category_description": str(row["category_description"]).strip(),
-                "example_1": str(row["example_1"]).strip() if pd.notna(row["example_1"]) else "",
-                "example_2": str(row["example_2"]).strip() if pd.notna(row["example_2"]) else "",
-                "example_3": str(row["example_3"]).strip() if pd.notna(row["example_3"]) else "",
-            }
-            categories.append(category)
-
-        if not categories:
-            raise ValueError(f"No categories in {file_name}")
-
-        logger.info(
-            "Loaded category configuration",
-            bank_type=bank_type,
-            file_name=file_name,
-            categories=len(categories),
-        )
-        return categories
-
-    except Exception as e:
-        error_msg = f"Failed to load categories from {xlsx_path}: {str(e)}"
+    except Exception as exc:
+        # Pandas/openpyxl read failure is a system/infrastructure problem,
+        # not a user-facing data-quality issue.
         logger.error(
-            "Failed to load category configuration",
+            "Failed to read category configuration file",
             xlsx_path=xlsx_path,
-            error=str(e),
+            error=str(exc),
         )
-        raise RuntimeError(error_msg) from e
+        raise RuntimeError(
+            f"Failed to read categories from {xlsx_path}: {exc}"
+        ) from exc
+
+    if len(all_sheets) > 1:
+        logger.warning(
+            "Categories workbook contains multiple sheets; only the first is loaded",
+            xlsx_path=xlsx_path,
+            loaded_sheet=all_sheets[0],
+            ignored_sheets=all_sheets[1:],
+        )
+
+    # Required columns for standard format
+    required_columns = ["transcript_sections", "category_name", "category_description"]
+    missing_columns = [col for col in required_columns if col not in df.columns]
+    if missing_columns:
+        raise ValueError(f"Missing required columns in {file_name}: {missing_columns}")
+
+    # Optional columns with defaults for backward compatibility
+    optional_columns = ["example_1", "example_2", "example_3"]
+    for col in optional_columns:
+        if col not in df.columns:
+            df[col] = ""  # Add empty column if not present
+
+    # Ensure report_section column exists even for legacy sheets
+    if "report_section" not in df.columns:
+        df["report_section"] = "Results Summary"
+
+    # Convert to list of dicts, ensuring all required fields are non-empty
+    categories = []
+    for idx, row in df.iterrows():
+        for field in required_columns:
+            if pd.isna(row[field]) or str(row[field]).strip() == "":
+                raise ValueError(f"Missing value for '{field}' in {file_name} (row {idx + 2})")
+
+        transcript_sections = str(row["transcript_sections"]).strip()
+        valid_sections = VALID_SECTION_KEYS
+        if transcript_sections not in valid_sections:
+            raise ValueError(
+                f"Invalid transcript_sections '{transcript_sections}' "
+                f"in {file_name} (row {idx + 2}). Must be one of: {valid_sections}"
+            )
+
+        category = {
+            "transcript_sections": transcript_sections,
+            "report_section": (
+                str(row["report_section"]).strip()
+                if pd.notna(row["report_section"])
+                else "Results Summary"
+            ),
+            "category_name": str(row["category_name"]).strip(),
+            "category_description": str(row["category_description"]).strip(),
+            "example_1": str(row["example_1"]).strip() if pd.notna(row["example_1"]) else "",
+            "example_2": str(row["example_2"]).strip() if pd.notna(row["example_2"]) else "",
+            "example_3": str(row["example_3"]).strip() if pd.notna(row["example_3"]) else "",
+        }
+        categories.append(category)
+
+    if not categories:
+        raise ValueError(f"No categories in {file_name}")
+
+    # category_name doubles as the bucket label downstream; duplicates would
+    # silently collapse two configured buckets into the same id.
+    seen_names: Dict[str, int] = {}
+    for idx, category in enumerate(categories, start=2):  # +2 for header + 1-based row
+        normalized = category["category_name"].strip().lower()
+        if normalized in seen_names:
+            raise ValueError(
+                f"Duplicate category_name '{category['category_name']}' "
+                f"in {file_name} (rows {seen_names[normalized]} and {idx})"
+            )
+        seen_names[normalized] = idx
+
+    logger.info(
+        "Loaded category configuration",
+        bank_type=bank_type,
+        file_name=file_name,
+        categories=len(categories),
+    )
+    return categories
 
 
 def get_bank_info_from_config(bank_identifier: str) -> Dict[str, Any]:
@@ -417,16 +443,14 @@ def _timing_summary(marks: list) -> dict:
     return summary
 
 
-def _get_interactive_report_metadata() -> Dict[str, str]:
-    """Metadata for interactive HTML call summary editor reports."""
-    return {
-        "report_name": "Earnings Call Summary Editor",
-        "report_description": (
-            "Interactive HTML earnings call summary editor with sentence-level "
-            "classification, transcript review, and report drafting controls."
-        ),
-        "report_type": "call_summary_editor",
-    }
+INTERACTIVE_REPORT_METADATA: Dict[str, str] = {
+    "report_name": "Earnings Call Summary Editor",
+    "report_description": (
+        "Interactive HTML earnings call summary editor with sentence-level "
+        "classification, transcript review, and report drafting controls."
+    ),
+    "report_type": "call_summary_editor",
+}
 
 
 def _generate_interactive_report(
@@ -480,9 +504,12 @@ async def _save_interactive_report_to_database(
     fiscal_year = etl_context["fiscal_year"]
     execution_id = etl_context["execution_id"]
 
-    report_metadata = _get_interactive_report_metadata()
+    report_metadata = INTERACTIVE_REPORT_METADATA
     generation_timestamp = datetime.now()
 
+    # `get_connection` uses `engine.begin()`, so the DELETE+INSERT below
+    # run inside a single transaction that commits on exit (or rolls back
+    # on exception). No explicit commit is required.
     async with get_connection() as conn:
         await conn.execute(
             text(
@@ -566,7 +593,6 @@ async def _save_interactive_report_to_database(
                 ),
             },
         )
-        await conn.commit()
 
     logger.info(
         "Saved report metadata to database",
@@ -794,9 +820,14 @@ async def generate_call_summary(  # pylint: disable=too-many-statements
 
     except CallSummaryError:
         raise
-    except (ValueError, RuntimeError) as exc:
-        logger.error("Call summary editor failed", error=str(exc))
+    except ValueError as exc:
+        # Data-quality / user-input failures (bad XLSX rows, invalid args).
+        logger.error("Call summary editor failed (user error)", error=str(exc))
         raise CallSummaryUserError(str(exc)) from exc
+    except RuntimeError as exc:
+        # Wrapped infrastructure/LLM failures (NAS read, XLSX parse, LLM retries).
+        logger.error("Call summary editor failed (system error)", error=str(exc))
+        raise CallSummarySystemError(str(exc)) from exc
     except Exception as exc:
         error_msg = f"Error generating call summary: {str(exc)}"
         logger.error(

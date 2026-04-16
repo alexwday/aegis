@@ -179,7 +179,17 @@ def generate_html(
     banner_path: Optional[Path] = None,
 ) -> str:
     """Render the mock HTML shell with injected report state."""
-    state_json = json.dumps(state, ensure_ascii=False, indent=2).translate(
+    # Resolve the banner before serialization so the data: URL travels through
+    # the same JSON-escaping path as the rest of the state. The previous
+    # implementation post-patched the serialized string by string-replacing
+    # `"banner_src": null`, which silently failed if json.dumps formatting
+    # changed or if any other field happened to serialize the same way.
+    state_with_banner = dict(state)
+    banner_b64 = load_banner_b64(banner_path or DEFAULT_BANNER_PATH)
+    if banner_b64 and not state_with_banner.get("banner_src"):
+        state_with_banner["banner_src"] = banner_b64
+
+    state_json = json.dumps(state_with_banner, ensure_ascii=False, indent=2).translate(
         {
             ord("<"): "\\u003c",
             ord(">"): "\\u003e",
@@ -192,8 +202,4 @@ def generate_html(
     html = html.replace("__PERIOD__", f"{fiscal_quarter} {fiscal_year}")
     html = html.replace("__MIN_IMPORTANCE__", str(min_importance))
     html = html.replace("__STATE_JSON__", state_json)
-
-    banner_b64 = load_banner_b64(banner_path or DEFAULT_BANNER_PATH)
-    if banner_b64 and '"banner_src": null' in html:
-        html = html.replace('"banner_src": null', f'"banner_src": "{banner_b64}"')
     return html

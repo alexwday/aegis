@@ -13,7 +13,8 @@ import asyncio
 import json
 import re
 from collections import defaultdict
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional, Tuple
+from xml.sax.saxutils import escape as _xml_escape
 
 from pydantic import BaseModel, Field
 
@@ -70,12 +71,24 @@ class QABoundaryResult(BaseModel):
 
 
 class QAExchangeClassification(BaseModel):
-    """Whole-exchange classification for one QA conversation."""
+    """Whole-exchange classification for one QA conversation.
+
+    Analyst question sentences are intentionally excluded from per-sentence
+    classification: anything an analyst says is treated as context only and
+    never becomes a standalone finding. The model is asked to produce a short
+    paraphrase of the analyst's question so that downstream renderings can
+    prefix executive findings with "In response to the analyst question: ...".
+    """
 
     primary_bucket_index: int = Field(
         description="0-based index of the best existing bucket for the whole exchange."
     )
-    question_sentences: List[SentenceResult]
+    analyst_question_summary: str = Field(
+        description=(
+            "One-sentence paraphrase of the analyst's question (\u226425 words). "
+            "Used as the lead-in line above the executive findings."
+        )
+    )
     answer_sentences: List[SentenceResult]
 
 
@@ -215,20 +228,29 @@ TOOL_QA_EXCHANGE = {
         "name": "classify_qa_exchange",
         "strict": True,
         "description": (
-            "Call this tool when one grouped Q&A exchange needs sentence-level classification. "
-            "It returns the best whole-exchange bucket plus one structured result for every "
-            "indexed analyst and executive sentence. Use it once per completed Q&A conversation."
+            "Call this tool when one grouped Q&A exchange needs sentence-level classification "
+            "of the executive answer. It returns the best whole-exchange bucket, a one-sentence "
+            "paraphrase of the analyst's question, and one structured result for every indexed "
+            "executive answer sentence. Analyst question sentences are NOT classified individually "
+            "\u2014 they are context only. Use this tool once per completed Q&A conversation."
         ),
         "parameters": {
             "type": "object",
             "properties": {
                 "primary_bucket_index": {"type": "integer"},
-                "question_sentences": {"type": "array", "items": _SENTENCE_RESULT_SCHEMA},
+                "analyst_question_summary": {
+                    "type": "string",
+                    "description": (
+                        "One-sentence paraphrase of the analyst's question (\u226425 words). "
+                        "Reads as a complete clause, e.g. 'on capital deployment plans for "
+                        "the back half of the year'."
+                    ),
+                },
                 "answer_sentences": {"type": "array", "items": _SENTENCE_RESULT_SCHEMA},
             },
             "required": [
                 "primary_bucket_index",
-                "question_sentences",
+                "analyst_question_summary",
                 "answer_sentences",
             ],
             "additionalProperties": False,
@@ -377,7 +399,15 @@ TOOL_EMERGING_TOPIC_REVIEW = {
 
 
 def split_sentences(text: str) -> List[str]:
-    """Split text into sentences with a spaCy-first fallback."""
+    """Split text into sentences with a spaCy-first fallback.
+
+    The regex fallback (used when spaCy is unavailable) splits on terminal
+    punctuation followed by whitespace and a sentence-starting character.
+    Earnings transcripts frequently start sentences with currency symbols
+    (`$`, `\u20ac`, `\u00a3`, `\u00a5`), opening parentheses or brackets, em/en
+    dashes, or even lowercase words after diarization quirks - all are
+    accepted here.
+    """
     clean = re.sub(r"\s+", " ", (text or "")).strip()
     if not clean:
         return []
@@ -388,8 +418,24 @@ def split_sentences(text: str) -> List[str]:
         if sentences:
             return sentences
 
-    parts = re.split(r"(?<=[.!?])\s+(?=[A-Z0-9\"'])", clean)
+    parts = re.split(
+        r"(?<=[.!?])\s+(?=[A-Za-z0-9\"'\(\[\$\u20ac\u00a3\u00a5\u2013\u2014])",
+        clean,
+    )
     return [part.strip() for part in parts if part.strip()]
+
+
+def _escape_for_prompt(value: Any) -> str:
+    """Escape a value for safe interpolation inside an XML-style prompt block.
+
+    Categories, speaker names, and transcript text are interpolated into
+    XML tags throughout this module. Without escaping, a stray `<`, `>`, or
+    `&` in a category description (or a speaker name like "Smith & Co")
+    would break the surrounding XML structure. We escape on interpolation
+    rather than at ingest so the original strings are preserved everywhere
+    else (logs, HTML state, DB metadata).
+    """
+    return _xml_escape(str(value or ""), entities={"\"": "&quot;"})
 
 
 def format_categories_for_prompt(
@@ -410,9 +456,9 @@ def format_categories_for_prompt(
 
         lines = [
             f'<category index="{idx}">',
-            f'  <name>{category["category_name"]}</name>',
-            f"  <applies_to>{applies}</applies_to>",
-            f'  <description>{category["category_description"]}</description>',
+            f"  <name>{_escape_for_prompt(category['category_name'])}</name>",
+            f"  <applies_to>{_escape_for_prompt(applies)}</applies_to>",
+            f"  <description>{_escape_for_prompt(category['category_description'])}</description>",
         ]
 
         examples = [
@@ -423,7 +469,7 @@ def format_categories_for_prompt(
         if examples:
             lines.append("  <examples>")
             for example in examples:
-                lines.append(f"    <example>{example}</example>")
+                lines.append(f"    <example>{_escape_for_prompt(example)}</example>")
             lines.append("  </examples>")
 
         lines.append("</category>")
@@ -657,7 +703,13 @@ def _bucket_score(scores: Dict[str, float], bucket_id: str) -> float:
 
 
 def _normalise_scores(raw_scores: Any, categories: List[Dict[str, Any]]) -> Dict[str, float]:
-    """Convert model output into sparse `bucket_N` score mapping."""
+    """Convert model output into sparse `bucket_N` score mapping.
+
+    Models occasionally ignore the 0-10 scale guidance in the prompt and
+    return 0-1 normalized values instead. When every score in the response
+    falls in (0, 1], rescale to the documented 0-10 range. (See
+    test_classify_qa_conversation_rescales_normalized_bucket_scores.)
+    """
     output: Dict[str, float] = {}
     if isinstance(raw_scores, list):
         for idx, value in enumerate(raw_scores):
@@ -818,6 +870,42 @@ def _make_sentence_record(
     }
 
 
+def _make_context_sentence_record(
+    sentence_id: str,
+    text: str,
+    *,
+    transcript_section: str,
+    source_block_id: str,
+    parent_record_id: str,
+) -> Dict[str, Any]:
+    """Build a sentence record marked as context-only (no bucket assignment).
+
+    Used for analyst question sentences in QA conversations: they should
+    appear in the transcript and provide context for the executive findings,
+    but should never be classified into a bucket or selected as a finding
+    themselves. The dedicated ``status="context"`` value distinguishes
+    deliberate omission from a parse failure (``status="rejected"``).
+    """
+    return {
+        "sid": sentence_id,
+        "text": text,
+        "verbatim_text": text,
+        "sentence_ids": [sentence_id],
+        "span_id": sentence_id,
+        "source_block_id": source_block_id,
+        "parent_record_id": parent_record_id,
+        "transcript_section": transcript_section,
+        "primary": "",
+        "selected_bucket_id": "",
+        "candidate_bucket_ids": [],
+        "scores": {},
+        "importance_score": 0.0,
+        "status": "context",
+        "emerging_topic": False,
+        "condensed": text,
+    }
+
+
 def _seed_selected_report_sentences(
     processed_md: List[Dict[str, Any]],
     processed_qa: List[Dict[str, Any]],
@@ -899,7 +987,9 @@ def _format_block_preview(paragraphs: List[str], max_paragraph_chars: int = 900)
     preview_parts = []
     for paragraph in paragraphs:
         preview_parts.append(
-            f"<paragraph>{_preview_text(paragraph, max_paragraph_chars)}</paragraph>"
+            "<paragraph>"
+            f"{_escape_for_prompt(_preview_text(paragraph, max_paragraph_chars))}"
+            "</paragraph>"
         )
     return "\n".join(preview_parts)
 
@@ -910,10 +1000,12 @@ def _format_qa_block_prompt_entry(entry: Dict[str, Any]) -> str:
     return (
         "<qa_block>\n"
         f"  <index>{entry['block_index']}</index>\n"
-        f"  <speaker_type_hint>{hint}</speaker_type_hint>\n"
-        f"  <speaker>{entry.get('speaker', 'Unknown Speaker')}</speaker>\n"
-        f"  <speaker_title>{entry.get('speaker_title', '')}</speaker_title>\n"
-        f"  <speaker_affiliation>{entry.get('speaker_affiliation', '')}</speaker_affiliation>\n"
+        f"  <speaker_type_hint>{_escape_for_prompt(hint)}</speaker_type_hint>\n"
+        f"  <speaker>{_escape_for_prompt(entry.get('speaker', 'Unknown Speaker'))}</speaker>\n"
+        f"  <speaker_title>{_escape_for_prompt(entry.get('speaker_title', ''))}</speaker_title>\n"
+        "  <speaker_affiliation>"
+        f"{_escape_for_prompt(entry.get('speaker_affiliation', ''))}"
+        "</speaker_affiliation>\n"
         "  <preview>\n"
         f"{entry.get('preview', '')}\n"
         "  </preview>\n"
@@ -1334,75 +1426,127 @@ async def classify_qa_conversation(  # pylint: disable=unused-argument
     conv_id = f"{ticker}_QA_{conv_idx}"
     applicable_ids = applicable_bucket_ids(categories, "QA")
 
-    question_blocks = [block for block in conv_blocks if block.get("speaker_type_hint") == "q"]
-    answer_blocks = [block for block in conv_blocks if block.get("speaker_type_hint") != "q"]
-    if not question_blocks:
-        question_blocks, answer_blocks = conv_blocks[:1], conv_blocks[1:]
-
-    analyst_name = question_blocks[0]["speaker"] if question_blocks else "Analyst"
-    analyst_affiliation = (
-        question_blocks[0].get("speaker_affiliation", "") if question_blocks else ""
+    # Build per-turn role assignments while preserving the original speaker
+    # block order. Previously the function partitioned blocks by role, which
+    # destroyed the back-and-forth interleaving (greeting Q, A, follow-up Q,
+    # A, thanks Q) that the transcript view needs to reconstruct.
+    has_explicit_question = any(
+        block.get("speaker_type_hint") == "q" for block in conv_blocks
     )
-    executive_name = answer_blocks[0]["speaker"] if answer_blocks else "Executive"
-    executive_title = answer_blocks[0].get("speaker_title", "") if answer_blocks else ""
 
-    question_text = " ".join(
-        paragraph for block in question_blocks for paragraph in block["paragraphs"]
-    )
-    question_sentences = split_sentences(question_text)
-    question_para_indices: List[int] = []
-    para_idx = 0
-    for block in question_blocks:
-        for paragraph in block["paragraphs"]:
-            for _sentence in split_sentences(paragraph):
-                question_para_indices.append(para_idx)
-            para_idx += 1
+    def _role_for_block(block: Dict[str, Any], position: int) -> str:
+        hint = block.get("speaker_type_hint")
+        if hint == "q":
+            return "q"
+        if hint:
+            return "a"
+        # No hint at all: fall back to "first block in conversation is the
+        # analyst" so we always have a question turn to summarize.
+        if not has_explicit_question and position == 0:
+            return "q"
+        return "a"
 
+    turns: List[Dict[str, Any]] = []
+    for position, block in enumerate(conv_blocks):
+        role = _role_for_block(block, position)
+        turn_sentences: List[Tuple[int, str]] = []
+        for paragraph_idx, paragraph in enumerate(block["paragraphs"]):
+            for sentence in split_sentences(paragraph):
+                turn_sentences.append((paragraph_idx, sentence))
+        turns.append(
+            {
+                "turn_idx": len(turns),
+                "role": role,
+                "speaker": block.get("speaker", ""),
+                "speaker_title": block.get("speaker_title", ""),
+                "speaker_affiliation": block.get("speaker_affiliation", ""),
+                "block_id": block.get("id", conv_id),
+                "_sentences_raw": turn_sentences,  # populated with records below
+            }
+        )
+
+    question_turns = [turn for turn in turns if turn["role"] == "q"]
+    answer_turns = [turn for turn in turns if turn["role"] == "a"]
+
+    analyst_name = question_turns[0]["speaker"] if question_turns else "Analyst"
+    analyst_affiliation = question_turns[0]["speaker_affiliation"] if question_turns else ""
+    executive_name = answer_turns[0]["speaker"] if answer_turns else "Executive"
+    executive_title = answer_turns[0]["speaker_title"] if answer_turns else ""
+
+    # Build flat AS-only indexing: only executive sentences get classified.
+    # Question sentences are still shown in the prompt for context but are
+    # not addressed by any QS/AS index in the tool output.
     answer_sentences_raw: List[str] = []
     answer_para_indices: List[int] = []
     para_idx = 0
-    for block in answer_blocks:
-        for paragraph in block["paragraphs"]:
-            for sentence in split_sentences(paragraph):
-                answer_sentences_raw.append(sentence)
-                answer_para_indices.append(para_idx)
-            para_idx += 1
+    for turn in answer_turns:
+        for paragraph_idx, sentence in turn["_sentences_raw"]:
+            answer_sentences_raw.append(sentence)
+            answer_para_indices.append(para_idx + paragraph_idx)
+        # Advance the paragraph counter past this turn's paragraphs so the
+        # next turn's paragraphs get distinct indices for the JS para-break
+        # renderer.
+        para_idx += len({p for p, _ in turn["_sentences_raw"]}) or 1
 
-    question_lines = "\n".join(
-        f'QS{idx + 1}: "{sentence}"' for idx, sentence in enumerate(question_sentences)
-    )
-    answer_lines = "\n".join(
-        f'AS{idx + 1}: "{sentence}"' for idx, sentence in enumerate(answer_sentences_raw)
-    )
-    analyst_label = analyst_name + (f", {analyst_affiliation}" if analyst_affiliation else "")
-    executive_label = executive_name + (f", {executive_title}" if executive_title else "")
-    exchange_text = (
-        f"ANALYST ({analyst_label}):\n"
-        f"{question_lines}\n\n"
-        f"EXECUTIVE ({executive_label}):\n"
-        f"{answer_lines}"
-    )
+    question_para_indices: List[int] = []
+    para_idx = 0
+    for turn in question_turns:
+        for paragraph_idx, _sentence in turn["_sentences_raw"]:
+            question_para_indices.append(para_idx + paragraph_idx)
+        para_idx += len({p for p, _ in turn["_sentences_raw"]}) or 1
+
+    # Render the prompt with full back-and-forth so the model sees real
+    # context, but only AS sentences are indexed (and therefore expected in
+    # the response). Analyst turns are shown unindexed under "ANALYST".
+    exchange_lines: List[str] = []
+    answer_index = 0
+    for turn in turns:
+        if turn["role"] == "q":
+            label_parts = [turn["speaker"] or "Analyst"]
+            if turn["speaker_affiliation"]:
+                label_parts.append(f", {turn['speaker_affiliation']}")
+            exchange_lines.append(f"ANALYST ({''.join(label_parts)}):")
+            for _, sentence in turn["_sentences_raw"]:
+                exchange_lines.append(f'  "{sentence}"')
+            exchange_lines.append("")
+        else:
+            label_parts = [turn["speaker"] or "Executive"]
+            if turn["speaker_title"]:
+                label_parts.append(f", {turn['speaker_title']}")
+            exchange_lines.append(f"EXECUTIVE ({''.join(label_parts)}):")
+            for _, sentence in turn["_sentences_raw"]:
+                answer_index += 1
+                exchange_lines.append(f'  AS{answer_index}: "{sentence}"')
+            exchange_lines.append("")
+    exchange_text = "\n".join(exchange_lines).rstrip()
+
     system_prompt = (
         "You are a sentence classifier for earnings call Q&A exchanges. "
-        "Assign a best-fit bucket for the overall exchange and score every indexed analyst and "
-        "executive sentence using the category sheet. Always use the provided tool."
+        "For each exchange, paraphrase the analyst's question, choose a single best-fit bucket "
+        "for the overall topic, and classify only the executive answer sentences. Treat anything "
+        "the analyst says as context only and never assign a bucket to it. Always use the "
+        "provided tool."
     )
     user_prompt = (
         "## Task\n"
-        "Classify this Q&A exchange at the whole-conversation level and at the sentence level.\n\n"
+        "Summarise the analyst's question, choose a primary bucket for the overall exchange, "
+        "and classify only the executive answer sentences (AS).\n\n"
         "## Decision Criteria\n"
-        "Use the overall exchange topic for `primary_bucket_index`, then score each analyst and "
-        "executive sentence from the category descriptions and examples.\n"
+        "Use the overall exchange topic for `primary_bucket_index`, then score each executive "
+        "answer sentence from the category descriptions and examples. Analyst sentences are "
+        "shown for context only \u2014 do not return any QS results.\n"
         f"{_bucket_score_scale_guidance()}\n"
         f"{_importance_scale_guidance(report_inclusion_threshold)}\n\n"
         "## Rules\n"
         "1. Set `primary_bucket_index` to the single best existing bucket for the full exchange.\n"
-        "2. Return one result for every `QS` and `AS` sentence shown below.\n"
-        "3. Use up to the top 3 bucket-score pairs for each sentence, "
+        "2. Return `analyst_question_summary` as a single clause of \u226425 words paraphrasing "
+        "what the analyst is asking about. Avoid filler like greetings or thank-yous.\n"
+        "3. Return one result for every `AS` sentence shown below \u2014 and only AS sentences.\n"
+        "4. Use up to the top 3 bucket-score pairs for each AS sentence, "
         "ordered by score descending.\n"
-        "4. Score importance from 0 to 10 using the inclusion guidance above.\n"
-        "5. Keep `condensed` faithful to the source sentence while removing filler.\n"
-        "6. Keep each `index` aligned to the numbered `QS` or `AS` sentence.\n\n"
+        "5. Score importance from 0 to 10 using the inclusion guidance above.\n"
+        "6. Keep `condensed` faithful to the source sentence while removing filler.\n"
+        "7. Keep each `index` aligned to the numbered `AS` sentence.\n\n"
         "## Categories\n"
         f"{_xml_block('categories', categories_text_qa)}\n\n"
         "## Exchange\n"
@@ -1419,36 +1563,42 @@ async def classify_qa_conversation(  # pylint: disable=unused-argument
         llm_params=llm_params,
     )
 
-    primary_bucket = ""
+    # Question sentences are always built as context-only records: no LLM
+    # scoring, no bucket assignment, no eligibility for the report. Build
+    # them up front so they exist regardless of how the LLM call resolves.
+    question_source_block_id = (
+        question_turns[0]["block_id"] if question_turns else conv_id
+    )
+    answer_source_block_id = (
+        answer_turns[0]["block_id"] if answer_turns else conv_id
+    )
+
+    question_sentences_flat = [
+        sentence for turn in question_turns for _, sentence in turn["_sentences_raw"]
+    ]
     question_records: List[Dict[str, Any]] = []
+    for idx, sentence in enumerate(question_sentences_flat):
+        record = _make_context_sentence_record(
+            f"{conv_id}_qs{idx}",
+            sentence,
+            transcript_section="QA",
+            source_block_id=question_source_block_id,
+            parent_record_id=conv_id,
+        )
+        record["para_idx"] = (
+            question_para_indices[idx] if idx < len(question_para_indices) else 0
+        )
+        question_records.append(record)
+
+    primary_bucket = ""
+    analyst_question_summary = ""
     answer_records: List[Dict[str, Any]] = []
     if raw:
         try:
             result = QAExchangeClassification.model_validate(raw)
             if 0 <= result.primary_bucket_index < len(categories):
                 primary_bucket = f"bucket_{result.primary_bucket_index}"
-
-            question_by_idx = {sentence.index: sentence for sentence in result.question_sentences}
-            for idx, sentence in enumerate(question_sentences, start=1):
-                record = _make_sentence_record(
-                    f"{conv_id}_qs{idx - 1}",
-                    sentence,
-                    question_by_idx.get(idx),
-                    categories,
-                    applicable_ids,
-                    transcript_section="QA",
-                    source_block_id=(
-                        question_blocks[0].get("id", conv_id) if question_blocks else conv_id
-                    ),
-                    parent_record_id=conv_id,
-                    selected_importance_threshold=selected_importance_threshold,
-                    candidate_importance_threshold=candidate_importance_threshold,
-                    min_bucket_score_for_assignment=min_bucket_score_for_assignment,
-                )
-                record["para_idx"] = (
-                    question_para_indices[idx - 1] if idx - 1 < len(question_para_indices) else 0
-                )
-                question_records.append(record)
+            analyst_question_summary = (result.analyst_question_summary or "").strip()
 
             answer_by_idx = {sentence.index: sentence for sentence in result.answer_sentences}
             for idx, sentence in enumerate(answer_sentences_raw, start=1):
@@ -1459,9 +1609,7 @@ async def classify_qa_conversation(  # pylint: disable=unused-argument
                     categories,
                     applicable_ids,
                     transcript_section="QA",
-                    source_block_id=(
-                        answer_blocks[0].get("id", conv_id) if answer_blocks else conv_id
-                    ),
+                    source_block_id=answer_source_block_id,
                     parent_record_id=conv_id,
                     selected_importance_threshold=selected_importance_threshold,
                     candidate_importance_threshold=candidate_importance_threshold,
@@ -1478,28 +1626,6 @@ async def classify_qa_conversation(  # pylint: disable=unused-argument
                 error=str(exc),
             )
 
-    if not question_records:
-        for idx, sentence in enumerate(question_sentences):
-            record = _make_sentence_record(
-                f"{conv_id}_qs{idx}",
-                sentence,
-                None,
-                categories,
-                applicable_ids,
-                transcript_section="QA",
-                source_block_id=(
-                    question_blocks[0].get("id", conv_id) if question_blocks else conv_id
-                ),
-                parent_record_id=conv_id,
-                selected_importance_threshold=selected_importance_threshold,
-                candidate_importance_threshold=candidate_importance_threshold,
-                min_bucket_score_for_assignment=min_bucket_score_for_assignment,
-            )
-            record["para_idx"] = (
-                question_para_indices[idx] if idx < len(question_para_indices) else 0
-            )
-            question_records.append(record)
-
     if not answer_records:
         for idx, sentence in enumerate(answer_sentences_raw):
             record = _make_sentence_record(
@@ -1509,7 +1635,7 @@ async def classify_qa_conversation(  # pylint: disable=unused-argument
                 categories,
                 applicable_ids,
                 transcript_section="QA",
-                source_block_id=answer_blocks[0].get("id", conv_id) if answer_blocks else conv_id,
+                source_block_id=answer_source_block_id,
                 parent_record_id=conv_id,
                 selected_importance_threshold=selected_importance_threshold,
                 candidate_importance_threshold=candidate_importance_threshold,
@@ -1518,15 +1644,24 @@ async def classify_qa_conversation(  # pylint: disable=unused-argument
             record["para_idx"] = answer_para_indices[idx] if idx < len(answer_para_indices) else 0
             answer_records.append(record)
 
+    # Honor the LLM's whole-exchange primary bucket only if (a) it is in the
+    # set of buckets applicable to QA, and (b) at least one answer sentence
+    # also classifies into it. Otherwise fall back to a vote across the
+    # answer-sentence buckets. (Previously this was two chained `if` blocks
+    # where the second one always ran whenever the first nullified the
+    # primary, making the chain hard to reason about.)
     supported_answer_bucket_ids = {
         sentence.get("selected_bucket_id") or sentence.get("primary", "")
         for sentence in answer_records
         if sentence.get("selected_bucket_id") or sentence.get("primary", "")
     }
-    if primary_bucket not in supported_answer_bucket_ids:
-        primary_bucket = ""
+    primary_supported = (
+        primary_bucket
+        and primary_bucket in applicable_ids
+        and primary_bucket in supported_answer_bucket_ids
+    )
 
-    if primary_bucket not in applicable_ids:
+    if not primary_supported:
         answer_bucket_totals: Dict[str, Dict[str, float]] = defaultdict(
             lambda: {"count": 0.0, "importance": 0.0, "score": 0.0}
         )
@@ -1553,11 +1688,26 @@ async def classify_qa_conversation(  # pylint: disable=unused-argument
                 ),
             )[0]
         else:
+            primary_bucket = ""
             logger.warning(
                 "Q&A conversation could not resolve a primary bucket",
                 conversation=conv_id,
                 reason="no answer records available to derive primary bucket",
             )
+
+    # Stitch records back into the original turn order so the transcript
+    # popout can render the real back-and-forth (greeting Q -> A -> follow-up
+    # Q -> A -> thanks). The flat ``question_sentences``/``answer_sentences``
+    # lists are also kept for callers/UI code that consume the per-role view
+    # (report panel, included-sids set, etc.).
+    question_records_iter = iter(question_records)
+    answer_records_iter = iter(answer_records)
+    for turn in turns:
+        if turn["role"] == "q":
+            turn["sentences"] = [next(question_records_iter) for _ in turn["_sentences_raw"]]
+        else:
+            turn["sentences"] = [next(answer_records_iter) for _ in turn["_sentences_raw"]]
+        turn.pop("_sentences_raw", None)
 
     return {
         "id": conv_id,
@@ -1566,6 +1716,8 @@ async def classify_qa_conversation(  # pylint: disable=unused-argument
         "analyst_affiliation": analyst_affiliation,
         "executive_name": executive_name,
         "executive_title": executive_title,
+        "analyst_question_summary": analyst_question_summary,
+        "turns": turns,
         "question_sentences": question_records,
         "answer_sentences": answer_records,
     }
@@ -1919,42 +2071,35 @@ def _serialise_evidence_digest(
         )
         lines = [
             "<evidence>",
-            f"  <id>{row['evidence_id']}</id>",
-            f"  <status>{row['status']}</status>",
-            ("  <transcript_section>" f"{row['transcript_section']}</transcript_section>"),
-            f"  <speaker>{row['speaker']}</speaker>",
-            f"  <source_block_id>{row['source_block_id']}</source_block_id>",
-            f"  <selected_bucket>{selected_bucket}</selected_bucket>",
-            f"  <candidate_buckets>{candidate_names}</candidate_buckets>",
+            f"  <id>{_escape_for_prompt(row['evidence_id'])}</id>",
+            f"  <status>{_escape_for_prompt(row['status'])}</status>",
+            "  <transcript_section>"
+            f"{_escape_for_prompt(row['transcript_section'])}"
+            "</transcript_section>",
+            f"  <speaker>{_escape_for_prompt(row['speaker'])}</speaker>",
+            f"  <source_block_id>{_escape_for_prompt(row['source_block_id'])}</source_block_id>",
+            f"  <selected_bucket>{_escape_for_prompt(selected_bucket)}</selected_bucket>",
+            f"  <candidate_buckets>{_escape_for_prompt(candidate_names)}</candidate_buckets>",
             f"  <emerging_topic>{str(row['emerging_topic']).lower()}</emerging_topic>",
             f"  <importance_score>{row['importance_score']:.1f}</importance_score>",
         ]
         if row["classification_error"]:
             lines.append(
-                f"  <classification_error>{row['classification_error']}</classification_error>"
+                "  <classification_error>"
+                f"{_escape_for_prompt(row['classification_error'])}"
+                "</classification_error>"
             )
         if row["question_context"]:
-            lines.append(f"  <question_context>{row['question_context']}</question_context>")
-        lines.append(f"  <quote>{row['quote']}</quote>")
+            lines.append(
+                "  <question_context>"
+                f"{_escape_for_prompt(row['question_context'])}"
+                "</question_context>"
+            )
+        lines.append(f"  <quote>{_escape_for_prompt(row['quote'])}</quote>")
         lines.append("</evidence>")
         digest_rows.append("\n".join(lines))
 
     return "\n\n".join(digest_rows)
-
-
-def _build_config_review_digest(
-    bank_data: Dict[str, Any],
-    categories: List[Dict[str, Any]],
-    min_importance: float,
-    max_items: Optional[int] = None,
-) -> tuple[str, Dict[str, Dict[str, Any]]]:
-    """Build a full verbatim evidence digest and index for config change proposals."""
-    del min_importance
-    evidence_rows, evidence_index = _collect_config_review_evidence(bank_data)
-    return (
-        _serialise_evidence_digest(evidence_rows, categories, max_items=max_items),
-        evidence_index,
-    )
 
 
 def _category_to_row(category: Dict[str, Any]) -> Dict[str, str]:
@@ -2145,8 +2290,14 @@ async def analyze_config_coverage(
 
     mapped_rows = _existing_category_rows(evidence_rows)
     uncovered_rows = _emerging_topic_rows(evidence_rows)
-    combined_proposals: List[Dict[str, Any]] = []
-    seen_combined_keys = set()
+    # Keep the two passes' proposals in separate buckets so we can interleave
+    # them at the end. Previously they were appended into one list, then
+    # truncated to 6 - which meant a productive existing-update pass could
+    # entirely evict the emerging-topic pass that the business added the
+    # second pass to surface.
+    existing_proposals: List[Dict[str, Any]] = []
+    emerging_proposals: List[Dict[str, Any]] = []
+    seen_combined_keys: set = set()
 
     logger.info(
         "Reviewing category coverage",
@@ -2215,7 +2366,7 @@ async def analyze_config_coverage(
                     if key in seen_combined_keys:
                         continue
                     seen_combined_keys.add(key)
-                    combined_proposals.append(proposal)
+                    existing_proposals.append(proposal)
 
     if uncovered_rows:
         uncovered_digest = _serialise_evidence_digest(uncovered_rows, categories)
@@ -2279,9 +2430,18 @@ async def analyze_config_coverage(
                     if key in seen_combined_keys:
                         continue
                     seen_combined_keys.add(key)
-                    combined_proposals.append(proposal)
+                    emerging_proposals.append(proposal)
 
-    final_proposals = combined_proposals[:6]
+    # Interleave the two pools so neither pass can fully evict the other when
+    # the combined cap is reached. We zip-merge in round-robin order, then
+    # append any leftovers from whichever pool ran longer.
+    final_proposals: List[Dict[str, Any]] = []
+    for existing, emerging in zip(existing_proposals, emerging_proposals):
+        final_proposals.extend([existing, emerging])
+    leftover_start = min(len(existing_proposals), len(emerging_proposals))
+    final_proposals.extend(existing_proposals[leftover_start:])
+    final_proposals.extend(emerging_proposals[leftover_start:])
+    final_proposals = final_proposals[:6]
     logger.info(
         "Config review complete",
         ticker=bank_data.get("ticker", ""),
