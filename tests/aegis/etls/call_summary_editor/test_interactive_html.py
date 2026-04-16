@@ -129,8 +129,11 @@ def test_generate_html_injects_period_and_state():
     assert "Config Change Proposals" in html
     assert "No description provided." not in html
     assert "function renderEmergingTopicPanel()" in html
-    assert "function bucketSourceLabel(source)" in html
-    assert "bkt-source-badge" in html
+    # The Configured/Suggested/Emerging source badge row was removed from the
+    # bucket header in favor of an inline `<bucket name>: <generated headline>`
+    # layout — the source provenance is no longer surfaced to users.
+    assert "bucketSourceLabel(source)" not in html
+    assert "bkt-source-badge" not in html
     assert "const context = getSentenceContext(_activeSid);" in html
     assert "const {context} = getSentenceContext(_activeSid);" not in html
     assert "conv.primary_bucket ||" not in html

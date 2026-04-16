@@ -47,24 +47,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 #tp-resize:hover,#tp-resize.active{background:#0A66C2}
 #tp-resize.tp-hidden{display:none}
 
-/* View mode toggle */
-#tp-view-bar{padding:5px 10px;background:#F8F9FB;border-bottom:1px solid #E4E6EA;flex-shrink:0;display:flex;align-items:center;justify-content:center;gap:4px}
-.tp-view-label{font-size:9px;font-weight:600;color:#8A8D91;text-transform:uppercase;letter-spacing:.03em;margin-right:2px;white-space:nowrap}
-.tp-view-btn{font-size:9px;padding:3px 8px;border:1px solid transparent;border-radius:3px;background:none;cursor:pointer;color:#65676B;font-weight:600;text-transform:uppercase;letter-spacing:.03em;white-space:nowrap}
-.tp-view-btn.active{background:#1A2332;color:#fff;border-color:#1A2332}
-.tp-view-btn:hover:not(.active){background:#E4E6EA}
-.tp-view-help{width:18px;height:18px;border-radius:50%;border:1px solid #CDD0D5;background:none;cursor:pointer;font-size:10px;font-weight:700;color:#8A8D91;display:flex;align-items:center;justify-content:center;margin-left:4px;flex-shrink:0}
-.tp-view-help:hover{background:#E4E6EA;color:#1A2332}
-
-/* View help tooltip */
-#tp-help-tip{display:none;position:absolute;z-index:100;background:#fff;border:1px solid #E4E6EA;border-radius:6px;box-shadow:0 4px 16px rgba(0,0,0,.12);padding:12px 14px;width:280px;font-size:11px;line-height:1.5;color:#333}
-#tp-help-tip.visible{display:block}
-#tp-help-tip h4{font-size:10px;font-weight:700;text-transform:uppercase;color:#1A2332;margin:0 0 6px;letter-spacing:.04em}
-#tp-help-tip ul{margin:0;padding:0 0 0 14px}
-#tp-help-tip li{margin-bottom:6px}
-#tp-help-tip li:last-child{margin-bottom:0}
-#tp-help-tip strong{color:#1A2332}
-
 #transcript-body{flex:1;overflow-y:auto;padding:4px 0}
 
 /* Transcript section header */
@@ -77,14 +59,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 .t-speaker-title{font-size:9px;color:#65676B}
 .t-block-text{font-size:10.5px;line-height:1.45;color:#444}
 .t-para-break{display:block;height:6px}
-
-/* Classification sub-group within a block */
-.t-class-group{margin:1px 0;padding:3px 5px;border-left:2px solid transparent;border-radius:0 3px 3px 0}
-.t-class-label{font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#888;margin-bottom:1px}
-
-/* Category view bucket header */
-.t-cat-header{padding:5px 10px;background:#F0F2F5;font-size:9px;font-weight:700;color:#555;border-bottom:1px solid #E4E6EA;display:flex;align-items:center;gap:6px;position:sticky;top:0;z-index:2;border-left:3px solid #CDD0D5}
-.t-cat-count{font-size:8px;color:#8A8D91;background:#fff;padding:1px 5px;border-radius:8px;margin-left:auto}
 
 /* QA group — condensed */
 .t-qa-group{margin:4px 6px;border-left:3px solid #B8CCE4;border-radius:0 4px 4px 0;overflow:hidden;background:#F0F5FA}
@@ -121,19 +95,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 .s-tok.s-highlight{outline:2px solid #FF9800;outline-offset:1px;background:rgba(255,152,0,.15)!important;border-radius:3px;animation:s-flash .6s ease-out}
 @keyframes s-flash{0%{outline-color:#FF9800;background:rgba(255,152,0,.25)}100%{outline-color:#FF9800;background:rgba(255,152,0,.15)}}
 .q-card.q-card-highlight{box-shadow:0 0 0 2px #FF9800;transition:box-shadow .3s}
-
-/* By Category: sentence group within a bucket */
-.t-cat-sent-group{margin:1px 6px;padding:4px 7px;background:#fff;border-left:3px solid #E4E6EA;border-radius:0 4px 4px 0}
-.t-cat-sent-group+.t-cat-sent-group{margin-top:0;border-top:1px dotted #E4E6EA}
-.t-cat-attrib{text-align:right;font-size:9px;color:#8A8D91;font-style:italic;margin-top:2px}
-
-/* Classified view: excluded group dimming */
-.t-class-group.t-grp-excl{opacity:.45}
-.t-class-group.t-grp-excl .t-class-label{color:#B0B3B8!important}
-
-/* Tab icons */
-.tp-view-icon{font-size:10px;margin-right:2px;opacity:.7}
-.tp-view-btn.active .tp-view-icon{opacity:1}
 
 /* Sentence popover */
 #s-popover{position:fixed;z-index:9999;background:#fff;border:1px solid #E4E6EA;border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.14);width:420px;max-width:min(420px,calc(100vw - 16px));display:none;overflow:hidden}
@@ -182,19 +143,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 .rpt-l1{font-size:16px;font-weight:800;color:#1A2332;padding:10px 0 4px;margin:0;border-bottom:2px solid #1A2332;margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em}
 .rpt-l1:not(:first-child){margin-top:14px}
 
-/* Report: L2 bucket heading + L3 headline */
+/* Report: L2 bucket heading + inline generated subtitle */
 .bkt-section{margin-bottom:6px;overflow:hidden}
 .bkt-header{display:flex;align-items:center;gap:8px;padding:4px 0;cursor:pointer;user-select:none}
 .bkt-bar{width:3px;min-height:24px;border-radius:2px;flex-shrink:0}
-.bkt-info{flex:1;min-width:0}
-.bkt-name-input{font-size:13px;font-weight:700;color:#1A2332;background:transparent;border:none;outline:none;width:100%;padding:0;cursor:text}
+.bkt-info{flex:1;min-width:0;display:flex;align-items:baseline;gap:6px;flex-wrap:wrap}
+.bkt-name-input{font-size:13px;font-weight:700;color:#1A2332;background:transparent;border:none;outline:none;padding:0;cursor:text;min-width:80px;flex-shrink:0}
 .bkt-name-input:focus{background:#F8F9FB;border-radius:3px;padding:1px 4px;margin:-1px -4px}
-.bkt-headline{font-size:10px;color:#65676B;margin-top:1px;font-style:italic}
-.bkt-meta-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:2px}
-.bkt-source-badge{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;border-radius:999px;padding:2px 6px;white-space:nowrap}
-.bkt-source-badge.config{background:#E8EDF4;color:#405267}
-.bkt-source-badge.suggested{background:#FFF3E0;color:#A45100}
-.bkt-source-badge.emerging{background:#E8F5E9;color:#1E6D36}
+.bkt-headline{font-size:11px;color:#65676B;font-style:italic;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bkt-headline::before{content:": ";color:#1A2332;font-weight:700;font-style:normal}
 .bkt-count{font-size:10px;background:#F0F2F5;color:#65676B;padding:1px 7px;border-radius:12px;font-weight:600;white-space:nowrap}
 .bkt-chevron{color:#C4C9D0;font-size:12px;transition:transform .15s;flex-shrink:0}
 .bkt-chevron.open{transform:rotate(0deg)}
@@ -252,20 +209,23 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 .drag-handle:active{cursor:grabbing}
 .q-attrib{text-align:right;font-size:9px;color:#8A8D91;font-style:italic;padding:0 10px 6px}
 .attrib-off .q-attrib{display:none}
-.q-bank-badge{font-size:9px;font-weight:600;padding:1px 5px;border-radius:3px;background:#E4E6EA;color:#555}
-.q-sec-badge{font-size:9px;padding:1px 5px;border-radius:3px;font-weight:600}
-.q-sec-badge.md{background:#E8F4EC;color:#1B6B38}
-.q-sec-badge.qa{background:#E8F0FC;color:#1657A8}
-.q-imp{font-size:9px;color:#8A8D91}
 .q-hdr-spacer{flex:1}
 .q-del{background:none;border:none;color:#C4C9D0;cursor:pointer;font-size:15px;padding:0 2px;line-height:1;flex-shrink:0}
 .q-del:hover{color:#E02020}
-/* Format dropdown button */
-.fmt-select{font-size:9px;padding:2px 6px;border:1px solid #CDD0D5;border-radius:3px;background:#fff;cursor:pointer;color:#1A2332;font-weight:600;white-space:nowrap;appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5'%3E%3Cpath d='M0 0l4 5 4-5z' fill='%238A8D91'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 4px center;padding-right:14px}
-.fmt-select:hover{border-color:#0A66C2}
+/* Summarize toggle (replaces the former Verbatim/Condensed dropdown) */
+.fmt-toggle{display:inline-flex;align-items:center;gap:6px;font-size:10px;color:#65676B;cursor:pointer;user-select:none;white-space:nowrap}
+.fmt-toggle input{appearance:none;-webkit-appearance:none;width:22px;height:12px;background:#CDD0D5;border-radius:7px;position:relative;cursor:pointer;transition:background .15s;flex-shrink:0}
+.fmt-toggle input::after{content:"";position:absolute;top:1px;left:1px;width:10px;height:10px;background:#fff;border-radius:50%;transition:transform .15s;box-shadow:0 1px 2px rgba(0,0,0,.2)}
+.fmt-toggle input:checked{background:#0A66C2}
+.fmt-toggle input:checked::after{transform:translateX(10px)}
 .q-text{padding:6px 10px;font-size:11px;line-height:1.65;color:#3C3F44;max-height:200px;overflow-y:auto}
 .q-text p{margin-bottom:5px}
 .q-text p:last-child{margin-bottom:0}
+/* Report preview: no per-bucket highlighting inside quote cards. The transcript
+   panel still uses .s-tok's bucket colors to cue classification, but the
+   report panel is a clean bullet list that should read like the final copy. */
+.q-text .s-tok{background:none!important;border-bottom:none!important;color:inherit!important;padding:0!important;cursor:default}
+.q-text .s-tok:hover{opacity:1}
 .q-expand-btn{font-size:11px;color:#0A66C2;cursor:pointer;padding:3px 12px;display:block;text-align:center;background:#F8F9FB;border:none;width:100%;border-top:1px solid #F0F2F5}
 /* QA conversation card extras */
 .qa-card-q{padding:8px 12px 4px;background:#FAFBFC;border-bottom:1px solid #F0F2F5;font-size:11px;color:#65676B}
@@ -358,21 +318,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
     <div id="transcript-wrap" class="tp-collapsed" style="width:40%">
       <div id="transcript-panel">
         <div id="tp-content">
-          <div id="tp-view-bar" style="position:relative">
-            <span class="tp-view-label">View:</span>
-            <button class="tp-view-btn active" data-view="blocks" onclick="setTranscriptView('blocks')"><span class="tp-view-icon">&#8801;</span>Blocks</button>
-            <button class="tp-view-btn" data-view="classified" onclick="setTranscriptView('classified')"><span class="tp-view-icon">&#9881;</span>Classified</button>
-            <button class="tp-view-btn" data-view="category" onclick="setTranscriptView('category')"><span class="tp-view-icon">&#9638;</span>By Category</button>
-            <button class="tp-view-help" onclick="toggleViewHelp(event)" title="About view modes">?</button>
-            <div id="tp-help-tip">
-              <h4>Transcript View Modes</h4>
-              <ul>
-                <li><strong>Blocks</strong> &mdash; Original transcript layout grouped by speaker. Sentences highlighted green are included in the report draft.</li>
-                <li><strong>Classified</strong> &mdash; Speaker blocks with sentences sub-grouped by their assigned financial category. See at a glance how each speaker's remarks break down.</li>
-                <li><strong>By Category</strong> &mdash; All sentences across the transcript grouped under their category headers. Useful for seeing everything said about a topic in one place.</li>
-              </ul>
-            </div>
-          </div>
           <div id="transcript-body"></div>
         </div>
         <div id="tp-rail" onclick="toggleTranscript()"><span id="tp-rail-label">Earnings Call Transcript</span></div>
@@ -423,7 +368,9 @@ let __HTML_TPL__ = null;
 let state = null;
 let sortableInstances = [];
 let _activeSid = null; // sentence currently shown in popover
-let _transcriptView = 'blocks'; // 'blocks' | 'classified' | 'category'
+// Transcript panel has a single fixed view: blocks. The classified / by-category
+// alternates were removed because the block view already shows status colour
+// cues on every sentence, so the other modes just added navigation cost.
 const DYNAMIC_BUCKET_COLORS = [
   {bg:'#E3F2FD', accent:'#1565C0'},
   {bg:'#F3E5F5', accent:'#6A1B9A'},
@@ -523,27 +470,6 @@ function toggleTranscript() {
     wrap.classList.add('tp-collapsed');
     wrap.style.width = '';
     resize.classList.add('tp-hidden');
-  }
-}
-function setTranscriptView(mode) {
-  _transcriptView = mode;
-  document.querySelectorAll('.tp-view-btn').forEach(b =>
-    b.classList.toggle('active', b.dataset.view === mode));
-  renderTranscriptBody();
-}
-function toggleViewHelp(evt) {
-  evt.stopPropagation();
-  const tip = document.getElementById('tp-help-tip');
-  tip.classList.toggle('visible');
-  if (tip.classList.contains('visible')) {
-    const btn = evt.currentTarget;
-    const bar = btn.closest('#tp-view-bar');
-    const barRect = bar.getBoundingClientRect();
-    const btnRect = btn.getBoundingClientRect();
-    tip.style.top = (btnRect.bottom - barRect.top + 4) + 'px';
-    tip.style.right = '4px';
-    const close = e => { if (!tip.contains(e.target) && e.target !== btn) { tip.classList.remove('visible'); document.removeEventListener('mousedown', close); } };
-    setTimeout(() => document.addEventListener('mousedown', close), 0);
   }
 }
 
@@ -655,14 +581,6 @@ function createBucketFromRow(row, options={}) {
   return bucket;
 }
 
-function bucketSourceLabel(source) {
-  return {config:'Configured', suggested:'Suggested', emerging:'Emerging'}[source] || 'Configured';
-}
-
-function bucketSourceClass(source) {
-  return {config:'config', suggested:'suggested', emerging:'emerging'}[source] || 'config';
-}
-
 function getSentenceReviewStatus(sid) {
   const bs = getBankState(state.current_bank);
   if (bs.sentence_status_overrides && bs.sentence_status_overrides[sid]) {
@@ -688,8 +606,6 @@ function effectivePrimary(sid) {
 }
 
 function renderTranscriptBody() {
-  if (_transcriptView === 'classified') return renderTranscriptBodyClassified();
-  if (_transcriptView === 'category') return renderTranscriptBodyByCategory();
   renderTranscriptBodyBlocks();
 }
 
@@ -714,16 +630,6 @@ function computeIncludedSids(bankId) {
     });
   });
   return inc;
-}
-function groupByCat(sentences) {
-  const groups = []; let cur = null;
-  for (const s of sentences) {
-    const ep = effectivePrimary(s.sid);
-    if (!cur || cur.bid !== ep) { if (cur) groups.push(cur); cur = {bid:ep, sents:[s]}; }
-    else cur.sents.push(s);
-  }
-  if (cur) groups.push(cur);
-  return groups;
 }
 function renderGroupedSpans(groups, btype, inc) {
   return groups.map((g, i) => {
@@ -842,114 +748,6 @@ function renderQAConvBlocks(conv, inc, convIdx) {
   return `<div class="t-qa-group">
     <div class="t-qa-num-label">Question ${convIdx + 1}</div>
     ${turnsHtml}</div>`;
-}
-
-// ── View: Classified (sub-grouped by category within each block) ──
-function renderTranscriptBodyClassified() {
-  const bank = state.banks[state.current_bank];
-  const inc = computeIncludedSids(state.current_bank);
-  let html = '';
-  if (bank.md_blocks && bank.md_blocks.length) {
-    html += `<div class="t-section-header">Management Discussion</div>`;
-    bank.md_blocks.forEach(blk => { html += renderMDBlockClassified(blk, inc); });
-  }
-  if (bank.qa_conversations && bank.qa_conversations.length) {
-    html += `<div class="t-section-header">Questions &amp; Answers</div>`;
-    bank.qa_conversations.forEach((conv, ci) => { html += renderQAConvClassified(conv, inc, ci); });
-  }
-  document.getElementById('transcript-body').innerHTML = html;
-}
-function renderMDBlockClassified(blk, inc) {
-  const groups = groupByCat(blk.sentences);
-  const groupsHtml = groups.map(g => {
-    const bkt = getBucket(g.bid);
-    const grpInc = g.sents.some(s => inc.has(s.sid));
-    const cls = grpInc ? '' : ' t-grp-excl';
-    const spans = tSpansWithParas(g.sents, 'md', inc);
-    return `<div class="t-class-group${cls}" style="border-left-color:${bkt.color_accent};background:${grpInc?bkt.color_bg:'#FAFAFA'}">
-      <div class="t-class-label" style="color:${bkt.color_accent}"><span class="t-gbullet">&bull;</span> ${esc(bucketLabel(bkt))}</div>
-      <div class="t-block-text">${spans}</div></div>`;
-  }).join('');
-  return `<div class="t-block">
-    <div class="t-block-header"><span class="t-speaker-name">${esc(blk.speaker)}</span>
-    ${blk.speaker_title ? `<span class="t-speaker-title">${esc(blk.speaker_title)}</span>` : ''}</div>
-    ${groupsHtml}</div>`;
-}
-function renderQAConvClassified(conv, inc, convIdx) {
-  const turns = _qaConvTurns(conv);
-  const turnsHtml = turns.map(turn => {
-    const label = _qaTurnLabel(turn);
-    if (turn.role === 'q') {
-      // Analyst turns are context-only: render them as plain spans, no
-      // category sub-grouping, since they have no bucket assignment.
-      const spans = tSpansWithParas(turn.sentences || [], 'qa', inc);
-      return `<div class="t-qa-q"><span class="qa-lbl q">Q</span><span class="qa-person">${esc(label)}</span>
-        <div class="t-qa-text">${spans}</div></div>`;
-    }
-    const groups = groupByCat(turn.sentences || []);
-    const groupsHtml = groups.map(g => {
-      const bkt = getBucket(g.bid);
-      const grpInc = g.sents.some(s => inc.has(s.sid));
-      const cls = grpInc ? '' : ' t-grp-excl';
-      const spans = tSpansWithParas(g.sents, 'qa', inc);
-      return `<div class="t-class-group${cls}" style="border-left-color:${bkt.color_accent};background:${grpInc?bkt.color_bg:'#FAFAFA'}">
-        <div class="t-class-label" style="color:${bkt.color_accent}"><span class="t-gbullet">&bull;</span> ${esc(bucketLabel(bkt))}</div>
-        <div class="t-block-text">${spans}</div></div>`;
-    }).join('');
-    return `<div class="t-qa-a"><span class="qa-lbl a">A</span><span class="qa-person">${esc(label)}</span>
-      ${groupsHtml}</div>`;
-  }).join('');
-  return `<div class="t-qa-group">
-    <div class="t-qa-num-label">Question ${convIdx + 1}</div>
-    ${turnsHtml}</div>`;
-}
-
-// ── View: By Category ──
-function renderTranscriptBodyByCategory() {
-  const bank = state.banks[state.current_bank];
-  const inc = computeIncludedSids(state.current_bank);
-  const allSents = [];
-  (bank.md_blocks || []).forEach(blk => {
-    blk.sentences.forEach(s => allSents.push({sent:s, type:'md', speaker:blk.speaker, speakerTitle:blk.speaker_title||'', blkId:blk.id}));
-  });
-  // By-category view skips analyst question sentences entirely: they are
-  // context-only (status="context") and don't belong to any bucket, so
-  // including them here would just produce empty groups under "Other".
-  (bank.qa_conversations || []).forEach(conv => {
-    conv.answer_sentences.forEach(s => allSents.push({sent:s, type:'qa-a', speaker:conv.executive_name, speakerTitle:conv.executive_title||'', blkId:conv.id}));
-  });
-  const byBucket = {};
-  allSents.forEach(item => { const bid = effectivePrimary(item.sent.sid); if (!byBucket[bid]) byBucket[bid]=[]; byBucket[bid].push(item); });
-
-  let html = '';
-  const orderedBuckets = [...state.buckets];
-  if (byBucket[''] && byBucket[''].length) orderedBuckets.push(getBucket(''));
-
-  orderedBuckets.forEach(bucket => {
-    const items = byBucket[bucket.id || ''];
-    if (!items || !items.length) return;
-    const incCount = items.filter(i => inc.has(i.sent.sid)).length;
-    html += `<div class="t-cat-header"><strong>${esc(bucketLabel(bucket))}</strong><span class="t-cat-count">${incCount}/${items.length}</span></div>`;
-    // Group consecutive sentences from same speaker+block into bullet groups
-    const groups = [];
-    let cur = null;
-    items.forEach(item => {
-      if (!cur || cur.speaker !== item.speaker || cur.blkId !== item.blkId) {
-        if (cur) groups.push(cur);
-        cur = {speaker:item.speaker, speakerTitle:item.speakerTitle, type:item.type, blkId:item.blkId, sents:[item]};
-      } else { cur.sents.push(item); }
-    });
-    if (cur) groups.push(cur);
-    groups.forEach(g => {
-      const btype = g.type.startsWith('qa') ? 'qa' : 'md';
-      const spans = g.sents.map(i => tSpan(i.sent, btype, inc)).join(' ');
-      const attrib = g.speakerTitle ? `${g.speaker}, ${g.speakerTitle}` : g.speaker;
-      html += `<div class="t-cat-sent-group">
-        <div class="t-block-text"><span class="t-gbullet">&bull;</span> ${spans}</div>
-        <div class="t-cat-attrib">&mdash; ${esc(attrib)}</div></div>`;
-    });
-  });
-  document.getElementById('transcript-body').innerHTML = html;
 }
 
 // ============================================================
@@ -1590,20 +1388,21 @@ function renderReportSections() {
       const userTitle = (state.bucket_user_titles || {})[bucket.id];
       const titleVal  = userTitle != null ? userTitle : bucket.name;
 
+      // The bucket name + generated subtitle share one baseline row so the
+      // header reads like "Capital Markets: <subtitle>". The source badge and
+      // meta-row were removed — the generated subtitle already conveys "this
+      // bucket has real content" and the provenance is not shown to users.
       html += `
 <div class="bkt-section" id="bs_${bucket.id}">
   <div class="bkt-header" onclick="toggleBucket('${bucket.id}')">
     <div class="bkt-bar" style="background:${bucket.color_accent}"></div>
-	    <div class="bkt-info">
-	      <input class="bkt-name-input" value="${escAttr(titleVal)}"
-	             onclick="event.stopPropagation()"
-	             onblur="saveBucketTitle('${bucket.id}',this.value)"
-	             onkeydown="if(event.key==='Enter')this.blur()">
-	      <div class="bkt-meta-row">
-	        ${bucket.generated_headline ? `<div class="bkt-headline">${esc(bucket.generated_headline)}</div>` : ''}
-	        <span class="bkt-source-badge ${bucketSourceClass(bucket.source)}">${bucketSourceLabel(bucket.source)}</span>
-	      </div>
-	    </div>
+    <div class="bkt-info">
+      <input class="bkt-name-input" value="${escAttr(titleVal)}"
+             onclick="event.stopPropagation()"
+             onblur="saveBucketTitle('${bucket.id}',this.value)"
+             onkeydown="if(event.key==='Enter')this.blur()">
+      ${bucket.generated_headline ? `<span class="bkt-headline">${esc(bucket.generated_headline)}</span>` : ''}
+    </div>
     <span class="bkt-count" id="bkc_${bucket.id}">${quotes.length}</span>
     <span class="bkt-chevron open" id="bkv_${bucket.id}">&#9662;</span>
   </div>
@@ -1622,13 +1421,10 @@ function renderSubquoteCard(sq, bucket) {
   const bankId = state.current_bank;
   const bank   = state.banks[bankId];
   const bs     = getBankState(bankId);
+  // fmt is now a 2-value toggle: 'verbatim' (off) or 'condensed' (on = summarize).
   const fmt    = (bs.subquote_formats && bs.subquote_formats[sq.id]) || 'verbatim';
-  const imp    = getSubquoteImportance(sq).toFixed(1);
+  const summarizeOn = fmt === 'condensed';
   const isMD   = sq.type === 'md';
-
-  const secBadge = isMD
-    ? `<span class="q-sec-badge md">MD</span>`
-    : `<span class="q-sec-badge qa">Q&amp;A</span>`;
 
   const textContent = renderSubquoteText(sq, fmt, bs);
   const isLong = getSubquoteFormats(sq, 'verbatim').length > 600;
@@ -1667,14 +1463,11 @@ function renderSubquoteCard(sq, bucket) {
 <div class="q-card" data-subquote-id="${sq.id}">
   <div class="q-card-header">
     <span class="drag-handle">&#8942;</span>
-    <select class="fmt-select" onchange="switchFmt('${sq.id}',this.value)">
-      ${['verbatim','condensed'].map(f =>
-        `<option value="${f}"${fmt===f?' selected':''}>${fmtLabel(f)}</option>`
-      ).join('')}
-    </select>
-    <span class="q-bank-badge">${esc(bank.ticker)}</span>
-    ${secBadge}
-    <span class="q-imp">&#9733; ${imp}</span>
+    <label class="fmt-toggle" onclick="event.stopPropagation()">
+      <input type="checkbox" ${summarizeOn ? 'checked' : ''}
+             onchange="switchFmt('${sq.id}', this.checked ? 'condensed' : 'verbatim')">
+      <span>Summarize</span>
+    </label>
     <span class="q-hdr-spacer"></span>
     <button class="q-del" onclick="deleteSubquote('${sq.id}')" title="Remove from report">&#215;</button>
   </div>
@@ -1710,16 +1503,6 @@ function renderSubquoteText(sq, fmt, bs) {
   // Non-span formats — plain text, no spans
   const text = sents.map(s => s[fmt] || s.text || '').join(' ').trim();
   return text.split(/\n\n+/).filter(Boolean).map(p => `<p>${esc(p.trim())}</p>`).join('');
-}
-
-function fmtLabel(f) {
-  return {verbatim:'Verbatim',condensed:'Condensed'}[f]||f;
-}
-function fmtIcon(f) {
-  return {verbatim:'&#8220;',condensed:'&#8796;'}[f]||'?';
-}
-function fmtTitle(f) {
-  return {verbatim:'Verbatim — original text',condensed:'Condensed — shortened'}[f]||f;
 }
 
 function expandCard(btn) {

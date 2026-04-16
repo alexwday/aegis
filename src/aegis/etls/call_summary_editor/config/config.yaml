@@ -47,8 +47,10 @@ pipeline:
   # Minimum existing-bucket score required before evidence is auto-assigned to
   # an existing category. Lower-scoring evidence remains unmapped for review.
   min_bucket_score_for_assignment: 6.0
-  # Optional headline generation; disabled by default until evidence is finalized.
-  enable_headlines: false
+  # Bucket headlines are shown inline after the section name in the report
+  # preview (e.g. "Capital Markets: <generated subtitle>"), so they need to
+  # run as part of the normal pipeline.
+  enable_headlines: true
   # Maximum number of sample snippets fed to the headline LLM per bucket.
   # Higher = richer headlines but larger prompt cost.
   headline_sample_size: 8
