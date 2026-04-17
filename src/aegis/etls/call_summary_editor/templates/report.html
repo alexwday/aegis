@@ -763,6 +763,58 @@ body{
 .q-card:hover .q-del{color:var(--text-3)}
 .q-del:hover{color:var(--danger)!important}
 
+/* Edit / Revert buttons (mirrors .q-del look) */
+.q-edit,.q-revert{
+  background:none;border:none;
+  color:var(--rule);
+  cursor:pointer;
+  padding:0 4px;line-height:1;flex-shrink:0;
+  display:inline-flex;align-items:center;justify-content:center;
+  transition:color .15s;
+}
+.q-card:hover .q-edit,
+.q-card:hover .q-revert{color:var(--text-3)}
+.q-edit:hover{color:var(--accent)!important}
+.q-revert:hover{color:var(--accent)!important}
+
+/* "edited" pill — signals that the finding text is user-customised */
+.q-edited-badge{
+  font-size:9.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--accent);
+  background:var(--accent-soft);
+  padding:2px 6px;border-radius:3px;
+  white-space:nowrap;
+}
+
+/* Inline edit UI */
+.q-text.q-text-editing{max-height:none;overflow:visible}
+.q-edit-area{
+  width:100%;box-sizing:border-box;
+  font-family:var(--font-serif);
+  font-size:14px;line-height:1.7;color:var(--text-1);
+  padding:8px 10px;
+  border:1px solid var(--rule);
+  border-radius:4px;
+  background:var(--paper-2);
+  resize:vertical;min-height:80px;
+  letter-spacing:.003em;
+}
+.q-edit-area:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
+.q-edit-actions{
+  display:flex;justify-content:flex-end;gap:6px;
+  padding:6px 0 0;
+}
+.q-edit-cancel,.q-edit-save{
+  font-size:11.5px;font-weight:500;
+  padding:4px 12px;border-radius:3px;cursor:pointer;
+  border:1px solid var(--rule);
+  background:var(--paper-2);color:var(--text-2);
+  transition:background .15s,color .15s,border-color .15s;
+}
+.q-edit-cancel:hover{background:var(--surface-1)}
+.q-edit-save{background:var(--accent);color:#fff;border-color:var(--accent)}
+.q-edit-save:hover{background:var(--accent-hover);border-color:var(--accent-hover)}
+
 /* Summarize toggle */
 .fmt-toggle{display:inline-flex;align-items:center;gap:7px;font-size:10.5px;color:var(--text-3);cursor:pointer;user-select:none;white-space:nowrap;font-weight:500}
 .fmt-toggle input{appearance:none;-webkit-appearance:none;width:24px;height:13px;background:var(--rule);border-radius:7px;position:relative;cursor:pointer;transition:background .15s;flex-shrink:0}
@@ -1044,6 +1096,8 @@ let _activeSid = null; // sentence currently shown in popover
 // the icon dependency-free and lets `currentColor` pick up the .bkt-focus
 // state styling (default grey, hover amber, active dark-on-yellow).
 const HIGHLIGHTER_SVG = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 11-6 6v3h9l3-3"/><path d="m22 12-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4"/></svg>';
+const EDIT_SVG = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>';
+const REVERT_SVG = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>';
 
 const DYNAMIC_BUCKET_COLORS = [
   {bg:'#E3F2FD', accent:'#1565C0'},
@@ -2382,9 +2436,15 @@ function renderSubquoteCard(sq, bucket) {
   const fmt    = (bs.subquote_formats && bs.subquote_formats[sq.id]) || 'verbatim';
   const summarizeOn = fmt === 'condensed';
   const isMD   = sq.type === 'md';
+  const isEdited = !!getSubquoteTextOverride(sq.id, bs);
 
   const textContent = renderSubquoteText(sq, fmt, bs);
-  const isLong = getSubquoteFormats(sq, 'verbatim').length > 600;
+  // When edited, the text is custom — "Show more" truncation is based on
+  // the override length, not the original verbatim length.
+  const measureLen = isEdited
+    ? getSubquoteTextOverride(sq.id, bs).length
+    : getSubquoteFormats(sq, 'verbatim').length;
+  const isLong = measureLen > 600;
   const expandBtn = isLong
     ? `<button class="q-expand-btn" onclick="expandCard(this)">Show more &#9662;</button>`
     : '';
@@ -2416,16 +2476,32 @@ function renderSubquoteCard(sq, bucket) {
     </div>`;
   }
 
-  return `
-<div class="q-card" data-subquote-id="${sq.id}">
-  <div class="q-card-header">
-    <span class="drag-handle">&#8942;</span>
+  // When the user has edited the finding, the Summarize toggle no longer
+  // applies (the text is custom) — hide it and surface a "Revert" affordance
+  // instead. Revert deletes the override, restoring the sentence-derived view.
+  const summarizeToggleHtml = isEdited ? '' : `
     <label class="fmt-toggle" onclick="event.stopPropagation()">
       <input type="checkbox" ${summarizeOn ? 'checked' : ''}
              onchange="switchFmt('${sq.id}', this.checked ? 'condensed' : 'verbatim')">
       <span>Summarize</span>
-    </label>
+    </label>`;
+  const editedBadgeHtml = isEdited
+    ? `<span class="q-edited-badge" title="Text has been manually edited">edited</span>`
+    : '';
+  const revertBtnHtml = isEdited
+    ? `<button class="q-revert" onclick="revertSubquoteEdit('${sq.id}')" title="Revert to original text">${REVERT_SVG}</button>`
+    : '';
+  const editBtnHtml = `<button class="q-edit" onclick="editSubquote('${sq.id}')" title="Edit text">${EDIT_SVG}</button>`;
+
+  return `
+<div class="q-card" data-subquote-id="${sq.id}">
+  <div class="q-card-header">
+    <span class="drag-handle">&#8942;</span>
+    ${summarizeToggleHtml}
+    ${editedBadgeHtml}
     <span class="q-hdr-spacer"></span>
+    ${editBtnHtml}
+    ${revertBtnHtml}
     <button class="q-del" onclick="deleteSubquote('${sq.id}')" title="Remove from report">&#215;</button>
   </div>
   ${qaContextHtml}
@@ -2435,7 +2511,22 @@ function renderSubquoteCard(sq, bucket) {
 </div>`;
 }
 
+function getSubquoteTextOverride(sqid, bs) {
+  if (!bs || !bs.subquote_text_overrides) return null;
+  const v = bs.subquote_text_overrides[sqid];
+  return (typeof v === 'string' && v.length) ? v : null;
+}
+
 function renderSubquoteText(sq, fmt, bs) {
+  // User-edited override: render as plain paragraphs, no sentence spans.
+  // The original remains derivable from sq.sentences/sq.answer_sentences,
+  // so "revert" is just deleting this override key.
+  const override = getSubquoteTextOverride(sq.id, bs);
+  if (override) {
+    return override.split(/\n\n+/).filter(Boolean)
+      .map(p => `<p>${esc(p.trim())}</p>`).join('') || `<p>${esc(override)}</p>`;
+  }
+
   const useSpans = fmt === 'verbatim' || fmt === 'condensed';
   const sents = sq.type === 'md' ? sq.sentences : sq.answer_sentences;
   const isQA = sq.type === 'qa';
@@ -2563,6 +2654,102 @@ function deleteSubquote(sqid) {
   renderTranscriptBody();
 }
 
+// ------------------------------------------------------------
+// MANUAL FINDING EDITS
+// ------------------------------------------------------------
+// A user-edited finding stores its override plain text on the bank state
+// (bs.subquote_text_overrides[sqid]). The original is always derivable from
+// the sentence data, so "revert" is implemented as simply deleting the key.
+// The sentence-level spans/highlighting are dropped while an override is in
+// effect — custom text has no 1:1 mapping back to source sentences.
+function getSubquotePlainText(sq, fmt, bs) {
+  // Seed the edit textarea with whatever text the user is currently seeing.
+  // If already edited, seed with the override so further edits compound.
+  const override = getSubquoteTextOverride(sq.id, bs);
+  if (override) return override;
+  return subquoteTextForDocx(sq, fmt);
+}
+
+function editSubquote(sqid) {
+  const sq = getAllSubquotes(state.current_bank).find(x => x.id === sqid);
+  if (!sq) return;
+  const bs = getBankState(state.current_bank);
+  const fmt = (bs.subquote_formats && bs.subquote_formats[sqid]) || 'verbatim';
+  const seedText = getSubquotePlainText(sq, fmt, bs);
+
+  const card = document.querySelector(`[data-subquote-id="${sqid}"]`);
+  if (!card) return;
+  // If a textarea is already open (double-click), don't re-open.
+  if (card.querySelector('.q-edit-area')) return;
+
+  const textDiv = card.querySelector('.q-text');
+  if (!textDiv) return;
+
+  // Stash the pre-edit HTML so Cancel can restore without a full re-render.
+  textDiv.dataset.preEditHtml = textDiv.innerHTML;
+  textDiv.classList.add('q-text-editing');
+
+  const rowsGuess = Math.min(20, Math.max(4, (seedText.match(/\n/g) || []).length + Math.ceil(seedText.length / 90)));
+  textDiv.innerHTML = `
+    <textarea class="q-edit-area" rows="${rowsGuess}" aria-label="Edit finding text">${esc(seedText)}</textarea>
+    <div class="q-edit-actions">
+      <button class="q-edit-cancel" onclick="cancelSubquoteEdit('${sqid}')">Cancel</button>
+      <button class="q-edit-save" onclick="saveSubquoteEdit('${sqid}')">Save</button>
+    </div>
+  `;
+  const ta = textDiv.querySelector('textarea');
+  if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
+
+  // Expand any truncated region so the full text is visible while editing.
+  textDiv.style.maxHeight = 'none';
+  const existingExpand = card.querySelector('.q-expand-btn');
+  if (existingExpand) existingExpand.style.display = 'none';
+}
+
+function cancelSubquoteEdit(sqid) {
+  const card = document.querySelector(`[data-subquote-id="${sqid}"]`);
+  if (!card) return;
+  const textDiv = card.querySelector('.q-text');
+  if (!textDiv) return;
+  if (textDiv.dataset.preEditHtml !== undefined) {
+    textDiv.innerHTML = textDiv.dataset.preEditHtml;
+    delete textDiv.dataset.preEditHtml;
+  }
+  textDiv.classList.remove('q-text-editing');
+  textDiv.style.maxHeight = '';
+  const existingExpand = card.querySelector('.q-expand-btn');
+  if (existingExpand) existingExpand.style.display = '';
+}
+
+function saveSubquoteEdit(sqid) {
+  const card = document.querySelector(`[data-subquote-id="${sqid}"]`);
+  if (!card) return;
+  const ta = card.querySelector('.q-edit-area');
+  if (!ta) return;
+  const newText = (ta.value || '').trim();
+  if (!newText) {
+    // Empty text is treated as cancel — deleting the finding has its own
+    // affordance (the × button) and shouldn't happen by accident here.
+    cancelSubquoteEdit(sqid);
+    return;
+  }
+
+  const bs = getBankState(state.current_bank);
+  if (!bs.subquote_text_overrides) bs.subquote_text_overrides = {};
+  bs.subquote_text_overrides[sqid] = newText;
+
+  // Full re-render of the card so header toggles/badges reflect edited state.
+  renderCurrentBank();
+}
+
+function revertSubquoteEdit(sqid) {
+  const bs = getBankState(state.current_bank);
+  if (!bs.subquote_text_overrides) return;
+  if (!(sqid in bs.subquote_text_overrides)) return;
+  delete bs.subquote_text_overrides[sqid];
+  renderCurrentBank();
+}
+
 function showAddMenu(convId, anchor) {
   document.querySelectorAll('.atr-menu').forEach(m => m.remove());
   const menu = document.createElement('div');
@@ -2627,6 +2814,7 @@ function getBankState(bankId) {
       sentence_user_primary: {},
       sentence_status_overrides: {},
       subquote_bucket_overrides: {}, bucket_subquote_order: {}, subquote_formats: {},
+      subquote_text_overrides: {},
     };
   }
   return state.bank_states[bankId];
@@ -2721,7 +2909,13 @@ function rasterizeImageForDocx(src, maxWidth = 1200) {
 
 // Extract plain text for DOCX — mirrors getSubquoteFormats but centralised so
 // both verbatim and condensed paths get the same whitespace normalisation.
-function subquoteTextForDocx(sq, fmt) {
+// Honours user edits: if the subquote has a manual text override it wins over
+// the sentence-derived rendering. Accepts `bs` optionally; defaults to the
+// current bank's state.
+function subquoteTextForDocx(sq, fmt, bs) {
+  const bankState = bs || (state && state.current_bank ? getBankState(state.current_bank) : null);
+  const override = bankState ? getSubquoteTextOverride(sq.id, bankState) : null;
+  if (override) return override;
   const sents = sq.type === 'md' ? sq.sentences : sq.answer_sentences;
   if (!sents || !sents.length) return '';
   const key = fmt === 'verbatim' ? 'text' : (fmt || 'text');
