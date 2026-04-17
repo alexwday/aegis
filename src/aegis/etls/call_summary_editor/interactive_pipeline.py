@@ -184,7 +184,9 @@ _FINDING_GROUP_SCHEMA = {
             "type": "array",
             "description": (
                 "1-based sentence indices belonging to this finding, in ascending "
-                "contiguous order (e.g. [1,2,3] or [4] or [5,6])."
+                "contiguous order (e.g. [1], [2,3], [4]). Size follows the idea: "
+                "include exactly the sentences that express one coherent claim, "
+                "metric, or argument — no more."
             ),
             "items": {"type": "integer"},
         },
@@ -275,9 +277,13 @@ TOOL_MD_GROUPING = {
         "strict": True,
         "description": (
             "Call this tool when an indexed Management Discussion speaker block's sentences "
-            "need to be grouped into findings. A finding is a contiguous ascending sequence of "
-            "sentence indices expressing one coherent idea. Every indexed sentence must appear "
-            "in exactly one finding."
+            "need to be split into findings. A finding is ONE coherent idea — one claim, "
+            "one metric with its context, one forward-looking statement — spanning exactly "
+            "the sentences required to express it. Size follows the idea, not a target: a "
+            "finding may be one sentence or several, but sentences covering distinct "
+            "metrics, time horizons, business lines, or independent claims must be split "
+            "into separate findings. Every indexed sentence must appear in exactly one "
+            "finding, as a contiguous ascending sequence of indices."
         ),
         "parameters": {
             "type": "object",
@@ -286,8 +292,11 @@ TOOL_MD_GROUPING = {
                     "type": "array",
                     "description": (
                         "Ordered list of findings covering every sentence in the block. "
-                        "Findings are listed in sentence order, each with a contiguous "
-                        "ascending list of sentence indices."
+                        "Each finding contains exactly the sentences that express one "
+                        "coherent idea — split whenever the next sentence starts a "
+                        "distinct idea, even inside the same paragraph. Findings are "
+                        "listed in sentence order, each with a contiguous ascending list "
+                        "of sentence indices."
                     ),
                     "items": _FINDING_GROUP_SCHEMA,
                 },
@@ -305,9 +314,13 @@ TOOL_QA_GROUPING = {
         "strict": True,
         "description": (
             "Call this tool when an indexed Q&A speaker block's sentences (analyst or "
-            "executive) need to be grouped into findings. A finding is a contiguous ascending "
-            "sequence of sentence indices expressing one coherent idea. Every indexed sentence "
-            "must appear in exactly one finding."
+            "executive) need to be split into findings. A finding is ONE coherent idea — "
+            "one question, one answer point, one claim, one metric with its context — "
+            "spanning exactly the sentences required to express it. Size follows the idea, "
+            "not a target: a finding may be one sentence or several, but sentences "
+            "covering distinct metrics, time horizons, business lines, or independent "
+            "claims must be split into separate findings. Every indexed sentence must "
+            "appear in exactly one finding, as a contiguous ascending sequence of indices."
         ),
         "parameters": {
             "type": "object",
@@ -316,8 +329,11 @@ TOOL_QA_GROUPING = {
                     "type": "array",
                     "description": (
                         "Ordered list of findings covering every sentence in the block. "
-                        "Findings are listed in sentence order, each with a contiguous "
-                        "ascending list of sentence indices."
+                        "Each finding contains exactly the sentences that express one "
+                        "coherent idea — split whenever the next sentence starts a "
+                        "distinct idea, even inside the same paragraph. Findings are "
+                        "listed in sentence order, each with a contiguous ascending list "
+                        "of sentence indices."
                     ),
                     "items": _FINDING_GROUP_SCHEMA,
                 },
@@ -1537,35 +1553,73 @@ def _format_indexed_sentences(sentences: List[str]) -> str:
 
 
 _GROUPING_SYSTEM_PROMPT_MD = (
-    "You group indexed sentences from an earnings call Management Discussion speaker "
-    "block into findings. A finding is a coherent unit — a single claim, fact, "
-    "argument, forward-looking statement, or logically connected sequence expressing "
-    "one idea. Findings MUST be contiguous ascending sequences of sentence indices: "
-    "every indexed sentence must belong to exactly one finding, and findings are "
-    "returned in sentence order. Always use the provided tool."
+    "You split indexed sentences from an earnings call Management Discussion "
+    "speaker block into findings. A finding is ONE coherent idea — one claim, "
+    "one metric with its context, one forward-looking statement, one argument "
+    "— covering exactly as many contiguous sentences as it takes to express "
+    "that idea and no more. A finding may be one sentence or several; size "
+    "follows the idea, not a target. Critically, closely related sentences on "
+    "the same topic are NOT the same finding: two sentences both about NII, "
+    "both about capital, or both about the macro backdrop are separate "
+    "findings whenever each makes its own standalone claim. Downstream the "
+    "user reassigns findings between categories and links them to emerging "
+    "topics, so a finding that fuses distinct ideas (different metrics, "
+    "different time horizons, different business lines, or independent claims "
+    "that each stand on their own) blocks that workflow — split those. Every "
+    "indexed sentence must belong to exactly one finding, findings are "
+    "contiguous ascending sequences of indices, and findings are returned in "
+    "sentence order. Always use the provided tool."
 )
 
 
 _GROUPING_SYSTEM_PROMPT_QA = (
-    "You group indexed sentences from one Q&A speaker block (analyst or executive) "
-    "into findings. A finding is a coherent unit — a single question part, answer "
-    "component, claim, or logically connected sequence expressing one idea. Findings "
-    "MUST be contiguous ascending sequences of sentence indices: every indexed "
-    "sentence must belong to exactly one finding, and findings are returned in "
-    "sentence order. Always use the provided tool."
+    "You split indexed sentences from one Q&A speaker block (analyst or "
+    "executive) into findings. A finding is ONE coherent idea — one question, "
+    "one answer point, one claim, one metric with its context — covering "
+    "exactly as many contiguous sentences as it takes to express that idea and "
+    "no more. A finding may be one sentence or several; size follows the idea, "
+    "not a target. Critically, closely related sentences on the same topic are "
+    "NOT the same finding: two sentences both about NII, both about capital, "
+    "or both about the macro backdrop are separate findings whenever each "
+    "makes its own standalone claim. Downstream the user reassigns findings "
+    "between categories and links them to emerging topics, so a finding that "
+    "fuses distinct ideas (different metrics, different time horizons, "
+    "different business lines, or independent claims that each stand on their "
+    "own) blocks that workflow — split those. Every indexed sentence must "
+    "belong to exactly one finding, findings are contiguous ascending "
+    "sequences of indices, and findings are returned in sentence order. "
+    "Always use the provided tool."
 )
 
 
 _GROUPING_RULES = (
     "## Rules\n"
-    "1. Each finding must be a contiguous ascending sequence of sentence indices "
-    "(e.g. [1,2,3] or [4] or [5,6]). No skipping, no reordering.\n"
-    "2. Every indexed sentence must appear in exactly one finding.\n"
-    "3. Findings are returned in sentence order — the first finding starts at S1.\n"
-    "4. Prefer grouping sentences that share a subject, claim, or elaboration; split "
-    "when the speaker moves to a distinct idea.\n"
-    "5. A finding may be one sentence or many; do not force groupings when sentences "
-    "stand alone."
+    "1. Contiguous & complete — each finding is a contiguous ascending run of "
+    "sentence indices (e.g. [1], [2,3], [4]); every indexed sentence appears in "
+    "exactly one finding; findings are listed in sentence order starting at S1.\n"
+    "2. One idea per finding. The sentences inside a finding must all be part "
+    "of the same claim, argument, or metric-with-context. A finding can be one "
+    "sentence or several — size follows the idea, not a target.\n"
+    "3. Closely related does NOT mean the same finding. Two sentences on the "
+    "same broad topic (e.g. both about NII, both about capital, both about the "
+    "macro backdrop) are separate findings when each makes its own standalone "
+    "claim. Same topic ≠ same idea.\n"
+    "4. Split whenever the next sentence starts a distinct idea, even within "
+    "the same paragraph. Distinct ideas include: different metrics (e.g. "
+    "revenue vs. margin vs. ROE), different time horizons (current quarter vs. "
+    "forward outlook), different business lines or segments, or independent "
+    "claims that each stand on their own.\n"
+    "5. Merge adjacent sentences only when they genuinely express the same "
+    "idea. Typical merges: a setup sentence plus its punchline; a claim "
+    "followed by the number that proves it; a statement followed by a "
+    "subordinate clause, a pronoun reference, or a 'this reflects…' / 'that "
+    "means…' elaboration of the exact same claim.\n"
+    "6. A finding spanning an entire paragraph is only correct when the whole "
+    "paragraph is making one coherent argument. If the paragraph moves through "
+    "multiple metrics, topics, or standalone claims, split it into multiple "
+    "findings.\n"
+    "7. When a sentence could plausibly stand on its own and be reclassified "
+    "separately, it should be its own finding. When in doubt, split."
 )
 
 
@@ -1651,8 +1705,11 @@ async def group_md_block_findings(
     prior_block = prior_context or "[This is the first speaker block in the section — no prior context.]"
     user_prompt = (
         "## Task\n"
-        "Group the indexed sentences in the current Management Discussion speaker block "
-        "into findings.\n\n"
+        "Split the indexed sentences in the current Management Discussion speaker "
+        "block into findings, where each finding is one coherent idea. A finding "
+        "may be one sentence or several, but split whenever the next sentence "
+        "starts a distinct idea — closely related sentences on the same topic are "
+        "NOT the same finding if each makes its own standalone claim.\n\n"
         "## Prior Context\n"
         f"{_xml_block('prior_speaker_context', prior_block)}\n\n"
         f"## Current Block — {speaker_line}\n"
@@ -1694,7 +1751,11 @@ async def group_qa_block_findings(
     indexed = _format_indexed_sentences(sentences)
     user_prompt = (
         "## Task\n"
-        "Group the indexed sentences in the current Q&A speaker block into findings.\n\n"
+        "Split the indexed sentences in the current Q&A speaker block into "
+        "findings, where each finding is one coherent idea. A finding may be one "
+        "sentence or several, but split whenever the next sentence starts a "
+        "distinct idea — closely related sentences on the same topic are NOT "
+        "the same finding if each makes its own standalone claim.\n\n"
         "## Full Exchange Context\n"
         f"{_xml_block('qa_exchange', exchange_context or '[No exchange context available.]')}\n\n"
         f"## Current Block — {role_label} ({speaker_line})\n"
