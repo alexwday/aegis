@@ -954,6 +954,25 @@ body{
   font-style:italic;
 }
 
+/* QA conversation group — one analyst-question header shared by all findings
+   from the same conversation inside a bucket. Replaces the per-card question
+   block; the cards that follow this header render without their own `.qa-card-q`. */
+.qa-group-header{
+  padding:10px 4px 6px 4px;
+  margin-top:10px;
+  font-size:11.5px;color:var(--text-3);
+  border-bottom:1px dotted var(--rule-2);
+}
+.qa-group-header:first-child{margin-top:2px}
+.qa-group-q-line{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.qa-group-affiliation{color:#65676B}
+.qa-group-q-text{
+  font-family:var(--font-serif);
+  font-size:13px;color:var(--text-2);
+  margin-top:4px;line-height:1.6;
+  font-style:italic;
+}
+
 /* ════════════════════════════════════════════════════════════════
    BUTTONS
    ════════════════════════════════════════════════════════════════ */
@@ -2642,6 +2661,70 @@ function renderTableOfContents(orderedSections) {
   return html;
 }
 
+// Segment a bucket's flat subquote list into render-time groups.
+// QA subquotes from the same conversation (same `conv_id`) collapse under a
+// single conversation header; MD subquotes each form their own trivial group
+// so the renderer can treat both uniformly. First-seen position is preserved,
+// so the sort order coming in from `getReportSubquotes` (importance desc or
+// user drag order) dictates the order of the groups — a conversation inherits
+// the position of its highest-ranked finding. Non-contiguous QA cards for the
+// same conversation (possible after manual drag) are re-stitched here.
+function groupSubquotesForReport(subquotes) {
+  const groups = [];
+  const qaGroupByConv = new Map();
+  for (const sq of subquotes) {
+    if (sq.type === 'qa') {
+      let group = qaGroupByConv.get(sq.conv_id);
+      if (!group) {
+        group = {
+          kind: 'qa',
+          conv_id: sq.conv_id,
+          analyst_name: sq.analyst_name || 'Analyst',
+          analyst_affiliation: sq.analyst_affiliation || '',
+          analyst_question_summary: sq.analyst_question_summary || '',
+          question_sentences: sq.question_sentences || [],
+          subquotes: [],
+        };
+        qaGroupByConv.set(sq.conv_id, group);
+        groups.push(group);
+      }
+      group.subquotes.push(sq);
+    } else {
+      groups.push({ kind: 'md', subquotes: [sq] });
+    }
+  }
+  return groups;
+}
+
+// Header rendered once per Q&A conversation group inside a bucket. Falls back
+// to the verbatim question text if the model did not produce an
+// `analyst_question_summary`; the verbatim question is exposed as a hover
+// title so the short summary can still be audited against the full turn.
+function renderConversationHeader(group) {
+  const verbatim = (group.question_sentences || [])
+    .map(s => s.text)
+    .join(' ')
+    .trim();
+  const summary = (group.analyst_question_summary || '').trim();
+  const contextSource = summary || verbatim;
+  const contextLine = contextSource
+    ? `In response to the analyst question: ${esc(contextSource)}`
+    : 'In response to the analyst question:';
+  const verbatimTitle = summary && verbatim ? ` title="${escAttr(verbatim)}"` : '';
+  const affiliationHtml = group.analyst_affiliation
+    ? `<span class="qa-group-affiliation"> (${esc(group.analyst_affiliation)})</span>`
+    : '';
+  return `
+  <div class="qa-group-header" data-conv-id="${escAttr(group.conv_id)}">
+    <div class="qa-group-q-line">
+      <span class="qa-lbl q">Q</span>
+      <strong>${esc(group.analyst_name || 'Analyst')}</strong>
+      ${affiliationHtml}
+    </div>
+    <div class="qa-group-q-text"${verbatimTitle}>${contextLine}</div>
+  </div>`;
+}
+
 function renderReportSections() {
   destroySortables();
   const sectionRank = {'Results Summary': 0, 'Earnings Call Q&A': 1, 'Other': 2};
@@ -2702,7 +2785,13 @@ function renderReportSections() {
     <svg class="bkt-chevron open" id="bkv_${bucket.id}" viewBox="0 0 10 10"><path d="M2 4l3 3 3-3"/></svg>
   </div>
   <div class="bkt-quotes" id="bq_${bucket.id}" data-bucket-id="${bucket.id}">
-    ${quotes.map(sq => renderSubquoteCard(sq, bucket)).join('')}
+    ${groupSubquotesForReport(quotes).map(group => {
+      if (group.kind === 'qa') {
+        return renderConversationHeader(group)
+          + group.subquotes.map(sq => renderSubquoteCard(sq, bucket)).join('');
+      }
+      return renderSubquoteCard(group.subquotes[0], bucket);
+    }).join('')}
   </div>
 </div>`;
     });
@@ -2738,27 +2827,10 @@ function renderSubquoteCard(sq, bucket) {
   const attribTitle = isMD ? (sq.speaker_title || '') : (sq.executive_title || '');
   const attribLine = attribTitle ? `${attribName}, ${attribTitle}` : attribName;
 
-  // QA card shows the analyst question as context above the executive
-  // answer text. Prefer the model-generated `analyst_question_summary` (a
-  // single short clause) over the raw verbatim question, which can run on
-  // for paragraphs and bury the actual context. The verbatim text is kept
-  // as the title attribute so the user can hover to see the original.
-  let qaContextHtml = '';
-  if (!isMD) {
-    const verbatim = (sq.question_sentences || []).map(s => s.text).join(' ');
-    const summary = (sq.analyst_question_summary || '').trim();
-    const contextLine = summary
-      ? `In response to the analyst question: ${esc(summary)}`
-      : `In response to the analyst question: ${esc(verbatim)}`;
-    const verbatimTitle = summary ? ` title="${escAttr(verbatim)}"` : '';
-    qaContextHtml = `
-    <div class="qa-card-q">
-      <span class="qa-lbl q">Q</span>
-      <strong>${esc(sq.analyst_name||'Analyst')}</strong>
-      ${sq.analyst_affiliation ? `<span style="color:#65676B"> (${esc(sq.analyst_affiliation)})</span>` : ''}
-      <div class="qa-card-q-text"${verbatimTitle}>${contextLine}</div>
-    </div>`;
-  }
+  // Q&A cards render beneath a conversation header emitted by
+  // `renderConversationHeader`, so the per-card question context that used to
+  // live here is intentionally omitted — all cards from one conversation share
+  // a single "In response to the analyst question: …" header above the group.
 
   // When the user has edited the finding, the Summarize toggle no longer
   // applies (the text is custom) — hide it and surface a "Revert" affordance
@@ -2800,7 +2872,6 @@ function renderSubquoteCard(sq, bucket) {
     ${revertBtnHtml}
     <button class="q-del" onclick="deleteSubquote('${sq.id}')" title="Remove from report">&#215;</button>
   </div>
-  ${qaContextHtml}
   <div class="q-text">${textContent}</div>
   ${expandBtn}
   <div class="q-attrib">&mdash; ${esc(attribLine)}</div>
@@ -2870,6 +2941,10 @@ function initSortables() {
       handle: '.drag-handle',
       ghostClass: 'sortable-ghost',
       chosenClass: 'sortable-chosen',
+      // Conversation headers sit in the same container as draggable cards but
+      // are purely structural; `filter` keeps them anchored while the cards
+      // around them reorder normally.
+      filter: '.qa-group-header',
       onEnd(evt) {
         const sqid = evt.item.dataset.subquoteId;
         const from = evt.from.dataset.bucketId;
@@ -3327,28 +3402,13 @@ async function saveDocx() {
         }));
       }
 
-      quotes.forEach(sq => {
+      // Emit the bullet + optional attribution for one finding card. Shared
+      // between MD (standalone) and Q&A (inside a conversation group) paths so
+      // both end up with identical trailing formatting.
+      const emitSubquoteParagraphs = (sq) => {
         const fmt  = (bs.subquote_formats && bs.subquote_formats[sq.id]) || 'verbatim';
         const text = subquoteTextForDocx(sq, fmt);
         if (!text) return;
-
-        // QA answers are preceded by a short italic context line so the
-        // reader always knows what question the finding addresses.
-        if (sq.type === 'qa') {
-          const verbatim = (sq.question_sentences || []).map(s => s.text).join(' ').trim();
-          const summary  = (sq.analyst_question_summary || '').trim();
-          const context  = summary || verbatim;
-          if (context) {
-            children.push(new Paragraph({
-              spacing: { before: 100, after: 40 },
-              indent: { left: 360 },
-              children: [new TextRun({
-                text: `In response to the analyst question: ${context}`,
-                italics: true, color: '4A5268', size: 20,
-              })],
-            }));
-          }
-        }
 
         children.push(new Paragraph({
           bullet: { level: 0 },
@@ -3368,6 +3428,30 @@ async function saveDocx() {
             spacing: { before: 0, after: 140 },
             children: [new TextRun({ text: `\u2014 ${attrib}`, italics: true, size: 18, color: '7A7364' })],
           }));
+        }
+      };
+
+      // Group findings by conversation so each analyst question appears once
+      // per bucket, with all of its findings bulleted beneath it — matching
+      // the on-screen report layout.
+      groupSubquotesForReport(quotes).forEach(group => {
+        if (group.kind === 'qa') {
+          const verbatim = (group.question_sentences || []).map(s => s.text).join(' ').trim();
+          const summary  = (group.analyst_question_summary || '').trim();
+          const context  = summary || verbatim;
+          if (context) {
+            children.push(new Paragraph({
+              spacing: { before: 100, after: 40 },
+              indent: { left: 360 },
+              children: [new TextRun({
+                text: `In response to the analyst question: ${context}`,
+                italics: true, color: '4A5268', size: 20,
+              })],
+            }));
+          }
+          group.subquotes.forEach(emitSubquoteParagraphs);
+        } else {
+          emitSubquoteParagraphs(group.subquotes[0]);
         }
       });
     });
