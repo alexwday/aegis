@@ -381,13 +381,14 @@ def test_browser_adopt_emerging_topic_creates_new_bucket_with_linked_evidence(
 ) -> None:
     browser_page.goto(served_report)
 
-    expect(browser_page.locator("#emerging-topic-shell")).to_contain_text("Emerging Topics Review")
-    browser_page.get_by_role("button", name="Adopt with linked evidence").click()
+    # Emerging topics are auto-enabled on load, so the new section appears
+    # in the draft without any user interaction. The top-of-report bar shows
+    # a row per topic with an on/off toggle.
+    expect(browser_page.locator("#report-page .emg-bar")).to_contain_text("Emerging Topics")
 
     emerging_section = browser_page.locator("#report-page .bkt-section").filter(
         has=browser_page.locator('input.bkt-name-input[value="Agentic AI"]')
     )
-    expect(emerging_section).to_contain_text("Emerging")
     expect(emerging_section).to_contain_text("Agentic AI is now a standalone operating priority.")
 
 
@@ -429,7 +430,8 @@ def test_browser_save_download_persists_updated_state(
     tmp_path: Path,
 ) -> None:
     browser_page.goto(served_report)
-    browser_page.get_by_role("button", name="Adopt with linked evidence").click()
+    # Emerging topics auto-enable on load, so the save captures the adopted
+    # bucket + linked-evidence state without extra clicks.
 
     with browser_page.expect_download() as download_info:
         browser_page.get_by_role("button", name="Save").click()
@@ -456,7 +458,7 @@ def test_browser_saved_report_can_be_reopened_with_persisted_editor_state(
         exact=True,
     ).click()
     browser_page.locator("#s-popover").get_by_text("Selected for report", exact=True).click()
-    browser_page.get_by_role("button", name="Adopt with linked evidence").click()
+    # Emerging topic adoption now happens automatically on load.
 
     with browser_page.expect_download() as download_info:
         browser_page.get_by_role("button", name="Save").click()
