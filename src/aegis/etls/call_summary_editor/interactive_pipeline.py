@@ -36,18 +36,40 @@ except ImportError:
     _NLP = None
 
 
-class SentenceResult(BaseModel):
-    """Sentence-level classification output."""
+class FindingGroup(BaseModel):
+    """One finding: a contiguous group of sentence indices within a speaker block."""
 
-    index: int = Field(description="1-based sentence index matching S1, S2, ... in the prompt")
+    sentence_indices: List[int] = Field(
+        description=(
+            "1-based sentence indices belonging to this finding, in ascending contiguous "
+            "order (e.g. [1,2,3] or [4] or [5,6])."
+        )
+    )
+
+
+class FindingGroupResult(BaseModel):
+    """Grouping tool response: ordered findings covering every sentence in the block."""
+
+    findings: List[FindingGroup]
+
+
+class FindingResult(BaseModel):
+    """Finding-level classification output."""
+
+    index: int = Field(description="1-based finding index matching F1, F2, ... in the prompt")
     scores: List[Any] = Field(
         description=(
-            "Up to the top 3 bucket-score pairs for this sentence. Each item should include "
+            "Up to the top 3 bucket-score pairs for this finding. Each item should include "
             "bucket_index and a 0-10 relevance score."
         )
     )
     importance_score: float = Field(description="IR quotability 0-10")
-    condensed: str = Field(description="~70% length, filler removed, all facts kept")
+    condensed: str = Field(
+        description=(
+            "Condensed form of the full finding (joined sentences) — filler removed, all "
+            "facts kept."
+        )
+    )
 
 
 class QAConversationGroup(BaseModel):
@@ -89,7 +111,7 @@ class QAExchangeClassification(BaseModel):
             "Used as the lead-in line above the executive findings."
         )
     )
-    answer_sentences: List[SentenceResult]
+    answer_findings: List[FindingResult]
 
 
 class ProposedConfigRow(BaseModel):
@@ -155,17 +177,33 @@ class EmergingTopicsResult(BaseModel):
     proposals: List[EmergingTopicProposal] = Field(default_factory=list)
 
 
-_SENTENCE_RESULT_SCHEMA = {
+_FINDING_GROUP_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "sentence_indices": {
+            "type": "array",
+            "description": (
+                "1-based sentence indices belonging to this finding, in ascending "
+                "contiguous order (e.g. [1,2,3] or [4] or [5,6])."
+            ),
+            "items": {"type": "integer"},
+        },
+    },
+    "required": ["sentence_indices"],
+    "additionalProperties": False,
+}
+
+_FINDING_RESULT_SCHEMA = {
     "type": "object",
     "properties": {
         "index": {
             "type": "integer",
-            "description": "1-based sentence index matching S1, S2, etc. in the prompt",
+            "description": "1-based finding index matching F1, F2, etc. in the prompt",
         },
         "scores": {
             "type": "array",
             "description": (
-                "Return up to the top 3 bucket-score pairs for this sentence, ordered by "
+                "Return up to the top 3 bucket-score pairs for this finding, ordered by "
                 "score descending. Use a 0-10 relevance scale."
             ),
             "items": {
@@ -179,7 +217,13 @@ _SENTENCE_RESULT_SCHEMA = {
             },
         },
         "importance_score": {"type": "number", "description": "IR quotability score 0-10"},
-        "condensed": {"type": "string"},
+        "condensed": {
+            "type": "string",
+            "description": (
+                "Condensed form of the full finding (joined sentences) — filler removed, "
+                "all facts kept."
+            ),
+        },
     },
     "required": ["index", "scores", "importance_score", "condensed"],
     "additionalProperties": False,
@@ -224,21 +268,81 @@ TOOL_QA_BOUNDARY = {
     },
 }
 
-TOOL_MD_PARAGRAPH = {
+TOOL_MD_GROUPING = {
     "type": "function",
     "function": {
-        "name": "classify_paragraph_sentences",
+        "name": "group_md_block_findings",
         "strict": True,
         "description": (
-            "Call this tool when the current Management Discussion paragraph has indexed sentences "
-            "that need bucket scores and importance scoring. It returns one structured result per "
-            "sentence in the paragraph. Use it only for the S-numbered sentences shown in the "
-            "current paragraph context."
+            "Call this tool when an indexed Management Discussion speaker block's sentences "
+            "need to be grouped into findings. A finding is a contiguous ascending sequence of "
+            "sentence indices expressing one coherent idea. Every indexed sentence must appear "
+            "in exactly one finding."
         ),
         "parameters": {
             "type": "object",
-            "properties": {"sentences": {"type": "array", "items": _SENTENCE_RESULT_SCHEMA}},
-            "required": ["sentences"],
+            "properties": {
+                "findings": {
+                    "type": "array",
+                    "description": (
+                        "Ordered list of findings covering every sentence in the block. "
+                        "Findings are listed in sentence order, each with a contiguous "
+                        "ascending list of sentence indices."
+                    ),
+                    "items": _FINDING_GROUP_SCHEMA,
+                },
+            },
+            "required": ["findings"],
+            "additionalProperties": False,
+        },
+    },
+}
+
+TOOL_QA_GROUPING = {
+    "type": "function",
+    "function": {
+        "name": "group_qa_block_findings",
+        "strict": True,
+        "description": (
+            "Call this tool when an indexed Q&A speaker block's sentences (analyst or "
+            "executive) need to be grouped into findings. A finding is a contiguous ascending "
+            "sequence of sentence indices expressing one coherent idea. Every indexed sentence "
+            "must appear in exactly one finding."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "findings": {
+                    "type": "array",
+                    "description": (
+                        "Ordered list of findings covering every sentence in the block. "
+                        "Findings are listed in sentence order, each with a contiguous "
+                        "ascending list of sentence indices."
+                    ),
+                    "items": _FINDING_GROUP_SCHEMA,
+                },
+            },
+            "required": ["findings"],
+            "additionalProperties": False,
+        },
+    },
+}
+
+TOOL_MD_BLOCK = {
+    "type": "function",
+    "function": {
+        "name": "classify_md_block_findings",
+        "strict": True,
+        "description": (
+            "Call this tool when the current Management Discussion speaker block has indexed "
+            "findings (F1, F2, ...) that need bucket scores, importance scoring, and a "
+            "condensed summary. It returns one structured result per finding in the block. "
+            "Use it exactly once per speaker block."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {"findings": {"type": "array", "items": _FINDING_RESULT_SCHEMA}},
+            "required": ["findings"],
             "additionalProperties": False,
         },
     },
@@ -250,10 +354,10 @@ TOOL_QA_EXCHANGE = {
         "name": "classify_qa_exchange",
         "strict": True,
         "description": (
-            "Call this tool when one grouped Q&A exchange needs sentence-level classification "
+            "Call this tool when one grouped Q&A exchange needs finding-level classification "
             "of the executive answer. It returns the best whole-exchange bucket, a one-sentence "
             "paraphrase of the analyst's question, and one structured result for every indexed "
-            "executive answer sentence. Analyst question sentences are NOT classified individually "
+            "executive answer finding. Analyst findings are NOT classified individually "
             "\u2014 they are context only. Use this tool once per completed Q&A conversation."
         ),
         "parameters": {
@@ -268,12 +372,12 @@ TOOL_QA_EXCHANGE = {
                         "the back half of the year'."
                     ),
                 },
-                "answer_sentences": {"type": "array", "items": _SENTENCE_RESULT_SCHEMA},
+                "answer_findings": {"type": "array", "items": _FINDING_RESULT_SCHEMA},
             },
             "required": [
                 "primary_bucket_index",
                 "analyst_question_summary",
-                "answer_sentences",
+                "answer_findings",
             ],
             "additionalProperties": False,
         },
@@ -828,7 +932,7 @@ def _empty_config_row() -> Dict[str, str]:
     }
 
 
-def _initial_sentence_status(
+def _initial_finding_status(
     *,
     importance_score: float,
     selected_bucket_id: str,
@@ -836,7 +940,7 @@ def _initial_sentence_status(
     selected_importance_threshold: float,
     candidate_importance_threshold: float,
 ) -> str:
-    """Assign the initial recall-first review status for one sentence."""
+    """Assign the initial recall-first review status for one finding."""
     if selected_bucket_id and importance_score >= selected_importance_threshold:
         return "selected"
     if importance_score >= candidate_importance_threshold or candidate_bucket_ids:
@@ -844,10 +948,11 @@ def _initial_sentence_status(
     return "rejected"
 
 
-def _make_sentence_record(
-    sentence_id: str,
-    text: str,
-    llm_result: Optional[SentenceResult],
+def _make_finding_record(
+    finding_id: str,
+    finding_text: str,
+    sentence_ids: List[str],
+    llm_result: Optional[FindingResult],
     categories: List[Dict[str, Any]],
     applicable_ids: List[str],
     *,
@@ -862,11 +967,11 @@ def _make_sentence_record(
         candidate_bucket_ids: List[str] = []
         selected_bucket_id = ""
         return {
-            "sid": sentence_id,
-            "text": text,
-            "verbatim_text": text,
-            "sentence_ids": [sentence_id],
-            "span_id": sentence_id,
+            "sid": finding_id,
+            "text": finding_text,
+            "verbatim_text": finding_text,
+            "sentence_ids": list(sentence_ids),
+            "span_id": finding_id,
             "source_block_id": source_block_id,
             "parent_record_id": parent_record_id,
             "transcript_section": transcript_section,
@@ -878,7 +983,7 @@ def _make_sentence_record(
             "status": "rejected",
             "emerging_topic": False,
             "classification_error": "missing_sentence_classification",
-            "condensed": text,
+            "condensed": finding_text,
         }
 
     scores = _normalise_scores(llm_result.scores, categories)
@@ -890,11 +995,11 @@ def _make_sentence_record(
     )
     importance_score = round(float(llm_result.importance_score), 1)
     return {
-        "sid": sentence_id,
-        "text": text,
-        "verbatim_text": text,
-        "sentence_ids": [sentence_id],
-        "span_id": sentence_id,
+        "sid": finding_id,
+        "text": finding_text,
+        "verbatim_text": finding_text,
+        "sentence_ids": list(sentence_ids),
+        "span_id": finding_id,
         "source_block_id": source_block_id,
         "parent_record_id": parent_record_id,
         "transcript_section": transcript_section,
@@ -903,7 +1008,7 @@ def _make_sentence_record(
         "candidate_bucket_ids": candidate_bucket_ids,
         "scores": scores,
         "importance_score": importance_score,
-        "status": _initial_sentence_status(
+        "status": _initial_finding_status(
             importance_score=importance_score,
             selected_bucket_id=selected_bucket_id,
             candidate_bucket_ids=candidate_bucket_ids,
@@ -911,32 +1016,33 @@ def _make_sentence_record(
             candidate_importance_threshold=candidate_importance_threshold,
         ),
         "emerging_topic": not bool(selected_bucket_id),
-        "condensed": llm_result.condensed or text,
+        "condensed": llm_result.condensed or finding_text,
     }
 
 
-def _make_context_sentence_record(
-    sentence_id: str,
-    text: str,
+def _make_context_finding_record(
+    finding_id: str,
+    finding_text: str,
+    sentence_ids: List[str],
     *,
     transcript_section: str,
     source_block_id: str,
     parent_record_id: str,
 ) -> Dict[str, Any]:
-    """Build a sentence record marked as context-only (no bucket assignment).
+    """Build a finding record marked as context-only (no bucket assignment).
 
-    Used for analyst question sentences in QA conversations: they should
-    appear in the transcript and provide context for the executive findings,
-    but should never be classified into a bucket or selected as a finding
+    Used for analyst findings in QA conversations: they should appear in the
+    transcript and provide context for the executive findings, but should
+    never be classified into a bucket or selected as a report finding
     themselves. The dedicated ``status="context"`` value distinguishes
     deliberate omission from a parse failure (``status="rejected"``).
     """
     return {
-        "sid": sentence_id,
-        "text": text,
-        "verbatim_text": text,
-        "sentence_ids": [sentence_id],
-        "span_id": sentence_id,
+        "sid": finding_id,
+        "text": finding_text,
+        "verbatim_text": finding_text,
+        "sentence_ids": list(sentence_ids),
+        "span_id": finding_id,
         "source_block_id": source_block_id,
         "parent_record_id": parent_record_id,
         "transcript_section": transcript_section,
@@ -947,7 +1053,7 @@ def _make_context_sentence_record(
         "importance_score": 0.0,
         "status": "context",
         "emerging_topic": False,
-        "condensed": text,
+        "condensed": finding_text,
     }
 
 
@@ -1288,9 +1394,333 @@ async def detect_qa_boundaries(
     )
 
 
+# ── Finding grouping ────────────────────────────────────────────────────────
+#
+# A "finding" is a contiguous ascending sequence of sentence indices within a
+# single speaker block that together express one coherent idea. Grouping runs
+# before classification so that downstream scoring and summarization work on
+# meaningful units instead of spaCy-fragmented sentences. The spaCy splitter
+# is left alone — its errors (e.g. splitting "ex. Capital Markets" on the
+# abbreviation period) are absorbed by the grouping stage because the two
+# halves land in the same finding.
+
+
+def build_md_grouping_context(
+    block_index: int,
+    all_md_blocks: List[Dict[str, Any]],
+    *,
+    min_chars: int = 200,
+    max_blocks_back: int = 3,
+) -> str:
+    """Build the prior-block context string for grouping one MD speaker block.
+
+    Walks backward from ``block_index`` accumulating speaker+text until
+    ``min_chars`` of context is reached or ``max_blocks_back`` blocks have
+    been consumed. Returns an empty string for the first block in the section.
+    """
+    if block_index <= 0:
+        return ""
+
+    chunks: List[str] = []
+    char_count = 0
+    start = max(0, block_index - max_blocks_back)
+    for prior_idx in range(block_index - 1, start - 1, -1):
+        prior = all_md_blocks[prior_idx]
+        speaker_line = prior.get("speaker", "Unknown Speaker")
+        if prior.get("speaker_title"):
+            speaker_line += f", {prior['speaker_title']}"
+        if prior.get("speaker_affiliation"):
+            speaker_line += f" ({prior['speaker_affiliation']})"
+        body = " ".join(
+            paragraph for paragraph in prior.get("paragraphs", []) if paragraph
+        ).strip()
+        if not body:
+            continue
+        chunk = f"{speaker_line}: {body}"
+        chunks.append(chunk)
+        char_count += len(chunk)
+        if char_count >= min_chars:
+            break
+
+    if not chunks:
+        return ""
+    return "\n\n".join(reversed(chunks))
+
+
+def build_qa_exchange_context(turns: List[Dict[str, Any]]) -> str:
+    """Render a full Q&A exchange as unindexed context for grouping calls.
+
+    Mirrors the in-situ exchange rendering used by
+    :func:`classify_qa_conversation` but emits every sentence without AS/QS
+    numbering — grouping calls only need the exchange flow for context, not
+    per-sentence addressing.
+    """
+    lines: List[str] = []
+    for turn in turns:
+        role = turn.get("role", "a")
+        if role == "q":
+            label_parts = [turn.get("speaker") or "Analyst"]
+            if turn.get("speaker_affiliation"):
+                label_parts.append(f", {turn['speaker_affiliation']}")
+            lines.append(f"ANALYST ({''.join(label_parts)}):")
+        else:
+            label_parts = [turn.get("speaker") or "Executive"]
+            if turn.get("speaker_title"):
+                label_parts.append(f", {turn['speaker_title']}")
+            lines.append(f"EXECUTIVE ({''.join(label_parts)}):")
+        for _, sentence in turn.get("_sentences_raw", []):
+            lines.append(f'  "{sentence}"')
+        lines.append("")
+    return "\n".join(lines).rstrip()
+
+
+def _is_valid_finding_group(
+    indices: List[int],
+    total_sentences: int,
+    already_placed: set,
+) -> bool:
+    """Validate a single candidate finding group."""
+    if not indices:
+        return False
+    if any(idx < 1 or idx > total_sentences for idx in indices):
+        return False
+    if any(idx in already_placed for idx in indices):
+        return False
+    # Contiguous ascending
+    for prev, curr in zip(indices, indices[1:]):
+        if curr != prev + 1:
+            return False
+    return True
+
+
+def repair_finding_groups(
+    llm_groups: List[FindingGroup],
+    total_sentences: int,
+) -> List[FindingGroup]:
+    """Repair a possibly-invalid grouping into a guaranteed-valid covering.
+
+    Walks LLM-provided groups in order of their minimum sentence index and
+    accepts each one if it is contiguous, within ``[1, total_sentences]``, and
+    does not overlap any already-accepted group. Rejected groups are
+    discarded. Sentences not covered by any accepted group become singleton
+    findings. The final list is sorted by minimum sentence index and
+    collectively covers ``[1, total_sentences]`` exactly once.
+    """
+    accepted: List[FindingGroup] = []
+    placed: set = set()
+
+    ordered_groups = sorted(
+        (group for group in llm_groups if group.sentence_indices),
+        key=lambda group: min(group.sentence_indices),
+    )
+
+    for group in ordered_groups:
+        indices = sorted(set(group.sentence_indices))
+        if _is_valid_finding_group(indices, total_sentences, placed):
+            accepted.append(FindingGroup(sentence_indices=indices))
+            placed.update(indices)
+
+    for idx in range(1, total_sentences + 1):
+        if idx not in placed:
+            accepted.append(FindingGroup(sentence_indices=[idx]))
+            placed.add(idx)
+
+    accepted.sort(key=lambda group: group.sentence_indices[0])
+    return accepted
+
+
+def _format_indexed_sentences(sentences: List[str]) -> str:
+    """Render sentences as numbered S1, S2, ... lines for grouping prompts."""
+    return "\n".join(
+        f'  S{idx}: "{sentence}"' for idx, sentence in enumerate(sentences, start=1)
+    )
+
+
+_GROUPING_SYSTEM_PROMPT_MD = (
+    "You group indexed sentences from an earnings call Management Discussion speaker "
+    "block into findings. A finding is a coherent unit — a single claim, fact, "
+    "argument, forward-looking statement, or logically connected sequence expressing "
+    "one idea. Findings MUST be contiguous ascending sequences of sentence indices: "
+    "every indexed sentence must belong to exactly one finding, and findings are "
+    "returned in sentence order. Always use the provided tool."
+)
+
+
+_GROUPING_SYSTEM_PROMPT_QA = (
+    "You group indexed sentences from one Q&A speaker block (analyst or executive) "
+    "into findings. A finding is a coherent unit — a single question part, answer "
+    "component, claim, or logically connected sequence expressing one idea. Findings "
+    "MUST be contiguous ascending sequences of sentence indices: every indexed "
+    "sentence must belong to exactly one finding, and findings are returned in "
+    "sentence order. Always use the provided tool."
+)
+
+
+_GROUPING_RULES = (
+    "## Rules\n"
+    "1. Each finding must be a contiguous ascending sequence of sentence indices "
+    "(e.g. [1,2,3] or [4] or [5,6]). No skipping, no reordering.\n"
+    "2. Every indexed sentence must appear in exactly one finding.\n"
+    "3. Findings are returned in sentence order — the first finding starts at S1.\n"
+    "4. Prefer grouping sentences that share a subject, claim, or elaboration; split "
+    "when the speaker moves to a distinct idea.\n"
+    "5. A finding may be one sentence or many; do not force groupings when sentences "
+    "stand alone."
+)
+
+
+async def _call_grouping_tool(
+    *,
+    messages: List[Dict[str, str]],
+    tool: Dict[str, Any],
+    label: str,
+    total_sentences: int,
+    context: Dict[str, Any],
+    llm_params: Dict[str, Any],
+    max_retries: int = 1,
+) -> List[FindingGroup]:
+    """Run a grouping tool call with one retry, falling back to repair."""
+    last_llm_groups: List[FindingGroup] = []
+    for attempt in range(max_retries + 1):
+        raw = await _call_tool(
+            messages=messages,
+            tool=tool,
+            label=f"{label}:attempt{attempt + 1}",
+            context=context,
+            llm_params=llm_params,
+        )
+        if raw:
+            try:
+                parsed = FindingGroupResult.model_validate(raw)
+                last_llm_groups = parsed.findings
+            except Exception as exc:
+                logger.warning(
+                    "Grouping tool response could not be parsed",
+                    stage=label,
+                    attempt=attempt + 1,
+                    error=str(exc),
+                )
+                last_llm_groups = []
+            else:
+                placed: set = set()
+                all_valid = True
+                for group in last_llm_groups:
+                    indices = sorted(set(group.sentence_indices))
+                    if not _is_valid_finding_group(indices, total_sentences, placed):
+                        all_valid = False
+                        break
+                    placed.update(indices)
+                if all_valid and placed == set(range(1, total_sentences + 1)):
+                    return [
+                        FindingGroup(sentence_indices=sorted(set(group.sentence_indices)))
+                        for group in last_llm_groups
+                    ]
+                logger.warning(
+                    "Grouping response failed coverage/contiguity validation",
+                    stage=label,
+                    attempt=attempt + 1,
+                    total_sentences=total_sentences,
+                    placed=sorted(placed),
+                )
+
+    logger.warning(
+        "Grouping tool exhausted retries; applying repair fallback",
+        stage=label,
+        total_sentences=total_sentences,
+        llm_groups=len(last_llm_groups),
+    )
+    return repair_finding_groups(last_llm_groups, total_sentences)
+
+
+async def group_md_block_findings(
+    *,
+    block_id: str,
+    speaker_line: str,
+    sentences: List[str],
+    prior_context: str,
+    categories_text_md: str,
+    context: Dict[str, Any],
+    llm_params: Dict[str, Any],
+    max_retries: int = 1,
+) -> List[FindingGroup]:
+    """Group sentences from one MD speaker block into findings."""
+    if not sentences:
+        return []
+
+    indexed = _format_indexed_sentences(sentences)
+    prior_block = prior_context or "[This is the first speaker block in the section — no prior context.]"
+    user_prompt = (
+        "## Task\n"
+        "Group the indexed sentences in the current Management Discussion speaker block "
+        "into findings.\n\n"
+        "## Prior Context\n"
+        f"{_xml_block('prior_speaker_context', prior_block)}\n\n"
+        f"## Current Block — {speaker_line}\n"
+        f"{_xml_block('current_block', indexed)}\n\n"
+        f"{_GROUPING_RULES}"
+    )
+
+    return await _call_grouping_tool(
+        messages=[
+            {"role": "developer", "content": _GROUPING_SYSTEM_PROMPT_MD},
+            {"role": "user", "content": user_prompt},
+        ],
+        tool=TOOL_MD_GROUPING,
+        label=f"md_group:{block_id}",
+        total_sentences=len(sentences),
+        context=context,
+        llm_params=llm_params,
+        max_retries=max_retries,
+    )
+
+
+async def group_qa_block_findings(
+    *,
+    conversation_id: str,
+    block_id: str,
+    speaker_role: str,
+    speaker_line: str,
+    sentences: List[str],
+    exchange_context: str,
+    context: Dict[str, Any],
+    llm_params: Dict[str, Any],
+    max_retries: int = 1,
+) -> List[FindingGroup]:
+    """Group sentences from one QA speaker block into findings."""
+    if not sentences:
+        return []
+
+    role_label = "ANALYST" if speaker_role == "q" else "EXECUTIVE"
+    indexed = _format_indexed_sentences(sentences)
+    user_prompt = (
+        "## Task\n"
+        "Group the indexed sentences in the current Q&A speaker block into findings.\n\n"
+        "## Full Exchange Context\n"
+        f"{_xml_block('qa_exchange', exchange_context or '[No exchange context available.]')}\n\n"
+        f"## Current Block — {role_label} ({speaker_line})\n"
+        f"{_xml_block('current_block', indexed)}\n\n"
+        f"{_GROUPING_RULES}"
+    )
+
+    return await _call_grouping_tool(
+        messages=[
+            {"role": "developer", "content": _GROUPING_SYSTEM_PROMPT_QA},
+            {"role": "user", "content": user_prompt},
+        ],
+        tool=TOOL_QA_GROUPING,
+        label=f"qa_group:{conversation_id}:{block_id}",
+        total_sentences=len(sentences),
+        context=context,
+        llm_params=llm_params,
+        max_retries=max_retries,
+    )
+
+
 async def classify_md_block(  # pylint: disable=unused-argument
     *,
     block_raw: Dict[str, Any],
+    block_index: int,
+    all_md_blocks: List[Dict[str, Any]],
     categories: List[Dict[str, Any]],
     categories_text_md: str,
     company_name: str,
@@ -1303,7 +1733,10 @@ async def classify_md_block(  # pylint: disable=unused-argument
     context: Dict[str, Any],
     llm_params: Dict[str, Any],
 ) -> Dict[str, Any]:
-    """Classify one MD speaker block sentence-by-sentence.
+    """Classify one MD speaker block at finding grain.
+
+    Groups the block's sentences into findings via an LLM grouping call, then
+    makes one classification call per block (rather than per paragraph).
 
     `company_name`, `fiscal_year`, and `fiscal_quarter` are currently unused but
     reserved for prompt enrichment (banks + periods in the system message).
@@ -1319,120 +1752,142 @@ async def classify_md_block(  # pylint: disable=unused-argument
         speaker_line += f" ({block_raw['speaker_affiliation']})"
 
     all_para_sentences: List[List[str]] = [split_sentences(paragraph) for paragraph in paragraphs]
-    sentence_records: List[Dict[str, Any]] = []
-    prior_para_summaries: List[str] = []
-    global_sent_idx = 0
-    parse_error_count = 0
-    parse_error_paragraphs = set()
-    last_parse_error = ""
-
+    flat_sentences: List[str] = []
+    sentence_para_idx: List[int] = []
     for para_idx, para_sentences in enumerate(all_para_sentences):
-        if not para_sentences:
-            continue
+        for sentence in para_sentences:
+            flat_sentences.append(sentence)
+            sentence_para_idx.append(para_idx)
 
-        context_lines = [f"SPEAKER: {speaker_line}\n"]
-        for idx, (paragraph, paragraph_sentences) in enumerate(zip(paragraphs, all_para_sentences)):
-            if idx < para_idx:
-                context_lines.append(f"[Paragraph {idx + 1} - previously classified]")
-                context_lines.append(
-                    prior_para_summaries[idx]
-                    if idx < len(prior_para_summaries)
-                    else paragraph[:200]
-                )
-            elif idx == para_idx:
-                context_lines.append(f"\n[Paragraph {idx + 1} - CLASSIFY THESE SENTENCES:]")
-                for sent_idx, sentence in enumerate(paragraph_sentences, start=1):
-                    context_lines.append(f'  S{sent_idx}: "{sentence}"')
-            else:
-                context_lines.append(f"[Paragraph {idx + 1} - not yet processed]")
-                context_lines.append(paragraph[:150] + ("..." if len(paragraph) > 150 else ""))
+    if not flat_sentences:
+        return {
+            "id": block_id,
+            "speaker": block_raw["speaker"],
+            "speaker_title": block_raw.get("speaker_title", ""),
+            "speaker_affiliation": block_raw.get("speaker_affiliation", ""),
+            "sentences": [],
+        }
 
-        system_prompt = (
-            "You are a sentence classifier for earnings call Management Discussion sections. "
-            "Assign each indexed sentence to the best report buckets and score its "
-            "investor-relations importance using the category sheet and speaker context. "
-            "Always use the provided tool."
-        )
-        user_prompt = (
-            "## Task\n"
-            f"Classify the indexed sentences in Management Discussion paragraph {para_idx + 1}.\n\n"
-            "## Decision Criteria\n"
-            "Choose bucket scores from the category descriptions and examples, then score how "
-            "quotable each sentence is for an investor-relations summary.\n"
-            f"{_bucket_score_scale_guidance()}\n"
-            f"{_importance_scale_guidance(report_inclusion_threshold)}\n\n"
-            "## Rules\n"
-            "1. Return one result for every S-numbered sentence in the current paragraph.\n"
-            "2. Use up to the top 3 bucket-score pairs for each sentence, "
-            "ordered by score descending.\n"
-            "3. Score importance from 0 to 10 using the inclusion guidance above.\n"
-            "4. Keep `condensed` faithful to the sentence while removing filler.\n"
-            "5. Keep the `index` aligned to the S-number shown in the current paragraph.\n\n"
-            "## Categories\n"
-            f"{_xml_block('categories', categories_text_md)}\n\n"
-            "## Paragraph Context\n"
-            f"{_xml_block('md_paragraph_context', '\n'.join(context_lines))}"
-        )
-        raw = await _call_tool(
-            messages=[
-                {"role": "developer", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-            tool=TOOL_MD_PARAGRAPH,
-            label=f"md_para:{block_id}:p{para_idx + 1}",
-            context=context,
-            llm_params=llm_params,
-        )
+    prior_context = build_md_grouping_context(block_index, all_md_blocks)
+    finding_groups = await group_md_block_findings(
+        block_id=block_id,
+        speaker_line=speaker_line,
+        sentences=flat_sentences,
+        prior_context=prior_context,
+        categories_text_md=categories_text_md,
+        context=context,
+        llm_params=llm_params,
+    )
 
-        llm_results_by_idx: Dict[int, SentenceResult] = {}
-        if raw and "sentences" in raw:
-            for sentence_raw in raw["sentences"]:
+    finding_texts: List[str] = []
+    finding_sentence_ids: List[List[str]] = []
+    finding_para_idx: List[int] = []
+    sentence_ids_by_global_idx = [
+        f"{block_id}_s{global_idx}" for global_idx in range(len(flat_sentences))
+    ]
+    for group in finding_groups:
+        indices = [idx - 1 for idx in group.sentence_indices]
+        finding_texts.append(" ".join(flat_sentences[i] for i in indices))
+        finding_sentence_ids.append([sentence_ids_by_global_idx[i] for i in indices])
+        finding_para_idx.append(sentence_para_idx[indices[0]] if indices else 0)
+
+    indexed_findings_lines = [
+        f'  F{idx}: "{text}"' for idx, text in enumerate(finding_texts, start=1)
+    ]
+    context_lines = [f"SPEAKER: {speaker_line}", ""]
+    if prior_context:
+        context_lines.append("[Prior speaker context]")
+        context_lines.append(prior_context)
+        context_lines.append("")
+    context_lines.append("[CLASSIFY THESE FINDINGS:]")
+    context_lines.extend(indexed_findings_lines)
+
+    system_prompt = (
+        "You are a finding classifier for earnings call Management Discussion sections. "
+        "Assign each indexed finding to the best report buckets and score its "
+        "investor-relations importance using the category sheet and speaker context. "
+        "Always use the provided tool."
+    )
+    user_prompt = (
+        "## Task\n"
+        f"Classify the indexed findings from Management Discussion speaker block {block_id}.\n\n"
+        "## Decision Criteria\n"
+        "Choose bucket scores from the category descriptions and examples, then score how "
+        "quotable each finding is for an investor-relations summary.\n"
+        f"{_bucket_score_scale_guidance()}\n"
+        f"{_importance_scale_guidance(report_inclusion_threshold)}\n\n"
+        "## Rules\n"
+        "1. Return one result for every F-numbered finding in the current block.\n"
+        "2. Use up to the top 3 bucket-score pairs for each finding, "
+        "ordered by score descending.\n"
+        "3. Score importance from 0 to 10 using the inclusion guidance above.\n"
+        "4. Make `condensed` a compact summary of the full finding "
+        "— remove filler, keep every fact.\n"
+        "5. Keep the `index` aligned to the F-number shown in the current block.\n\n"
+        "## Categories\n"
+        f"{_xml_block('categories', categories_text_md)}\n\n"
+        "## Block Context\n"
+        f"{_xml_block('md_block_context', '\n'.join(context_lines))}"
+    )
+    raw = await _call_tool(
+        messages=[
+            {"role": "developer", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+        tool=TOOL_MD_BLOCK,
+        label=f"md_block:{block_id}",
+        context=context,
+        llm_params=llm_params,
+    )
+
+    llm_results_by_idx: Dict[int, FindingResult] = {}
+    parse_error_count = 0
+    last_parse_error = ""
+    if raw and "findings" in raw:
+        for finding_raw in raw["findings"]:
+            try:
+                result = FindingResult.model_validate(finding_raw)
+            except Exception:
                 try:
-                    result = SentenceResult.model_validate(sentence_raw)
-                except Exception:
-                    try:
-                        result = SentenceResult(
-                            index=sentence_raw.get("index"),
-                            scores=sentence_raw.get("scores", []),
-                            importance_score=sentence_raw.get("importance_score", 3.0),
-                            condensed=sentence_raw.get("condensed", ""),
-                        )
-                    except Exception as exc:
-                        parse_error_count += 1
-                        parse_error_paragraphs.add(para_idx + 1)
-                        last_parse_error = str(exc)
-                        continue
-                llm_results_by_idx[result.index] = result
+                    result = FindingResult(
+                        index=finding_raw.get("index"),
+                        scores=finding_raw.get("scores", []),
+                        importance_score=finding_raw.get("importance_score", 3.0),
+                        condensed=finding_raw.get("condensed", ""),
+                    )
+                except Exception as exc:
+                    parse_error_count += 1
+                    last_parse_error = str(exc)
+                    continue
+            llm_results_by_idx[result.index] = result
 
-        labels = []
-        for sent_idx, sentence in enumerate(para_sentences, start=1):
-            sentence_id = f"{block_id}_s{global_sent_idx}"
-            record = _make_sentence_record(
-                sentence_id,
-                sentence,
-                llm_results_by_idx.get(sent_idx),
-                categories,
-                applicable_ids,
-                transcript_section="MD",
-                source_block_id=block_id,
-                parent_record_id=block_id,
-                selected_importance_threshold=selected_importance_threshold,
-                candidate_importance_threshold=candidate_importance_threshold,
-                min_bucket_score_for_assignment=min_bucket_score_for_assignment,
-            )
-            record["para_idx"] = para_idx
-            sentence_records.append(record)
-            labels.append(f"S{sent_idx}->{_bucket_name(record['primary'], categories)}")
-            global_sent_idx += 1
-
-        prior_para_summaries.append(f"  [{', '.join(labels)}] {paragraphs[para_idx][:120]}...")
+    finding_records: List[Dict[str, Any]] = []
+    for finding_idx, (text, sentence_ids, para_idx) in enumerate(
+        zip(finding_texts, finding_sentence_ids, finding_para_idx), start=1
+    ):
+        finding_id = f"{block_id}_f{finding_idx - 1}"
+        record = _make_finding_record(
+            finding_id,
+            text,
+            sentence_ids,
+            llm_results_by_idx.get(finding_idx),
+            categories,
+            applicable_ids,
+            transcript_section="MD",
+            source_block_id=block_id,
+            parent_record_id=block_id,
+            selected_importance_threshold=selected_importance_threshold,
+            candidate_importance_threshold=candidate_importance_threshold,
+            min_bucket_score_for_assignment=min_bucket_score_for_assignment,
+        )
+        record["para_idx"] = para_idx
+        finding_records.append(record)
 
     if parse_error_count:
         logger.warning(
             "Management discussion block had parse fallbacks",
             block_id=block_id,
             speaker=block_raw["speaker"],
-            paragraphs=sorted(parse_error_paragraphs),
             parse_errors=parse_error_count,
             last_error=last_parse_error,
         )
@@ -1442,7 +1897,7 @@ async def classify_md_block(  # pylint: disable=unused-argument
         "speaker": block_raw["speaker"],
         "speaker_title": block_raw.get("speaker_title", ""),
         "speaker_affiliation": block_raw.get("speaker_affiliation", ""),
-        "sentences": sentence_records,
+        "sentences": finding_records,
     }
 
 
@@ -1463,7 +1918,11 @@ async def classify_qa_conversation(  # pylint: disable=unused-argument
     context: Dict[str, Any],
     llm_params: Dict[str, Any],
 ) -> Dict[str, Any]:
-    """Classify one QA exchange at sentence level.
+    """Classify one QA exchange at finding grain.
+
+    Groups each block's sentences into findings via parallel LLM grouping
+    calls, then makes one classification call per exchange. Analyst findings
+    are kept as context; executive findings receive bucket scores.
 
     `company_name`, `fiscal_year`, and `fiscal_quarter` are currently unused but
     reserved for prompt enrichment — keep them in the public signature.
@@ -1518,80 +1977,147 @@ async def classify_qa_conversation(  # pylint: disable=unused-argument
     executive_name = answer_turns[0]["speaker"] if answer_turns else "Executive"
     executive_title = answer_turns[0]["speaker_title"] if answer_turns else ""
 
-    # Build flat AS-only indexing: only executive sentences get classified.
-    # Question sentences are still shown in the prompt for context but are
-    # not addressed by any QS/AS index in the tool output.
-    answer_sentences_raw: List[str] = []
-    answer_para_indices: List[int] = []
-    para_idx = 0
-    for turn in answer_turns:
-        for paragraph_idx, sentence in turn["_sentences_raw"]:
-            answer_sentences_raw.append(sentence)
-            answer_para_indices.append(para_idx + paragraph_idx)
-        # Advance the paragraph counter past this turn's paragraphs so the
-        # next turn's paragraphs get distinct indices for the JS para-break
-        # renderer.
-        para_idx += len({p for p, _ in turn["_sentences_raw"]}) or 1
-
-    question_para_indices: List[int] = []
-    para_idx = 0
+    # Assign per-role sentence ids and flat sentence text lists on each turn
+    # so grouping + record construction can operate on uniform turn-scoped
+    # data structures. Sentence ids preserve the legacy `_qs{idx}` / `_as{idx}`
+    # naming so transcript highlighting downstream keeps working.
+    global_q_idx = 0
     for turn in question_turns:
-        for paragraph_idx, _sentence in turn["_sentences_raw"]:
-            question_para_indices.append(para_idx + paragraph_idx)
-        para_idx += len({p for p, _ in turn["_sentences_raw"]}) or 1
+        turn["_sentence_ids"] = []
+        turn["_sentence_texts"] = []
+        turn["_sentence_para_idx"] = []
+        for para_idx, sentence in turn["_sentences_raw"]:
+            turn["_sentence_ids"].append(f"{conv_id}_qs{global_q_idx}")
+            turn["_sentence_texts"].append(sentence)
+            turn["_sentence_para_idx"].append(para_idx)
+            global_q_idx += 1
 
-    # Render the prompt with full back-and-forth so the model sees real
-    # context, but only AS sentences are indexed (and therefore expected in
-    # the response). Analyst turns are shown unindexed under "ANALYST".
+    global_a_idx = 0
+    for turn in answer_turns:
+        turn["_sentence_ids"] = []
+        turn["_sentence_texts"] = []
+        turn["_sentence_para_idx"] = []
+        for para_idx, sentence in turn["_sentences_raw"]:
+            turn["_sentence_ids"].append(f"{conv_id}_as{global_a_idx}")
+            turn["_sentence_texts"].append(sentence)
+            turn["_sentence_para_idx"].append(para_idx)
+            global_a_idx += 1
+
+    # Offset paragraph indices so every turn's paragraphs have distinct
+    # ``para_idx`` values for the JS para-break renderer (preserves the
+    # original indexing scheme: question turns and answer turns advance
+    # independently).
+    q_para_offset = 0
+    for turn in question_turns:
+        turn["_sentence_global_para_idx"] = [
+            para_idx + q_para_offset for para_idx in turn["_sentence_para_idx"]
+        ]
+        q_para_offset += len({p for p in turn["_sentence_para_idx"]}) or 1
+
+    a_para_offset = 0
+    for turn in answer_turns:
+        turn["_sentence_global_para_idx"] = [
+            para_idx + a_para_offset for para_idx in turn["_sentence_para_idx"]
+        ]
+        a_para_offset += len({p for p in turn["_sentence_para_idx"]}) or 1
+
+    # Group each turn's sentences into findings in parallel. Exchange context
+    # (unindexed rendering of the whole back-and-forth) is shared across all
+    # grouping calls.
+    exchange_context_for_grouping = build_qa_exchange_context(turns)
+
+    async def _group_turn(turn: Dict[str, Any]) -> List[FindingGroup]:
+        if not turn["_sentence_texts"]:
+            return []
+        speaker_line = turn["speaker"] or (
+            "Analyst" if turn["role"] == "q" else "Executive"
+        )
+        return await group_qa_block_findings(
+            conversation_id=conv_id,
+            block_id=turn["block_id"],
+            speaker_role=turn["role"],
+            speaker_line=speaker_line,
+            sentences=turn["_sentence_texts"],
+            exchange_context=exchange_context_for_grouping,
+            context=context,
+            llm_params=llm_params,
+        )
+
+    grouping_results = await asyncio.gather(
+        *[_group_turn(turn) for turn in turns]
+    )
+    for turn, groups in zip(turns, grouping_results):
+        turn["_finding_groups"] = groups
+
+    # Materialise finding-level aggregates on each turn.
+    for turn in turns:
+        finding_texts: List[str] = []
+        finding_sentence_ids: List[List[str]] = []
+        finding_para_idx: List[int] = []
+        for group in turn["_finding_groups"]:
+            indices = [i - 1 for i in group.sentence_indices]
+            finding_texts.append(" ".join(turn["_sentence_texts"][i] for i in indices))
+            finding_sentence_ids.append([turn["_sentence_ids"][i] for i in indices])
+            finding_para_idx.append(
+                turn["_sentence_global_para_idx"][indices[0]] if indices else 0
+            )
+        turn["_finding_texts"] = finding_texts
+        turn["_finding_sentence_ids"] = finding_sentence_ids
+        turn["_finding_para_idx"] = finding_para_idx
+
+    # Render the classification prompt with the full back-and-forth, but only
+    # AF-index executive findings (analyst findings are shown unindexed as
+    # context). AF numbering spans all executive turns in exchange order.
     exchange_lines: List[str] = []
-    answer_index = 0
+    answer_af_index = 0
     for turn in turns:
         if turn["role"] == "q":
             label_parts = [turn["speaker"] or "Analyst"]
             if turn["speaker_affiliation"]:
                 label_parts.append(f", {turn['speaker_affiliation']}")
             exchange_lines.append(f"ANALYST ({''.join(label_parts)}):")
-            for _, sentence in turn["_sentences_raw"]:
-                exchange_lines.append(f'  "{sentence}"')
+            for text in turn["_finding_texts"]:
+                exchange_lines.append(f'  "{text}"')
             exchange_lines.append("")
         else:
             label_parts = [turn["speaker"] or "Executive"]
             if turn["speaker_title"]:
                 label_parts.append(f", {turn['speaker_title']}")
             exchange_lines.append(f"EXECUTIVE ({''.join(label_parts)}):")
-            for _, sentence in turn["_sentences_raw"]:
-                answer_index += 1
-                exchange_lines.append(f'  AS{answer_index}: "{sentence}"')
+            for text in turn["_finding_texts"]:
+                answer_af_index += 1
+                exchange_lines.append(f'  AF{answer_af_index}: "{text}"')
             exchange_lines.append("")
     exchange_text = "\n".join(exchange_lines).rstrip()
 
     system_prompt = (
-        "You are a sentence classifier for earnings call Q&A exchanges. "
+        "You are a finding classifier for earnings call Q&A exchanges. "
         "For each exchange, paraphrase the analyst's question, choose a single best-fit bucket "
-        "for the overall topic, and classify only the executive answer sentences. Treat anything "
+        "for the overall topic, and classify only the executive answer findings. Treat anything "
         "the analyst says as context only and never assign a bucket to it. Always use the "
         "provided tool."
     )
     user_prompt = (
         "## Task\n"
         "Summarise the analyst's question, choose a primary bucket for the overall exchange, "
-        "and classify only the executive answer sentences (AS).\n\n"
+        "and classify only the executive answer findings (AF).\n\n"
         "## Decision Criteria\n"
         "Use the overall exchange topic for `primary_bucket_index`, then score each executive "
-        "answer sentence from the category descriptions and examples. Analyst sentences are "
-        "shown for context only \u2014 do not return any QS results.\n"
+        "answer finding from the category descriptions and examples. Analyst findings are "
+        "shown for context only \u2014 do not return any QF results.\n"
         f"{_bucket_score_scale_guidance()}\n"
         f"{_importance_scale_guidance(report_inclusion_threshold)}\n\n"
         "## Rules\n"
         "1. Set `primary_bucket_index` to the single best existing bucket for the full exchange.\n"
         "2. Return `analyst_question_summary` as a single clause of \u226425 words paraphrasing "
         "what the analyst is asking about. Avoid filler like greetings or thank-yous.\n"
-        "3. Return one result for every `AS` sentence shown below \u2014 and only AS sentences.\n"
-        "4. Use up to the top 3 bucket-score pairs for each AS sentence, "
+        "3. Return one result for every `AF` finding shown below \u2014 and only AF findings.\n"
+        "4. Use up to the top 3 bucket-score pairs for each AF finding, "
         "ordered by score descending.\n"
         "5. Score importance from 0 to 10 using the inclusion guidance above.\n"
-        "6. Keep `condensed` faithful to the source sentence while removing filler.\n"
-        "7. Keep each `index` aligned to the numbered `AS` sentence.\n\n"
+        "6. Make `condensed` a compact summary of the full finding "
+        "\u2014 remove filler, keep every fact.\n"
+        "7. Keep each `index` aligned to the numbered `AF` finding.\n\n"
         "## Categories\n"
         f"{_xml_block('categories', categories_text_qa)}\n\n"
         "## Exchange\n"
@@ -1608,9 +2134,6 @@ async def classify_qa_conversation(  # pylint: disable=unused-argument
         llm_params=llm_params,
     )
 
-    # Question sentences are always built as context-only records: no LLM
-    # scoring, no bucket assignment, no eligibility for the report. Build
-    # them up front so they exist regardless of how the LLM call resolves.
     question_source_block_id = (
         question_turns[0]["block_id"] if question_turns else conv_id
     )
@@ -1618,52 +2141,42 @@ async def classify_qa_conversation(  # pylint: disable=unused-argument
         answer_turns[0]["block_id"] if answer_turns else conv_id
     )
 
-    question_sentences_flat = [
-        sentence for turn in question_turns for _, sentence in turn["_sentences_raw"]
-    ]
+    # Analyst findings are always context-only: no LLM scoring, no bucket
+    # assignment, not eligible for the report.
     question_records: List[Dict[str, Any]] = []
-    for idx, sentence in enumerate(question_sentences_flat):
-        record = _make_context_sentence_record(
-            f"{conv_id}_qs{idx}",
-            sentence,
-            transcript_section="QA",
-            source_block_id=question_source_block_id,
-            parent_record_id=conv_id,
-        )
-        record["para_idx"] = (
-            question_para_indices[idx] if idx < len(question_para_indices) else 0
-        )
-        question_records.append(record)
+    q_finding_counter = 0
+    for turn in question_turns:
+        turn_records: List[Dict[str, Any]] = []
+        for text, sids, para_idx in zip(
+            turn["_finding_texts"],
+            turn["_finding_sentence_ids"],
+            turn["_finding_para_idx"],
+        ):
+            finding_id = f"{conv_id}_qf{q_finding_counter}"
+            record = _make_context_finding_record(
+                finding_id,
+                text,
+                sids,
+                transcript_section="QA",
+                source_block_id=question_source_block_id,
+                parent_record_id=conv_id,
+            )
+            record["para_idx"] = para_idx
+            question_records.append(record)
+            turn_records.append(record)
+            q_finding_counter += 1
+        turn["_finding_records"] = turn_records
 
     primary_bucket = ""
     analyst_question_summary = ""
-    answer_records: List[Dict[str, Any]] = []
+    answer_by_idx: Dict[int, FindingResult] = {}
     if raw:
         try:
             result = QAExchangeClassification.model_validate(raw)
             if 0 <= result.primary_bucket_index < len(categories):
                 primary_bucket = f"bucket_{result.primary_bucket_index}"
             analyst_question_summary = (result.analyst_question_summary or "").strip()
-
-            answer_by_idx = {sentence.index: sentence for sentence in result.answer_sentences}
-            for idx, sentence in enumerate(answer_sentences_raw, start=1):
-                record = _make_sentence_record(
-                    f"{conv_id}_as{idx - 1}",
-                    sentence,
-                    answer_by_idx.get(idx),
-                    categories,
-                    applicable_ids,
-                    transcript_section="QA",
-                    source_block_id=answer_source_block_id,
-                    parent_record_id=conv_id,
-                    selected_importance_threshold=selected_importance_threshold,
-                    candidate_importance_threshold=candidate_importance_threshold,
-                    min_bucket_score_for_assignment=min_bucket_score_for_assignment,
-                )
-                record["para_idx"] = (
-                    answer_para_indices[idx - 1] if idx - 1 < len(answer_para_indices) else 0
-                )
-                answer_records.append(record)
+            answer_by_idx = {finding.index: finding for finding in result.answer_findings}
         except Exception as exc:
             logger.warning(
                 "Q&A conversation response could not be parsed",
@@ -1671,12 +2184,22 @@ async def classify_qa_conversation(  # pylint: disable=unused-argument
                 error=str(exc),
             )
 
-    if not answer_records:
-        for idx, sentence in enumerate(answer_sentences_raw):
-            record = _make_sentence_record(
-                f"{conv_id}_as{idx}",
-                sentence,
-                None,
+    answer_records: List[Dict[str, Any]] = []
+    a_finding_counter = 0
+    for turn in answer_turns:
+        turn_records = []
+        for text, sids, para_idx in zip(
+            turn["_finding_texts"],
+            turn["_finding_sentence_ids"],
+            turn["_finding_para_idx"],
+        ):
+            finding_id = f"{conv_id}_af{a_finding_counter}"
+            af_idx = a_finding_counter + 1
+            record = _make_finding_record(
+                finding_id,
+                text,
+                sids,
+                answer_by_idx.get(af_idx),
                 categories,
                 applicable_ids,
                 transcript_section="QA",
@@ -1686,8 +2209,11 @@ async def classify_qa_conversation(  # pylint: disable=unused-argument
                 candidate_importance_threshold=candidate_importance_threshold,
                 min_bucket_score_for_assignment=min_bucket_score_for_assignment,
             )
-            record["para_idx"] = answer_para_indices[idx] if idx < len(answer_para_indices) else 0
+            record["para_idx"] = para_idx
             answer_records.append(record)
+            turn_records.append(record)
+            a_finding_counter += 1
+        turn["_finding_records"] = turn_records
 
     # Honor the LLM's whole-exchange primary bucket only if (a) it is in the
     # set of buckets applicable to QA, and (b) at least one answer sentence
@@ -1745,14 +2271,21 @@ async def classify_qa_conversation(  # pylint: disable=unused-argument
     # Q -> A -> thanks). The flat ``question_sentences``/``answer_sentences``
     # lists are also kept for callers/UI code that consume the per-role view
     # (report panel, included-sids set, etc.).
-    question_records_iter = iter(question_records)
-    answer_records_iter = iter(answer_records)
     for turn in turns:
-        if turn["role"] == "q":
-            turn["sentences"] = [next(question_records_iter) for _ in turn["_sentences_raw"]]
-        else:
-            turn["sentences"] = [next(answer_records_iter) for _ in turn["_sentences_raw"]]
-        turn.pop("_sentences_raw", None)
+        turn["sentences"] = turn.get("_finding_records", [])
+        for scratch_key in (
+            "_sentences_raw",
+            "_sentence_ids",
+            "_sentence_texts",
+            "_sentence_para_idx",
+            "_sentence_global_para_idx",
+            "_finding_groups",
+            "_finding_texts",
+            "_finding_sentence_ids",
+            "_finding_para_idx",
+            "_finding_records",
+        ):
+            turn.pop(scratch_key, None)
 
     return {
         "id": conv_id,
@@ -1822,6 +2355,8 @@ async def build_interactive_bank_data(
             try:
                 return await classify_md_block(
                     block_raw=block,
+                    block_index=block_index,
+                    all_md_blocks=md_raw_blocks,
                     categories=categories,
                     categories_text_md=categories_text_md,
                     company_name=company_name,
@@ -1838,7 +2373,7 @@ async def build_interactive_bank_data(
                 logger.error(
                     "Management Discussion block classification failed",
                     ticker=ticker,
-                    block_index=block_index,
+                    block_index=block_index + 1,
                     block_id=block["id"],
                     error=str(exc),
                     exc_info=True,
@@ -1853,7 +2388,7 @@ async def build_interactive_bank_data(
                 }
 
     md_results = await asyncio.gather(
-        *[_process_md_block(idx, block) for idx, block in enumerate(md_raw_blocks, start=1)],
+        *[_process_md_block(idx, block) for idx, block in enumerate(md_raw_blocks)],
         return_exceptions=True,
     )
 

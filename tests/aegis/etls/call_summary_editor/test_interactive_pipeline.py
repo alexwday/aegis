@@ -1,17 +1,48 @@
 """Tests for the interactive pipeline helpers."""
 
+import re
 from unittest.mock import AsyncMock, patch
 
 import pytest
 
 from aegis.etls.call_summary_editor.interactive_pipeline import (
+    FindingGroup,
     _primary_from_scores,
     _seed_selected_report_sentences,
     analyze_config_coverage,
+    build_md_grouping_context,
+    classify_md_block,
     classify_qa_conversation,
     count_included_categories,
     detect_qa_boundaries,
+    group_md_block_findings,
+    group_qa_block_findings,
+    repair_finding_groups,
 )
+
+
+def _qa_call_tool_dispatcher(classification_response):
+    """Build an AsyncMock that returns singleton-group findings for grouping
+    calls and ``classification_response`` for the exchange classification.
+
+    Grouping calls are identified by tool.function.name. Grouping returns one
+    finding per sentence so tests exercise the classification path with a
+    1:1 sentence-to-finding mapping (matching the old sentence-level flow).
+    """
+    async def _dispatch(**kwargs):
+        tool_name = kwargs["tool"]["function"]["name"]
+        if tool_name in {"group_md_block_findings", "group_qa_block_findings"}:
+            user_msg = next(m for m in kwargs["messages"] if m["role"] == "user")
+            current_block = re.search(
+                r"<current_block>(.*?)</current_block>", user_msg["content"], re.DOTALL
+            )
+            body = current_block.group(1) if current_block else user_msg["content"]
+            count = len(re.findall(r"^\s*S\d+:", body, re.MULTILINE))
+            return {"findings": [{"sentence_indices": [i]} for i in range(1, count + 1)]}
+        if tool_name == "classify_qa_exchange":
+            return classification_response
+        return None
+    return AsyncMock(side_effect=_dispatch)
 
 
 @pytest.mark.asyncio
@@ -494,11 +525,11 @@ async def test_classify_qa_conversation_treats_question_sentences_as_context_onl
 
     with patch(
         "aegis.etls.call_summary_editor.interactive_pipeline._call_tool",
-        new=AsyncMock(
-            return_value={
+        new=_qa_call_tool_dispatcher(
+            {
                 "primary_bucket_index": 0,
                 "analyst_question_summary": "on CET1 capital and expense outlook",
-                "answer_sentences": [
+                "answer_findings": [
                     {
                         "index": 1,
                         "scores": [{"bucket_index": 0, "score": 8.1}],
@@ -580,11 +611,11 @@ async def test_classify_qa_conversation_prompt_mentions_auto_include_threshold()
         },
     ]
 
-    mock_call_tool = AsyncMock(
-        return_value={
+    mock_call_tool = _qa_call_tool_dispatcher(
+        {
             "primary_bucket_index": 0,
             "analyst_question_summary": "on CET1 outlook",
-            "answer_sentences": [],
+            "answer_findings": [],
         }
     )
 
@@ -609,9 +640,15 @@ async def test_classify_qa_conversation_prompt_mentions_auto_include_threshold()
             llm_params={"model": "gpt-test"},
         )
 
-    prompt_messages = mock_call_tool.await_args.kwargs["messages"]
+    classification_call = next(
+        call
+        for call in mock_call_tool.await_args_list
+        if call.kwargs["tool"]["function"]["name"] == "classify_qa_exchange"
+    )
     user_prompt = next(
-        message["content"] for message in prompt_messages if message["role"] == "user"
+        message["content"]
+        for message in classification_call.kwargs["messages"]
+        if message["role"] == "user"
     )
     assert "Use bucket `score` on a 0-10 relevance scale." in user_prompt
     assert "Scores >= 4.0 should remain visible for analyst review at minimum." in user_prompt
@@ -646,11 +683,11 @@ async def test_classify_qa_conversation_rescales_normalized_bucket_scores():
 
     with patch(
         "aegis.etls.call_summary_editor.interactive_pipeline._call_tool",
-        new=AsyncMock(
-            return_value={
+        new=_qa_call_tool_dispatcher(
+            {
                 "primary_bucket_index": 0,
                 "analyst_question_summary": "on CET1 outlook",
-                "answer_sentences": [
+                "answer_findings": [
                     {
                         "index": 1,
                         "scores": [{"bucket_index": 0, "score": 0.84}],
@@ -753,11 +790,11 @@ async def test_classify_qa_conversation_keeps_weak_bucket_match_as_unmapped_cand
 
     with patch(
         "aegis.etls.call_summary_editor.interactive_pipeline._call_tool",
-        new=AsyncMock(
-            return_value={
+        new=_qa_call_tool_dispatcher(
+            {
                 "primary_bucket_index": 0,
                 "analyst_question_summary": "on the AI rollout",
-                "answer_sentences": [
+                "answer_findings": [
                     {
                         "index": 1,
                         "scores": [{"bucket_index": 0, "score": 4.3}],
@@ -793,7 +830,7 @@ async def test_classify_qa_conversation_keeps_weak_bucket_match_as_unmapped_cand
 
 
 @pytest.mark.asyncio
-async def test_classify_qa_conversation_missing_sentence_results_are_rejected_not_emerging():
+async def test_classify_qa_conversation_missing_finding_results_are_rejected_not_emerging():
     categories = [
         {
             "transcript_sections": "QA",
@@ -821,11 +858,11 @@ async def test_classify_qa_conversation_missing_sentence_results_are_rejected_no
 
     with patch(
         "aegis.etls.call_summary_editor.interactive_pipeline._call_tool",
-        new=AsyncMock(
-            return_value={
+        new=_qa_call_tool_dispatcher(
+            {
                 "primary_bucket_index": 0,
                 "analyst_question_summary": "on CET1 outlook",
-                "answer_sentences": [],
+                "answer_findings": [],
             }
         ),
     ):
@@ -860,3 +897,506 @@ async def test_classify_qa_conversation_missing_sentence_results_are_rejected_no
         result["answer_sentences"][0]["classification_error"]
         == "missing_sentence_classification"
     )
+
+
+# ── Finding grouping helpers ───────────────────────────────────────────────
+
+
+def _make_groups(*index_lists: list) -> list:
+    return [FindingGroup(sentence_indices=list(indices)) for indices in index_lists]
+
+
+def test_repair_finding_groups_accepts_valid_contiguous_groups():
+    groups = _make_groups([1, 2, 3], [4], [5, 6])
+    repaired = repair_finding_groups(groups, total_sentences=6)
+    assert [group.sentence_indices for group in repaired] == [[1, 2, 3], [4], [5, 6]]
+
+
+def test_repair_finding_groups_fills_gaps_with_singletons():
+    groups = _make_groups([1, 2], [5])
+    repaired = repair_finding_groups(groups, total_sentences=6)
+    assert [group.sentence_indices for group in repaired] == [[1, 2], [3], [4], [5], [6]]
+
+
+def test_repair_finding_groups_rejects_overlapping_groups_keeping_first():
+    groups = _make_groups([1, 2, 3], [2, 3, 4])
+    repaired = repair_finding_groups(groups, total_sentences=4)
+    assert [group.sentence_indices for group in repaired] == [[1, 2, 3], [4]]
+
+
+def test_repair_finding_groups_rejects_non_contiguous_groups():
+    groups = _make_groups([1, 3], [2])
+    repaired = repair_finding_groups(groups, total_sentences=3)
+    # Non-contiguous [1,3] rejected; [2] accepted; 1 and 3 filled as singletons.
+    # Ordering is by minimum index ascending: [1], [2], [3].
+    assert [group.sentence_indices for group in repaired] == [[1], [2], [3]]
+
+
+def test_repair_finding_groups_rejects_out_of_range_indices():
+    groups = _make_groups([1, 2], [5, 6])
+    repaired = repair_finding_groups(groups, total_sentences=3)
+    assert [group.sentence_indices for group in repaired] == [[1, 2], [3]]
+
+
+def test_repair_finding_groups_handles_empty_llm_output():
+    repaired = repair_finding_groups([], total_sentences=3)
+    assert [group.sentence_indices for group in repaired] == [[1], [2], [3]]
+
+
+def _make_md_block(speaker: str, text: str, **extra) -> dict:
+    return {
+        "id": extra.get("id", f"block_{speaker.lower().replace(' ', '_')}"),
+        "speaker": speaker,
+        "speaker_title": extra.get("speaker_title", ""),
+        "speaker_affiliation": extra.get("speaker_affiliation", ""),
+        "paragraphs": [text] if text else [],
+    }
+
+
+def test_build_md_grouping_context_returns_empty_for_first_block():
+    blocks = [_make_md_block("CEO", "Opening remarks for the quarter.")]
+    assert build_md_grouping_context(0, blocks) == ""
+
+
+def test_build_md_grouping_context_returns_immediate_prior_block_when_long_enough():
+    long_text = "Lorem ipsum " * 30  # well over 200 chars
+    blocks = [
+        _make_md_block("CEO", long_text),
+        _make_md_block("CFO", "Thanks."),
+    ]
+    context = build_md_grouping_context(1, blocks, min_chars=200, max_blocks_back=3)
+    assert "CEO" in context
+    assert long_text.strip() in context
+    # Shouldn't include the current block.
+    assert "CFO" not in context
+
+
+def test_build_md_grouping_context_extends_backward_for_short_preceding_blocks():
+    blocks = [
+        _make_md_block("Operator", "Please welcome today's speakers."),
+        _make_md_block("CEO", "Thanks."),  # short
+        _make_md_block("CFO", "Let me add."),  # short
+        _make_md_block("Analyst", "Next speaker."),  # current
+    ]
+    context = build_md_grouping_context(3, blocks, min_chars=200, max_blocks_back=3)
+    # Should include multiple prior blocks to accumulate context.
+    assert "CFO" in context
+    assert "CEO" in context
+    # Analyst (current block) excluded.
+    assert "Next speaker." not in context
+
+
+def test_build_md_grouping_context_caps_at_three_blocks_back():
+    blocks = [
+        _make_md_block("A", "One."),
+        _make_md_block("B", "Two."),
+        _make_md_block("C", "Three."),
+        _make_md_block("D", "Four."),
+        _make_md_block("E", "Five."),
+    ]
+    context = build_md_grouping_context(4, blocks, min_chars=10_000, max_blocks_back=3)
+    # Despite not hitting min_chars, should stop after 3 blocks back: B, C, D.
+    assert "A: One." not in context
+    assert "B: Two." in context
+    assert "C: Three." in context
+    assert "D: Four." in context
+    assert "E: Five." not in context
+
+
+def test_build_md_grouping_context_orders_oldest_to_newest():
+    blocks = [
+        _make_md_block("A", "first."),
+        _make_md_block("B", "second."),
+        _make_md_block("C", "third."),
+    ]
+    context = build_md_grouping_context(2, blocks, min_chars=10_000, max_blocks_back=3)
+    # Prior blocks A then B, in transcript order.
+    assert context.find("A: first.") < context.find("B: second.")
+
+
+@pytest.mark.asyncio
+async def test_group_md_block_findings_returns_findings_on_happy_path():
+    mock_call_tool = AsyncMock(
+        return_value={"findings": [{"sentence_indices": [1, 2]}, {"sentence_indices": [3]}]}
+    )
+    with patch(
+        "aegis.etls.call_summary_editor.interactive_pipeline._call_tool",
+        new=mock_call_tool,
+    ):
+        groups = await group_md_block_findings(
+            block_id="RY_MD_1",
+            speaker_line="CEO",
+            sentences=["S1 text.", "S2 text.", "S3 text."],
+            prior_context="",
+            categories_text_md="",
+            context={"execution_id": "test"},
+            llm_params={"model": "gpt-test"},
+        )
+
+    assert [group.sentence_indices for group in groups] == [[1, 2], [3]]
+    assert mock_call_tool.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_group_md_block_findings_retries_on_invalid_then_repairs_on_final_failure():
+    mock_call_tool = AsyncMock(
+        side_effect=[
+            # Attempt 1: non-contiguous (invalid)
+            {"findings": [{"sentence_indices": [1, 3]}, {"sentence_indices": [2]}]},
+            # Attempt 2: missing sentence 3 (invalid coverage)
+            {"findings": [{"sentence_indices": [1, 2]}]},
+        ]
+    )
+    with patch(
+        "aegis.etls.call_summary_editor.interactive_pipeline._call_tool",
+        new=mock_call_tool,
+    ):
+        groups = await group_md_block_findings(
+            block_id="RY_MD_1",
+            speaker_line="CEO",
+            sentences=["S1.", "S2.", "S3."],
+            prior_context="",
+            categories_text_md="",
+            context={"execution_id": "test"},
+            llm_params={"model": "gpt-test"},
+            max_retries=1,
+        )
+
+    # After retries fail, repair falls back to keeping accepted groups + filling gaps.
+    # Final LLM groups were [[1,2]]; repair fills [3] as singleton.
+    assert [group.sentence_indices for group in groups] == [[1, 2], [3]]
+    assert mock_call_tool.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_group_md_block_findings_passes_prior_context_to_prompt():
+    mock_call_tool = AsyncMock(
+        return_value={"findings": [{"sentence_indices": [1]}]}
+    )
+    with patch(
+        "aegis.etls.call_summary_editor.interactive_pipeline._call_tool",
+        new=mock_call_tool,
+    ):
+        await group_md_block_findings(
+            block_id="RY_MD_2",
+            speaker_line="CFO",
+            sentences=["Only one sentence."],
+            prior_context="CEO: Opening remarks for the quarter.",
+            categories_text_md="",
+            context={"execution_id": "test"},
+            llm_params={"model": "gpt-test"},
+        )
+
+    user_prompt = next(
+        message["content"]
+        for message in mock_call_tool.await_args.kwargs["messages"]
+        if message["role"] == "user"
+    )
+    assert "CEO: Opening remarks for the quarter." in user_prompt
+    assert "prior_speaker_context" in user_prompt
+    assert 'S1: "Only one sentence."' in user_prompt
+
+
+@pytest.mark.asyncio
+async def test_group_qa_block_findings_includes_exchange_context():
+    mock_call_tool = AsyncMock(
+        return_value={"findings": [{"sentence_indices": [1, 2]}]}
+    )
+    with patch(
+        "aegis.etls.call_summary_editor.interactive_pipeline._call_tool",
+        new=mock_call_tool,
+    ):
+        await group_qa_block_findings(
+            conversation_id="RY_QA_conv_1",
+            block_id="RY_QA_2",
+            speaker_role="a",
+            speaker_line="CFO",
+            sentences=["We expect modest growth.", "That reflects our baseline."],
+            exchange_context="ANALYST (Big Bank):\n  \"How should we think about NII?\"",
+            context={"execution_id": "test"},
+            llm_params={"model": "gpt-test"},
+        )
+
+    user_prompt = next(
+        message["content"]
+        for message in mock_call_tool.await_args.kwargs["messages"]
+        if message["role"] == "user"
+    )
+    assert "How should we think about NII?" in user_prompt
+    assert "EXECUTIVE (CFO)" in user_prompt
+    assert 'S1: "We expect modest growth."' in user_prompt
+
+
+@pytest.mark.asyncio
+async def test_group_md_block_findings_empty_sentences_returns_no_groups():
+    # Shouldn't call the LLM if there are no sentences to group.
+    mock_call_tool = AsyncMock(return_value=None)
+    with patch(
+        "aegis.etls.call_summary_editor.interactive_pipeline._call_tool",
+        new=mock_call_tool,
+    ):
+        groups = await group_md_block_findings(
+            block_id="RY_MD_1",
+            speaker_line="CEO",
+            sentences=[],
+            prior_context="",
+            categories_text_md="",
+            context={"execution_id": "test"},
+            llm_params={"model": "gpt-test"},
+        )
+
+    assert groups == []
+    assert mock_call_tool.await_count == 0
+
+
+@pytest.mark.asyncio
+async def test_classify_md_block_makes_grouping_then_classification_call():
+    """classify_md_block issues a grouping call followed by a classification call."""
+    categories = [
+        {
+            "transcript_sections": "MD",
+            "report_section": "Results Summary",
+            "category_name": "Capital",
+            "category_description": "Capital discussion.",
+        },
+    ]
+    block_raw = {
+        "id": "RY_MD_1",
+        "speaker": "CEO",
+        "speaker_title": "CEO",
+        "speaker_affiliation": "Royal Bank of Canada",
+        "paragraphs": ["CET1 was strong. We remain well capitalized."],
+    }
+
+    mock_call_tool = AsyncMock(
+        side_effect=[
+            {"findings": [{"sentence_indices": [1, 2]}]},
+            {
+                "findings": [
+                    {
+                        "index": 1,
+                        "scores": [{"bucket_index": 0, "score": 8.1}],
+                        "importance_score": 7.5,
+                        "condensed": "CET1 strong; well capitalized.",
+                    }
+                ]
+            },
+        ]
+    )
+    with patch(
+        "aegis.etls.call_summary_editor.interactive_pipeline._call_tool",
+        new=mock_call_tool,
+    ):
+        result = await classify_md_block(
+            block_raw=block_raw,
+            block_index=0,
+            all_md_blocks=[block_raw],
+            categories=categories,
+            categories_text_md="",
+            company_name="RBC",
+            fiscal_year=2026,
+            fiscal_quarter="Q1",
+            report_inclusion_threshold=4.0,
+            selected_importance_threshold=6.5,
+            candidate_importance_threshold=4.0,
+            min_bucket_score_for_assignment=3.0,
+            context={"execution_id": "test"},
+            llm_params={"model": "gpt-test"},
+        )
+
+    assert mock_call_tool.await_count == 2
+    grouping_label = mock_call_tool.await_args_list[0].kwargs["label"]
+    classification_label = mock_call_tool.await_args_list[1].kwargs["label"]
+    assert grouping_label.startswith("md_group:RY_MD_1")
+    assert classification_label == "md_block:RY_MD_1"
+
+    findings = result["sentences"]
+    assert len(findings) == 1
+    assert findings[0]["sid"] == "RY_MD_1_f0"
+    assert findings[0]["sentence_ids"] == ["RY_MD_1_s0", "RY_MD_1_s1"]
+    assert findings[0]["text"] == "CET1 was strong. We remain well capitalized."
+    assert findings[0]["condensed"] == "CET1 strong; well capitalized."
+    assert findings[0]["primary"] == "bucket_0"
+
+
+@pytest.mark.asyncio
+async def test_classify_md_block_returns_empty_for_block_with_no_sentences():
+    """Empty blocks skip both the grouping and classification LLM calls."""
+    block_raw = {
+        "id": "RY_MD_1",
+        "speaker": "CEO",
+        "speaker_title": "CEO",
+        "speaker_affiliation": "RBC",
+        "paragraphs": [""],
+    }
+    mock_call_tool = AsyncMock(return_value=None)
+    with patch(
+        "aegis.etls.call_summary_editor.interactive_pipeline._call_tool",
+        new=mock_call_tool,
+    ):
+        result = await classify_md_block(
+            block_raw=block_raw,
+            block_index=0,
+            all_md_blocks=[block_raw],
+            categories=[],
+            categories_text_md="",
+            company_name="RBC",
+            fiscal_year=2026,
+            fiscal_quarter="Q1",
+            report_inclusion_threshold=4.0,
+            selected_importance_threshold=6.5,
+            candidate_importance_threshold=4.0,
+            min_bucket_score_for_assignment=3.0,
+            context={"execution_id": "test"},
+            llm_params={"model": "gpt-test"},
+        )
+
+    assert result["sentences"] == []
+    assert mock_call_tool.await_count == 0
+
+
+@pytest.mark.asyncio
+async def test_classify_md_block_passes_prior_block_context_into_prompt():
+    """The grouping prompt should carry the preceding speaker block as context."""
+    long_prior = "A " * 250
+    prior_block = {
+        "id": "RY_MD_1",
+        "speaker": "Operator",
+        "speaker_title": "",
+        "speaker_affiliation": "",
+        "paragraphs": [long_prior],
+    }
+    current_block = {
+        "id": "RY_MD_2",
+        "speaker": "CEO",
+        "speaker_title": "CEO",
+        "speaker_affiliation": "RBC",
+        "paragraphs": ["Let me begin."],
+    }
+
+    mock_call_tool = AsyncMock(
+        side_effect=[
+            {"findings": [{"sentence_indices": [1]}]},
+            {
+                "findings": [
+                    {
+                        "index": 1,
+                        "scores": [],
+                        "importance_score": 2.0,
+                        "condensed": "Begin.",
+                    }
+                ]
+            },
+        ]
+    )
+    with patch(
+        "aegis.etls.call_summary_editor.interactive_pipeline._call_tool",
+        new=mock_call_tool,
+    ):
+        await classify_md_block(
+            block_raw=current_block,
+            block_index=1,
+            all_md_blocks=[prior_block, current_block],
+            categories=[],
+            categories_text_md="",
+            company_name="RBC",
+            fiscal_year=2026,
+            fiscal_quarter="Q1",
+            report_inclusion_threshold=4.0,
+            selected_importance_threshold=6.5,
+            candidate_importance_threshold=4.0,
+            min_bucket_score_for_assignment=3.0,
+            context={"execution_id": "test"},
+            llm_params={"model": "gpt-test"},
+        )
+
+    grouping_prompt = next(
+        message["content"]
+        for message in mock_call_tool.await_args_list[0].kwargs["messages"]
+        if message["role"] == "user"
+    )
+    assert "Operator" in grouping_prompt
+    assert "A A A" in grouping_prompt
+
+
+@pytest.mark.asyncio
+async def test_classify_qa_conversation_groups_each_block_in_parallel():
+    """Grouping calls fire once per block; classification then runs once."""
+    categories = [
+        {
+            "transcript_sections": "QA",
+            "report_section": "Earnings Call Q&A",
+            "category_name": "Capital",
+            "category_description": "Capital and CET1 discussion.",
+        }
+    ]
+    conv_blocks = [
+        {
+            "speaker": "Analyst",
+            "speaker_affiliation": "Big Bank",
+            "speaker_title": "",
+            "speaker_type_hint": "q",
+            "paragraphs": ["First analyst sentence.", "Second analyst sentence."],
+        },
+        {
+            "speaker": "Chief Financial Officer",
+            "speaker_affiliation": "RBC",
+            "speaker_title": "CFO",
+            "speaker_type_hint": "a",
+            "paragraphs": ["Exec reply A1.", "Exec reply A2."],
+        },
+    ]
+
+    mock_call_tool = _qa_call_tool_dispatcher(
+        {
+            "primary_bucket_index": 0,
+            "analyst_question_summary": "on the opening question",
+            "answer_findings": [
+                {
+                    "index": 1,
+                    "scores": [{"bucket_index": 0, "score": 7.5}],
+                    "importance_score": 7.0,
+                    "condensed": "Exec reply A1.",
+                },
+                {
+                    "index": 2,
+                    "scores": [{"bucket_index": 0, "score": 6.2}],
+                    "importance_score": 5.5,
+                    "condensed": "Exec reply A2.",
+                },
+            ],
+        }
+    )
+
+    with patch(
+        "aegis.etls.call_summary_editor.interactive_pipeline._call_tool",
+        new=mock_call_tool,
+    ):
+        result = await classify_qa_conversation(
+            conv_idx=1,
+            conv_blocks=conv_blocks,
+            ticker="RY-CA",
+            categories=categories,
+            categories_text_qa="",
+            company_name="RBC",
+            fiscal_year=2026,
+            fiscal_quarter="Q1",
+            report_inclusion_threshold=4.0,
+            selected_importance_threshold=6.5,
+            candidate_importance_threshold=4.0,
+            min_bucket_score_for_assignment=3.0,
+            context={"execution_id": "test"},
+            llm_params={"model": "gpt-test"},
+        )
+
+    tool_names = [
+        call.kwargs["tool"]["function"]["name"] for call in mock_call_tool.await_args_list
+    ]
+    assert tool_names.count("group_qa_block_findings") == 2
+    assert tool_names.count("classify_qa_exchange") == 1
+    assert len(result["question_sentences"]) == 2
+    assert len(result["answer_sentences"]) == 2
+    assert result["answer_sentences"][0]["sid"] == "RY-CA_QA_1_af0"
+    assert result["answer_sentences"][0]["sentence_ids"] == ["RY-CA_QA_1_as0"]
+    assert result["question_sentences"][0]["sid"] == "RY-CA_QA_1_qf0"
+    assert result["question_sentences"][0]["status"] == "context"
