@@ -802,6 +802,15 @@ body{
   padding-left:9px!important;
   margin-left:-12px!important;
 }
+/* Within a highlighted category, only sentences that are actually in the
+   report (status=selected → .s-incl) get the blue outline. Candidate and
+   rejected siblings keep the plain blue fill, so the user can tell at a
+   glance which highlighted findings made it into the report output. */
+.s-tok.tp-highlighted.s-incl{
+  outline:2px solid #2563EB;
+  outline-offset:1px;
+  border-radius:3px;
+}
 /* Single-finding selection on transcript sentences — outline (not border)
    so the inline text flow isn't pushed around. Mirrors the blue border on
    the corresponding q-card in the report preview, giving the user one
