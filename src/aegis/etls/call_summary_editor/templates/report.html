@@ -802,6 +802,15 @@ body{
   padding-left:9px!important;
   margin-left:-12px!important;
 }
+/* Single-finding selection on transcript sentences — outline (not border)
+   so the inline text flow isn't pushed around. Mirrors the blue border on
+   the corresponding q-card in the report preview, giving the user one
+   visual "this is your selected finding" signal across both panes. */
+.s-tok.tp-sent-selected{
+  outline:2px solid #2563EB;
+  outline-offset:1px;
+  border-radius:3px;
+}
 
 /* ════════════════════════════════════════════════════════════════
    QUOTE CARDS
@@ -1478,17 +1487,45 @@ function findSubquoteIdForSid(sid) {
   return hit ? hit.id : null;
 }
 
+// Set of transcript sentence IDs belonging to the currently-selected finding.
+// Maintained alongside state.selected_subquote_id by setSelectedFinding and
+// read by tSpan on transcript re-renders so the blue border survives full
+// transcript rebuilds (bank switch, status edit, etc.).
+let _selectedFindingSids = null;
+
 // Single-finding selection is persistent — it survives popover close and only
 // changes when the user explicitly selects a different finding (or clicks the
 // same one again). We update DOM classes directly to avoid a full re-render
 // that would tear down the sortable instances on every click.
 function setSelectedFinding(sqId) {
   state.selected_subquote_id = sqId || null;
+
+  // Refresh the sid cache so transcript borders track the new selection.
+  if (state.selected_subquote_id) {
+    const sq = getAllSubquotes(state.current_bank)
+      .find(s => s.id === state.selected_subquote_id);
+    _selectedFindingSids = sq ? new Set(getSubquoteSentenceIds(sq)) : null;
+  } else {
+    _selectedFindingSids = null;
+  }
+
+  // Report-side card border
   document.querySelectorAll('.q-card.q-card-selected')
     .forEach(el => el.classList.remove('q-card-selected'));
   if (state.selected_subquote_id) {
     const card = document.querySelector(`.q-card[data-subquote-id="${state.selected_subquote_id}"]`);
     if (card) card.classList.add('q-card-selected');
+  }
+
+  // Transcript-side sentence borders — every sentence that makes up the
+  // selected finding gets the same blue outline as the report card.
+  document.querySelectorAll('#transcript-body .s-tok.tp-sent-selected')
+    .forEach(el => el.classList.remove('tp-sent-selected'));
+  if (_selectedFindingSids) {
+    _selectedFindingSids.forEach(sid => {
+      document.querySelectorAll(`#transcript-body .s-tok[data-sid="${sid}"]`)
+        .forEach(el => el.classList.add('tp-sent-selected'));
+    });
   }
 }
 
@@ -1680,8 +1717,14 @@ function tSpan(sent, blockType, inc) {
   // the user sees the full footprint of the category (included/review/rejected).
   const highlightCls = state.highlighted_bucket_id && bid === state.highlighted_bucket_id
     ? ' tp-highlighted' : '';
+  // Single-finding selection: outline every sentence that belongs to the
+  // selected subquote. Kept in sync with setSelectedFinding via the cached
+  // _selectedFindingSids Set; this path covers full re-renders that bypass
+  // the click-driven DOM toggle.
+  const selectCls = _selectedFindingSids && _selectedFindingSids.has(sent.sid)
+    ? ' tp-sent-selected' : '';
   const scores64 = btoa(unescape(encodeURIComponent(JSON.stringify(sent.scores))));
-  return `<span class="s-tok ${cls}${isQa?' qa-sent':''}${highlightCls}"
+  return `<span class="s-tok ${cls}${isQa?' qa-sent':''}${highlightCls}${selectCls}"
     data-sid="${sent.sid}" data-btype="${blockType}" data-primary="${bid}" data-scores="${scores64}"
     onclick="showSentencePopover(event,this)">${esc(sent.text)}</span>`;
 }
