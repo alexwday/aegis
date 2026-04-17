@@ -586,9 +586,10 @@ body{
   display:block;word-wrap:break-word;
   font-family:var(--font-serif);
 }
-.bkt-chevron{color:var(--text-3);font-size:13px;transition:transform .15s;flex-shrink:0;margin-top:6px;opacity:.5}
-.bkt-chevron.open{transform:rotate(0deg)}
-.bkt-chevron.closed{transform:rotate(-90deg)}
+.bkt-chevron{width:14px;height:14px;color:var(--text-3);transition:transform .15s;flex-shrink:0;margin-top:8px;opacity:.6}
+.bkt-chevron path{stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.bkt-chevron.closed{transform:rotate(0deg)}
+.bkt-chevron.open{transform:rotate(180deg)}
 .bkt-quotes{padding:2px 0 2px 15px}
 
 /* Emerging topic review (inside modal) */
@@ -2465,16 +2466,18 @@ function renderReportSections() {
   <div class="bkt-header" onclick="toggleBucket('${bucket.id}')">
     <div class="bkt-bar" style="background:${bucket.color_accent}"></div>
     <div class="bkt-info">
-      <input class="bkt-name-input" value="${escAttr(titleVal)}"
-             onclick="event.stopPropagation()"
-             onblur="saveBucketTitle('${bucket.id}',this.value)"
+      <input class="bkt-name-input" value="${escAttr(titleVal)}" readonly
+             onmousedown="if(this.hasAttribute('readonly'))event.preventDefault()"
+             onclick="if(!this.hasAttribute('readonly'))event.stopPropagation()"
+             ondblclick="event.stopPropagation();this.removeAttribute('readonly');this.focus();this.select()"
+             onblur="this.setAttribute('readonly','');saveBucketTitle('${bucket.id}',this.value)"
              onkeydown="if(event.key==='Enter')this.blur()">
       ${bucket.generated_headline ? `<span class="bkt-headline">${esc(bucket.generated_headline)}</span>` : ''}
     </div>
     <button class="bkt-focus ${isHighlighted ? 'active' : ''}"
             onclick="event.stopPropagation();toggleCategoryHighlight('${bucket.id}')"
             title="Highlight this category's findings in the transcript">${HIGHLIGHTER_SVG}</button>
-    <span class="bkt-chevron open" id="bkv_${bucket.id}">&#9662;</span>
+    <svg class="bkt-chevron open" id="bkv_${bucket.id}" viewBox="0 0 10 10"><path d="M2 4l3 3 3-3"/></svg>
   </div>
   <div class="bkt-quotes" id="bq_${bucket.id}" data-bucket-id="${bucket.id}">
     ${quotes.map(sq => renderSubquoteCard(sq, bucket)).join('')}
@@ -2856,7 +2859,10 @@ function toggleBucket(id) {
   if (!el) return;
   const hidden = el.style.display === 'none';
   el.style.display = hidden ? '' : 'none';
-  if (chev) chev.className = `bkt-chevron ${hidden ? 'open' : 'closed'}`;
+  if (chev) {
+    chev.classList.remove('open', 'closed');
+    chev.classList.add(hidden ? 'open' : 'closed');
+  }
 }
 function saveBucketTitle(id, val) {
   if (!state.bucket_user_titles) state.bucket_user_titles = {};
