@@ -15,6 +15,7 @@ from aegis.etls.call_summary_editor.interactive_pipeline import (
     classify_qa_conversation,
     count_included_categories,
     detect_qa_boundaries,
+    format_categories_for_prompt,
     group_md_block_findings,
     group_qa_block_findings,
     repair_finding_groups,
@@ -222,6 +223,58 @@ def test_primary_from_scores_uses_best_positive_score_without_legacy_threshold()
     }
 
     assert _primary_from_scores(scores, ["bucket_0", "bucket_1", "bucket_2"]) == "bucket_0"
+
+
+def test_format_categories_for_prompt_keeps_legacy_single_cell_description():
+    categories = [
+        {
+            "transcript_sections": "QA",
+            "report_section": "Earnings Call Q&A",
+            "category_name": "Capital",
+            "category_description": "Capital and CET1 discussion.",
+        }
+    ]
+
+    prompt_text = format_categories_for_prompt(categories, "QA")
+
+    assert "<description_format>legacy_free_text</description_format>" in prompt_text
+    assert "<description>Capital and CET1 discussion.</description>" in prompt_text
+    assert "<topics>" not in prompt_text
+    assert "<additional_sections>" not in prompt_text
+
+
+def test_format_categories_for_prompt_supports_sectioned_single_cell_descriptions():
+    categories = [
+        {
+            "transcript_sections": "ALL",
+            "report_section": "Results Summary",
+            "category_name": "Revenue",
+            "category_description": (
+                "Topics:\n"
+                "- net interest income\n"
+                "- fee income\n"
+                "Keywords: NII, spread income, advisory fees\n"
+                "Instructions:\n"
+                "- Use when the main point is revenue drivers or revenue mix.\n"
+                "Notes:\n"
+                "- If expenses dominate, leave it in Efficiency."
+            ),
+        }
+    ]
+
+    prompt_text = format_categories_for_prompt(categories, "ALL")
+
+    assert "<description_format>sectioned_lists</description_format>" in prompt_text
+    assert "<topic>net interest income</topic>" in prompt_text
+    assert "<keyword>NII</keyword>" in prompt_text
+    assert "<keyword>spread income</keyword>" in prompt_text
+    assert (
+        "<instruction>Use when the main point is revenue drivers or revenue mix.</instruction>"
+        in prompt_text
+    )
+    assert "<additional_sections>" in prompt_text
+    assert '<section name="Notes">' in prompt_text
+    assert "<item>If expenses dominate, leave it in Efficiency.</item>" in prompt_text
 
 
 @pytest.mark.asyncio
@@ -483,6 +536,173 @@ async def test_analyze_config_coverage_uses_full_verbatim_evidence_without_impor
 
 
 @pytest.mark.asyncio
+async def test_analyze_config_coverage_prompt_requests_sectioned_single_cell_descriptions():
+    bank_data = {
+        "ticker": "RY-CA",
+        "company_name": "Royal Bank of Canada",
+        "fiscal_quarter": "Q1",
+        "fiscal_year": 2026,
+        "md_blocks": [
+            {
+                "speaker": "Chief Executive Officer",
+                "speaker_title": "CEO",
+                "sentences": [
+                    {
+                        "sid": "md_1",
+                        "text": "We are scaling agentic AI across operations.",
+                        "verbatim_text": "We are scaling agentic AI across operations.",
+                        "primary": "",
+                        "selected_bucket_id": "",
+                        "candidate_bucket_ids": [],
+                        "scores": {},
+                        "importance_score": 8.5,
+                        "status": "candidate",
+                        "source_block_id": "RY-CA_MD_1",
+                        "parent_record_id": "RY-CA_MD_1",
+                        "transcript_section": "MD",
+                        "emerging_topic": True,
+                    }
+                ],
+            }
+        ],
+        "qa_conversations": [],
+    }
+    categories = [
+        {
+            "transcript_sections": "MD",
+            "report_section": "Results Summary",
+            "category_name": "Efficiency",
+            "category_description": "Productivity and cost discipline.",
+            "example_1": "",
+            "example_2": "",
+            "example_3": "",
+        }
+    ]
+
+    mock_tool = AsyncMock(side_effect=[{"proposals": []}, {"proposals": []}])
+
+    with patch(
+        "aegis.etls.call_summary_editor.interactive_pipeline._call_tool",
+        new=mock_tool,
+    ):
+        review = await analyze_config_coverage(
+            bank_data=bank_data,
+            categories=categories,
+            min_importance=4.0,
+            context={"execution_id": "test-exec"},
+            llm_params={"model": "gpt-test"},
+        )
+
+    assert review == {"config_change_proposals": []}
+    update_prompt = mock_tool.await_args_list[0].kwargs["messages"][-1]["content"]
+    emerging_prompt = mock_tool.await_args_list[1].kwargs["messages"][-1]["content"]
+    for prompt_text in (update_prompt, emerging_prompt):
+        assert "Keep `category_description` as one multiline cell" in prompt_text
+        assert "Topics:" in prompt_text
+        assert "Keywords:" in prompt_text
+        assert "Instructions:" in prompt_text
+        assert "Optional extra headings like `Notes:` or `Overrides:` are allowed" in prompt_text
+        assert "Use section headings and short list items, not paragraph prose." in prompt_text
+    assert "The proposal must be additive only" in update_prompt
+    assert "Never remove, narrow, or overwrite" in update_prompt
+    assert "`Keywords` are hint fields for non-exhaustive strong phrases" in update_prompt
+
+
+@pytest.mark.asyncio
+async def test_analyze_config_coverage_merges_structured_updates_additively():
+    bank_data = {
+        "ticker": "RY-CA",
+        "company_name": "Royal Bank of Canada",
+        "fiscal_quarter": "Q1",
+        "fiscal_year": 2026,
+        "md_blocks": [
+            {
+                "speaker": "Chief Executive Officer",
+                "speaker_title": "CEO",
+                "sentences": [
+                    {
+                        "sid": "md_1",
+                        "text": "Deposit migration is picking up.",
+                        "verbatim_text": "Deposit migration is picking up.",
+                        "primary": "bucket_0",
+                        "selected_bucket_id": "bucket_0",
+                        "candidate_bucket_ids": ["bucket_0"],
+                        "scores": {"bucket_0": 7.1},
+                        "importance_score": 7.3,
+                        "status": "selected",
+                        "source_block_id": "RY-CA_MD_1",
+                        "parent_record_id": "RY-CA_MD_1",
+                        "transcript_section": "MD",
+                        "emerging_topic": False,
+                    }
+                ],
+            }
+        ],
+        "qa_conversations": [],
+    }
+    categories = [
+        {
+            "transcript_sections": "ALL",
+            "report_section": "Results Summary",
+            "category_name": "Deposits & Funding",
+            "category_description": (
+                "Topics:\n"
+                "- deposit growth\n"
+                "Keywords:\n"
+                "- deposit beta\n"
+                "Instructions:\n"
+                "- Use when the main point is deposit economics."
+            ),
+            "example_1": "",
+            "example_2": "",
+            "example_3": "",
+        }
+    ]
+
+    mock_tool = AsyncMock(
+        side_effect=[
+            {
+                "proposals": [
+                    {
+                        "target_category_name": "Deposits & Funding",
+                        "change_summary": "Add migration commentary to the keyword field.",
+                        "proposed_description": (
+                            "Topics:\n"
+                            "- deposit growth\n"
+                            "Keywords:\n"
+                            "- migration\n"
+                            "Instructions:\n"
+                            "- Use when the main point is deposit economics."
+                        ),
+                    }
+                ]
+            },
+            {"proposals": []},
+        ]
+    )
+
+    with patch(
+        "aegis.etls.call_summary_editor.interactive_pipeline._call_tool",
+        new=mock_tool,
+    ):
+        review = await analyze_config_coverage(
+            bank_data=bank_data,
+            categories=categories,
+            min_importance=4.0,
+            context={"execution_id": "test-exec"},
+            llm_params={"model": "gpt-test"},
+        )
+
+    proposals = review["config_change_proposals"]
+    assert len(proposals) == 1
+    merged_description = proposals[0]["proposed_row"]["category_description"]
+    assert "- deposit growth" in merged_description
+    assert "- deposit beta" in merged_description
+    assert "- migration" in merged_description
+    assert merged_description.count("Keywords:") == 1
+
+
+@pytest.mark.asyncio
 async def test_classify_qa_conversation_treats_question_sentences_as_context_only():
     """Analyst question sentences must never receive a bucket assignment.
 
@@ -582,6 +802,93 @@ async def test_classify_qa_conversation_treats_question_sentences_as_context_onl
     assert [turn["role"] for turn in result["turns"]] == ["q", "a"]
     assert result["turns"][0]["sentences"][0]["status"] == "context"
     assert result["turns"][1]["sentences"][0]["primary"] == "bucket_0"
+
+
+@pytest.mark.asyncio
+async def test_classify_qa_conversation_prompt_supports_sectioned_description_cells():
+    categories = [
+        {
+            "transcript_sections": "QA",
+            "report_section": "Earnings Call Q&A",
+            "category_name": "Revenue",
+            "category_description": (
+                "Topics:\n"
+                "- net interest income\n"
+                "Keywords: NII, margin\n"
+                "Instructions:\n"
+                "- Use for revenue drivers.\n"
+                "Overrides:\n"
+                "- If the point is purely about expenses, do not use this category."
+            ),
+        }
+    ]
+    conv_blocks = [
+        {
+            "speaker": "Analyst",
+            "speaker_affiliation": "Big Bank",
+            "speaker_title": "",
+            "speaker_type_hint": "q",
+            "paragraphs": ["How should we think about NII?"],
+        },
+        {
+            "speaker": "Chief Financial Officer",
+            "speaker_affiliation": "Royal Bank of Canada",
+            "speaker_title": "CFO",
+            "speaker_type_hint": "a",
+            "paragraphs": ["NII should remain resilient through the year."],
+        },
+    ]
+
+    mock_call_tool = _qa_call_tool_dispatcher(
+        {
+            "primary_bucket_index": 0,
+            "analyst_question_summary": "on NII outlook",
+            "answer_findings": [
+                {
+                    "index": 1,
+                    "scores": [{"bucket_index": 0, "score": 8.2}],
+                    "importance_score": 7.4,
+                    "condensed": "NII should remain resilient through the year.",
+                }
+            ],
+        }
+    )
+
+    with patch(
+        "aegis.etls.call_summary_editor.interactive_pipeline._call_tool",
+        new=mock_call_tool,
+    ):
+        await classify_qa_conversation(
+            conv_idx=1,
+            conv_blocks=conv_blocks,
+            ticker="RY-CA",
+            categories=categories,
+            categories_text_qa=format_categories_for_prompt(categories, "QA"),
+            company_name="Royal Bank of Canada",
+            fiscal_year=2026,
+            fiscal_quarter="Q1",
+            report_inclusion_threshold=4.0,
+            selected_importance_threshold=6.5,
+            candidate_importance_threshold=4.0,
+            min_bucket_score_for_assignment=6.0,
+            context={"execution_id": "test-exec"},
+            llm_params={"model": "gpt-test"},
+        )
+
+    classification_call = next(
+        call
+        for call in mock_call_tool.await_args_list
+        if call.kwargs["tool"]["function"]["name"] == "classify_qa_exchange"
+    )
+    user_prompt = next(
+        message["content"]
+        for message in classification_call.kwargs["messages"]
+        if message["role"] == "user"
+    )
+    assert "The main headings to expect are `<topics>`, `<keywords>`, and `<instructions>`." in user_prompt
+    assert "<keyword>NII</keyword>" in user_prompt
+    assert "<additional_sections>" in user_prompt
+    assert '<section name="Overrides">' in user_prompt
 
 
 @pytest.mark.asyncio

@@ -1,6 +1,26 @@
 """Tests for interactive HTML rendering helpers."""
 
-from aegis.etls.call_summary_editor.interactive_html import build_report_state, generate_html
+from aegis.etls.call_summary_editor import interactive_html
+from aegis.etls.call_summary_editor.interactive_html import (
+    build_report_state,
+    generate_html,
+    resolve_banner_path,
+)
+
+
+def test_resolve_banner_path_falls_back_to_png_when_svg_is_missing(tmp_path, monkeypatch):
+    banner_png = tmp_path / "banner.png"
+    banner_png.write_bytes(b"png-bytes")
+    monkeypatch.setattr(interactive_html, "_TEMPLATE_DIR", tmp_path)
+
+    assert resolve_banner_path() == banner_png
+
+
+def test_resolve_banner_path_prefers_explicit_path(tmp_path):
+    explicit_banner = tmp_path / "custom-banner.png"
+    explicit_banner.write_bytes(b"png-bytes")
+
+    assert resolve_banner_path(explicit_banner) == explicit_banner
 
 
 def test_generate_html_injects_period_and_state():

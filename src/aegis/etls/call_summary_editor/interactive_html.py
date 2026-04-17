@@ -28,7 +28,9 @@ BUCKET_COLORS: List[Tuple[str, str]] = [
 ]
 OTHER_COLOR: Tuple[str, str] = ("#FAFAFA", "#9E9E9E")
 _MODULE_DIR = Path(__file__).resolve().parent
-DEFAULT_BANNER_PATH = _MODULE_DIR / "templates" / "banner.svg"
+_TEMPLATE_DIR = _MODULE_DIR / "templates"
+DEFAULT_BANNER_PATH = _TEMPLATE_DIR / "banner.svg"
+BANNER_EXTENSIONS: Tuple[str, ...] = ("svg", "png", "jpg", "jpeg")
 TEMPLATE_PATH = _MODULE_DIR / "templates" / "report.html"
 
 
@@ -52,6 +54,24 @@ def load_banner_b64(path: Path) -> Optional[str]:
         "svg": "image/svg+xml",
     }.get(ext, "image/png")
     return f"data:{mime};base64,{data}"
+
+
+def resolve_banner_path(banner_path: Optional[Path] = None) -> Optional[Path]:
+    """Resolve an explicit or default banner path with extension fallback.
+
+    When no explicit path is supplied, the editor checks for
+    `templates/banner.svg`, `templates/banner.png`, `templates/banner.jpg`, and
+    `templates/banner.jpeg` in that order. This lets users replace the banner
+    asset by file type without changing call sites.
+    """
+    if banner_path is not None:
+        return banner_path
+
+    for ext in BANNER_EXTENSIONS:
+        candidate = _TEMPLATE_DIR / f"banner.{ext}"
+        if candidate.exists():
+            return candidate
+    return None
 
 
 def build_report_state(
@@ -178,7 +198,8 @@ def generate_html(
     # `"banner_src": null`, which silently failed if json.dumps formatting
     # changed or if any other field happened to serialize the same way.
     state_with_banner = dict(state)
-    banner_b64 = load_banner_b64(banner_path or DEFAULT_BANNER_PATH)
+    resolved_banner_path = resolve_banner_path(banner_path)
+    banner_b64 = load_banner_b64(resolved_banner_path) if resolved_banner_path else None
     if banner_b64 and not state_with_banner.get("banner_src"):
         state_with_banner["banner_src"] = banner_b64
 

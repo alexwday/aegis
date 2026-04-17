@@ -120,7 +120,13 @@ class ProposedConfigRow(BaseModel):
     transcript_sections: str = Field(description="MD, QA, or ALL")
     report_section: str = Field(description="Results Summary or Earnings Call Q&A")
     category_name: str
-    category_description: str
+    category_description: str = Field(
+        description=(
+            "Business-editable category guidance kept in one multiline cell. Prefer section "
+            "headings like `Topics:`, `Keywords:`, and `Instructions:`; optional extra "
+            "headings such as `Notes:` or `Overrides:` are allowed."
+        )
+    )
     example_1: str = ""
     example_2: str = ""
     example_3: str = ""
@@ -137,9 +143,12 @@ class DescriptionUpdateProposal(BaseModel):
     )
     proposed_description: str = Field(
         description=(
-            "The full replacement `category_description` — copy-paste ready. The other "
-            "fields (transcript_sections, report_section, category_name, examples) are "
-            "preserved server-side from the current row."
+            "The full replacement `category_description` — copy-paste ready. Keep it as one "
+            "multiline cell using section headings. Prefer `Topics:`, `Keywords:`, and "
+            "`Instructions:`; optional extra headings are allowed. The other fields "
+            "(transcript_sections, report_section, category_name, examples) are preserved "
+            "server-side from the current row. This update must be additive: preserve the "
+            "existing scope and append or clarify; do not remove prior concepts."
         )
     )
 
@@ -438,7 +447,14 @@ _CONFIG_ROW_SCHEMA = {
             "description": "Use Results Summary or Earnings Call Q&A exactly.",
         },
         "category_name": {"type": "string"},
-        "category_description": {"type": "string"},
+        "category_description": {
+            "type": "string",
+            "description": (
+                "Business-editable category guidance kept in one multiline cell. Prefer "
+                "headings like Topics, Keywords, and Instructions; optional extra headings "
+                "are allowed."
+            ),
+        },
         "example_1": {"type": "string"},
         "example_2": {"type": "string"},
         "example_3": {"type": "string"},
@@ -465,7 +481,9 @@ TOOL_DESCRIPTION_UPDATES = {
             "tightened or extended based on indexed findings from the transcript. Return only "
             "the categories whose `category_description` should change, along with a one-to-two "
             "sentence reasoning and the full replacement description ready to paste into the "
-            "config sheet. Do not propose new categories — that is a separate pass."
+            "config sheet. Keep it as one multiline cell with section headings, prioritizing "
+            "`Topics`, `Keywords`, and `Instructions`. Do not propose new categories — that "
+            "is a separate pass."
         ),
         "parameters": {
             "type": "object",
@@ -490,7 +508,10 @@ TOOL_DESCRIPTION_UPDATES = {
                             "proposed_description": {
                                 "type": "string",
                                 "description": (
-                                    "Full replacement `category_description` — copy-paste ready."
+                                    "Full replacement `category_description` — copy-paste ready. "
+                                    "Keep it as one multiline cell with section headings, "
+                                    "preferably Topics, Keywords, and Instructions. The update "
+                                    "must be additive and preserve existing scope."
                                 ),
                             },
                         },
@@ -603,6 +624,241 @@ def _escape_for_prompt(value: Any) -> str:
     return _xml_escape(str(value or ""), entities={"\"": "&quot;"})
 
 
+_CATEGORY_DESCRIPTION_SECTION_ALIASES = {
+    "topic": "topics",
+    "topics": "topics",
+    "subtopic": "topics",
+    "subtopics": "topics",
+    "concept": "topics",
+    "concepts": "topics",
+    "key topic": "topics",
+    "key topics": "topics",
+    "key concept": "topics",
+    "key concepts": "topics",
+    "keyword": "keywords",
+    "keywords": "keywords",
+    "key word": "keywords",
+    "key words": "keywords",
+    "instruction": "instructions",
+    "instructions": "instructions",
+    "rule": "instructions",
+    "rules": "instructions",
+}
+_CATEGORY_DESCRIPTION_SECTION_RE = re.compile(r"^(?P<header>[A-Za-z][A-Za-z _/-]*):\s*(?P<rest>.*)$")
+_CATEGORY_DESCRIPTION_BULLET_RE = re.compile(r"^(?:[-*•]+|\d+[.)])\s*")
+
+
+def _append_unique_items(target: List[str], items: List[str]) -> None:
+    """Append non-empty items while preserving order and removing duplicates."""
+    for item in items:
+        clean = str(item or "").strip()
+        if clean and clean not in target:
+            target.append(clean)
+
+
+def _normalise_category_description_header(value: str) -> str:
+    """Normalise a structured category-description header for matching."""
+    return re.sub(r"\s+", " ", str(value or "").strip().lower())
+
+
+def _split_category_description_items(section: str, value: str) -> List[str]:
+    """Split inline description content into list items.
+
+    `keywords` and `topics` often appear inline as comma-separated phrases.
+    All other sections should remain intact because commas are common inside a
+    single note or rule.
+    """
+    clean = str(value or "").strip()
+    if not clean:
+        return []
+    if section not in {"topics", "keywords"}:
+        return [clean]
+    return [item.strip() for item in re.split(r"[;,]\s*", clean) if item.strip()]
+
+
+def parse_category_description(description: str) -> Dict[str, Any]:
+    """Parse a business-friendly category description into structured sections.
+
+    Supported structured format inside the existing `category_description`
+    cell:
+
+    Topics:
+    - topic one
+    - topic two
+    Keywords:
+    - keyword
+    Instructions:
+    - inclusion, exclusion, or tie-break rules
+
+    Notes:
+    - optional extra guidance
+
+    The parser is intentionally permissive:
+    - Section headers are case-insensitive.
+    - Topics/keywords may be comma-separated on the header line.
+    - Extra section names such as `Notes` or `Overrides` are preserved.
+    - Existing plain-text descriptions remain valid and are returned as
+      `legacy_free_text`.
+    """
+    raw = str(description or "").strip()
+    parsed = {
+        "format": "legacy_free_text",
+        "raw": raw,
+        "brief": raw,
+        "topics": [],
+        "keywords": [],
+        "instructions": [],
+        "additional_sections": [],
+    }
+    if not raw:
+        return parsed
+
+    current_section_key: Optional[str] = None
+    section_count = 0
+    intro_lines: List[str] = []
+    structured_items = {"topics": [], "keywords": [], "instructions": []}
+    additional_sections: Dict[str, Dict[str, Any]] = {}
+
+    def _get_section_bucket(header_name: str, role: str) -> List[str]:
+        if role in structured_items:
+            return structured_items[role]
+
+        section_key = _normalise_category_description_header(header_name)
+        if section_key not in additional_sections:
+            additional_sections[section_key] = {
+                "name": header_name.strip() or "Additional",
+                "items": [],
+            }
+        return additional_sections[section_key]["items"]
+
+    for raw_line in raw.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+
+        header_match = _CATEGORY_DESCRIPTION_SECTION_RE.match(line)
+        if header_match:
+            header_name = header_match.group("header").strip()
+            section = _CATEGORY_DESCRIPTION_SECTION_ALIASES.get(
+                _normalise_category_description_header(header_match.group("header"))
+            )
+            current_section_key = section or _normalise_category_description_header(header_name)
+            section_count += 1
+            _append_unique_items(
+                _get_section_bucket(header_name, section or current_section_key),
+                _split_category_description_items(section or current_section_key, header_match.group("rest")),
+            )
+            continue
+
+        if current_section_key:
+            clean_item = _CATEGORY_DESCRIPTION_BULLET_RE.sub("", line).strip()
+            _append_unique_items(
+                _get_section_bucket(current_section_key, current_section_key),
+                _split_category_description_items(current_section_key, clean_item),
+            )
+            continue
+
+        intro_lines.append(line)
+
+    if not section_count:
+        return parsed
+
+    return {
+        "format": "sectioned_lists",
+        "raw": raw,
+        "brief": " ".join(intro_lines).strip(),
+        **structured_items,
+        "additional_sections": list(additional_sections.values()),
+    }
+
+
+def render_sectioned_category_description(parsed_description: Dict[str, Any]) -> str:
+    """Render a parsed sectioned description back to the single-cell format."""
+    if parsed_description.get("format") != "sectioned_lists":
+        return str(parsed_description.get("raw", "") or "").strip()
+
+    lines: List[str] = []
+    for heading, key in (
+        ("Topics", "topics"),
+        ("Keywords", "keywords"),
+        ("Instructions", "instructions"),
+    ):
+        items = [str(item).strip() for item in parsed_description.get(key, []) if str(item).strip()]
+        if not items:
+            continue
+        lines.append(f"{heading}:")
+        lines.extend(f"- {item}" for item in items)
+
+    for section in parsed_description.get("additional_sections", []) or []:
+        section_name = str(section.get("name", "") or "").strip()
+        items = [str(item).strip() for item in section.get("items", []) if str(item).strip()]
+        if not section_name or not items:
+            continue
+        lines.append(f"{section_name}:")
+        lines.extend(f"- {item}" for item in items)
+
+    return "\n".join(lines).strip()
+
+
+def merge_sectioned_category_descriptions(
+    existing_description: str,
+    proposed_description: str,
+) -> str:
+    """Merge a proposed structured description additively onto an existing one.
+
+    This safeguard is intentionally narrow: it only auto-merges when both the
+    existing row and the proposal already use the sectioned single-cell
+    format. Legacy free-text rows still rely on the prompt to preserve and
+    restructure the old meaning because there is no reliable local parser for
+    arbitrary prose.
+    """
+    existing = parse_category_description(existing_description)
+    proposed = parse_category_description(proposed_description)
+    if (
+        existing.get("format") != "sectioned_lists"
+        or proposed.get("format") != "sectioned_lists"
+    ):
+        return str(proposed_description or "").strip()
+
+    merged = {
+        "format": "sectioned_lists",
+        "raw": "",
+        "brief": "",
+        "topics": [],
+        "keywords": [],
+        "instructions": [],
+        "additional_sections": [],
+    }
+    for key in ("topics", "keywords", "instructions"):
+        _append_unique_items(merged[key], existing.get(key, []))
+        _append_unique_items(merged[key], proposed.get(key, []))
+
+    additional_sections: Dict[str, Dict[str, Any]] = {}
+    for source in (existing, proposed):
+        for section in source.get("additional_sections", []) or []:
+            section_name = str(section.get("name", "") or "").strip()
+            if not section_name:
+                continue
+            section_key = _normalise_category_description_header(section_name)
+            if section_key not in additional_sections:
+                additional_sections[section_key] = {"name": section_name, "items": []}
+            _append_unique_items(additional_sections[section_key]["items"], section.get("items", []))
+    merged["additional_sections"] = list(additional_sections.values())
+    return render_sectioned_category_description(merged)
+
+
+def _append_prompt_list(
+    lines: List[str], *, parent_tag: str, child_tag: str, items: List[str]
+) -> None:
+    """Append a structured XML list to the category prompt block."""
+    if not items:
+        return
+    lines.append(f"  <{parent_tag}>")
+    for item in items:
+        lines.append(f"    <{child_tag}>{_escape_for_prompt(item)}</{child_tag}>")
+    lines.append(f"  </{parent_tag}>")
+
+
 def format_categories_for_prompt(
     categories: List[Dict[str, Any]], section_filter: str = "ALL"
 ) -> str:
@@ -623,8 +879,51 @@ def format_categories_for_prompt(
             f'<category index="{idx}">',
             f"  <name>{_escape_for_prompt(category['category_name'])}</name>",
             f"  <applies_to>{_escape_for_prompt(applies)}</applies_to>",
-            f"  <description>{_escape_for_prompt(category['category_description'])}</description>",
         ]
+        parsed_description = parse_category_description(category.get("category_description", ""))
+        lines.append(
+            f"  <description_format>{parsed_description['format']}</description_format>"
+        )
+        if parsed_description["format"] == "sectioned_lists":
+            if parsed_description["brief"]:
+                lines.append(
+                    "  "
+                    f"<description_brief>{_escape_for_prompt(parsed_description['brief'])}"
+                    "</description_brief>"
+                )
+            _append_prompt_list(
+                lines,
+                parent_tag="topics",
+                child_tag="topic",
+                items=parsed_description["topics"],
+            )
+            _append_prompt_list(
+                lines,
+                parent_tag="keywords",
+                child_tag="keyword",
+                items=parsed_description["keywords"],
+            )
+            _append_prompt_list(
+                lines,
+                parent_tag="instructions",
+                child_tag="instruction",
+                items=parsed_description["instructions"],
+            )
+            if parsed_description["additional_sections"]:
+                lines.append("  <additional_sections>")
+                for section in parsed_description["additional_sections"]:
+                    lines.append(
+                        "    "
+                        f'<section name="{_escape_for_prompt(section["name"])}">'
+                    )
+                    for item in section["items"]:
+                        lines.append(f"      <item>{_escape_for_prompt(item)}</item>")
+                    lines.append("    </section>")
+                lines.append("  </additional_sections>")
+        else:
+            lines.append(
+                f"  <description>{_escape_for_prompt(parsed_description['raw'])}</description>"
+            )
 
         examples = [
             category.get(f"example_{example_idx}", "").strip()
@@ -676,6 +975,48 @@ def _bucket_score_scale_guidance() -> str:
         "- 4-5 means a plausible but not definitive fit.\n"
         "- 6-8 means a strong fit that can support assignment.\n"
         "- 9-10 means a direct, highly confident fit."
+    )
+
+
+def _category_sheet_guidance() -> str:
+    """Explain how the category sheet should be interpreted during matching."""
+    return (
+        "Interpret the category sheet using overall meaning, not literal keyword overlap alone.\n"
+        "- The main headings to expect are `<topics>`, `<keywords>`, and `<instructions>`.\n"
+        "- `<topics>` define the main semantic scope of the category.\n"
+        "- `<keywords>` are non-exhaustive cues and common phrases; exact matches are not "
+        "required.\n"
+        "- Include findings that are semantically similar to the listed topics or keywords even "
+        "when the exact words in the sheet do not appear.\n"
+        "- Do not treat the listed keywords as an exhaustive checklist; they indicate what must "
+        "clearly fit, while closely related language and adjacent subtopics should also be "
+        "included when the meaning matches.\n"
+        "- `<instructions>` are category-specific inclusion, exclusion, and tie-break rules.\n"
+        "- Any `<additional_sections>` (for example Notes or Overrides) are supplemental "
+        "guidance, not separate buckets.\n"
+        "- `<examples>` illustrate the intended fit when present.\n"
+        "- If a row has only `<description>`, treat that legacy free-text description as the "
+        "category brief."
+    )
+
+
+def _structured_description_template_guidance() -> str:
+    """Return the preferred business-editable description template."""
+    return (
+        "Keep `category_description` as one multiline cell and use section headings.\n"
+        "Preferred headings for anything new or rewritten:\n"
+        "Topics:\n"
+        "- short topic or subtopic\n"
+        "Keywords:\n"
+        "- short keyword or phrase\n"
+        "Instructions:\n"
+        "- short inclusion, exclusion, or tie-break rule\n\n"
+        "Optional extra headings like `Notes:` or `Overrides:` are allowed when helpful. "
+        "Keep the list items simple and business-friendly. Do not write a narrative "
+        "description paragraph. Treat the headings like field lists inside one cell. "
+        "`Topics` define the category's scope, `Keywords` are non-exhaustive hint fields for "
+        "strong phrases that should clearly map in, and `Instructions` define boundaries and "
+        "tie-breaks."
     )
 
 
@@ -1873,8 +2214,9 @@ async def classify_md_block(  # pylint: disable=unused-argument
         "## Task\n"
         f"Classify the indexed findings from Management Discussion speaker block {block_id}.\n\n"
         "## Decision Criteria\n"
-        "Choose bucket scores from the category descriptions and examples, then score how "
-        "quotable each finding is for an investor-relations summary.\n"
+        "Choose bucket scores from the category sheet, then score how quotable each finding "
+        "is for an investor-relations summary.\n"
+        f"{_category_sheet_guidance()}\n"
         f"{_bucket_score_scale_guidance()}\n"
         f"{_importance_scale_guidance(report_inclusion_threshold)}\n\n"
         "## Rules\n"
@@ -2164,8 +2506,9 @@ async def classify_qa_conversation(  # pylint: disable=unused-argument
         "and classify only the executive answer findings (AF).\n\n"
         "## Decision Criteria\n"
         "Use the overall exchange topic for `primary_bucket_index`, then score each executive "
-        "answer finding from the category descriptions and examples. Analyst findings are "
-        "shown for context only \u2014 do not return any QF results.\n"
+        "answer finding from the category sheet. Analyst findings are shown for context only "
+        "\u2014 do not return any QF results.\n"
+        f"{_category_sheet_guidance()}\n"
         f"{_bucket_score_scale_guidance()}\n"
         f"{_importance_scale_guidance(report_inclusion_threshold)}\n\n"
         "## Rules\n"
@@ -2824,8 +3167,16 @@ async def analyze_config_coverage(
                     "findings from one transcript, identify existing categories whose "
                     "`category_description` is weak, narrow, or outdated relative to what "
                     "was actually discussed, and return a tightened replacement description "
-                    "that the user can copy directly into the config sheet. Do not propose "
-                    "new categories in this pass. Always use the provided tool."
+                    "that the user can copy directly into the config sheet. Keep it as one "
+                    "multiline cell with section headings so business users can maintain the "
+                    "sheet without writing prompt prose. Prioritize `Topics`, `Keywords`, "
+                    "and `Instructions`, but optional extra headings are allowed. This pass "
+                    "is ADDITIVE ONLY: build on the current row, preserve existing approved "
+                    "scope, and add or clarify missing items; never remove or narrow prior "
+                    "topics, keywords, or instructions. If the current row is still legacy "
+                    "prose, convert it into section headings while preserving every existing "
+                    "concept. Do not propose new categories in this pass. Always use the "
+                    "provided tool."
                 ),
             },
             {
@@ -2840,12 +3191,22 @@ async def analyze_config_coverage(
                     "suggest new categories in this pass.\n"
                     "2. `target_category_name` must match an existing `category_name` exactly.\n"
                     "3. `proposed_description` is the full replacement text for "
-                    "`category_description` — do not return deltas or diffs. The other row "
-                    "fields are preserved server-side.\n"
-                    "4. Keep `change_summary` to 1-2 sentences of reasoning.\n"
-                    "5. Skip rows whose description is already accurate; return nothing "
+                    "`category_description` — do not return deltas or diffs. Keep it as one "
+                    "multiline cell and use the preferred sectioned format shown below. The "
+                    "other row fields are preserved server-side.\n"
+                    "4. The proposal must be additive only: preserve all existing scope and "
+                    "append or clarify missing items. Never remove, narrow, or overwrite "
+                    "existing topics, keywords, instructions, or optional sections.\n"
+                    "5. Use section headings and short list items, not paragraph prose. "
+                    "`Topics` are scope fields, `Keywords` are hint fields for non-exhaustive "
+                    "strong phrases, and `Instructions` are inclusion/exclusion/tie-break "
+                    "rules.\n"
+                    "6. Keep `change_summary` to 1-2 sentences of reasoning.\n"
+                    "7. Skip rows whose description is already accurate; return nothing "
                     "for them.\n"
-                    "6. Cap the response at 6 proposals, one per category at most.\n\n"
+                    "8. Cap the response at 6 proposals, one per category at most.\n\n"
+                    "## Preferred Description Format\n"
+                    f"{_structured_description_template_guidance()}\n\n"
                     "## Current Category Sheet\n"
                     f"{_xml_block('categories', categories_text)}\n\n"
                     "## Indexed Findings Digest\n"
@@ -2881,20 +3242,36 @@ async def analyze_config_coverage(
                 )
                 if target_bucket_index < 0:
                     continue
+                base_category = categories[target_bucket_index]
+                current_row = _category_to_row(base_category)
+                current_description = current_row["category_description"]
+                current_parsed = parse_category_description(current_description)
                 new_description = proposal.proposed_description.strip()
                 if not new_description:
                     continue
-                dedupe_key = (target_bucket_index, new_description)
+                proposed_parsed = parse_category_description(new_description)
+                if (
+                    current_parsed["format"] == "sectioned_lists"
+                    and proposed_parsed["format"] != "sectioned_lists"
+                ):
+                    logger.warning(
+                        "Skipping config proposal that regressed a structured description to prose",
+                        target_category_name=target_name,
+                    )
+                    continue
+
+                merged_description = merge_sectioned_category_descriptions(
+                    current_description,
+                    new_description,
+                )
+                dedupe_key = (target_bucket_index, merged_description)
                 if dedupe_key in seen_targets:
                     continue
                 seen_targets.add(dedupe_key)
-
-                base_category = categories[target_bucket_index]
-                current_row = _category_to_row(base_category)
-                if new_description == current_row["category_description"]:
+                if merged_description == current_description:
                     continue
                 proposed_row = dict(current_row)
-                proposed_row["category_description"] = new_description
+                proposed_row["category_description"] = merged_description
 
                 update_proposals.append(
                     {
@@ -2922,7 +3299,12 @@ async def analyze_config_coverage(
                     "or across the industry. For each emerging topic return a copy-ready "
                     "config row and the finding ids that belong under it (ids can come from "
                     "any status — selected/candidate/rejected — and may currently sit in "
-                    "other buckets; enabling the topic in the UI will reassign them)."
+                    "other buckets; enabling the topic in the UI will reassign them). Keep "
+                    "the new row's `category_description` as one multiline cell with section "
+                    "headings. Prioritize `Topics`, `Keywords`, and `Instructions`, but "
+                    "optional extra headings are allowed. Do not write narrative "
+                    "descriptions; use short field-like list items. Treat `Keywords` as hint "
+                    "fields for strong phrases, not an exhaustive list."
                 ),
             },
             {
@@ -2941,11 +3323,19 @@ async def analyze_config_coverage(
                     "4. `proposed_row.transcript_sections` must be exactly `MD`, `QA`, or "
                     "`ALL`.\n"
                     "5. `proposed_row.category_name` must be unique versus the existing sheet.\n"
-                    "6. `linked_finding_ids` must use only ids that appear in the findings "
+                    "6. `proposed_row.category_description` should stay as one multiline "
+                    "cell and use the preferred sectioned format shown below.\n"
+                    "7. Use section headings and short list items, not paragraph prose. "
+                    "`Topics` are scope fields, `Keywords` are hint fields for non-exhaustive "
+                    "strong phrases, and `Instructions` are inclusion/exclusion/tie-break "
+                    "rules.\n"
+                    "8. `linked_finding_ids` must use only ids that appear in the findings "
                     "digest below. Include every finding that would genuinely belong under "
                     "the topic, across all statuses.\n"
-                    "7. Keep `change_summary` to 1-2 sentences of reasoning.\n"
-                    "8. Cap the response at 4 proposals.\n\n"
+                    "9. Keep `change_summary` to 1-2 sentences of reasoning.\n"
+                    "10. Cap the response at 4 proposals.\n\n"
+                    "## Preferred Description Format\n"
+                    f"{_structured_description_template_guidance()}\n\n"
                     "## Current Category Sheet\n"
                     f"{_xml_block('categories', categories_text)}\n\n"
                     "## Indexed Findings Digest\n"
@@ -2971,6 +3361,11 @@ async def analyze_config_coverage(
             seen_names: set = set()
             for idx, proposal in enumerate(emerging_result.proposals[:4], start=1):
                 proposed_row = _normalise_config_row(proposal.proposed_row)
+                proposed_parsed = parse_category_description(proposed_row["category_description"])
+                if proposed_parsed["format"] == "sectioned_lists":
+                    proposed_row["category_description"] = render_sectioned_category_description(
+                        proposed_parsed
+                    )
                 name = proposed_row["category_name"].strip()
                 if not name or not proposed_row["category_description"].strip():
                     continue
