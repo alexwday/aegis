@@ -91,12 +91,39 @@ body{
   padding:13px 28px;
   text-transform:none;
   position:relative;
+  display:flex;
+  align-items:baseline;
+  gap:14px;
+  flex-wrap:wrap;
 }
 #app-banner::after{
   content:"";
   position:absolute;left:28px;right:28px;bottom:0;height:1px;
   background:linear-gradient(90deg,transparent,var(--accent-line) 15%,var(--accent-line) 85%,transparent);
   opacity:.35;
+}
+#banner-meta{
+  font-family:var(--font-sans);
+  font-size:12.5px;
+  font-weight:500;
+  color:var(--text-on-ink-2);
+  letter-spacing:.01em;
+  display:inline-flex;
+  align-items:baseline;
+  gap:8px;
+}
+#banner-meta:empty{display:none}
+#banner-meta .banner-sep{
+  display:inline-block;
+  width:1px;height:12px;
+  background:var(--text-on-ink-2);
+  opacity:.35;
+  transform:translateY(1px);
+}
+#banner-meta .banner-period{
+  font-weight:400;
+  opacity:.78;
+  margin-left:4px;
 }
 
 /* PDF banner (print only) */
@@ -164,9 +191,40 @@ body{
 #tp-resize:hover,#tp-resize.active{background:var(--accent-line)}
 #tp-resize.tp-hidden{display:none}
 
-#transcript-body{flex:1;overflow-y:auto;padding:0 0 16px}
+#transcript-body{flex:1;display:flex;flex-direction:column;overflow:hidden;padding:0;min-height:0}
 
-/* Section header (MANAGEMENT DISCUSSION / Q&A) */
+/* Fixed section label — sits above the scroll area so the scrollbar starts
+   BELOW it, keeping the seam with #tp-rail visually continuous. */
+#tp-section-label{
+  flex-shrink:0;
+  padding:14px 18px 12px;
+  background:var(--ink);
+  color:var(--text-on-ink);
+  font-family:var(--font-serif);
+  font-size:12px;font-weight:600;
+  text-transform:uppercase;letter-spacing:.14em;
+  border-bottom:1px solid var(--ink-2);
+}
+
+#tp-scroll{
+  flex:1;
+  overflow-y:auto;
+  padding:0 0 16px;
+  min-height:0;
+  scrollbar-width:thin;
+  scrollbar-color:var(--ink-3) transparent;
+}
+#tp-scroll::-webkit-scrollbar{width:8px}
+#tp-scroll::-webkit-scrollbar-track{background:transparent}
+#tp-scroll::-webkit-scrollbar-thumb{background:var(--ink-3);border-radius:4px;border:none}
+#tp-scroll::-webkit-scrollbar-thumb:hover{background:var(--ink-2)}
+
+/* First inline section header is hidden — #tp-section-label shows it instead.
+   Subsequent section headers (e.g. Q&A) remain as inline dividers. */
+#tp-scroll > .t-section-header:first-child{display:none}
+
+/* Section header — inline divider between sections (no longer sticky, the
+   current-section title is rendered in #tp-section-label above the scroll). */
 .t-section-header{
   padding:14px 18px 12px;
   background:var(--ink);
@@ -176,7 +234,6 @@ body{
   text-transform:uppercase;letter-spacing:.14em;
   border-bottom:1px solid var(--ink-2);
   margin-bottom:10px;
-  position:sticky;top:0;z-index:1;
 }
 
 /* MD speaker block */
@@ -355,7 +412,7 @@ body{
 /* ════════════════════════════════════════════════════════════════
    REPORT PANEL — header + paper
    ════════════════════════════════════════════════════════════════ */
-#report-panel{flex:1;display:flex;flex-direction:column;background:var(--paper);overflow:hidden;min-width:0}
+#report-panel{flex:1;display:flex;flex-direction:column;background:var(--paper);min-width:0}
 
 #report-header{
   flex-shrink:0;
@@ -364,6 +421,14 @@ body{
   padding:11px 22px;
   display:flex;align-items:center;justify-content:flex-end;
   position:relative;
+}
+#report-header::before{
+  content:"";
+  position:absolute;
+  right:100%;top:0;bottom:0;
+  width:5px;
+  background:var(--ink);
+  pointer-events:none;
 }
 .report-actions{display:flex;gap:6px;align-items:center}
 .hdr-menu-caret{margin-left:6px;width:10px;height:10px;display:inline-block;vertical-align:middle;opacity:.85}
@@ -1030,7 +1095,10 @@ body{
 </head>
 <body>
 <div id="app">
-  <div id="app-banner">Investor Relations PM Call Summary</div>
+  <div id="app-banner">
+    <span id="banner-title">Investor Relations PM Call Summary</span>
+    <span id="banner-meta"></span>
+  </div>
   <div id="banner-wrap">
     <img id="banner-img" src="" alt="Banner">
   </div>
@@ -1237,14 +1305,31 @@ function closeHeaderMenusOnOutsideClick(e) {
 // ============================================================
 function renderTabs() {
   const bar = document.getElementById('tab-bar');
+  const meta = document.getElementById('banner-meta');
   const fq = state.meta && state.meta.fiscal_quarter || '';
   const fy = state.meta && state.meta.fiscal_year || '';
   const shortYear = fy.length === 4 ? "'" + fy.slice(2) : fy;
-  const period = fq && fy ? ` ${fq}${shortYear}` : '';
-  bar.innerHTML = Object.entries(state.banks).map(([id, bank]) =>
-    `<button class="tab-btn${id === state.current_bank ? ' active' : ''}" onclick="selectBank('${id}')">
-       ${esc(bank.company_name)}${period ? `<span style="font-weight:400;color:#65676B;margin-left:4px;font-size:11px">${esc(period)}</span>` : ''}</button>`
-  ).join('');
+  const period = fq && fy ? `${fq}${shortYear}` : '';
+  const bankIds = Object.keys(state.banks);
+  const currentBank = state.banks[state.current_bank];
+  const bankName = currentBank ? currentBank.company_name : '';
+
+  if (meta) {
+    meta.innerHTML = bankName
+      ? `<span class="banner-sep"></span>${esc(bankName)}${period ? `<span class="banner-period">${esc(period)}</span>` : ''}`
+      : '';
+  }
+
+  if (bankIds.length > 1) {
+    bar.style.display = '';
+    bar.innerHTML = bankIds.map(id =>
+      `<button class="tab-btn${id === state.current_bank ? ' active' : ''}" onclick="selectBank('${id}')">
+         ${esc(state.banks[id].company_name)}</button>`
+    ).join('');
+  } else {
+    bar.style.display = 'none';
+    bar.innerHTML = '';
+  }
 }
 function selectBank(id) {
   state.current_bank = id; renderTabs(); renderCurrentBank();
@@ -1561,8 +1646,10 @@ function renderTranscriptBodyBlocks() {
   const bank = state.banks[state.current_bank];
   const inc = computeIncludedSids(state.current_bank);
   let html = '';
+  let firstSection = '';
   if (bank.md_blocks && bank.md_blocks.length) {
-    html += `<div class="t-section-header">Management Discussion</div>`;
+    if (!firstSection) firstSection = 'Management Discussion';
+    html += `<div class="t-section-header" data-section="Management Discussion">Management Discussion</div>`;
     bank.md_blocks.forEach(blk => {
       const sentHtml = tSpansWithParas(blk.sentences, 'md', inc);
       html += `<div class="t-block">
@@ -1572,12 +1659,36 @@ function renderTranscriptBodyBlocks() {
     });
   }
   if (bank.qa_conversations && bank.qa_conversations.length) {
-    html += `<div class="t-section-header">Questions &amp; Answers</div>`;
+    if (!firstSection) firstSection = 'Questions & Answers';
+    html += `<div class="t-section-header" data-section="Questions &amp; Answers">Questions &amp; Answers</div>`;
     bank.qa_conversations.forEach((conv, ci) => {
       html += renderQAConvBlocks(conv, inc, ci);
     });
   }
-  document.getElementById('transcript-body').innerHTML = html;
+  const tb = document.getElementById('transcript-body');
+  tb.innerHTML = `<div id="tp-section-label">${esc(firstSection)}</div><div id="tp-scroll">${html}</div>`;
+  bindTpSectionLabelScroll();
+}
+
+// Keep #tp-section-label in sync with the section currently at the top of
+// #tp-scroll. Headers inside the scroll carry data-section; we find the last
+// one whose top has crossed the scroll viewport's top edge.
+function bindTpSectionLabelScroll() {
+  const scrollEl = document.getElementById('tp-scroll');
+  const label = document.getElementById('tp-section-label');
+  if (!scrollEl || !label) return;
+  const headers = Array.from(scrollEl.querySelectorAll('.t-section-header'));
+  if (headers.length <= 1) return;
+  const update = () => {
+    const viewportTop = scrollEl.getBoundingClientRect().top;
+    let current = headers[0].dataset.section;
+    for (const h of headers) {
+      if (h.getBoundingClientRect().top - viewportTop <= 0) current = h.dataset.section;
+    }
+    if (label.textContent !== current) label.textContent = current;
+  };
+  scrollEl.addEventListener('scroll', update, { passive: true });
+  update();
 }
 
 // Build the per-turn rows for the Blocks view, preserving the back-and-forth
