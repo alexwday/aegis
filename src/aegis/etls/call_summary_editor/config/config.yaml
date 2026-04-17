@@ -23,13 +23,13 @@ llm:
     md_classification: 32768
     qa_classification: 32768
     headline:          2048
-    # Each proposal carries two full config rows (7 fields each) plus up to 4
-    # supporting quotes, and we ask for up to 4 proposals per pass. That packs
-    # close to 3k output tokens in the worst case before JSON/tool-call wrapping
-    # and reasoning overhead, which blew past the previous 4096 cap and tripped
-    # `finish_reason: length` — the tool call would arrive truncated with no
-    # parseable `tool_calls`. 16384 gives enough headroom for both passes.
-    config_review:     16384
+    # Pass 1 (description updates) returns ~1 short row per category at most;
+    # pass 2 (emerging topics) returns up to 4 full rows plus a list of finding
+    # ids. Worst-case output is well under 2k tokens per pass, so 6144 is
+    # comfortable headroom. Previously we were at 16384 with a much wider
+    # schema (verbatim supporting quotes, mirrored current/proposed rows); the
+    # combination pushed individual calls past the 180s httpx read timeout.
+    config_review:     6144
     default:           32768
 
 concurrency:

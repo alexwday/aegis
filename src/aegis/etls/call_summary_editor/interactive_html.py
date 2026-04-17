@@ -100,53 +100,46 @@ def build_report_state(
         bank_review = raw_config_reviews.get(ticker, {})
         proposals = []
         for idx, proposal in enumerate(bank_review.get("config_change_proposals", []), start=1):
-            current_row = proposal.get("current_row", {})
-            proposed_row = proposal.get("proposed_row", {})
-            proposals.append(
-                {
-                    "id": proposal.get("id") or f"{ticker}_proposal_{idx}",
-                    "change_type": proposal.get("change_type", "update_existing"),
-                    "change_summary": proposal.get("change_summary", ""),
-                    "target_bucket_index": proposal.get("target_bucket_index", -1),
-                    "target_bucket_id": proposal.get("target_bucket_id"),
-                    "target_category_name": proposal.get("target_category_name", ""),
-                    "suggested_subtitle": proposal.get("suggested_subtitle", ""),
-                    "linked_evidence_ids": [
-                        evidence_id
-                        for evidence_id in proposal.get("linked_evidence_ids", [])
-                        if evidence_id
-                    ],
-                    "adopted_bucket_id": proposal.get("adopted_bucket_id"),
-                    "current_row": {
-                        "transcript_sections": current_row.get("transcript_sections", "ALL"),
-                        "report_section": current_row.get("report_section", "Results Summary"),
-                        "category_name": current_row.get("category_name", ""),
-                        "category_description": current_row.get("category_description", ""),
-                        "example_1": current_row.get("example_1", ""),
-                        "example_2": current_row.get("example_2", ""),
-                        "example_3": current_row.get("example_3", ""),
-                    },
-                    "proposed_row": {
-                        "transcript_sections": proposed_row.get("transcript_sections", "ALL"),
-                        "report_section": proposed_row.get("report_section", "Results Summary"),
-                        "category_name": proposed_row.get("category_name", ""),
-                        "category_description": proposed_row.get("category_description", ""),
-                        "example_1": proposed_row.get("example_1", ""),
-                        "example_2": proposed_row.get("example_2", ""),
-                        "example_3": proposed_row.get("example_3", ""),
-                    },
-                    "supporting_quotes": [
-                        {
-                            "evidence_id": quote.get("evidence_id", ""),
-                            "quote": quote.get("quote", ""),
-                            "speaker": quote.get("speaker", ""),
-                            "transcript_section": quote.get("transcript_section", ""),
-                        }
-                        for quote in proposal.get("supporting_quotes", [])
-                        if quote
-                    ],
-                }
-            )
+            change_type = proposal.get("change_type", "update_existing")
+            current_row = proposal.get("current_row", {}) or {}
+            proposed_row = proposal.get("proposed_row", {}) or {}
+            serialized = {
+                "id": proposal.get("id") or f"{ticker}_proposal_{idx}",
+                "change_type": change_type,
+                "change_summary": proposal.get("change_summary", ""),
+                "target_bucket_index": proposal.get("target_bucket_index", -1),
+                "target_bucket_id": proposal.get("target_bucket_id"),
+                "target_category_name": proposal.get("target_category_name", ""),
+                "current_row": {
+                    "transcript_sections": current_row.get("transcript_sections", "ALL"),
+                    "report_section": current_row.get("report_section", "Results Summary"),
+                    "category_name": current_row.get("category_name", ""),
+                    "category_description": current_row.get("category_description", ""),
+                    "example_1": current_row.get("example_1", ""),
+                    "example_2": current_row.get("example_2", ""),
+                    "example_3": current_row.get("example_3", ""),
+                },
+                "proposed_row": {
+                    "transcript_sections": proposed_row.get("transcript_sections", "ALL"),
+                    "report_section": proposed_row.get("report_section", "Results Summary"),
+                    "category_name": proposed_row.get("category_name", ""),
+                    "category_description": proposed_row.get("category_description", ""),
+                    "example_1": proposed_row.get("example_1", ""),
+                    "example_2": proposed_row.get("example_2", ""),
+                    "example_3": proposed_row.get("example_3", ""),
+                },
+            }
+            # Emerging topics carry the finding ids the UI will reassign on enable.
+            # Description-only updates never carry evidence — that's the point of
+            # the slim pass-1 schema.
+            if change_type == "new_category":
+                serialized["linked_evidence_ids"] = [
+                    evidence_id
+                    for evidence_id in proposal.get("linked_evidence_ids", [])
+                    if evidence_id
+                ]
+                serialized["adopted_bucket_id"] = proposal.get("adopted_bucket_id")
+            proposals.append(serialized)
 
         config_change_proposals_state["by_bank"][ticker] = {"proposals": proposals}
 

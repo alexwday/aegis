@@ -13,7 +13,7 @@ import asyncio
 import json
 import re
 from collections import defaultdict
-from typing import Any, Dict, List, Literal, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 from xml.sax.saxutils import escape as _xml_escape
 
 from pydantic import BaseModel, Field
@@ -104,33 +104,55 @@ class ProposedConfigRow(BaseModel):
     example_3: str = ""
 
 
-class SupportingQuote(BaseModel):
-    """Verbatim quote linked to a source evidence record."""
+class DescriptionUpdateProposal(BaseModel):
+    """Pass 1: tightened description for one existing category row."""
 
-    evidence_id: str
-    quote: str
-    speaker: str = ""
-    transcript_section: str = ""
-
-
-class ConfigChangeProposal(BaseModel):
-    """Structured config change proposal for the editor UI."""
-
-    change_type: Literal["update_existing", "new_category"]
-    change_summary: str
-    target_bucket_index: int = -1
-    target_category_name: str = ""
-    suggested_subtitle: str = ""
-    linked_evidence_ids: List[str] = Field(default_factory=list)
-    current_row: ProposedConfigRow
-    proposed_row: ProposedConfigRow
-    supporting_quotes: List[SupportingQuote] = Field(default_factory=list)
+    target_category_name: str = Field(
+        description="Exact `category_name` of the existing row whose description should be edited."
+    )
+    change_summary: str = Field(
+        description="One or two sentence reasoning for why the description needs to be edited."
+    )
+    proposed_description: str = Field(
+        description=(
+            "The full replacement `category_description` — copy-paste ready. The other "
+            "fields (transcript_sections, report_section, category_name, examples) are "
+            "preserved server-side from the current row."
+        )
+    )
 
 
-class ConfigReviewResult(BaseModel):
-    """Structured config proposals for the current transcript."""
+class DescriptionUpdatesResult(BaseModel):
+    """Structured pass-1 proposals: existing-category description refinements."""
 
-    proposals: List[ConfigChangeProposal] = Field(default_factory=list)
+    proposals: List[DescriptionUpdateProposal] = Field(default_factory=list)
+
+
+class EmergingTopicProposal(BaseModel):
+    """Pass 2: one emerging-topic candidate with linked finding IDs."""
+
+    change_summary: str = Field(
+        description=(
+            "One or two sentence reasoning for why this is a distinct emerging topic "
+            "worth tracking across future quarters."
+        )
+    )
+    proposed_row: ProposedConfigRow = Field(
+        description="The full copy-paste ready config row for the new category."
+    )
+    linked_finding_ids: List[str] = Field(
+        default_factory=list,
+        description=(
+            "Finding ids from the digest that belong under this emerging topic — across "
+            "any status (selected/candidate/rejected) and regardless of current bucket."
+        ),
+    )
+
+
+class EmergingTopicsResult(BaseModel):
+    """Structured pass-2 proposals: brand-new emerging categories."""
+
+    proposals: List[EmergingTopicProposal] = Field(default_factory=list)
 
 
 _SENTENCE_RESULT_SCHEMA = {
@@ -313,27 +335,17 @@ _CONFIG_ROW_SCHEMA = {
     "additionalProperties": False,
 }
 
-_SUPPORTING_QUOTE_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "evidence_id": {"type": "string"},
-        "quote": {"type": "string"},
-        "speaker": {"type": "string"},
-        "transcript_section": {"type": "string"},
-    },
-    "required": ["evidence_id", "quote", "speaker", "transcript_section"],
-    "additionalProperties": False,
-}
-
-TOOL_CONFIG_REVIEW = {
+TOOL_DESCRIPTION_UPDATES = {
     "type": "function",
     "function": {
-        "name": "propose_config_changes",
+        "name": "propose_description_updates",
         "strict": True,
         "description": (
-            "Call this tool when transcript evidence needs structured config change proposals. "
-            "It returns update_existing and new_category proposals with linked evidence ids, "
-            "supporting verbatim quotes, and copy-ready rows for the config UI."
+            "Call this tool when the current category sheet has descriptions that should be "
+            "tightened or extended based on indexed findings from the transcript. Return only "
+            "the categories whose `category_description` should change, along with a one-to-two "
+            "sentence reasoning and the full replacement description ready to paste into the "
+            "config sheet. Do not propose new categories — that is a separate pass."
         ),
         "parameters": {
             "type": "object",
@@ -343,35 +355,29 @@ TOOL_CONFIG_REVIEW = {
                     "items": {
                         "type": "object",
                         "properties": {
-                            "change_type": {
+                            "target_category_name": {
                                 "type": "string",
-                                "enum": ["update_existing", "new_category"],
+                                "description": (
+                                    "Exact `category_name` of the existing row to edit."
+                                ),
                             },
-                            "change_summary": {"type": "string"},
-                            "target_bucket_index": {"type": "integer"},
-                            "target_category_name": {"type": "string"},
-                            "suggested_subtitle": {"type": "string"},
-                            "linked_evidence_ids": {
-                                "type": "array",
-                                "items": {"type": "string"},
+                            "change_summary": {
+                                "type": "string",
+                                "description": (
+                                    "One or two sentence reasoning for the description change."
+                                ),
                             },
-                            "current_row": _CONFIG_ROW_SCHEMA,
-                            "proposed_row": _CONFIG_ROW_SCHEMA,
-                            "supporting_quotes": {
-                                "type": "array",
-                                "items": _SUPPORTING_QUOTE_SCHEMA,
+                            "proposed_description": {
+                                "type": "string",
+                                "description": (
+                                    "Full replacement `category_description` — copy-paste ready."
+                                ),
                             },
                         },
                         "required": [
-                            "change_type",
-                            "change_summary",
-                            "target_bucket_index",
                             "target_category_name",
-                            "suggested_subtitle",
-                            "linked_evidence_ids",
-                            "current_row",
-                            "proposed_row",
-                            "supporting_quotes",
+                            "change_summary",
+                            "proposed_description",
                         ],
                         "additionalProperties": False,
                     },
@@ -383,17 +389,56 @@ TOOL_CONFIG_REVIEW = {
     },
 }
 
-TOOL_EMERGING_TOPIC_REVIEW = {
+TOOL_EMERGING_TOPICS = {
     "type": "function",
     "function": {
-        "name": "extract_emerging_topic_proposals",
+        "name": "propose_emerging_topics",
         "strict": True,
         "description": (
-            "Call this tool when uncovered transcript evidence from the second pass needs "
-            "structured emerging-topic proposals. It returns update_existing or new_category "
-            "proposals with linked evidence ids, verbatim quotes, and copy-ready rows."
+            "Call this tool to identify brand-new emerging topics worth tracking in future "
+            "quarters — themes that do not fit any existing category. For each topic return "
+            "a copy-ready config row (including `report_section` so it lands in Results "
+            "Summary or Earnings Call Q&A) and the finding ids that belong under it. Finding "
+            "ids may come from any status (selected/candidate/rejected) and may currently sit "
+            "in other buckets — if the user enables the topic, those findings will be moved."
         ),
-        "parameters": TOOL_CONFIG_REVIEW["function"]["parameters"],
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "proposals": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "change_summary": {
+                                "type": "string",
+                                "description": (
+                                    "One or two sentence reasoning for why this is a distinct "
+                                    "emerging topic worth tracking."
+                                ),
+                            },
+                            "proposed_row": _CONFIG_ROW_SCHEMA,
+                            "linked_finding_ids": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "description": (
+                                    "Finding ids from the digest that belong under this topic. "
+                                    "Use only ids that appear in the digest."
+                                ),
+                            },
+                        },
+                        "required": [
+                            "change_summary",
+                            "proposed_row",
+                            "linked_finding_ids",
+                        ],
+                        "additionalProperties": False,
+                    },
+                },
+            },
+            "required": ["proposals"],
+            "additionalProperties": False,
+        },
     },
 }
 
@@ -2119,164 +2164,25 @@ async def analyze_config_coverage(
     *,
     bank_data: Dict[str, Any],
     categories: List[Dict[str, Any]],
-    min_importance: float,
+    min_importance: float,  # pylint: disable=unused-argument
     context: Dict[str, Any],
     llm_params: Dict[str, Any],
 ) -> Dict[str, Any]:
-    """Review transcript coverage against the current input config sheet."""
+    """Review the transcript against the current config sheet in two focused passes.
 
-    def _existing_category_rows(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        return [row for row in rows if row.get("selected_bucket_id")]
+    Pass 1 (`config_review_updates`): asks the model which existing category
+    descriptions should be tightened or extended, and returns a replacement
+    description per row ready to paste into the config sheet.
 
-    def _emerging_topic_rows(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        return [
-            row
-            for row in rows
-            if not row.get("selected_bucket_id") and not row.get("classification_error")
-        ]
+    Pass 2 (`config_review_emerging`): asks the model for brand-new emerging
+    topics that do not fit any existing category, each with a copy-paste
+    ready config row and the finding ids that should move under it when the
+    user enables the topic in the UI.
 
-    def _proposal_dedupe_key(proposal: Dict[str, Any]) -> tuple[Any, ...]:
-        target = (
-            proposal["target_bucket_index"]
-            if proposal["change_type"] == "update_existing"
-            else proposal["proposed_row"]["category_name"].strip().lower()
-        )
-        return (
-            proposal["change_type"],
-            target,
-            proposal["proposed_row"]["category_description"],
-            tuple(proposal["linked_evidence_ids"]),
-        )
-
-    def _materialize_config_proposals(
-        *,
-        result: ConfigReviewResult,
-        evidence_index: Dict[str, Dict[str, Any]],
-        allowed_change_types: Optional[set[str]],
-        proposal_id_prefix: str,
-    ) -> List[Dict[str, Any]]:
-        proposals: List[Dict[str, Any]] = []
-        seen_proposals = set()
-        existing_names = {
-            category.get("category_name", "").strip().lower() for category in categories
-        }
-
-        for idx, proposal in enumerate(result.proposals[:6], start=1):
-            change_type = proposal.change_type
-            if allowed_change_types and change_type not in allowed_change_types:
-                continue
-
-            target_bucket_index = proposal.target_bucket_index
-            target_category_name = proposal.target_category_name.strip()
-
-            current_row = _empty_config_row()
-            bucket_id = None
-            if change_type == "update_existing":
-                if not 0 <= target_bucket_index < len(categories):
-                    target_bucket_index = next(
-                        (
-                            bucket_idx
-                            for bucket_idx, category in enumerate(categories)
-                            if category.get("category_name", "").strip() == target_category_name
-                        ),
-                        -1,
-                    )
-                if not 0 <= target_bucket_index < len(categories):
-                    continue
-                base_category = categories[target_bucket_index]
-                current_row = _category_to_row(base_category)
-                bucket_id = f"bucket_{target_bucket_index}"
-                target_category_name = current_row["category_name"]
-
-            proposed_row = _normalise_config_row(proposal.proposed_row)
-            if change_type == "update_existing":
-                proposed_row = {
-                    "transcript_sections": current_row["transcript_sections"],
-                    "report_section": current_row["report_section"],
-                    "category_name": current_row["category_name"],
-                    "category_description": proposed_row["category_description"]
-                    or current_row["category_description"],
-                    "example_1": proposed_row["example_1"] or current_row["example_1"],
-                    "example_2": proposed_row["example_2"] or current_row["example_2"],
-                    "example_3": proposed_row["example_3"] or current_row["example_3"],
-                }
-            elif not proposed_row["category_name"] or not proposed_row["category_description"]:
-                continue
-
-            dedupe_name = proposed_row["category_name"].strip().lower()
-            if change_type == "new_category" and dedupe_name in existing_names:
-                continue
-
-            linked_evidence_ids = [
-                evidence_id
-                for evidence_id in proposal.linked_evidence_ids
-                if evidence_id in evidence_index
-            ]
-            if not linked_evidence_ids:
-                linked_evidence_ids = [
-                    quote.evidence_id
-                    for quote in proposal.supporting_quotes
-                    if quote.evidence_id in evidence_index
-                ]
-            linked_evidence_ids = list(dict.fromkeys(linked_evidence_ids))[:12]
-            if not linked_evidence_ids:
-                continue
-
-            supporting_quotes: List[Dict[str, str]] = []
-            seen_quote_ids = set()
-            for quote in proposal.supporting_quotes:
-                if quote.evidence_id not in evidence_index or quote.evidence_id in seen_quote_ids:
-                    continue
-                evidence = evidence_index[quote.evidence_id]
-                supporting_quotes.append(
-                    {
-                        "evidence_id": quote.evidence_id,
-                        "quote": evidence.get("quote", quote.quote).strip(),
-                        "speaker": evidence.get("speaker", quote.speaker).strip(),
-                        "transcript_section": evidence.get(
-                            "transcript_section",
-                            quote.transcript_section,
-                        ).strip(),
-                    }
-                )
-                seen_quote_ids.add(quote.evidence_id)
-
-            for evidence_id in linked_evidence_ids:
-                if evidence_id in seen_quote_ids:
-                    continue
-                evidence = evidence_index[evidence_id]
-                supporting_quotes.append(
-                    {
-                        "evidence_id": evidence_id,
-                        "quote": evidence.get("quote", "").strip(),
-                        "speaker": evidence.get("speaker", "").strip(),
-                        "transcript_section": evidence.get("transcript_section", "").strip(),
-                    }
-                )
-                seen_quote_ids.add(evidence_id)
-                if len(supporting_quotes) >= 4:
-                    break
-
-            materialized = {
-                "id": f"{bank_data.get('ticker', 'bank')}_{proposal_id_prefix}_{idx}",
-                "change_type": change_type,
-                "change_summary": proposal.change_summary.strip(),
-                "target_bucket_index": target_bucket_index,
-                "target_bucket_id": bucket_id,
-                "target_category_name": target_category_name or proposed_row["category_name"],
-                "suggested_subtitle": proposal.suggested_subtitle.strip(),
-                "linked_evidence_ids": linked_evidence_ids,
-                "current_row": current_row,
-                "proposed_row": proposed_row,
-                "supporting_quotes": supporting_quotes[:4],
-            }
-            dedupe_key = _proposal_dedupe_key(materialized)
-            if dedupe_key in seen_proposals:
-                continue
-            seen_proposals.add(dedupe_key)
-            proposals.append(materialized)
-
-        return proposals
+    Both passes share the same indexed-findings digest. Output shape is kept
+    as `{"config_change_proposals": [...]}` so downstream rendering (which
+    keys off `change_type`) continues to work unchanged.
+    """
 
     evidence_rows, evidence_index = _collect_config_review_evidence(bank_data)
     if not evidence_rows:
@@ -2288,170 +2194,227 @@ async def analyze_config_coverage(
     fiscal_quarter = bank_data.get("fiscal_quarter", "")
     fiscal_year = bank_data.get("fiscal_year", "")
 
-    mapped_rows = _existing_category_rows(evidence_rows)
-    uncovered_rows = _emerging_topic_rows(evidence_rows)
-    # Keep the two passes' proposals in separate buckets so we can interleave
-    # them at the end. Previously they were appended into one list, then
-    # truncated to 6 - which meant a productive existing-update pass could
-    # entirely evict the emerging-topic pass that the business added the
-    # second pass to surface.
-    existing_proposals: List[Dict[str, Any]] = []
-    emerging_proposals: List[Dict[str, Any]] = []
-    seen_combined_keys: set = set()
+    # One shared digest for both passes. Cap at the 150 most-important rows so
+    # the prompt stays well under the model's latency ceiling — the previous
+    # unbounded digest is what pushed individual calls past the 180s httpx
+    # read timeout and triggered silent 3x SDK retries.
+    findings_digest = _serialise_evidence_digest(
+        evidence_rows,
+        categories,
+        max_items=150,
+    )
 
     logger.info(
         "Reviewing category coverage",
         ticker=bank_data.get("ticker", ""),
         evidence_rows=len(evidence_rows),
-        mapped_rows=len(mapped_rows),
-        uncovered_rows=len(uncovered_rows),
+        digest_rows=min(len(evidence_rows), 150),
     )
 
-    if mapped_rows:
-        mapped_digest = _serialise_evidence_digest(mapped_rows, categories)
-        raw_existing = await _call_tool(
-            messages=[
-                {
-                    "role": "developer",
-                    "content": (
-                        "You are a config-review analyst for investor-relations "
-                        "transcript editors. "
-                        "Review mapped verbatim evidence against the current category sheet and "
-                        "propose only `update_existing` changes for existing rows. Do not create "
-                        "new categories in this pass. Always use the provided tool."
-                    ),
-                },
-                {
-                    "role": "user",
-                    "content": (
-                        "## Task\n"
-                        f"Review {company_name}'s {fiscal_quarter} {fiscal_year} mapped transcript "
-                        "evidence against the current category config sheet and return only "
-                        "`update_existing` proposals.\n\n"
-                        "## Rules\n"
-                        "1. Return only `update_existing` proposals in this pass.\n"
-                        "2. Use only evidence ids from the digest below.\n"
-                        "3. Keep `supporting_quotes` verbatim.\n"
-                        "4. Use the current category index for `target_bucket_index`.\n"
-                        "5. Make every `proposed_row` copy-ready for the config UI.\n"
-                        "6. Avoid duplicates and cap the response at 4 proposals.\n\n"
-                        "## Current Category Sheet\n"
-                        f"{_xml_block('categories', categories_text)}\n\n"
-                        "## Mapped Evidence Digest\n"
-                        f"{_xml_block('mapped_evidence', mapped_digest)}"
-                    ),
-                },
-            ],
-            tool=TOOL_CONFIG_REVIEW,
-            label="config_review_existing",
-            context=context,
-            llm_params=llm_params,
-        )
-        if raw_existing:
-            try:
-                existing_result = ConfigReviewResult.model_validate(raw_existing)
-            except Exception as exc:
-                logger.warning(
-                    "Existing-category review response could not be parsed",
-                    error=str(exc),
-                )
-            else:
-                for proposal in _materialize_config_proposals(
-                    result=existing_result,
-                    evidence_index=evidence_index,
-                    allowed_change_types={"update_existing"},
-                    proposal_id_prefix="existing",
-                ):
-                    key = _proposal_dedupe_key(proposal)
-                    if key in seen_combined_keys:
-                        continue
-                    seen_combined_keys.add(key)
-                    existing_proposals.append(proposal)
+    existing_names = {
+        category.get("category_name", "").strip().lower() for category in categories
+    }
+    update_proposals: List[Dict[str, Any]] = []
+    emerging_proposals: List[Dict[str, Any]] = []
 
-    if uncovered_rows:
-        uncovered_digest = _serialise_evidence_digest(uncovered_rows, categories)
-        raw_emerging = await _call_tool(
-            messages=[
-                {
-                    "role": "developer",
-                    "content": (
-                        "You are a second-pass emerging-topic extractor for investor-relations "
-                        "transcript editors. Review uncovered verbatim evidence that remained "
-                        "unmapped after the first-pass category extraction. Group that evidence "
-                        "into the fewest high-signal themes and return structured proposals. Use "
-                        "`update_existing` when the taxonomy is close but incomplete, and "
-                        "`new_category` when the uncovered evidence deserves its own row. Always "
-                        "use the provided tool."
-                    ),
-                },
-                {
-                    "role": "user",
-                    "content": (
-                        "## Task\n"
-                        f"Review {company_name}'s {fiscal_quarter} {fiscal_year} uncovered "
-                        "transcript evidence and return second-pass emerging-topic proposals.\n\n"
-                        "## Rules\n"
-                        "1. Focus only on the uncovered evidence shown below.\n"
-                        "2. Use `update_existing` when the evidence should map to an existing "
-                        "category after widening the row.\n"
-                        "3. Use `new_category` when the evidence should become its own category.\n"
-                        "4. `linked_evidence_ids` must use only ids from the digest below.\n"
-                        "5. Keep `supporting_quotes` verbatim and aligned to the linked evidence.\n"
-                        "6. Make every `proposed_row` copy-ready for the config UI.\n"
-                        "7. Avoid duplicates and cap the response at 4 proposals.\n\n"
-                        "## Current Category Sheet\n"
-                        f"{_xml_block('categories', categories_text)}\n\n"
-                        "## Uncovered Evidence Digest\n"
-                        f"{_xml_block('uncovered_evidence', uncovered_digest)}"
-                    ),
-                },
-            ],
-            tool=TOOL_EMERGING_TOPIC_REVIEW,
-            label="config_review_emerging",
-            context=context,
-            llm_params=llm_params,
-        )
-        if raw_emerging:
-            try:
-                emerging_result = ConfigReviewResult.model_validate(raw_emerging)
-            except Exception as exc:
-                logger.warning(
-                    "Emerging-topic review response could not be parsed",
-                    error=str(exc),
-                )
-            else:
-                for proposal in _materialize_config_proposals(
-                    result=emerging_result,
-                    evidence_index=evidence_index,
-                    allowed_change_types={"update_existing", "new_category"},
-                    proposal_id_prefix="emerging",
-                ):
-                    key = _proposal_dedupe_key(proposal)
-                    if key in seen_combined_keys:
-                        continue
-                    seen_combined_keys.add(key)
-                    emerging_proposals.append(proposal)
+    # --- Pass 1: description updates for existing categories ---
+    raw_updates = await _call_tool(
+        messages=[
+            {
+                "role": "developer",
+                "content": (
+                    "You are a config-sheet maintenance analyst for investor-relations "
+                    "transcript editors. Given the current category sheet and the indexed "
+                    "findings from one transcript, identify existing categories whose "
+                    "`category_description` is weak, narrow, or outdated relative to what "
+                    "was actually discussed, and return a tightened replacement description "
+                    "that the user can copy directly into the config sheet. Do not propose "
+                    "new categories in this pass. Always use the provided tool."
+                ),
+            },
+            {
+                "role": "user",
+                "content": (
+                    "## Task\n"
+                    f"Review {company_name}'s {fiscal_quarter} {fiscal_year} indexed findings "
+                    "against the current category sheet and return description-only edits "
+                    "for existing rows.\n\n"
+                    "## Rules\n"
+                    "1. Only propose changes to existing categories listed below. Do not "
+                    "suggest new categories in this pass.\n"
+                    "2. `target_category_name` must match an existing `category_name` exactly.\n"
+                    "3. `proposed_description` is the full replacement text for "
+                    "`category_description` — do not return deltas or diffs. The other row "
+                    "fields are preserved server-side.\n"
+                    "4. Keep `change_summary` to 1-2 sentences of reasoning.\n"
+                    "5. Skip rows whose description is already accurate; return nothing "
+                    "for them.\n"
+                    "6. Cap the response at 6 proposals, one per category at most.\n\n"
+                    "## Current Category Sheet\n"
+                    f"{_xml_block('categories', categories_text)}\n\n"
+                    "## Indexed Findings Digest\n"
+                    f"{_xml_block('findings', findings_digest)}"
+                ),
+            },
+        ],
+        tool=TOOL_DESCRIPTION_UPDATES,
+        label="config_review_updates",
+        context=context,
+        llm_params=llm_params,
+    )
 
-    # Interleave the two pools so neither pass can fully evict the other when
-    # the combined cap is reached. We zip-merge in round-robin order, then
-    # append any leftovers from whichever pool ran longer.
-    final_proposals: List[Dict[str, Any]] = []
-    for existing, emerging in zip(existing_proposals, emerging_proposals):
-        final_proposals.extend([existing, emerging])
-    leftover_start = min(len(existing_proposals), len(emerging_proposals))
-    final_proposals.extend(existing_proposals[leftover_start:])
-    final_proposals.extend(emerging_proposals[leftover_start:])
-    final_proposals = final_proposals[:6]
+    if raw_updates:
+        try:
+            updates_result = DescriptionUpdatesResult.model_validate(raw_updates)
+        except Exception as exc:
+            logger.warning(
+                "Description-update response could not be parsed",
+                error=str(exc),
+            )
+        else:
+            seen_targets: set = set()
+            for idx, proposal in enumerate(updates_result.proposals[:6], start=1):
+                target_name = proposal.target_category_name.strip()
+                target_bucket_index = next(
+                    (
+                        bucket_idx
+                        for bucket_idx, category in enumerate(categories)
+                        if category.get("category_name", "").strip() == target_name
+                    ),
+                    -1,
+                )
+                if target_bucket_index < 0:
+                    continue
+                new_description = proposal.proposed_description.strip()
+                if not new_description:
+                    continue
+                dedupe_key = (target_bucket_index, new_description)
+                if dedupe_key in seen_targets:
+                    continue
+                seen_targets.add(dedupe_key)
+
+                base_category = categories[target_bucket_index]
+                current_row = _category_to_row(base_category)
+                if new_description == current_row["category_description"]:
+                    continue
+                proposed_row = dict(current_row)
+                proposed_row["category_description"] = new_description
+
+                update_proposals.append(
+                    {
+                        "id": f"{bank_data.get('ticker', 'bank')}_update_{idx}",
+                        "change_type": "update_existing",
+                        "change_summary": proposal.change_summary.strip(),
+                        "target_bucket_index": target_bucket_index,
+                        "target_bucket_id": f"bucket_{target_bucket_index}",
+                        "target_category_name": current_row["category_name"],
+                        "current_row": current_row,
+                        "proposed_row": proposed_row,
+                    }
+                )
+
+    # --- Pass 2: emerging topics that deserve a new category ---
+    raw_emerging = await _call_tool(
+        messages=[
+            {
+                "role": "developer",
+                "content": (
+                    "You are an emerging-topic analyst for investor-relations transcript "
+                    "editors. Given the current category sheet and the indexed findings from "
+                    "one transcript, identify themes that do not fit any existing category "
+                    "and are substantial enough to be worth tracking across future quarters "
+                    "or across the industry. For each emerging topic return a copy-ready "
+                    "config row and the finding ids that belong under it (ids can come from "
+                    "any status — selected/candidate/rejected — and may currently sit in "
+                    "other buckets; enabling the topic in the UI will reassign them)."
+                ),
+            },
+            {
+                "role": "user",
+                "content": (
+                    "## Task\n"
+                    f"Review {company_name}'s {fiscal_quarter} {fiscal_year} indexed findings "
+                    "and return brand-new emerging-topic categories worth carrying forward.\n\n"
+                    "## Rules\n"
+                    "1. Only surface topics that are NOT already covered by an existing "
+                    "category below.\n"
+                    "2. Each topic must be a genuinely trackable theme, not a one-off mention. "
+                    "Skip isolated remarks that are not worth their own category.\n"
+                    "3. `proposed_row.report_section` must be exactly `Results Summary` or "
+                    "`Earnings Call Q&A`.\n"
+                    "4. `proposed_row.transcript_sections` must be exactly `MD`, `QA`, or "
+                    "`ALL`.\n"
+                    "5. `proposed_row.category_name` must be unique versus the existing sheet.\n"
+                    "6. `linked_finding_ids` must use only ids that appear in the findings "
+                    "digest below. Include every finding that would genuinely belong under "
+                    "the topic, across all statuses.\n"
+                    "7. Keep `change_summary` to 1-2 sentences of reasoning.\n"
+                    "8. Cap the response at 4 proposals.\n\n"
+                    "## Current Category Sheet\n"
+                    f"{_xml_block('categories', categories_text)}\n\n"
+                    "## Indexed Findings Digest\n"
+                    f"{_xml_block('findings', findings_digest)}"
+                ),
+            },
+        ],
+        tool=TOOL_EMERGING_TOPICS,
+        label="config_review_emerging",
+        context=context,
+        llm_params=llm_params,
+    )
+
+    if raw_emerging:
+        try:
+            emerging_result = EmergingTopicsResult.model_validate(raw_emerging)
+        except Exception as exc:
+            logger.warning(
+                "Emerging-topic response could not be parsed",
+                error=str(exc),
+            )
+        else:
+            seen_names: set = set()
+            for idx, proposal in enumerate(emerging_result.proposals[:4], start=1):
+                proposed_row = _normalise_config_row(proposal.proposed_row)
+                name = proposed_row["category_name"].strip()
+                if not name or not proposed_row["category_description"].strip():
+                    continue
+                name_key = name.lower()
+                if name_key in existing_names or name_key in seen_names:
+                    continue
+
+                linked_ids = [
+                    finding_id
+                    for finding_id in proposal.linked_finding_ids
+                    if finding_id in evidence_index
+                ]
+                linked_ids = list(dict.fromkeys(linked_ids))
+                if not linked_ids:
+                    continue
+                seen_names.add(name_key)
+
+                emerging_proposals.append(
+                    {
+                        "id": f"{bank_data.get('ticker', 'bank')}_emerging_{idx}",
+                        "change_type": "new_category",
+                        "change_summary": proposal.change_summary.strip(),
+                        "target_bucket_index": -1,
+                        "target_bucket_id": None,
+                        "target_category_name": name,
+                        "current_row": _empty_config_row(),
+                        "proposed_row": proposed_row,
+                        "linked_evidence_ids": linked_ids,
+                    }
+                )
+
+    # Keep the two pools separate up to their individual caps, then concatenate.
+    # Updates come first (description hygiene) followed by emerging topics.
+    final_proposals: List[Dict[str, Any]] = update_proposals + emerging_proposals
     logger.info(
         "Config review complete",
         ticker=bank_data.get("ticker", ""),
         proposals=len(final_proposals),
-        update_existing=sum(
-            1 for proposal in final_proposals if proposal.get("change_type") == "update_existing"
-        ),
-        new_category=sum(
-            1 for proposal in final_proposals if proposal.get("change_type") == "new_category"
-        ),
+        update_existing=len(update_proposals),
+        new_category=len(emerging_proposals),
     )
     return {"config_change_proposals": final_proposals}
 

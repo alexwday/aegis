@@ -251,70 +251,30 @@ async def test_analyze_config_coverage_returns_existing_and_new_rows():
         }
     ]
 
+    # Pass 1 returns description updates; pass 2 returns emerging topics.
+    # Both passes see the same findings digest so `md_1` and `md_2` both
+    # appear in each prompt.
     mock_tool = AsyncMock(
         side_effect=[
             {
                 "proposals": [
                     {
-                        "change_type": "update_existing",
+                        "target_category_name": "Efficiency",
                         "change_summary": (
                             "Expand the Efficiency row to cover AI-enabled productivity."
                         ),
-                        "target_bucket_index": 0,
-                        "target_category_name": "Efficiency",
-                        "suggested_subtitle": "",
-                        "linked_evidence_ids": ["md_1"],
-                        "current_row": {
-                            "transcript_sections": "MD",
-                            "report_section": "Results Summary",
-                            "category_name": "Efficiency",
-                            "category_description": "Productivity and cost discipline.",
-                            "example_1": "",
-                            "example_2": "",
-                            "example_3": "",
-                        },
-                        "proposed_row": {
-                            "transcript_sections": "MD",
-                            "report_section": "Results Summary",
-                            "category_name": "Efficiency",
-                            "category_description": (
-                                "Productivity, cost discipline, and AI-enabled operating leverage."
-                            ),
-                            "example_1": "Scaling agentic AI across operations.",
-                            "example_2": "",
-                            "example_3": "",
-                        },
-                        "supporting_quotes": [
-                            {
-                                "evidence_id": "md_1",
-                                "quote": "We are scaling agentic AI across operations.",
-                                "speaker": "Chief Executive Officer, CEO",
-                                "transcript_section": "MD",
-                            }
-                        ],
+                        "proposed_description": (
+                            "Productivity, cost discipline, and AI-enabled operating leverage."
+                        ),
                     }
                 ],
             },
             {
                 "proposals": [
                     {
-                        "change_type": "new_category",
                         "change_summary": (
                             "Create a new category for standalone agentic AI commentary."
                         ),
-                        "target_bucket_index": -1,
-                        "target_category_name": "Agentic AI",
-                        "suggested_subtitle": "AI moves from pilot to operating model",
-                        "linked_evidence_ids": ["md_2"],
-                        "current_row": {
-                            "transcript_sections": "ALL",
-                            "report_section": "Results Summary",
-                            "category_name": "",
-                            "category_description": "",
-                            "example_1": "",
-                            "example_2": "",
-                            "example_3": "",
-                        },
                         "proposed_row": {
                             "transcript_sections": "MD",
                             "report_section": "Results Summary",
@@ -327,14 +287,7 @@ async def test_analyze_config_coverage_returns_existing_and_new_rows():
                             "example_2": "",
                             "example_3": "",
                         },
-                        "supporting_quotes": [
-                            {
-                                "evidence_id": "md_2",
-                                "quote": "Agentic AI is now a standalone operating priority.",
-                                "speaker": "Chief Executive Officer, CEO",
-                                "transcript_section": "MD",
-                            }
-                        ],
+                        "linked_finding_ids": ["md_2"],
                     }
                 ],
             },
@@ -353,24 +306,34 @@ async def test_analyze_config_coverage_returns_existing_and_new_rows():
             llm_params={"model": "gpt-test"},
         )
 
-    assert review["config_change_proposals"][0]["target_bucket_id"] == "bucket_0"
+    proposals = review["config_change_proposals"]
+    assert len(proposals) == 2
+    # Pass 1: description update preserves the existing row and swaps only the description.
+    assert proposals[0]["change_type"] == "update_existing"
+    assert proposals[0]["target_bucket_id"] == "bucket_0"
+    assert proposals[0]["target_category_name"] == "Efficiency"
     assert (
-        review["config_change_proposals"][0]["proposed_row"]["category_description"]
+        proposals[0]["proposed_row"]["category_description"]
         == "Productivity, cost discipline, and AI-enabled operating leverage."
     )
-    assert review["config_change_proposals"][1]["target_category_name"] == "Agentic AI"
-    assert (
-        review["config_change_proposals"][1]["proposed_row"]["report_section"]
-        == "Results Summary"
-    )
-    assert review["config_change_proposals"][1]["linked_evidence_ids"] == ["md_2"]
+    assert proposals[0]["proposed_row"]["category_name"] == "Efficiency"
+    assert "supporting_quotes" not in proposals[0]
+    # Pass 2: emerging topic carries linked finding ids for the UI to reassign.
+    assert proposals[1]["change_type"] == "new_category"
+    assert proposals[1]["target_category_name"] == "Agentic AI"
+    assert proposals[1]["proposed_row"]["report_section"] == "Results Summary"
+    assert proposals[1]["linked_evidence_ids"] == ["md_2"]
     assert mock_tool.await_count == 2
     first_prompt = mock_tool.await_args_list[0].kwargs["messages"][-1]["content"]
     second_prompt = mock_tool.await_args_list[1].kwargs["messages"][-1]["content"]
-    assert "<mapped_evidence>" in first_prompt
+    # Both passes see the same findings digest — pass 2 needs to consider
+    # findings that are already mapped too, in case they should move under
+    # a new emerging topic.
+    assert "<findings>" in first_prompt
     assert "<id>md_1</id>" in first_prompt
-    assert "<id>md_2</id>" not in first_prompt
-    assert "<uncovered_evidence>" in second_prompt
+    assert "<id>md_2</id>" in first_prompt
+    assert "<findings>" in second_prompt
+    assert "<id>md_1</id>" in second_prompt
     assert "<id>md_2</id>" in second_prompt
 
 

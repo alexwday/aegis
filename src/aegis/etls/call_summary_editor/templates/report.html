@@ -199,6 +199,50 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 .cfg-config-table th,.cfg-config-table td{border:1px solid #E4E6EA;padding:7px 8px;text-align:left;vertical-align:top}
 .cfg-config-table th{width:140px;background:#F8F9FB;color:#65676B;font-weight:700}
 .cfg-review-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}
+.cfg-review-help{font-size:11px;color:#65676B;line-height:1.55;margin:2px 0 10px}
+.cfg-review-help code{background:#F0F2F5;padding:1px 5px;border-radius:3px;font-size:10px}
+/* Pass-1 "Category description updates" cards. Side-by-side current vs. proposed
+   text so the user can eyeball the change before copying the new description. */
+.cfg-update-list{display:grid;gap:10px}
+.cfg-update-card{border:1px solid #E4E6EA;border-radius:8px;background:#FAFBFC;padding:12px}
+.cfg-update-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:6px}
+.cfg-update-title{font-size:13px;font-weight:800;color:#1A2332}
+.cfg-update-reason{font-size:11px;color:#3C3F44;line-height:1.55;margin-bottom:10px}
+.cfg-update-diff{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.cfg-update-col-label{font-size:10px;font-weight:700;color:#8A8D91;text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px}
+.cfg-update-col-body{font-size:11px;line-height:1.55;color:#444;background:#fff;border:1px solid #E4E6EA;border-radius:6px;padding:7px 9px;min-height:40px}
+.cfg-update-col-body-new{background:#F0F9F2;border-color:#C8E6C9;color:#1B5E20}
+.cfg-copy-btn.btn-copied{background:#2D9E5F;border-color:#2D9E5F;color:#fff}
+/* Pass-2 "Emerging topics" cards with Enable toggle. */
+.cfg-emerging-list{display:grid;gap:10px}
+.cfg-emerging-card{border:1px solid #E4E6EA;border-radius:8px;background:#FAFBFC;padding:12px}
+.cfg-emerging-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.cfg-emerging-title{font-size:13px;font-weight:800;color:#1A2332}
+.cfg-emerging-meta{font-size:10px;color:#65676B;margin-top:3px}
+.cfg-emerging-reason{font-size:11px;color:#3C3F44;line-height:1.55;margin:8px 0 6px}
+.cfg-emerging-row{margin-top:4px}
+.cfg-emerging-row>summary{font-size:11px;font-weight:700;color:#0A66C2;cursor:pointer;list-style:none;display:inline-flex}
+.cfg-emerging-row>summary::-webkit-details-marker{display:none}
+/* Toggle-switch styling for Enable/Enabled on emerging-topic cards. Mirrors
+   `.fmt-toggle` so the visual vocabulary stays consistent across the app. */
+.cfg-enable-toggle{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:700;color:#1A2332;cursor:pointer;user-select:none;white-space:nowrap}
+.cfg-enable-toggle input{appearance:none;-webkit-appearance:none;width:30px;height:16px;background:#CDD0D5;border-radius:9px;position:relative;cursor:pointer;transition:background .15s;flex-shrink:0;margin:0}
+.cfg-enable-toggle input::after{content:"";position:absolute;top:1px;left:1px;width:14px;height:14px;background:#fff;border-radius:50%;transition:transform .15s;box-shadow:0 1px 2px rgba(0,0,0,.2)}
+.cfg-enable-toggle input:checked{background:#2D9E5F}
+.cfg-enable-toggle input:checked::after{transform:translateX(14px)}
+.cfg-enable-toggle input:disabled{cursor:default}
+/* Category highlight feature. Clicking the 🔎 icon in a bucket header sets
+   state.highlighted_bucket_id, opens the transcript drawer, and adds
+   `.tp-highlighted` to every sentence row that belongs to that bucket
+   regardless of status. A dismissible pill shows which category is active. */
+.bkt-focus{background:none;border:1px solid transparent;color:#8A8D91;cursor:pointer;font-size:12px;padding:2px 6px;border-radius:4px;margin-right:4px;line-height:1;flex-shrink:0}
+.bkt-focus:hover{color:#0A66C2;background:#EEF4FB}
+.bkt-focus.active{color:#fff;background:#0A66C2;border-color:#0A66C2}
+#tp-highlight-pill{display:none;align-items:center;justify-content:space-between;gap:8px;padding:6px 10px;margin:6px 8px 4px;background:#EEF4FB;border:1px solid #C8DEF1;border-radius:6px;font-size:11px;color:#0A4A86;font-weight:600}
+#tp-highlight-pill.active{display:flex}
+#tp-highlight-pill .tp-pill-clear{background:none;border:none;color:#0A4A86;cursor:pointer;font-size:14px;line-height:1;padding:0 2px}
+#tp-highlight-pill .tp-pill-clear:hover{color:#c00}
+.tp-highlighted{background:#FFF6C2!important;border-left:3px solid #E8B40A!important;padding-left:6px!important;margin-left:-9px!important}
 
 /* Quote card (sub-quote) */
 .q-card{background:#fff;border:1px solid #E4E6EA;border-radius:6px;margin-bottom:4px;overflow:hidden}
@@ -318,6 +362,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
     <div id="transcript-wrap" class="tp-collapsed" style="width:40%">
       <div id="transcript-panel">
         <div id="tp-content">
+          <div id="tp-highlight-pill">
+            <span id="tp-highlight-pill-label">Highlighting: —</span>
+            <button class="tp-pill-clear" onclick="clearCategoryHighlight()" title="Clear highlight">&times;</button>
+          </div>
           <div id="transcript-body"></div>
         </div>
         <div id="tp-rail" onclick="toggleTranscript()"><span id="tp-rail-label">Earnings Call Transcript</span></div>
@@ -462,15 +510,61 @@ function toggleTranscript() {
   const resize = document.getElementById('tp-resize');
   const isCollapsed = wrap.classList.contains('tp-collapsed');
   if (isCollapsed) {
-    wrap.classList.remove('tp-collapsed');
-    wrap.style.width = _tpSavedWidth || '40%';
-    resize.classList.remove('tp-hidden');
+    openTranscriptPanel();
   } else {
     _tpSavedWidth = wrap.style.width || '40%';
     wrap.classList.add('tp-collapsed');
     wrap.style.width = '';
     resize.classList.add('tp-hidden');
   }
+}
+
+// Force the transcript panel open. Used by the category highlight feature so
+// clicking the focus icon on a bucket never leaves the user staring at a
+// collapsed rail.
+function openTranscriptPanel() {
+  const wrap = document.getElementById('transcript-wrap');
+  const resize = document.getElementById('tp-resize');
+  if (!wrap.classList.contains('tp-collapsed')) return;
+  wrap.classList.remove('tp-collapsed');
+  wrap.style.width = _tpSavedWidth || '40%';
+  resize.classList.remove('tp-hidden');
+}
+
+// Toggle highlight for a bucket. Clicking the same bucket's focus icon
+// twice clears the highlight; clicking a different one switches target.
+function toggleCategoryHighlight(bucketId) {
+  if (state.highlighted_bucket_id === bucketId) {
+    clearCategoryHighlight();
+    return;
+  }
+  state.highlighted_bucket_id = bucketId;
+  openTranscriptPanel();
+  renderTranscriptBody();
+  renderCurrentBank();
+  updateHighlightPill();
+}
+
+function clearCategoryHighlight() {
+  if (!state.highlighted_bucket_id) return;
+  state.highlighted_bucket_id = null;
+  renderTranscriptBody();
+  renderCurrentBank();
+  updateHighlightPill();
+}
+
+function updateHighlightPill() {
+  const pill = document.getElementById('tp-highlight-pill');
+  const label = document.getElementById('tp-highlight-pill-label');
+  if (!pill || !label) return;
+  const bucketId = state.highlighted_bucket_id;
+  if (!bucketId) {
+    pill.classList.remove('active');
+    return;
+  }
+  const bucket = state.buckets.find(b => b.id === bucketId);
+  label.textContent = 'Highlighting: ' + (bucket ? bucket.name : bucketId);
+  pill.classList.add('active');
 }
 
 // ── Resize handle for transcript panel ──
@@ -656,8 +750,13 @@ function tSpan(sent, blockType, inc) {
   const isQa = blockType === 'qa';
   const status = getSentenceReviewStatus(sent.sid);
   const cls = status === 'selected' ? 's-incl' : status === 'candidate' ? 's-cand' : 's-excl';
+  // When a category is focused from the report preview, highlight every
+  // sentence whose current bucket matches — across all three statuses so
+  // the user sees the full footprint of the category (included/review/rejected).
+  const highlightCls = state.highlighted_bucket_id && bid === state.highlighted_bucket_id
+    ? ' tp-highlighted' : '';
   const scores64 = btoa(unescape(encodeURIComponent(JSON.stringify(sent.scores))));
-  return `<span class="s-tok ${cls}${isQa?' qa-sent':''}"
+  return `<span class="s-tok ${cls}${isQa?' qa-sent':''}${highlightCls}"
     data-sid="${sent.sid}" data-btype="${blockType}" data-primary="${bid}" data-scores="${scores64}"
     onclick="showSentencePopover(event,this)">${esc(sent.text)}</span>`;
 }
@@ -1156,9 +1255,9 @@ function getConfigChangeProposals(bankId) {
   }).proposals || [];
 }
 
-function renderConfigRowTable(row, title='Proposed row') {
+function renderConfigRowTable(row) {
   if (!row) return '';
-  return `<div class="cfg-review-note">${esc(title)}</div><table class="cfg-config-table">
+  return `<table class="cfg-config-table">
     <tr><th>transcript_sections</th><td>${esc(row.transcript_sections || '')}</td></tr>
     <tr><th>report_section</th><td>${esc(row.report_section || '')}</td></tr>
     <tr><th>category_name</th><td>${esc(row.category_name || '')}</td></tr>
@@ -1169,41 +1268,52 @@ function renderConfigRowTable(row, title='Proposed row') {
   </table>`;
 }
 
-function renderEvidence(items) {
-  if (!items || !items.length) return '';
-  return `<div class="cfg-review-evidence">${items.map(item =>
-    `<div class="cfg-review-evidence-item">
-      <strong>${esc(item.evidence_id || '')}</strong>
-      ${item.speaker ? ` · ${esc(item.speaker)}` : ''}
-      ${item.transcript_section ? ` · ${esc(item.transcript_section)}` : ''}
-      <div>${esc(item.quote || item)}</div>
-    </div>`).join('')}</div>`;
+// Copy a string to the clipboard. Uses the async Clipboard API when available
+// and falls back to a synthetic textarea for older browsers / local files.
+function copyToClipboard(text) {
+  if (navigator.clipboard && window.isSecureContext) {
+    return navigator.clipboard.writeText(text).catch(() => _copyViaTextarea(text));
+  }
+  return Promise.resolve(_copyViaTextarea(text));
+}
+function _copyViaTextarea(text) {
+  const ta = document.createElement('textarea');
+  ta.value = text; ta.style.position = 'fixed'; ta.style.left = '-9999px';
+  document.body.appendChild(ta); ta.focus(); ta.select();
+  try { document.execCommand('copy'); } catch (e) { /* ignore */ }
+  document.body.removeChild(ta);
 }
 
-function renderConfigReviewDetail(detailText, items, currentRow, proposedRow) {
-  return `<details class="cfg-review-detail">
-    <summary>Expand</summary>
-    <div class="cfg-review-detail-body">
-      ${detailText ? `<div class="cfg-review-note">${esc(detailText)}</div>` : ''}
-      ${renderEvidence(items || [])}
-      ${currentRow ? renderConfigRowTable(currentRow, 'Current row') : ''}
-      ${renderConfigRowTable(proposedRow, 'Proposed row')}
-    </div>
-  </details>`;
+function copyProposedDescription(proposalId, btn) {
+  const proposals = getConfigChangeProposals(state.current_bank);
+  const proposal = proposals.find(item => item.id === proposalId);
+  if (!proposal) return;
+  const desc = (proposal.proposed_row || {}).category_description || '';
+  copyToClipboard(desc).then(() => {
+    if (!btn) return;
+    const prev = btn.textContent;
+    btn.textContent = 'Copied';
+    btn.classList.add('btn-copied');
+    setTimeout(() => { btn.textContent = prev; btn.classList.remove('btn-copied'); }, 1200);
+  });
 }
 
-function adoptSuggestedBucket(proposalId) {
+// Enable an emerging-topic proposal: create the bucket at the end of its
+// report section, move every linked finding out of its current bucket into
+// the new one, and normalize each finding's status to `candidate` so the
+// user reviews them in their new home.
+function enableEmergingCategory(proposalId) {
   const proposals = getConfigChangeProposals(state.current_bank);
   const proposal = proposals.find(item => item.id === proposalId);
   if (!proposal || proposal.change_type !== 'new_category') return;
 
-  if (proposal.adopted_bucket_id && state.buckets.some(bucket => bucket.id === proposal.adopted_bucket_id)) {
+  // Idempotent: if we've already enabled this one, just re-render.
+  if (proposal.adopted_bucket_id && state.buckets.some(b => b.id === proposal.adopted_bucket_id)) {
     renderCurrentBank();
     return;
   }
 
   const bucket = createBucketFromRow(proposal.proposed_row || {}, {
-    generated_headline: proposal.suggested_subtitle || '',
     source: 'emerging',
   });
   proposal.adopted_bucket_id = bucket.id;
@@ -1212,7 +1322,10 @@ function adoptSuggestedBucket(proposalId) {
   if (!bs.sentence_user_primary) bs.sentence_user_primary = {};
   (proposal.linked_evidence_ids || []).forEach(evidenceId => {
     bs.sentence_user_primary[evidenceId] = bucket.id;
-    setSentenceReviewStatus(evidenceId, 'selected');
+    // Every linked finding lands in the review queue — promoted if it was
+    // rejected, demoted if it was selected. The user then re-confirms each
+    // one in the new category's card list.
+    setSentenceReviewStatus(evidenceId, 'candidate');
   });
 
   renderCurrentBank();
@@ -1220,84 +1333,98 @@ function adoptSuggestedBucket(proposalId) {
 
 function renderConfigReviewSection() {
   const proposals = getConfigChangeProposals(state.current_bank);
-  const existing = proposals.filter(item => item.change_type === 'update_existing');
+  const updates = proposals.filter(item => item.change_type === 'update_existing');
   const emerging = proposals.filter(item => item.change_type === 'new_category');
-  if (!existing.length && !emerging.length) return '';
+  if (!updates.length && !emerging.length) return '';
 
-  const existingHtml = existing.length ? `
+  const updatesHtml = updates.length ? `
     <div class="cfg-review-section">
-      <h3>Existing category updates</h3>
-      <table class="cfg-review-table">
-        <thead>
-          <tr>
-            <th>Category</th>
-            <th>Change summary</th>
-            <th>Details</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${existing.map(item => `
-            <tr>
-              <td>${esc(item.target_category_name || (item.current_row || {}).category_name || '')}</td>
-              <td>${esc(item.change_summary || '')}</td>
-              <td>${renderConfigReviewDetail('', item.supporting_quotes || [], item.current_row, item.proposed_row)}</td>
-            </tr>
-          `).join('')}
-        </tbody>
-      </table>
+      <h3>Category description updates</h3>
+      <p class="cfg-review-help">
+        Each proposal replaces the <code>category_description</code> on an existing row.
+        Review the reasoning, then copy the new description into the config sheet.
+      </p>
+      <div class="cfg-update-list">
+        ${updates.map(item => {
+          const proposed = item.proposed_row || {};
+          const current = item.current_row || {};
+          return `<div class="cfg-update-card">
+            <div class="cfg-update-head">
+              <div class="cfg-update-title">${esc(item.target_category_name || current.category_name || '')}</div>
+              <button class="btn btn-primary btn-sm cfg-copy-btn"
+                      onclick="copyProposedDescription('${item.id}', this)">
+                Copy new description
+              </button>
+            </div>
+            <div class="cfg-update-reason">${esc(item.change_summary || '')}</div>
+            <div class="cfg-update-diff">
+              <div class="cfg-update-col">
+                <div class="cfg-update-col-label">Current</div>
+                <div class="cfg-update-col-body">${esc(current.category_description || '')}</div>
+              </div>
+              <div class="cfg-update-col">
+                <div class="cfg-update-col-label">Proposed</div>
+                <div class="cfg-update-col-body cfg-update-col-body-new">${esc(proposed.category_description || '')}</div>
+              </div>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
     </div>
-  ` : '<div class="cfg-review-empty">No existing categories were flagged for updates.</div>';
+  ` : '';
 
-  const suggestionsHtml = emerging.length ? `
+  const emergingHtml = emerging.length ? `
     <div class="cfg-review-section">
-      <h3>Emerging topics and new classifications</h3>
-      <table class="cfg-review-table">
-        <thead>
-          <tr>
-            <th>Category</th>
-            <th>Change summary</th>
-            <th>Suggested subtitle</th>
-            <th>Action</th>
-            <th>Details</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${emerging.map(item => {
-            const adopted = item.adopted_bucket_id && state.buckets.some(bucket => bucket.id === item.adopted_bucket_id);
-            return `<tr>
-              <td>${esc(item.target_category_name || (item.proposed_row || {}).category_name || '')}</td>
-              <td>${esc(item.change_summary || '')}</td>
-              <td>${esc(item.suggested_subtitle || '—')}</td>
-              <td>
-                <button class="btn ${adopted ? 'btn-secondary' : 'btn-primary'} btn-sm"
-                        ${adopted ? 'disabled' : `onclick="adoptSuggestedBucket('${item.id}')"`}>
-                  ${adopted ? 'Adopted into editor' : 'Adopt with linked evidence'}
-                </button>
-              </td>
-              <td>${renderConfigReviewDetail('', item.supporting_quotes || [], item.current_row, item.proposed_row)}</td>
-            </tr>`;
-          }).join('')}
-        </tbody>
-      </table>
+      <h3>Emerging topics</h3>
+      <p class="cfg-review-help">
+        Brand-new categories worth tracking in future quarters. Enabling one creates a new
+        section at the end of its report section and moves every linked finding into it
+        (statuses normalize to review).
+      </p>
+      <div class="cfg-emerging-list">
+        ${emerging.map(item => {
+          const adopted = item.adopted_bucket_id && state.buckets.some(b => b.id === item.adopted_bucket_id);
+          const linkedCount = (item.linked_evidence_ids || []).length;
+          const proposed = item.proposed_row || {};
+          return `<div class="cfg-emerging-card">
+            <div class="cfg-emerging-head">
+              <div>
+                <div class="cfg-emerging-title">${esc(item.target_category_name || proposed.category_name || 'Emerging topic')}</div>
+                <div class="cfg-emerging-meta">${esc(proposed.report_section || 'Results Summary')} · ${esc(proposed.transcript_sections || 'ALL')} · ${linkedCount} finding${linkedCount === 1 ? '' : 's'} to reassign</div>
+              </div>
+              <label class="cfg-enable-toggle" title="${adopted ? 'Already enabled in this report' : 'Enable in this report'}">
+                <input type="checkbox" ${adopted ? 'checked disabled' : ''}
+                       onchange="enableEmergingCategory('${item.id}')">
+                <span>${adopted ? 'Enabled' : 'Enable'}</span>
+              </label>
+            </div>
+            <div class="cfg-emerging-reason">${esc(item.change_summary || '')}</div>
+            <details class="cfg-emerging-row">
+              <summary>Config row to add</summary>
+              ${renderConfigRowTable(proposed)}
+            </details>
+          </div>`;
+        }).join('')}
+      </div>
     </div>
-  ` : '<div class="cfg-review-empty">No emerging topics were suggested for this transcript.</div>';
+  ` : '';
 
   return `<details class="cfg-review-drawer">
     <summary>
       <div>
         <div class="cfg-review-title">Config Change Proposals</div>
         <div class="cfg-review-subtitle">
-          Structured config edits and emerging-topic proposals built from verbatim transcript evidence. This does not appear inside the report preview.
+          Description edits for existing rows and brand-new emerging topics, generated from the indexed findings. This drawer does not appear inside the exported report preview.
         </div>
       </div>
       <div class="cfg-review-pills">
-        <span class="cfg-review-pill">${existing.length} existing update${existing.length === 1 ? '' : 's'}</span>
+        <span class="cfg-review-pill">${updates.length} description update${updates.length === 1 ? '' : 's'}</span>
         <span class="cfg-review-pill">${emerging.length} emerging topic${emerging.length === 1 ? '' : 's'}</span>
       </div>
     </summary>
     <div class="cfg-review-body">
-      ${existingHtml}
-      ${suggestionsHtml}
+      ${updatesHtml}
+      ${emergingHtml}
     </div>
   </details>`;
 }
@@ -1313,28 +1440,29 @@ function renderEmergingTopicPanel() {
       <div>
         <div class="emg-review-title">Emerging Topics Review</div>
         <div class="emg-review-subtitle">
-          New themes detected outside the current taxonomy. Review them directly in the editor and adopt them into the draft with linked evidence.
+          New themes detected outside the current taxonomy. Enable a topic to create its section and reassign the linked findings into it.
         </div>
       </div>
       <div class="emg-review-pill">${proposals.length} topic${proposals.length === 1 ? '' : 's'}</div>
     </div>
     <div class="emg-review-grid">
       ${proposals.map(item => {
-        const adopted = item.adopted_bucket_id && state.buckets.some(bucket => bucket.id === item.adopted_bucket_id);
+        const adopted = item.adopted_bucket_id && state.buckets.some(b => b.id === item.adopted_bucket_id);
+        const linkedCount = (item.linked_evidence_ids || []).length;
+        const proposed = item.proposed_row || {};
         return `<div class="emg-review-card">
           <div class="emg-review-card-header">
             <div>
-              <div class="emg-review-card-title">${esc(item.target_category_name || (item.proposed_row || {}).category_name || 'Emerging topic')}</div>
-              ${item.suggested_subtitle ? `<div class="emg-review-card-subtitle">${esc(item.suggested_subtitle)}</div>` : ''}
+              <div class="emg-review-card-title">${esc(item.target_category_name || proposed.category_name || 'Emerging topic')}</div>
+              <div class="emg-review-card-subtitle">${esc(proposed.report_section || 'Results Summary')} · ${linkedCount} finding${linkedCount === 1 ? '' : 's'} to reassign</div>
             </div>
-            <button class="btn ${adopted ? 'btn-secondary' : 'btn-primary'} btn-sm"
-                    ${adopted ? 'disabled' : `onclick="adoptSuggestedBucket('${item.id}')"`}>
-              ${adopted ? 'Adopted' : 'Adopt with linked evidence'}
-            </button>
+            <label class="cfg-enable-toggle" title="${adopted ? 'Already enabled in this report' : 'Enable in this report'}">
+              <input type="checkbox" ${adopted ? 'checked disabled' : ''}
+                     onchange="enableEmergingCategory('${item.id}')">
+              <span>${adopted ? 'Enabled' : 'Enable'}</span>
+            </label>
           </div>
           <div class="emg-review-card-summary">${esc(item.change_summary || '')}</div>
-          ${renderEvidence((item.supporting_quotes || []).slice(0, 3))}
-          ${renderConfigReviewDetail('', item.supporting_quotes || [], item.current_row, item.proposed_row)}
         </div>`;
       }).join('')}
     </div>
@@ -1392,6 +1520,7 @@ function renderReportSections() {
       // header reads like "Capital Markets: <subtitle>". The source badge and
       // meta-row were removed — the generated subtitle already conveys "this
       // bucket has real content" and the provenance is not shown to users.
+      const isHighlighted = state.highlighted_bucket_id === bucket.id;
       html += `
 <div class="bkt-section" id="bs_${bucket.id}">
   <div class="bkt-header" onclick="toggleBucket('${bucket.id}')">
@@ -1403,6 +1532,9 @@ function renderReportSections() {
              onkeydown="if(event.key==='Enter')this.blur()">
       ${bucket.generated_headline ? `<span class="bkt-headline">${esc(bucket.generated_headline)}</span>` : ''}
     </div>
+    <button class="bkt-focus ${isHighlighted ? 'active' : ''}"
+            onclick="event.stopPropagation();toggleCategoryHighlight('${bucket.id}')"
+            title="Highlight this category's findings in the transcript">&#9906;</button>
     <span class="bkt-count" id="bkc_${bucket.id}">${quotes.length}</span>
     <span class="bkt-chevron open" id="bkv_${bucket.id}">&#9662;</span>
   </div>
