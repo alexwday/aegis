@@ -362,16 +362,12 @@ body{
   background:var(--ink);
   border-bottom:1px solid var(--ink-2);
   padding:11px 22px;
-  display:flex;align-items:center;justify-content:space-between;
+  display:flex;align-items:center;justify-content:flex-end;
   position:relative;
 }
-.report-meta-title{
-  font-family:var(--font-serif);
-  font-size:14px;font-weight:600;
-  color:var(--text-on-ink);
-  letter-spacing:.01em;
-}
 .report-actions{display:flex;gap:6px;align-items:center}
+.hdr-menu-caret{margin-left:6px;width:10px;height:10px;display:inline-block;vertical-align:middle;opacity:.85}
+.hdr-menu-caret path{stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
 .report-actions .btn{
   color:var(--text-on-ink);
   border-color:rgba(251,248,239,.18);
@@ -441,22 +437,7 @@ body{
 .modal-body{flex:1;overflow-y:auto;padding:20px 22px;background:var(--paper-2)}
 .modal-empty{font-size:12.5px;color:var(--text-3);font-style:italic;text-align:center;padding:24px}
 
-/* Emerging topics toolbar (banner strip above the report body) */
-#emerging-toolbar{
-  flex-shrink:0;
-  background:var(--surface-1);
-  border-bottom:1px solid var(--rule);
-}
-#emerging-toolbar:empty{display:none}
-#emerging-toolbar .emg-bar{
-  margin:0;
-  border:none;
-  border-radius:0;
-  background:transparent;
-  padding:10px 28px 11px;
-}
-
-/* Emerging topics toggle bar */
+/* Emerging topics toggle bar (used in the proposal modal) */
 .emg-bar{
   background:var(--surface-1);
   border:1px solid var(--rule-2);
@@ -902,6 +883,44 @@ body{
 .atr-item:hover{background:var(--surface-1)}
 .atr-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
 
+/* Header dropdown menu (Settings / Save) */
+.hdr-menu{
+  position:fixed;background:var(--paper-2);
+  border:1px solid var(--rule);
+  border-radius:var(--r-md);
+  box-shadow:var(--shadow-lg);
+  z-index:9999;padding:6px;min-width:200px;
+  color:var(--ink);
+}
+.hdr-menu-item{
+  padding:9px 14px;cursor:pointer;font-size:12.5px;
+  display:flex;align-items:center;gap:10px;
+  border-radius:var(--r-sm);transition:background .1s;
+  color:var(--ink);
+}
+.hdr-menu-item:hover{background:var(--surface-1)}
+.hdr-menu-toggle{
+  display:flex;align-items:center;justify-content:space-between;gap:16px;
+  padding:9px 14px;font-size:12.5px;font-weight:500;color:var(--ink);
+  cursor:pointer;user-select:none;
+  border-radius:var(--r-sm);transition:background .1s;
+}
+.hdr-menu-toggle:hover{background:var(--surface-1)}
+.hdr-menu-toggle input{
+  appearance:none;-webkit-appearance:none;
+  width:30px;height:16px;background:var(--rule);
+  border-radius:9px;position:relative;cursor:pointer;
+  transition:background .15s;flex-shrink:0;margin:0;
+}
+.hdr-menu-toggle input::after{
+  content:"";position:absolute;top:1px;left:1px;
+  width:14px;height:14px;background:#fff;
+  border-radius:50%;transition:transform .15s;
+  box-shadow:0 1px 2px rgba(0,0,0,.2);
+}
+.hdr-menu-toggle input:checked{background:var(--positive)}
+.hdr-menu-toggle input:checked::after{transform:translateX(14px)}
+
 .empty-bucket{padding:24px 16px;text-align:center;color:var(--text-3);font-size:12.5px;font-style:italic}
 .in-report-tag{font-size:11px;color:var(--positive);font-weight:600}
 .t-block-actions{margin-top:10px;display:flex;gap:8px;align-items:center}
@@ -918,7 +937,6 @@ body{
   #transcript-wrap{display:none!important}
   #tp-resize{display:none!important}
   #report-header{display:none!important}
-  #emerging-toolbar{display:none!important}
   #s-popover{display:none!important}
   .modal-overlay{display:none!important}
   .emg-bar{display:none!important}
@@ -1031,11 +1049,7 @@ body{
     <div id="tp-resize" class="tp-hidden"></div>
     <div id="report-panel">
       <div id="report-header">
-        <div class="report-meta">
-          <div class="report-meta-title">Report Draft</div>
-        </div>
         <div class="report-actions">
-          <button class="btn btn-secondary" id="attrib-toggle-btn" onclick="toggleAttrib()">Names: Off</button>
           <button class="btn btn-secondary btn-badge btn-disabled" id="config-changes-btn"
                   onclick="openConfigChangesModal()" title="Category description updates">
             Config Change Proposals
@@ -1046,13 +1060,12 @@ body{
             Emerging Topics
             <span class="badge-count hidden" id="emerging-topics-badge">0</span>
           </button>
-          <button class="btn btn-secondary" id="banner-toggle-btn" onclick="toggleBanner()">Banner: On</button>
-          <button class="btn btn-secondary" onclick="saveReport()">&#128190; Save</button>
-          <button class="btn btn-secondary" onclick="window.print()">&#128196; PDF</button>
-          <button class="btn btn-secondary" id="docx-btn" onclick="saveDocx()">&#128221; DOCX</button>
+          <button class="btn btn-secondary hdr-menu-trigger"
+                  onclick="toggleHeaderMenu('settings', this)">Settings<svg class="hdr-menu-caret" viewBox="0 0 10 10"><path d="M2 4l3 3 3-3"/></svg></button>
+          <button class="btn btn-secondary hdr-menu-trigger"
+                  onclick="toggleHeaderMenu('save', this)">Save<svg class="hdr-menu-caret" viewBox="0 0 10 10"><path d="M2 4l3 3 3-3"/></svg></button>
         </div>
       </div>
-      <div id="emerging-toolbar"></div>
       <div id="report-body"><div id="report-page" class="attrib-off"></div></div>
     </div>
     <!-- Shared modal overlay. Both header buttons populate the same element
@@ -1151,15 +1164,8 @@ function renderApp() {
 function renderBanner() {
   const wrap = document.getElementById('banner-wrap');
   const img = document.getElementById('banner-img');
-  const btn = document.getElementById('banner-toggle-btn');
   if (state.banner_src) { img.src = state.banner_src; }
-  if (state.banner_visible) {
-    wrap.classList.remove('banner-off');
-    if (btn) btn.textContent = 'Banner: On';
-  } else {
-    wrap.classList.add('banner-off');
-    if (btn) btn.textContent = 'Banner: Off';
-  }
+  wrap.classList.toggle('banner-off', !state.banner_visible);
 }
 function toggleBanner() { state.banner_visible = !state.banner_visible; renderBanner(); renderReportSections(); }
 
@@ -1167,7 +1173,61 @@ let _attribVisible = false;
 function toggleAttrib() {
   _attribVisible = !_attribVisible;
   document.getElementById('report-page').classList.toggle('attrib-off', !_attribVisible);
-  document.getElementById('attrib-toggle-btn').textContent = _attribVisible ? 'Names: On' : 'Names: Off';
+}
+
+// ============================================================
+// HEADER DROPDOWN MENUS (Settings + Save)
+// ============================================================
+// One menu at a time. Clicking the same trigger twice closes it; clicking
+// a different trigger swaps contents. Outside clicks dismiss.
+function toggleHeaderMenu(type, btnEl) {
+  const existing = document.querySelector('.hdr-menu');
+  const existingType = existing ? existing.dataset.type : null;
+  closeHeaderMenus();
+  if (existingType === type) return;
+
+  const menu = document.createElement('div');
+  menu.className = 'hdr-menu';
+  menu.dataset.type = type;
+
+  if (type === 'settings') {
+    menu.innerHTML = `
+      <label class="hdr-menu-toggle">
+        <span>Show names</span>
+        <input type="checkbox" ${_attribVisible ? 'checked' : ''} onchange="toggleAttrib()">
+      </label>
+      <label class="hdr-menu-toggle">
+        <span>Show banner</span>
+        <input type="checkbox" ${state.banner_visible ? 'checked' : ''} onchange="toggleBanner()">
+      </label>
+    `;
+  } else if (type === 'save') {
+    menu.innerHTML = `
+      <div class="hdr-menu-item" onclick="closeHeaderMenus();saveReport()">&#128190; Save</div>
+      <div class="hdr-menu-item" onclick="closeHeaderMenus();window.print()">&#128196; PDF</div>
+      <div class="hdr-menu-item" onclick="closeHeaderMenus();saveDocx()">&#128221; DOCX</div>
+    `;
+  } else {
+    return;
+  }
+
+  document.body.appendChild(menu);
+  const rect = btnEl.getBoundingClientRect();
+  menu.style.top = (rect.bottom + 4) + 'px';
+  menu.style.right = Math.max(8, window.innerWidth - rect.right) + 'px';
+
+  // Defer so the current click doesn't immediately trip the outside-click handler.
+  setTimeout(() => document.addEventListener('click', closeHeaderMenusOnOutsideClick), 0);
+}
+
+function closeHeaderMenus() {
+  document.querySelectorAll('.hdr-menu').forEach(m => m.remove());
+  document.removeEventListener('click', closeHeaderMenusOnOutsideClick);
+}
+
+function closeHeaderMenusOnOutsideClick(e) {
+  if (e.target.closest('.hdr-menu') || e.target.closest('.hdr-menu-trigger')) return;
+  closeHeaderMenus();
 }
 
 // ============================================================
@@ -2296,41 +2356,6 @@ document.addEventListener('keydown', evt => {
   if (evt.key === 'Escape') closeProposalModal();
 });
 
-// Small strip at the top of the report draft: one row per emerging topic with
-// an on/off toggle. Mirrors the modal's Enable checkboxes, so changes here
-// flow through the same enable/disable plumbing.
-function renderEmergingTopicsBar() {
-  const proposals = getConfigChangeProposals(state.current_bank).filter(
-    item => item.change_type === 'new_category'
-  );
-  if (!proposals.length) return '';
-  const rows = proposals.map(item => {
-    const adopted = isEmergingAdopted(item);
-    const linkedCount = (item.linked_evidence_ids || []).length;
-    const proposed = item.proposed_row || {};
-    const label = item.target_category_name || proposed.category_name || 'Emerging topic';
-    const section = proposed.report_section || 'Results Summary';
-    return `<div class="emg-bar-row">
-      <div class="emg-bar-main">
-        <span class="emg-bar-label">${esc(label)}</span>
-        <span class="emg-bar-meta">${esc(section)} · ${linkedCount} finding${linkedCount === 1 ? '' : 's'}</span>
-      </div>
-      <label class="cfg-enable-toggle" title="${adopted ? 'Showing in the draft' : 'Hidden from the draft'}">
-        <input type="checkbox" ${adopted ? 'checked' : ''}
-               onchange="toggleEmergingCategory('${item.id}', this.checked)">
-        <span>${adopted ? 'On' : 'Off'}</span>
-      </label>
-    </div>`;
-  }).join('');
-  return `<div class="emg-bar">
-    <div class="emg-bar-title">
-      <span>Emerging Topics</span>
-      <span class="emg-bar-title-count">${proposals.length} proposed</span>
-    </div>
-    ${rows}
-  </div>`;
-}
-
 // ============================================================
 // REPORT PANEL
 // ============================================================
@@ -2398,12 +2423,6 @@ function renderTableOfContents(orderedSections) {
 
 function renderReportSections() {
   destroySortables();
-  // Emerging topics now live in the #emerging-toolbar strip above the report
-  // paper — keeping them out of the printable body avoids the banner showing
-  // up in PDFs / DOCX. The toolbar self-hides via :empty when there's nothing.
-  const toolbar = document.getElementById('emerging-toolbar');
-  if (toolbar) toolbar.innerHTML = renderEmergingTopicsBar();
-
   const sectionRank = {'Results Summary': 0, 'Earnings Call Q&A': 1, 'Other': 2};
   const sectionOrder = [...new Set(
     state.buckets
