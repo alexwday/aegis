@@ -5,382 +5,947 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Call Summary — __PERIOD__</title>
 <style>
+@import url('https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=Inter:wght@400;500;600;700;800&display=swap');
+
+/* ════════════════════════════════════════════════════════════════
+   TOKENS — Editorial Financial theme
+   ════════════════════════════════════════════════════════════════ */
+:root{
+  /* Ink & paper */
+  --ink:#0F1B2D;
+  --ink-2:#213149;
+  --ink-3:#3A4A66;
+  --paper:#FAF7F0;
+  --paper-2:#FFFFFF;
+  --surface-1:#F5F1E6;
+  --surface-2:#EFEADC;
+  --surface-3:#FBF8EF;
+
+  /* Rules / borders */
+  --rule:#D9D0BC;
+  --rule-2:#E7DFCC;
+  --rule-3:#F1EBD9;
+
+  /* Text */
+  --text-1:#14213A;
+  --text-2:#4A5268;
+  --text-3:#7A7364;
+  --text-on-ink:#FBF8EF;
+  --text-on-ink-2:rgba(251,248,239,.72);
+
+  /* Semantic */
+  --accent:#B25A1E;
+  --accent-hover:#8F4516;
+  --accent-soft:#F2DDC3;
+  --accent-line:#D49764;
+  --positive:#1F6F3F;
+  --positive-soft:#DCECE1;
+  --candidate:#B17015;
+  --candidate-soft:#F6E4C7;
+  --danger:#B0321A;
+
+  /* Shadows */
+  --shadow-sm:0 1px 2px rgba(15,27,45,.06);
+  --shadow-md:0 4px 14px rgba(15,27,45,.08);
+  --shadow-lg:0 18px 48px rgba(15,27,45,.22);
+
+  /* Fonts */
+  --font-sans:'Inter',-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  --font-serif:'Source Serif 4',Georgia,'Times New Roman',serif;
+
+  /* Radii */
+  --r-sm:4px;
+  --r-md:8px;
+  --r-lg:12px;
+}
+
+/* ════════════════════════════════════════════════════════════════
+   RESET & BASE
+   ════════════════════════════════════════════════════════════════ */
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#F0F2F5;color:#1C1E21;font-size:14px;line-height:1.5;height:100vh;overflow:hidden}
-#app{display:flex;flex-direction:column;height:100vh;overflow:hidden}
+body{
+  font-family:var(--font-sans);
+  background:var(--paper);
+  color:var(--text-1);
+  font-size:13.5px;
+  line-height:1.55;
+  height:100vh;
+  overflow:hidden;
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+  font-feature-settings:"ss01","cv11","kern";
+}
+#app{display:flex;flex-direction:column;height:100vh;overflow:hidden;background:var(--paper)}
 
-/* App banner */
-#app-banner{flex-shrink:0;background:#1A2332;color:#fff;font-size:14px;font-weight:700;letter-spacing:.03em;padding:10px 20px;text-transform:uppercase}
+/* ════════════════════════════════════════════════════════════════
+   CHROME — banner + tab bar
+   ════════════════════════════════════════════════════════════════ */
+#app-banner{
+  flex-shrink:0;
+  background:var(--ink);
+  color:var(--text-on-ink);
+  font-family:var(--font-serif);
+  font-size:15px;
+  font-weight:600;
+  letter-spacing:.005em;
+  padding:13px 28px;
+  text-transform:none;
+  position:relative;
+}
+#app-banner::after{
+  content:"";
+  position:absolute;left:28px;right:28px;bottom:0;height:1px;
+  background:linear-gradient(90deg,transparent,var(--accent-line) 15%,var(--accent-line) 85%,transparent);
+  opacity:.35;
+}
 
-/* PDF banner — only shown in print/PDF */
+/* PDF banner (print only) */
 #banner-wrap{display:none}
 #banner-wrap img{max-height:56px;max-width:400px;object-fit:contain}
 
 /* Tab bar */
-#tab-bar{flex-shrink:0;background:#fff;border-bottom:2px solid #E4E6EA;display:flex;align-items:stretch;padding:0 16px;gap:2px;overflow-x:auto;scrollbar-width:none}
+#tab-bar{
+  flex-shrink:0;
+  background:var(--paper);
+  border-bottom:1px solid var(--rule);
+  display:flex;align-items:stretch;
+  padding:0 24px;gap:2px;
+  overflow-x:auto;scrollbar-width:none;
+}
 #tab-bar::-webkit-scrollbar{display:none}
-.tab-btn{padding:10px 18px;font-size:13px;font-weight:500;border:none;background:none;cursor:pointer;color:#65676B;border-bottom:3px solid transparent;white-space:nowrap}
-.tab-btn.active{color:#1A2332;border-bottom-color:#1A2332;font-weight:600}
-.tab-btn:hover:not(.active){color:#1A2332}
+.tab-btn{
+  padding:11px 18px 10px;
+  font-size:12.5px;
+  font-weight:500;
+  letter-spacing:.005em;
+  border:none;background:none;cursor:pointer;
+  color:var(--text-2);
+  border-bottom:2px solid transparent;
+  white-space:nowrap;
+  transition:color .15s,border-color .15s;
+}
+.tab-btn.active{color:var(--ink);border-bottom-color:var(--accent);font-weight:600}
+.tab-btn:hover:not(.active){color:var(--ink)}
 
 /* Content area */
-#content-area{flex:1;display:flex;overflow:hidden;position:relative}
+#content-area{flex:1;display:flex;overflow:hidden;position:relative;background:var(--paper)}
 
-/* Transcript wrapper: rail + panel side by side */
-#transcript-wrap{display:flex;flex-shrink:0;overflow:hidden;transition:width .2s ease}
-#transcript-wrap.tp-collapsed{width:32px!important}
+/* ════════════════════════════════════════════════════════════════
+   TRANSCRIPT PANEL — wrap + rail + resize
+   ════════════════════════════════════════════════════════════════ */
+#transcript-wrap{display:flex;flex-shrink:0;overflow:hidden;transition:width .2s ease;border-right:1px solid var(--rule)}
+#transcript-wrap.tp-collapsed{width:34px!important;border-right:none}
 
-/* Transcript panel — flex row: content + rail */
-#transcript-panel{flex:1;display:flex;flex-direction:row;background:#fff;overflow:hidden;min-width:0}
+#transcript-panel{flex:1;display:flex;flex-direction:row;background:var(--surface-3);overflow:hidden;min-width:0}
 
-/* Transcript content column */
 #tp-content{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0;transition:opacity .15s,flex .2s}
 .tp-collapsed #tp-content{opacity:0;pointer-events:none;overflow:hidden;flex:0}
 
-/* Vertical rail — always visible, on the inside (right edge of transcript) */
-#tp-rail{width:32px;flex-shrink:0;background:#2C3E50;cursor:pointer;display:flex;align-items:center;justify-content:center;user-select:none;z-index:2}
-#tp-rail:hover{background:#34495E}
-#tp-rail-label{writing-mode:vertical-lr;font-size:10px;font-weight:600;color:rgba(255,255,255,.8);letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
+#tp-rail{
+  width:34px;flex-shrink:0;
+  background:var(--ink);
+  cursor:pointer;display:flex;align-items:center;justify-content:center;
+  user-select:none;z-index:2;
+  transition:background .15s;
+  border-left:1px solid var(--ink-2);
+}
+#tp-rail:hover{background:var(--ink-2)}
+#tp-rail-label{
+  writing-mode:vertical-lr;
+  font-family:var(--font-serif);
+  font-size:11px;font-weight:600;
+  color:var(--text-on-ink-2);
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  white-space:nowrap;
+}
 
-/* Resize handle — hidden when collapsed */
-#tp-resize{width:5px;flex-shrink:0;cursor:col-resize;background:#E4E6EA;transition:background .15s}
-#tp-resize:hover,#tp-resize.active{background:#0A66C2}
+#tp-resize{width:4px;flex-shrink:0;cursor:col-resize;background:transparent;transition:background .15s}
+#tp-resize:hover,#tp-resize.active{background:var(--accent-line)}
 #tp-resize.tp-hidden{display:none}
 
-#transcript-body{flex:1;overflow-y:auto;padding:4px 0}
+#transcript-body{flex:1;overflow-y:auto;padding:0 0 16px}
 
-/* Transcript section header */
-.t-section-header{padding:8px 12px;background:linear-gradient(135deg,#1A2332 0%,#2C3E50 100%);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#fff;border-top:none;border-bottom:2px solid #E4E6EA;margin-bottom:4px}
+/* Section header (MANAGEMENT DISCUSSION / Q&A) */
+.t-section-header{
+  padding:14px 18px 12px;
+  background:var(--ink);
+  color:var(--text-on-ink);
+  font-family:var(--font-serif);
+  font-size:12px;font-weight:600;
+  text-transform:uppercase;letter-spacing:.14em;
+  border-bottom:1px solid var(--ink-2);
+  margin-bottom:10px;
+  position:sticky;top:0;z-index:1;
+}
 
-/* MD speaker block — condensed */
-.t-block{margin:4px 6px;padding:6px 8px;border-left:3px solid #D0D4DA;border-radius:0 4px 4px 0;background:#FAFBFC}
-.t-block-header{display:flex;flex-wrap:wrap;align-items:center;gap:4px;margin-bottom:4px}
-.t-speaker-name{font-weight:600;font-size:10px;color:#1A2332}
-.t-speaker-title{font-size:9px;color:#65676B}
-.t-block-text{font-size:10.5px;line-height:1.45;color:#444}
-.t-para-break{display:block;height:6px}
+/* MD speaker block */
+.t-block{
+  margin:6px 14px;padding:10px 12px 10px 14px;
+  border-left:2px solid var(--rule);
+  border-radius:0 var(--r-sm) var(--r-sm) 0;
+  background:var(--paper-2);
+  box-shadow:var(--shadow-sm);
+}
+.t-block-header{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px;margin-bottom:6px}
+.t-speaker-name{font-weight:700;font-size:11.5px;color:var(--ink);letter-spacing:.005em}
+.t-speaker-title{font-size:10.5px;color:var(--text-3);font-style:italic}
+.t-block-text{font-size:12px;line-height:1.6;color:var(--text-1)}
+.t-para-break{display:block;height:8px}
 
-/* QA group — condensed */
-.t-qa-group{margin:4px 6px;border-left:3px solid #B8CCE4;border-radius:0 4px 4px 0;overflow:hidden;background:#F0F5FA}
-.t-qa-q{padding:5px 8px;background:#E8F0F8}
-.t-qa-a{padding:5px 8px;border-top:1px solid #D0DCE8}
-.qa-lbl{display:inline-block;font-size:8px;font-weight:800;padding:1px 4px;border-radius:2px;margin-right:4px;vertical-align:middle}
-.qa-lbl.q{background:#0A66C2;color:#fff}
-.qa-lbl.a{background:#0F7B4E;color:#fff}
-.qa-person{font-weight:600;font-size:10px;color:#1A2332}
-.qa-affil{font-size:9px;color:#65676B}
-.t-qa-text{font-size:10.5px;line-height:1.45;color:#444;margin-top:2px}
-.t-qa-footer{padding:3px 7px;background:#fff;border-top:1px solid #E4E6EA;display:flex;align-items:center;gap:6px}
-.bucket-pill{font-size:9px;padding:1px 6px;border-radius:8px;color:#fff;font-weight:600;white-space:nowrap}
-.importance-chip{font-size:9px;color:#8A8D91;background:#F0F2F5;padding:1px 5px;border-radius:8px}
+/* QA group */
+.t-qa-group{
+  margin:8px 14px;
+  border:1px solid var(--rule-2);
+  border-left:2px solid var(--accent-line);
+  border-radius:0 var(--r-md) var(--r-md) 0;
+  overflow:hidden;
+  background:var(--paper-2);
+  box-shadow:var(--shadow-sm);
+}
+.t-qa-q{padding:9px 12px 8px;background:var(--surface-1)}
+.t-qa-a{padding:9px 12px 8px;border-top:1px solid var(--rule-3)}
+.qa-lbl{
+  display:inline-block;
+  font-size:9px;font-weight:700;
+  padding:2px 5px;border-radius:3px;
+  margin-right:5px;vertical-align:middle;
+  letter-spacing:.08em;
+}
+.qa-lbl.q{background:var(--ink);color:var(--text-on-ink)}
+.qa-lbl.a{background:var(--positive);color:#fff}
+.qa-person{font-weight:700;font-size:11px;color:var(--ink)}
+.qa-affil{font-size:10.5px;color:var(--text-3);font-style:italic}
+.t-qa-text{font-size:12px;line-height:1.6;color:var(--text-1);margin-top:3px}
+.t-qa-footer{padding:5px 10px;background:var(--surface-3);border-top:1px solid var(--rule-3);display:flex;align-items:center;gap:6px}
+.bucket-pill{
+  font-size:9.5px;padding:2px 7px;border-radius:999px;
+  color:#fff;font-weight:600;white-space:nowrap;
+  letter-spacing:.01em;
+}
+.importance-chip{
+  font-size:9.5px;color:var(--text-3);
+  background:var(--surface-1);
+  padding:2px 7px;border-radius:999px;
+  border:1px solid var(--rule-2);
+}
 
 /* Sentence tokens */
-.s-tok{border-radius:2px;padding:0px 1px;cursor:pointer;border-bottom:1.5px solid transparent;transition:opacity .1s;font-size:inherit;line-height:inherit}
-.s-tok:hover{opacity:.75}
+.s-tok{
+  border-radius:2px;padding:0 1px;
+  cursor:pointer;
+  border-bottom:1.5px solid transparent;
+  transition:opacity .1s,background .1s;
+  font-size:inherit;line-height:inherit;
+}
+.s-tok:hover{opacity:.8}
 .s-tok.qa-sent{cursor:default}
 
-/* Transcript: included vs excluded sentence styling */
-.s-tok.s-incl{background:rgba(46,125,50,.08);border-bottom-color:rgba(46,125,50,.35);color:#1C1E21}
-.s-tok.s-cand{background:rgba(245,127,23,.10);border-bottom-color:rgba(245,127,23,.45);color:#1C1E21}
-.s-tok.s-excl{background:transparent;border-bottom-color:transparent;color:#B0B3B8}
-.s-tok.s-excl:hover{opacity:.55}
+/* Included / candidate / excluded */
+.s-tok.s-incl{
+  background:var(--positive-soft);
+  border-bottom-color:rgba(31,111,63,.55);
+  color:var(--text-1);
+}
+.s-tok.s-cand{
+  background:var(--candidate-soft);
+  border-bottom-color:rgba(177,112,21,.5);
+  color:var(--text-1);
+}
+.s-tok.s-excl{background:transparent;border-bottom-color:transparent;color:var(--text-3)}
+.s-tok.s-excl:hover{opacity:.65}
 
 /* Group bullet separator */
-.t-gbullet{display:inline;color:#A0A4A8;font-size:11px;margin:0 1px;user-select:none;vertical-align:middle}
+.t-gbullet{display:inline;color:var(--text-3);font-size:11px;margin:0 2px;user-select:none;vertical-align:middle;opacity:.6}
 
 /* QA numbered container */
-.t-qa-num-label{font-size:9px;font-weight:700;color:#65676B;padding:5px 7px 2px;text-transform:uppercase;letter-spacing:.03em}
+.t-qa-num-label{
+  font-size:9.5px;font-weight:700;color:var(--text-3);
+  padding:8px 14px 3px;
+  text-transform:uppercase;letter-spacing:.12em;
+}
 
 /* Cross-highlight: flash sentence in report panel */
-.s-tok.s-highlight{outline:2px solid #FF9800;outline-offset:1px;background:rgba(255,152,0,.15)!important;border-radius:3px;animation:s-flash .6s ease-out}
-@keyframes s-flash{0%{outline-color:#FF9800;background:rgba(255,152,0,.25)}100%{outline-color:#FF9800;background:rgba(255,152,0,.15)}}
-.q-card.q-card-highlight{box-shadow:0 0 0 2px #FF9800;transition:box-shadow .3s}
+.s-tok.s-highlight{
+  outline:2px solid var(--accent);outline-offset:1px;
+  background:var(--accent-soft)!important;border-radius:3px;
+  animation:s-flash .6s ease-out;
+}
+@keyframes s-flash{
+  0%{outline-color:var(--accent);background:var(--accent-soft)}
+  100%{outline-color:var(--accent);background:var(--accent-soft)}
+}
+.q-card.q-card-highlight{box-shadow:0 0 0 2px var(--accent);transition:box-shadow .3s}
 
-/* Sentence popover */
-#s-popover{position:fixed;z-index:9999;background:#fff;border:1px solid #E4E6EA;border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.14);width:420px;max-width:min(420px,calc(100vw - 16px));display:none;overflow:hidden}
-#s-pop-text{padding:12px 14px;font-size:12px;color:#3C3F44;border-bottom:1px solid #F0F2F5;line-height:1.6;font-style:italic;max-height:180px;overflow:auto}
-#s-pop-title{padding:6px 14px 4px;font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:#8A8D91;background:#F8F9FB;border-bottom:1px solid #F0F2F5}
+/* ════════════════════════════════════════════════════════════════
+   SENTENCE POPOVER
+   ════════════════════════════════════════════════════════════════ */
+#s-popover{
+  position:fixed;z-index:9999;
+  background:var(--paper-2);
+  border:1px solid var(--rule);
+  border-radius:var(--r-md);
+  box-shadow:var(--shadow-lg);
+  width:440px;max-width:min(440px,calc(100vw - 16px));
+  display:none;overflow:hidden;
+}
+#s-pop-text{
+  padding:14px 16px;
+  font-family:var(--font-serif);
+  font-size:13px;color:var(--text-1);
+  border-bottom:1px solid var(--rule-3);
+  line-height:1.65;font-style:italic;
+  max-height:180px;overflow:auto;
+}
+#s-pop-title{
+  padding:8px 16px 6px;
+  font-size:10px;text-transform:uppercase;letter-spacing:.12em;
+  color:var(--text-3);
+  background:var(--surface-3);
+  border-bottom:1px solid var(--rule-3);
+  font-weight:600;
+}
 #s-pop-scores{max-height:420px;overflow-y:auto}
-.s-score-section{padding:10px 0;border-bottom:1px solid #F0F2F5}
+.s-score-section{padding:10px 0;border-bottom:1px solid var(--rule-3)}
 .s-score-section:last-child{border-bottom:none}
-.s-score-section-title{padding:0 14px 8px;font-size:10px;font-weight:700;color:#65676B;text-transform:uppercase;letter-spacing:.04em}
-.s-score-row{display:flex;align-items:flex-start;gap:8px;padding:8px 14px;cursor:pointer;transition:background .1s}
-.s-score-row:hover{background:#F0F2F5}
-.s-score-row.current{background:#EEF3FA}
+.s-score-section-title{padding:0 16px 8px;font-size:10px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.1em}
+.s-score-row{display:flex;align-items:flex-start;gap:10px;padding:8px 16px;cursor:pointer;transition:background .1s}
+.s-score-row:hover{background:var(--surface-1)}
+.s-score-row.current{background:var(--accent-soft)}
 .s-score-row.readonly{cursor:default}
 .s-score-row.readonly:hover{background:transparent}
-.s-score-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.s-score-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:5px}
 .s-score-main{flex:1;min-width:0}
-.s-score-name{font-size:12px;color:#1A2332;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.s-score-val{font-size:11px;font-weight:700;color:#65676B;min-width:28px;text-align:right;padding-top:1px}
-.s-score-check{font-size:12px;color:#1565C0;margin-left:2px;min-width:12px}
-.s-expand-btn{margin:0 14px;padding:7px 10px;border:1px solid #D7DBE0;border-radius:6px;background:#fff;color:#1A2332;font-size:11px;font-weight:600;cursor:pointer;width:calc(100% - 28px);text-align:left}
-.s-expand-btn:hover{background:#F8F9FB}
+.s-score-name{font-size:12.5px;color:var(--ink);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.s-score-val{font-size:11px;font-weight:700;color:var(--text-3);min-width:28px;text-align:right;padding-top:3px;font-variant-numeric:tabular-nums}
+.s-score-check{font-size:13px;color:var(--accent);margin-left:2px;min-width:12px}
+.s-expand-btn{
+  margin:8px 16px;padding:8px 12px;
+  border:1px solid var(--rule);border-radius:var(--r-sm);
+  background:var(--paper-2);color:var(--ink);
+  font-size:11.5px;font-weight:600;
+  cursor:pointer;width:calc(100% - 32px);text-align:left;
+  transition:background .15s;
+}
+.s-expand-btn:hover{background:var(--surface-1)}
 #s-pop-all{display:none;padding-top:8px}
-.s-pop-form{padding:8px 14px 2px;display:grid;gap:8px}
-.s-pop-form input,.s-pop-form textarea,.s-pop-form select{width:100%;border:1px solid #CDD0D5;border-radius:6px;padding:7px 9px;font-size:12px;font-family:inherit;background:#fff;color:#1A2332}
-.s-pop-form textarea{min-height:64px;resize:vertical}
+.s-pop-form{padding:10px 16px 4px;display:grid;gap:8px}
+.s-pop-form input,.s-pop-form textarea,.s-pop-form select{
+  width:100%;
+  border:1px solid var(--rule);
+  border-radius:var(--r-sm);
+  padding:8px 10px;
+  font-size:12px;
+  font-family:inherit;
+  background:var(--paper-2);color:var(--text-1);
+  transition:border-color .15s,box-shadow .15s;
+}
+.s-pop-form input:focus,.s-pop-form textarea:focus,.s-pop-form select:focus{
+  outline:none;
+  border-color:var(--accent);
+  box-shadow:0 0 0 3px var(--accent-soft);
+}
+.s-pop-form textarea{min-height:64px;resize:vertical;font-family:var(--font-serif);font-size:13px;line-height:1.55}
 .s-pop-form-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.s-pop-form-actions{display:flex;justify-content:flex-end;padding:2px 14px 12px}
+.s-pop-form-actions{display:flex;justify-content:flex-end;padding:4px 16px 14px;gap:8px}
 #s-pop-custom{display:none}
-#s-pop-footer{padding:8px 14px;border-top:1px solid #F0F2F5;background:#F8F9FB}
-.s-pop-note{font-size:10px;color:#8A8D91;font-style:italic}
+#s-pop-footer{padding:9px 16px;border-top:1px solid var(--rule-3);background:var(--surface-3)}
+.s-pop-note{font-size:10.5px;color:var(--text-3);font-style:italic}
 
-/* Report panel */
-#report-panel{flex:1;display:flex;flex-direction:column;background:#4A4A4A;overflow:hidden;min-width:0}
-#report-header{flex-shrink:0;background:#3A3A3A;border-bottom:1px solid #333;padding:10px 18px;display:flex;align-items:center;justify-content:space-between}
-.report-meta-title{font-size:14px;font-weight:700;color:rgba(255,255,255,.85)}
-.report-actions{display:flex;gap:8px;align-items:center}
-.report-actions .btn{color:rgba(255,255,255,.75);border-color:rgba(255,255,255,.25);background:transparent}
-.report-actions .btn:hover{background:rgba(255,255,255,.1);color:#fff}
-/* Header proposal buttons with notification badges. Greyed out when the
-   proposal count is zero; a red circular badge in the upper-right shows the
-   count otherwise. The badge floats above the border so overflow:visible is
-   required on the button. */
+/* ════════════════════════════════════════════════════════════════
+   REPORT PANEL — header + paper
+   ════════════════════════════════════════════════════════════════ */
+#report-panel{flex:1;display:flex;flex-direction:column;background:var(--paper);overflow:hidden;min-width:0}
+
+#report-header{
+  flex-shrink:0;
+  background:var(--ink);
+  border-bottom:1px solid var(--ink-2);
+  padding:11px 22px;
+  display:flex;align-items:center;justify-content:space-between;
+  position:relative;
+}
+.report-meta-title{
+  font-family:var(--font-serif);
+  font-size:14px;font-weight:600;
+  color:var(--text-on-ink);
+  letter-spacing:.01em;
+}
+.report-actions{display:flex;gap:6px;align-items:center}
+.report-actions .btn{
+  color:var(--text-on-ink);
+  border-color:rgba(251,248,239,.18);
+  background:rgba(251,248,239,.04);
+}
+.report-actions .btn:hover{
+  background:rgba(251,248,239,.1);
+  color:#fff;
+  border-color:rgba(251,248,239,.32);
+}
+
+/* Badge buttons */
 .btn-badge{position:relative;overflow:visible}
-.btn-badge.btn-disabled{opacity:.38;cursor:not-allowed;pointer-events:none}
-.badge-count{position:absolute;top:-7px;right:-7px;background:#E02020;color:#fff;font-size:10px;font-weight:800;min-width:18px;height:18px;border-radius:9px;display:inline-flex;align-items:center;justify-content:center;padding:0 5px;box-shadow:0 1px 3px rgba(0,0,0,.35);line-height:1;letter-spacing:0}
+.btn-badge.btn-disabled{opacity:.4;cursor:not-allowed;pointer-events:none}
+.badge-count{
+  position:absolute;top:-6px;right:-6px;
+  background:var(--accent);color:#fff;
+  font-size:10px;font-weight:700;
+  min-width:18px;height:18px;border-radius:9px;
+  display:inline-flex;align-items:center;justify-content:center;
+  padding:0 5px;
+  box-shadow:0 1px 3px rgba(0,0,0,.4);
+  line-height:1;letter-spacing:0;
+  border:1.5px solid var(--ink);
+}
 .badge-count.hidden{display:none}
 
-/* Modal overlay used by both "Config Change Proposals" and "Emerging Topics"
-   header buttons. A single overlay in the DOM — the body content is swapped
-   between modes when each button is clicked. */
-.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9998;align-items:flex-start;justify-content:center;padding:48px 20px 20px}
+/* ════════════════════════════════════════════════════════════════
+   MODAL
+   ════════════════════════════════════════════════════════════════ */
+.modal-overlay{
+  display:none;position:fixed;inset:0;
+  background:rgba(15,27,45,.5);
+  backdrop-filter:blur(3px);
+  -webkit-backdrop-filter:blur(3px);
+  z-index:9998;
+  align-items:flex-start;justify-content:center;
+  padding:56px 20px 20px;
+}
 .modal-overlay.active{display:flex}
-.modal-box{background:#fff;border-radius:10px;box-shadow:0 20px 48px rgba(0,0,0,.4);width:min(760px,100%);max-height:calc(100vh - 80px);display:flex;flex-direction:column;overflow:hidden}
-.modal-header{flex-shrink:0;padding:16px 20px;border-bottom:1px solid #E4E6EA;display:flex;align-items:flex-start;justify-content:space-between;gap:12px;background:linear-gradient(180deg,#FBFCFE 0%,#F5F7FA 100%)}
-.modal-title{font-size:16px;font-weight:800;color:#1A2332}
-.modal-subtitle{font-size:11px;color:#65676B;margin-top:3px;line-height:1.45;max-width:620px}
-.modal-close{background:none;border:none;font-size:22px;color:#65676B;cursor:pointer;line-height:1;padding:2px 8px;border-radius:4px;flex-shrink:0}
-.modal-close:hover{background:#F0F2F5;color:#1A2332}
-.modal-body{flex:1;overflow-y:auto;padding:18px 20px;background:#fff}
-.modal-empty{font-size:12px;color:#8A8D91;font-style:italic;text-align:center;padding:20px}
+.modal-box{
+  background:var(--paper-2);
+  border-radius:var(--r-lg);
+  box-shadow:var(--shadow-lg);
+  width:min(780px,100%);
+  max-height:calc(100vh - 80px);
+  display:flex;flex-direction:column;overflow:hidden;
+  border:1px solid var(--rule-2);
+}
+.modal-header{
+  flex-shrink:0;
+  padding:18px 22px 16px;
+  border-bottom:1px solid var(--rule-2);
+  display:flex;align-items:flex-start;justify-content:space-between;gap:12px;
+  background:var(--surface-3);
+}
+.modal-title{font-family:var(--font-serif);font-size:18px;font-weight:700;color:var(--ink);letter-spacing:.005em}
+.modal-subtitle{font-size:11.5px;color:var(--text-2);margin-top:4px;line-height:1.5;max-width:620px}
+.modal-close{
+  background:none;border:none;
+  font-size:22px;color:var(--text-2);
+  cursor:pointer;line-height:1;
+  padding:2px 8px;border-radius:var(--r-sm);
+  flex-shrink:0;transition:background .15s,color .15s;
+}
+.modal-close:hover{background:var(--surface-1);color:var(--ink)}
+.modal-body{flex:1;overflow-y:auto;padding:20px 22px;background:var(--paper-2)}
+.modal-empty{font-size:12.5px;color:var(--text-3);font-style:italic;text-align:center;padding:24px}
 
-/* Small toggle bar at the top of the report draft preview — one row per
-   emerging topic with an on/off switch. Hidden in print so the exported
-   PDF stays clean. By default each topic is enabled (its findings are
-   already reassigned to the new bucket). */
-.emg-bar{background:#F4F6F9;border:1px solid #E4E6EA;border-radius:6px;padding:10px 12px;margin:0 0 16px;font-size:11px}
-.emg-bar-title{font-size:10px;font-weight:700;color:#65676B;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;gap:8px}
-.emg-bar-title-count{color:#8A8D91;font-weight:600;text-transform:none;letter-spacing:0}
-.emg-bar-row{display:flex;align-items:center;gap:10px;padding:5px 0}
-.emg-bar-row+.emg-bar-row{border-top:1px solid #E9EBEF}
+/* Emerging topics toolbar (banner strip above the report body) */
+#emerging-toolbar{
+  flex-shrink:0;
+  background:var(--surface-1);
+  border-bottom:1px solid var(--rule);
+}
+#emerging-toolbar:empty{display:none}
+#emerging-toolbar .emg-bar{
+  margin:0;
+  border:none;
+  border-radius:0;
+  background:transparent;
+  padding:10px 28px 11px;
+}
+
+/* Emerging topics toggle bar */
+.emg-bar{
+  background:var(--surface-1);
+  border:1px solid var(--rule-2);
+  border-radius:var(--r-md);
+  padding:12px 14px;margin:0 0 20px;font-size:11.5px;
+}
+.emg-bar-title{
+  font-size:10px;font-weight:700;color:var(--text-3);
+  text-transform:uppercase;letter-spacing:.12em;
+  margin-bottom:8px;
+  display:flex;align-items:center;justify-content:space-between;gap:8px;
+}
+.emg-bar-title-count{color:var(--text-3);font-weight:600;text-transform:none;letter-spacing:0}
+.emg-bar-row{display:flex;align-items:center;gap:12px;padding:6px 0}
+.emg-bar-row+.emg-bar-row{border-top:1px solid var(--rule-3)}
 .emg-bar-main{flex:1;min-width:0;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
-.emg-bar-label{color:#1A2332;font-weight:700;font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
-.emg-bar-meta{color:#65676B;font-size:10px;font-weight:500;white-space:nowrap}
-#report-body{flex:1;overflow-y:auto;padding:24px 32px}
-#report-page{background:#fff;min-height:100%;border-radius:2px;box-shadow:0 2px 12px rgba(0,0,0,.3);padding:32px 36px;max-width:800px;margin:0 auto}
+.emg-bar-label{color:var(--ink);font-weight:700;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.emg-bar-meta{color:var(--text-3);font-size:10.5px;font-weight:500;white-space:nowrap}
 
-/* Bucket section */
-/* Report: L1 section heading */
-.rpt-l1{font-size:16px;font-weight:800;color:#1A2332;padding:10px 0 4px;margin:0;border-bottom:2px solid #1A2332;margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em}
-.rpt-l1:not(:first-child){margin-top:14px}
+/* Report body + page */
+#report-body{flex:1;overflow-y:auto;padding:32px 24px 48px;background:var(--paper)}
+#report-page{
+  background:var(--paper-2);
+  min-height:calc(100% - 48px);
+  border-radius:2px;
+  box-shadow:var(--shadow-md);
+  padding:56px 64px 72px;
+  max-width:820px;
+  margin:0 auto;
+  position:relative;
+}
+#report-page::before{
+  content:"";
+  position:absolute;top:0;left:64px;right:64px;height:3px;
+  background:var(--accent);
+}
 
-/* Report: L2 bucket heading + inline generated subtitle */
-.bkt-section{margin-bottom:6px;overflow:hidden}
-.bkt-header{display:flex;align-items:center;gap:8px;padding:4px 0;cursor:pointer;user-select:none}
-.bkt-bar{width:3px;min-height:24px;border-radius:2px;flex-shrink:0}
-.bkt-info{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
-.bkt-name-input{font-size:13px;font-weight:700;color:#1A2332;background:transparent;border:none;outline:none;padding:0;cursor:text;width:100%;display:block}
-.bkt-name-input:focus{background:#F8F9FB;border-radius:3px;padding:1px 4px;margin:-1px -4px;width:calc(100% + 8px)}
-.bkt-headline{font-size:11px;color:#65676B;font-style:italic;line-height:1.4;display:block;word-wrap:break-word}
-.bkt-chevron{color:#C4C9D0;font-size:12px;transition:transform .15s;flex-shrink:0}
+/* Banner cover page — shown at the top of the report paper when the banner
+   toggle is on. The negative margin lets the image run to the page edges while
+   the L1 heading below keeps its normal text column. */
+.rpt-cover{
+  margin:-8px -64px 28px;
+  padding:0 64px 20px;
+  text-align:center;
+  border-bottom:1px solid var(--rule);
+}
+.rpt-cover img{
+  max-width:100%;
+  max-height:120px;
+  object-fit:contain;
+  display:inline-block;
+}
+
+/* Table of contents — editorial list with dotted leaders. Page numbers are
+   populated by `target-counter` in print only; on screen they stay empty so
+   the rows read as a clean navigation list. */
+.rpt-toc{
+  margin:0 0 32px;
+  padding:0 0 24px;
+  border-bottom:1px solid var(--rule);
+}
+.rpt-toc-title{
+  font-family:var(--font-serif);
+  font-size:18px;font-weight:700;
+  color:var(--ink);
+  margin:0 0 12px;
+  padding:0 0 8px;
+  border-bottom:1px solid var(--rule-2);
+  letter-spacing:.005em;
+}
+.rpt-toc-list,.rpt-toc-sublist{list-style:none;padding:0;margin:0}
+.rpt-toc-sublist{padding-left:18px;margin:2px 0 10px}
+.rpt-toc-l1>a,.rpt-toc-l2>a{
+  display:flex;align-items:baseline;gap:6px;
+  padding:3px 0;
+  text-decoration:none;
+  font-family:var(--font-serif);
+  color:var(--text-1);
+  transition:color .1s;
+}
+.rpt-toc-l1>a{font-weight:700;font-size:14px;color:var(--ink);padding:5px 0}
+.rpt-toc-l2>a{font-weight:400;font-size:12.5px;color:var(--text-2)}
+.rpt-toc-l1>a:hover,.rpt-toc-l2>a:hover{color:var(--accent)}
+.rpt-toc-label{flex-shrink:1;min-width:0}
+.rpt-toc-leader{
+  flex:1;min-width:24px;
+  border-bottom:1px dotted var(--rule);
+  transform:translateY(-4px);
+  opacity:.6;
+}
+.rpt-toc-page{
+  font-variant-numeric:tabular-nums;
+  color:var(--text-3);
+  font-size:11.5px;
+  min-width:18px;text-align:right;
+}
+/* On screen the page numbers have no meaning — hide the trailing span and
+   the leader so rows render as clean clickable lines. */
+@media screen{
+  .rpt-toc-page{display:none}
+  .rpt-toc-leader{display:none}
+}
+
+/* L1 section heading */
+.rpt-l1{
+  font-family:var(--font-serif);
+  font-size:22px;font-weight:700;
+  color:var(--ink);
+  padding:6px 0 10px;
+  margin:0 0 14px;
+  border-bottom:1px solid var(--rule);
+  text-transform:none;
+  letter-spacing:0;
+  line-height:1.25;
+}
+.rpt-l1:not(:first-child){margin-top:32px}
+
+/* L2 bucket heading */
+.bkt-section{margin-bottom:18px;overflow:hidden}
+.bkt-header{
+  display:flex;align-items:flex-start;gap:12px;
+  padding:8px 0 10px;
+  cursor:pointer;user-select:none;
+  border-bottom:1px solid var(--rule-3);
+  margin-bottom:10px;
+}
+.bkt-bar{
+  width:3px;min-height:28px;
+  border-radius:2px;flex-shrink:0;
+  margin-top:5px;
+}
+.bkt-info{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.bkt-name-input{
+  font-family:var(--font-serif);
+  font-size:16px;font-weight:700;
+  color:var(--ink);
+  background:transparent;border:none;outline:none;
+  padding:0;cursor:text;width:100%;display:block;
+  letter-spacing:.005em;
+  line-height:1.3;
+}
+.bkt-name-input:focus{background:var(--surface-1);border-radius:3px;padding:2px 6px;margin:-2px -6px;width:calc(100% + 12px)}
+.bkt-headline{
+  font-size:12px;color:var(--text-2);
+  font-style:italic;line-height:1.5;
+  display:block;word-wrap:break-word;
+  font-family:var(--font-serif);
+}
+.bkt-chevron{color:var(--text-3);font-size:13px;transition:transform .15s;flex-shrink:0;margin-top:6px;opacity:.5}
 .bkt-chevron.open{transform:rotate(0deg)}
 .bkt-chevron.closed{transform:rotate(-90deg)}
-.bkt-quotes{padding:2px 0 2px 6px}
+.bkt-quotes{padding:2px 0 2px 15px}
 
-/* Emerging topic review */
-.emg-review-panel{border:1px solid #D7DBE0;border-radius:8px;background:#fff;overflow:hidden}
-.emg-review-header{padding:12px 14px;border-bottom:1px solid #E4E6EA;background:linear-gradient(180deg,#FBFCFE 0%,#F5F7FA 100%);display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
-.emg-review-title{font-size:15px;font-weight:800;color:#1A2332}
-.emg-review-subtitle{font-size:11px;color:#65676B;margin-top:2px;max-width:620px;line-height:1.45}
-.emg-review-pill{font-size:10px;font-weight:700;color:#3D5A40;background:#E8F5E9;border-radius:999px;padding:4px 8px;white-space:nowrap}
+/* Emerging topic review (inside modal) */
+.emg-review-panel{border:1px solid var(--rule-2);border-radius:var(--r-md);background:var(--paper-2);overflow:hidden}
+.emg-review-header{padding:14px 16px;border-bottom:1px solid var(--rule-2);background:var(--surface-3);display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.emg-review-title{font-family:var(--font-serif);font-size:16px;font-weight:700;color:var(--ink)}
+.emg-review-subtitle{font-size:11.5px;color:var(--text-2);margin-top:3px;max-width:620px;line-height:1.5}
+.emg-review-pill{font-size:10.5px;font-weight:700;color:var(--positive);background:var(--positive-soft);border-radius:999px;padding:4px 10px;white-space:nowrap}
 .emg-review-grid{display:grid;gap:10px;padding:14px}
-.emg-review-card{border:1px solid #E4E6EA;border-radius:8px;background:#FAFBFC;padding:12px}
+.emg-review-card{border:1px solid var(--rule-2);border-radius:var(--r-md);background:var(--surface-3);padding:14px}
 .emg-review-card-header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
-.emg-review-card-title{font-size:13px;font-weight:800;color:#1A2332}
-.emg-review-card-subtitle{font-size:11px;color:#65676B;margin-top:4px}
-.emg-review-card-summary{font-size:12px;color:#3C3F44;line-height:1.55;margin-top:8px}
+.emg-review-card-title{font-family:var(--font-serif);font-size:14px;font-weight:700;color:var(--ink)}
+.emg-review-card-subtitle{font-size:11.5px;color:var(--text-3);margin-top:4px}
+.emg-review-card-summary{font-size:12.5px;color:var(--text-1);line-height:1.6;margin-top:10px;font-family:var(--font-serif)}
 .emg-review-card-actions{display:flex;justify-content:flex-end;margin-top:12px}
 
 /* Config review */
-.cfg-review-drawer{margin-top:12px;border:1px solid #D7DBE0;border-radius:8px;background:#fff;overflow:hidden}
-.cfg-review-drawer summary{list-style:none;cursor:pointer;padding:12px 14px;display:flex;align-items:flex-start;justify-content:space-between;gap:12px;background:linear-gradient(180deg,#FBFCFE 0%,#F5F7FA 100%)}
+.cfg-review-drawer{margin-top:14px;border:1px solid var(--rule-2);border-radius:var(--r-md);background:var(--paper-2);overflow:hidden}
+.cfg-review-drawer summary{list-style:none;cursor:pointer;padding:14px 16px;display:flex;align-items:flex-start;justify-content:space-between;gap:12px;background:var(--surface-3)}
 .cfg-review-drawer summary::-webkit-details-marker{display:none}
-.cfg-review-title{font-size:15px;font-weight:800;color:#1A2332}
-.cfg-review-subtitle{font-size:11px;color:#65676B;margin-top:2px;max-width:620px;line-height:1.45}
+.cfg-review-title{font-family:var(--font-serif);font-size:16px;font-weight:700;color:var(--ink)}
+.cfg-review-subtitle{font-size:11.5px;color:var(--text-2);margin-top:3px;max-width:620px;line-height:1.5}
 .cfg-review-pills{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
-.cfg-review-pill{font-size:10px;font-weight:700;color:#4B5563;background:#E8EDF4;border-radius:999px;padding:4px 8px;white-space:nowrap}
-.cfg-review-body{padding:14px}
-.cfg-review-section+.cfg-review-section{margin-top:16px}
-.cfg-review-section h3{font-size:12px;font-weight:800;color:#1A2332;margin:0 0 8px}
-.cfg-review-table{width:100%;border-collapse:collapse;font-size:11px}
-.cfg-review-table th,.cfg-review-table td{border:1px solid #E4E6EA;padding:8px 9px;text-align:left;vertical-align:top}
-.cfg-review-table th{background:#F8F9FB;color:#65676B;font-weight:700}
-.cfg-review-table td{color:#3C3F44;line-height:1.5}
-.cfg-review-empty{font-size:12px;color:#8A8D91;font-style:italic;padding:4px 0}
+.cfg-review-pill{font-size:10.5px;font-weight:700;color:var(--text-2);background:var(--surface-1);border-radius:999px;padding:4px 10px;white-space:nowrap;border:1px solid var(--rule-2)}
+.cfg-review-body{padding:16px}
+.cfg-review-section+.cfg-review-section{margin-top:18px}
+.cfg-review-section h3{font-family:var(--font-serif);font-size:13px;font-weight:700;color:var(--ink);margin:0 0 10px}
+.cfg-review-table{width:100%;border-collapse:collapse;font-size:11.5px}
+.cfg-review-table th,.cfg-review-table td{border:1px solid var(--rule-2);padding:9px 10px;text-align:left;vertical-align:top}
+.cfg-review-table th{background:var(--surface-3);color:var(--text-2);font-weight:700}
+.cfg-review-table td{color:var(--text-1);line-height:1.55}
+.cfg-review-empty{font-size:12px;color:var(--text-3);font-style:italic;padding:6px 0}
 .cfg-review-detail{margin:0}
-.cfg-review-detail summary{list-style:none;cursor:pointer;font-size:11px;font-weight:700;color:#0A66C2;padding:0;background:none;display:inline-flex}
+.cfg-review-detail summary{list-style:none;cursor:pointer;font-size:11.5px;font-weight:700;color:var(--accent);padding:0;background:none;display:inline-flex}
 .cfg-review-detail summary::-webkit-details-marker{display:none}
 .cfg-review-detail-body{margin-top:8px}
-.cfg-review-note{font-size:11px;color:#65676B;margin-top:8px}
+.cfg-review-note{font-size:11.5px;color:var(--text-2);margin-top:10px}
 .cfg-review-evidence{margin-top:10px;display:grid;gap:6px}
-.cfg-review-evidence-item{font-size:11px;line-height:1.5;color:#444;background:#F8F9FB;border-radius:6px;padding:8px 10px;border-left:3px solid #D4DAE3}
-.cfg-config-table{width:100%;border-collapse:collapse;margin-top:12px;font-size:11px}
-.cfg-config-table th,.cfg-config-table td{border:1px solid #E4E6EA;padding:7px 8px;text-align:left;vertical-align:top}
-.cfg-config-table th{width:140px;background:#F8F9FB;color:#65676B;font-weight:700}
-.cfg-review-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}
-.cfg-review-help{font-size:11px;color:#65676B;line-height:1.55;margin:2px 0 10px}
-.cfg-review-help code{background:#F0F2F5;padding:1px 5px;border-radius:3px;font-size:10px}
-/* Pass-1 "Category description updates" cards. Side-by-side current vs. proposed
-   text so the user can eyeball the change before copying the new description. */
-.cfg-update-list{display:grid;gap:10px}
-.cfg-update-card{border:1px solid #E4E6EA;border-radius:8px;background:#FAFBFC;padding:12px}
-.cfg-update-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:6px}
-.cfg-update-title{font-size:13px;font-weight:800;color:#1A2332}
-.cfg-update-reason{font-size:11px;color:#3C3F44;line-height:1.55;margin-bottom:10px}
-.cfg-update-diff{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.cfg-update-col-label{font-size:10px;font-weight:700;color:#8A8D91;text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px}
-.cfg-update-col-body{font-size:11px;line-height:1.55;color:#444;background:#fff;border:1px solid #E4E6EA;border-radius:6px;padding:7px 9px;min-height:40px}
-.cfg-update-col-body-new{background:#F0F9F2;border-color:#C8E6C9;color:#1B5E20}
-.cfg-copy-btn.btn-copied{background:#2D9E5F;border-color:#2D9E5F;color:#fff}
-/* Pass-2 "Emerging topics" cards with Enable toggle. */
-.cfg-emerging-list{display:grid;gap:10px}
-.cfg-emerging-card{border:1px solid #E4E6EA;border-radius:8px;background:#FAFBFC;padding:12px}
+.cfg-review-evidence-item{font-size:11.5px;line-height:1.55;color:var(--text-1);background:var(--surface-3);border-radius:var(--r-sm);padding:9px 11px;border-left:3px solid var(--rule)}
+.cfg-config-table{width:100%;border-collapse:collapse;margin-top:12px;font-size:11.5px}
+.cfg-config-table th,.cfg-config-table td{border:1px solid var(--rule-2);padding:8px 9px;text-align:left;vertical-align:top}
+.cfg-config-table th{width:140px;background:var(--surface-3);color:var(--text-2);font-weight:700}
+.cfg-review-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:14px}
+.cfg-review-help{font-size:11.5px;color:var(--text-2);line-height:1.6;margin:2px 0 12px}
+.cfg-review-help code{background:var(--surface-1);padding:2px 6px;border-radius:3px;font-size:11px;font-family:ui-monospace,"SF Mono",Menlo,monospace}
+
+/* Pass-1 update cards */
+.cfg-update-list{display:grid;gap:12px}
+.cfg-update-card{border:1px solid var(--rule-2);border-radius:var(--r-md);background:var(--surface-3);padding:14px}
+.cfg-update-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px}
+.cfg-update-title{font-family:var(--font-serif);font-size:14px;font-weight:700;color:var(--ink)}
+.cfg-update-reason{font-size:11.5px;color:var(--text-1);line-height:1.6;margin-bottom:12px}
+.cfg-update-diff{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.cfg-update-col-label{font-size:10px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.12em;margin-bottom:4px}
+.cfg-update-col-body{font-size:11.5px;line-height:1.6;color:var(--text-1);background:var(--paper-2);border:1px solid var(--rule-2);border-radius:var(--r-sm);padding:8px 10px;min-height:44px;font-family:var(--font-serif)}
+.cfg-update-col-body-new{background:var(--positive-soft);border-color:rgba(31,111,63,.3);color:#0D5C30}
+.cfg-copy-btn.btn-copied{background:var(--positive);border-color:var(--positive);color:#fff}
+
+/* Pass-2 emerging cards */
+.cfg-emerging-list{display:grid;gap:12px}
+.cfg-emerging-card{border:1px solid var(--rule-2);border-radius:var(--r-md);background:var(--surface-3);padding:14px}
 .cfg-emerging-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
-.cfg-emerging-title{font-size:13px;font-weight:800;color:#1A2332}
-.cfg-emerging-meta{font-size:10px;color:#65676B;margin-top:3px}
-.cfg-emerging-reason{font-size:11px;color:#3C3F44;line-height:1.55;margin:8px 0 6px}
-.cfg-emerging-row{margin-top:4px}
-.cfg-emerging-row>summary{font-size:11px;font-weight:700;color:#0A66C2;cursor:pointer;list-style:none;display:inline-flex}
+.cfg-emerging-title{font-family:var(--font-serif);font-size:14px;font-weight:700;color:var(--ink)}
+.cfg-emerging-meta{font-size:10.5px;color:var(--text-3);margin-top:4px}
+.cfg-emerging-reason{font-size:11.5px;color:var(--text-1);line-height:1.6;margin:10px 0 6px}
+.cfg-emerging-row{margin-top:6px}
+.cfg-emerging-row>summary{font-size:11.5px;font-weight:700;color:var(--accent);cursor:pointer;list-style:none;display:inline-flex}
 .cfg-emerging-row>summary::-webkit-details-marker{display:none}
-/* Toggle-switch styling for Enable/Enabled on emerging-topic cards. Mirrors
-   `.fmt-toggle` so the visual vocabulary stays consistent across the app. */
-.cfg-enable-toggle{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:700;color:#1A2332;cursor:pointer;user-select:none;white-space:nowrap}
-.cfg-enable-toggle input{appearance:none;-webkit-appearance:none;width:30px;height:16px;background:#CDD0D5;border-radius:9px;position:relative;cursor:pointer;transition:background .15s;flex-shrink:0;margin:0}
+
+/* Enable toggle */
+.cfg-enable-toggle{display:inline-flex;align-items:center;gap:8px;font-size:11.5px;font-weight:700;color:var(--ink);cursor:pointer;user-select:none;white-space:nowrap}
+.cfg-enable-toggle input{appearance:none;-webkit-appearance:none;width:30px;height:16px;background:var(--rule);border-radius:9px;position:relative;cursor:pointer;transition:background .15s;flex-shrink:0;margin:0}
 .cfg-enable-toggle input::after{content:"";position:absolute;top:1px;left:1px;width:14px;height:14px;background:#fff;border-radius:50%;transition:transform .15s;box-shadow:0 1px 2px rgba(0,0,0,.2)}
-.cfg-enable-toggle input:checked{background:#2D9E5F}
+.cfg-enable-toggle input:checked{background:var(--positive)}
 .cfg-enable-toggle input:checked::after{transform:translateX(14px)}
 .cfg-enable-toggle input:disabled{cursor:default}
-/* Category highlight feature. Clicking the 🔎 icon in a bucket header sets
-   state.highlighted_bucket_id, opens the transcript drawer, and adds
-   `.tp-highlighted` to every sentence row that belongs to that bucket
-   regardless of status. A dismissible pill shows which category is active. */
-.bkt-focus{background:none;border:1px solid transparent;color:#8A8D91;cursor:pointer;padding:3px 6px;border-radius:4px;margin-right:4px;line-height:0;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center}
-.bkt-focus:hover{color:#B45309;background:#FEF3C7}
-.bkt-focus.active{color:#5C3B00;background:#FCD34D;border-color:#F59E0B}
-.bkt-focus svg{display:block;pointer-events:none}
-#tp-highlight-pill{display:none;align-items:center;justify-content:space-between;gap:8px;padding:6px 10px;margin:6px 8px 4px;background:#EEF4FB;border:1px solid #C8DEF1;border-radius:6px;font-size:11px;color:#0A4A86;font-weight:600}
-#tp-highlight-pill.active{display:flex}
-#tp-highlight-pill .tp-pill-clear{background:none;border:none;color:#0A4A86;cursor:pointer;font-size:14px;line-height:1;padding:0 2px}
-#tp-highlight-pill .tp-pill-clear:hover{color:#c00}
-.tp-highlighted{background:#FFF6C2!important;border-left:3px solid #E8B40A!important;padding-left:6px!important;margin-left:-9px!important}
 
-/* Quote card (sub-quote) */
-.q-card{background:#fff;border:1px solid #E4E6EA;border-radius:6px;margin-bottom:4px;overflow:hidden}
-.q-card.sortable-ghost{opacity:.4;background:#E8F4FD}
-.q-card.sortable-chosen{box-shadow:0 4px 16px rgba(0,0,0,.14)}
-.q-card-header{padding:4px 8px;display:flex;align-items:center;gap:5px;background:#F8F9FB;border-bottom:1px solid #F0F2F5}
-.drag-handle{color:#C4C9D0;cursor:grab;font-size:13px;flex-shrink:0;user-select:none}
+/* Category highlight */
+.bkt-focus{
+  background:none;
+  border:1px solid transparent;
+  color:var(--text-3);
+  cursor:pointer;
+  padding:4px 6px;border-radius:var(--r-sm);
+  margin-right:4px;line-height:0;flex-shrink:0;
+  display:inline-flex;align-items:center;justify-content:center;
+  transition:background .15s,color .15s,border-color .15s;
+  margin-top:3px;
+}
+.bkt-focus:hover{color:var(--accent);background:var(--accent-soft)}
+.bkt-focus.active{color:#5A2A0E;background:var(--accent-soft);border-color:var(--accent)}
+.bkt-focus svg{display:block;pointer-events:none}
+#tp-highlight-pill{
+  display:none;align-items:center;justify-content:space-between;gap:8px;
+  padding:8px 12px;margin:10px 14px 4px;
+  background:var(--accent-soft);
+  border:1px solid var(--accent-line);
+  border-radius:var(--r-md);
+  font-size:11.5px;color:#5A2A0E;font-weight:600;
+}
+#tp-highlight-pill.active{display:flex}
+#tp-highlight-pill .tp-pill-clear{background:none;border:none;color:#5A2A0E;cursor:pointer;font-size:14px;line-height:1;padding:0 2px}
+#tp-highlight-pill .tp-pill-clear:hover{color:var(--danger)}
+.tp-highlighted{
+  background:var(--accent-soft)!important;
+  border-left:3px solid var(--accent)!important;
+  padding-left:9px!important;
+  margin-left:-12px!important;
+}
+
+/* ════════════════════════════════════════════════════════════════
+   QUOTE CARDS
+   ════════════════════════════════════════════════════════════════ */
+.q-card{
+  background:transparent;
+  border:none;
+  border-radius:0;
+  margin-bottom:14px;
+  overflow:visible;
+  position:relative;
+  padding-left:18px;
+}
+.q-card::before{
+  content:"";
+  position:absolute;
+  left:0;top:8px;bottom:8px;
+  width:2px;
+  background:var(--rule);
+  border-radius:2px;
+}
+.q-card:hover::before{background:var(--accent-line)}
+.q-card.sortable-ghost{opacity:.4;background:var(--surface-1)}
+.q-card.sortable-chosen{box-shadow:0 6px 20px rgba(15,27,45,.14);background:var(--surface-3)}
+.q-card-header{
+  padding:2px 0 6px;
+  display:flex;align-items:center;gap:8px;
+  background:transparent;
+  border-bottom:none;
+}
+.drag-handle{color:var(--rule);cursor:grab;font-size:14px;flex-shrink:0;user-select:none;transition:color .15s}
+.q-card:hover .drag-handle{color:var(--text-3)}
 .drag-handle:active{cursor:grabbing}
-.q-attrib{text-align:right;font-size:9px;color:#8A8D91;font-style:italic;padding:0 10px 6px}
+.q-attrib{text-align:right;font-size:10.5px;color:var(--text-3);font-style:italic;padding:4px 0 0;font-family:var(--font-serif)}
 .attrib-off .q-attrib{display:none}
 .q-hdr-spacer{flex:1}
-.q-del{background:none;border:none;color:#C4C9D0;cursor:pointer;font-size:15px;padding:0 2px;line-height:1;flex-shrink:0}
-.q-del:hover{color:#E02020}
-/* Summarize toggle (replaces the former Verbatim/Condensed dropdown) */
-.fmt-toggle{display:inline-flex;align-items:center;gap:6px;font-size:10px;color:#65676B;cursor:pointer;user-select:none;white-space:nowrap}
-.fmt-toggle input{appearance:none;-webkit-appearance:none;width:22px;height:12px;background:#CDD0D5;border-radius:7px;position:relative;cursor:pointer;transition:background .15s;flex-shrink:0}
-.fmt-toggle input::after{content:"";position:absolute;top:1px;left:1px;width:10px;height:10px;background:#fff;border-radius:50%;transition:transform .15s;box-shadow:0 1px 2px rgba(0,0,0,.2)}
-.fmt-toggle input:checked{background:#0A66C2}
-.fmt-toggle input:checked::after{transform:translateX(10px)}
-.q-text{padding:6px 10px;font-size:11px;line-height:1.65;color:#3C3F44;max-height:200px;overflow-y:auto}
-.q-text p{margin-bottom:5px}
+.q-del{
+  background:none;border:none;
+  color:var(--rule);
+  cursor:pointer;font-size:16px;
+  padding:0 4px;line-height:1;flex-shrink:0;
+  transition:color .15s;
+}
+.q-card:hover .q-del{color:var(--text-3)}
+.q-del:hover{color:var(--danger)!important}
+
+/* Summarize toggle */
+.fmt-toggle{display:inline-flex;align-items:center;gap:7px;font-size:10.5px;color:var(--text-3);cursor:pointer;user-select:none;white-space:nowrap;font-weight:500}
+.fmt-toggle input{appearance:none;-webkit-appearance:none;width:24px;height:13px;background:var(--rule);border-radius:7px;position:relative;cursor:pointer;transition:background .15s;flex-shrink:0}
+.fmt-toggle input::after{content:"";position:absolute;top:1px;left:1px;width:11px;height:11px;background:#fff;border-radius:50%;transition:transform .15s;box-shadow:0 1px 2px rgba(0,0,0,.2)}
+.fmt-toggle input:checked{background:var(--accent)}
+.fmt-toggle input:checked::after{transform:translateX(11px)}
+
+/* Quote body text */
+.q-text{
+  padding:0;
+  font-family:var(--font-serif);
+  font-size:14px;line-height:1.7;
+  color:var(--text-1);
+  max-height:240px;overflow-y:auto;
+  letter-spacing:.003em;
+}
+.q-text p{margin-bottom:8px}
 .q-text p:last-child{margin-bottom:0}
-/* Report preview: no per-bucket highlighting inside quote cards. The transcript
-   panel still uses .s-tok's bucket colors to cue classification, but the
-   report panel is a clean bullet list that should read like the final copy. */
 .q-text .s-tok{background:none!important;border-bottom:none!important;color:inherit!important;padding:0!important;cursor:default}
 .q-text .s-tok:hover{opacity:1}
-.q-expand-btn{font-size:11px;color:#0A66C2;cursor:pointer;padding:3px 12px;display:block;text-align:center;background:#F8F9FB;border:none;width:100%;border-top:1px solid #F0F2F5}
-/* QA conversation card extras */
-.qa-card-q{padding:8px 12px 4px;background:#FAFBFC;border-bottom:1px solid #F0F2F5;font-size:11px;color:#65676B}
-.qa-card-q-text{font-size:12px;color:#444;margin-top:4px;line-height:1.6}
+.q-expand-btn{
+  font-size:11px;color:var(--accent);cursor:pointer;
+  padding:6px 0;display:block;text-align:left;
+  background:none;border:none;width:auto;
+  font-weight:600;
+  margin-top:4px;
+  border-top:none;
+  letter-spacing:.02em;
+}
+.q-expand-btn:hover{color:var(--accent-hover)}
 
-/* Buttons */
-.btn{font-size:12px;padding:6px 14px;border-radius:5px;border:1px solid;cursor:pointer;font-weight:600;transition:opacity .1s;white-space:nowrap}
-.btn:hover{opacity:.88}
-.btn-primary{background:#1A2332;color:#fff;border-color:#1A2332}
-.btn-secondary{background:#fff;color:#444;border-color:#CDD0D5}
-.btn-secondary:hover{background:#F8F9FB}
-.btn-sm{font-size:11px;padding:3px 9px}
-.btn-ghost{background:transparent;color:rgba(255,255,255,.75);border-color:rgba(255,255,255,.3)}
-.btn-ghost:hover{background:rgba(255,255,255,.1);opacity:1}
+/* QA conversation context */
+.qa-card-q{
+  padding:0 0 8px;margin-bottom:8px;
+  background:transparent;
+  border-bottom:1px dotted var(--rule-2);
+  font-size:11.5px;color:var(--text-3);
+}
+.qa-card-q-text{
+  font-family:var(--font-serif);
+  font-size:13px;color:var(--text-2);
+  margin-top:4px;line-height:1.6;
+  font-style:italic;
+}
+
+/* ════════════════════════════════════════════════════════════════
+   BUTTONS
+   ════════════════════════════════════════════════════════════════ */
+.btn{
+  font-family:var(--font-sans);
+  font-size:12px;padding:7px 14px;
+  border-radius:var(--r-sm);
+  border:1px solid;
+  cursor:pointer;font-weight:600;
+  transition:background .15s,color .15s,border-color .15s,opacity .15s;
+  white-space:nowrap;
+  letter-spacing:.005em;
+}
+.btn:hover{opacity:1}
+.btn-primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+.btn-primary:hover{background:var(--accent-hover);border-color:var(--accent-hover)}
+.btn-secondary{background:var(--paper-2);color:var(--ink);border-color:var(--rule)}
+.btn-secondary:hover{background:var(--surface-1);border-color:var(--rule)}
+.btn-sm{font-size:11px;padding:4px 10px}
+.btn-ghost{background:transparent;color:var(--text-on-ink-2);border-color:rgba(251,248,239,.2)}
+.btn-ghost:hover{background:rgba(251,248,239,.1);color:#fff}
 
 /* Add-to-report menu */
-.atr-menu{position:fixed;background:#fff;border:1px solid #E4E6EA;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.12);z-index:9999;padding:4px 0;min-width:200px}
-.atr-item{padding:8px 16px;cursor:pointer;font-size:13px;display:flex;align-items:center;gap:8px}
-.atr-item:hover{background:#F0F2F5}
-.atr-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.atr-menu{
+  position:fixed;background:var(--paper-2);
+  border:1px solid var(--rule);
+  border-radius:var(--r-md);
+  box-shadow:var(--shadow-lg);
+  z-index:9999;padding:6px;min-width:220px;
+}
+.atr-item{padding:9px 14px;cursor:pointer;font-size:12.5px;display:flex;align-items:center;gap:10px;border-radius:var(--r-sm);transition:background .1s}
+.atr-item:hover{background:var(--surface-1)}
+.atr-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
 
-.empty-bucket{padding:20px 16px;text-align:center;color:#8A8D91;font-size:12px;font-style:italic}
-.in-report-tag{font-size:11px;color:#2D9E5F;font-weight:600}
-.t-block-actions{margin-top:8px;display:flex;gap:6px;align-items:center}
+.empty-bucket{padding:24px 16px;text-align:center;color:var(--text-3);font-size:12.5px;font-style:italic}
+.in-report-tag{font-size:11px;color:var(--positive);font-weight:600}
+.t-block-actions{margin-top:10px;display:flex;gap:8px;align-items:center}
 
-/* Print */
+/* ════════════════════════════════════════════════════════════════
+   PRINT / PDF
+   ════════════════════════════════════════════════════════════════ */
 @media print{
-  /* Hide app chrome */
+  :root{--paper:#fff;--paper-2:#fff}
+  @page{margin:20mm 16mm}
+  body{background:#fff;color:#14213A;font-family:var(--font-serif)}
   #app-banner{display:none!important}
   #tab-bar{display:none!important}
   #transcript-wrap{display:none!important}
   #tp-resize{display:none!important}
   #report-header{display:none!important}
+  #emerging-toolbar{display:none!important}
   #s-popover{display:none!important}
   .modal-overlay{display:none!important}
   .emg-bar{display:none!important}
 
-  /* PDF banner */
-  #banner-wrap{display:block!important;text-align:center;padding:8px 0 4px;border:none;margin:0}
-  #banner-wrap.banner-off{display:none!important}
+  /* Old external banner is suppressed — the redesigned `.rpt-cover` now
+     carries the banner image as the first printed page. */
+  #banner-wrap{display:none!important}
 
-  /* Layout */
-  #content-area{display:block!important}
+  /* Banner + TOC share page 1: the cover image sits as a compact masthead
+     above the TOC, then the TOC itself forces a page break so the body
+     copy starts on page 2. */
+  .rpt-cover{
+    display:block!important;
+    margin:0 0 24px!important;
+    padding:0 0 18px!important;
+    border:none!important;
+    border-bottom:1px solid #D9D0BC!important;
+    text-align:center;
+    page-break-inside:avoid;
+    page-break-after:avoid;break-after:avoid;
+  }
+  .rpt-cover img{max-width:100%;max-height:140px;display:inline-block}
+
+  /* TOC: ends on its own page; reveal leaders + page numbers. */
+  .rpt-toc{
+    page-break-after:always;break-after:page;
+    page-break-before:avoid;break-before:avoid;
+    border-bottom:none;padding:0;margin:0;
+  }
+  .rpt-toc-title{font-size:22px;margin-bottom:20px;padding-bottom:10px}
+  .rpt-toc-leader{display:inline-block!important;flex:1!important;opacity:1!important;border-bottom-color:#B8AD94!important}
+  .rpt-toc-page{display:none!important}
+  .rpt-toc-l1>a, .rpt-toc-l2>a{color:#14213A!important;text-decoration:none!important}
+  /* `target-counter(attr(href url), page)` resolves the fragment link to the
+     page counter of the target — Chromium/WebKit populate this at print time.
+     Kept as a single ::after on the anchor so the leader still sits to its
+     left inside the flex row. */
+  .rpt-toc-l1>a::after, .rpt-toc-l2>a::after{
+    content: target-counter(attr(href url), page);
+    color:#7A7364;
+    font-variant-numeric:tabular-nums;
+    font-size:11.5px;
+    min-width:22px;
+    text-align:right;
+    margin-left:6px;
+    flex-shrink:0;
+  }
+  /* Start each L1 section on its own page so readers land on a clean header. */
+  .rpt-l1{page-break-before:always;break-before:page}
+  .rpt-l1:first-of-type{page-break-before:auto;break-before:auto}
+
+  #content-area{display:block!important;background:#fff!important}
   #report-panel{overflow:visible!important;display:block;background:#fff!important}
-  #report-body{overflow:visible!important;height:auto;padding:0!important}
-  #report-page{box-shadow:none!important;padding:0!important;max-width:none!important}
+  #report-body{overflow:visible!important;height:auto;padding:0!important;background:#fff!important}
+  #report-page{box-shadow:none!important;padding:0!important;max-width:none!important;background:#fff!important}
+  #report-page::before{display:none!important}
   body{overflow:visible!important;height:auto}
   #app{height:auto;overflow:visible}
 
-  /* L1 headings */
-  .rpt-l1{font-size:18px;padding:16px 0 8px;margin-bottom:12px;page-break-after:avoid}
-
-  /* L2 bucket: just name + headline, no bar/chevron/focus icon */
-  .bkt-section{margin-bottom:12px;page-break-inside:avoid}
-  .bkt-header{padding:4px 0;cursor:default}
+  .rpt-l1{font-size:20px;padding:14px 0 8px;margin-bottom:12px;page-break-after:avoid;border-bottom-color:#B8AD94}
+  .bkt-section{margin-bottom:14px;page-break-inside:avoid}
+  .bkt-header{padding:4px 0;cursor:default;border-bottom:none;margin-bottom:6px}
   .bkt-bar{display:none!important}
   .bkt-chevron{display:none!important}
   .bkt-focus{display:none!important}
-  .bkt-name-input{font-size:14px;cursor:default}
-  .bkt-headline{font-size:11px}
-  .bkt-quotes{padding:2px 0 2px 8px;display:block!important}
+  .bkt-name-input{font-size:14.5px;cursor:default;background:transparent!important}
+  .bkt-headline{font-size:11.5px;color:#5A5A5A}
+  .bkt-quotes{padding:2px 0 2px 10px;display:block!important}
 
-  /* Quote cards: clean bullet points */
-  .q-card{background:none!important;border:none!important;border-radius:0!important;margin-bottom:4px;page-break-inside:avoid;padding-left:12px;position:relative}
-  .q-card::before{content:"\2022";position:absolute;left:0;top:2px;font-size:11px;line-height:1.5;color:#333}
+  .q-card{background:none!important;border:none!important;border-radius:0!important;margin-bottom:6px;page-break-inside:avoid;padding-left:14px;position:relative}
+  .q-card::before{content:"2";position:absolute;left:0;top:2px;font-size:12px;line-height:1.5;color:#333;background:none!important;width:auto!important}
   .q-card-header{display:none!important}
   .qa-card-q{display:none!important}
-  .q-attrib{font-size:9px;padding:0;text-align:right}
+  .q-attrib{font-size:9.5px;padding:0;text-align:right;color:#5A5A5A}
   .attrib-off .q-attrib{display:none!important}
-  .q-text{padding:2px 0;max-height:none!important;overflow:visible!important;font-size:11px;line-height:1.5}
-  .q-text .s-tok{background:none!important;border-bottom:none!important;color:#333!important;padding:0!important;cursor:default}
+  .q-text{padding:2px 0;max-height:none!important;overflow:visible!important;font-size:11.5px;line-height:1.6;color:#14213A}
+  .q-text .s-tok{background:none!important;border-bottom:none!important;color:#14213A!important;padding:0!important;cursor:default}
   .q-expand-btn{display:none!important}
   .empty-bucket{display:none!important}
 }
 
-::-webkit-scrollbar{width:6px;height:6px}
+/* Scrollbar */
+::-webkit-scrollbar{width:8px;height:8px}
 ::-webkit-scrollbar-track{background:transparent}
-::-webkit-scrollbar-thumb{background:#CDD0D5;border-radius:3px}
-::-webkit-scrollbar-thumb:hover{background:#A8ADB5}
+::-webkit-scrollbar-thumb{background:var(--rule);border-radius:4px;border:2px solid var(--paper)}
+::-webkit-scrollbar-thumb:hover{background:var(--text-3)}
+
 </style>
 </head>
 <body>
@@ -424,8 +989,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
           <button class="btn btn-secondary" id="banner-toggle-btn" onclick="toggleBanner()">Banner: On</button>
           <button class="btn btn-secondary" onclick="saveReport()">&#128190; Save</button>
           <button class="btn btn-secondary" onclick="window.print()">&#128196; PDF</button>
+          <button class="btn btn-secondary" id="docx-btn" onclick="saveDocx()">&#128221; DOCX</button>
         </div>
       </div>
+      <div id="emerging-toolbar"></div>
       <div id="report-body"><div id="report-page" class="attrib-off"></div></div>
     </div>
     <!-- Shared modal overlay. Both header buttons populate the same element
@@ -530,7 +1097,7 @@ function renderBanner() {
     if (btn) btn.textContent = 'Banner: Off';
   }
 }
-function toggleBanner() { state.banner_visible = !state.banner_visible; renderBanner(); }
+function toggleBanner() { state.banner_visible = !state.banner_visible; renderBanner(); renderReportSections(); }
 
 let _attribVisible = false;
 function toggleAttrib() {
@@ -1690,26 +2257,81 @@ function renderReportPanel() {
   renderReportSections();
 }
 
+// The banner image doubles as a cover block inside the report paper; the TOC
+// sits directly beneath it. `renderBannerCover` only emits markup when the
+// banner toggle is on so the cover tracks the same visibility as the print
+// masthead / screen banner.
+function renderBannerCover() {
+  if (!state.banner_visible || !state.banner_src) return '';
+  return `<div class="rpt-cover"><img src="${escAttr(state.banner_src)}" alt="Banner"></div>`;
+}
+
+function sanitizeId(s) { return String(s).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, ''); }
+
+// Editorial TOC — renders L1 report-section headings with nested L2 bucket
+// titles. Each anchor points at a `#sec_…` or `#bs_…` fragment; `target-counter`
+// resolves the page number at print time, and on screen we hide the leader +
+// page span so the rows read as clean clickable navigation.
+function renderTableOfContents(orderedSections) {
+  if (!orderedSections.length) return '';
+  let html = `<nav class="rpt-toc" aria-label="Table of contents">
+    <div class="rpt-toc-title">Contents</div>
+    <ul class="rpt-toc-list">`;
+  orderedSections.forEach(({name: secName, buckets}) => {
+    const secId = 'sec_' + sanitizeId(secName);
+    html += `<li class="rpt-toc-l1"><a href="#${secId}">
+      <span class="rpt-toc-label">${esc(secName)}</span>
+      <span class="rpt-toc-leader" aria-hidden="true"></span>
+      <span class="rpt-toc-page"></span>
+    </a>`;
+    if (buckets.length) {
+      html += `<ul class="rpt-toc-sublist">`;
+      buckets.forEach(bucket => {
+        const title = (state.bucket_user_titles || {})[bucket.id] || bucket.name;
+        html += `<li class="rpt-toc-l2"><a href="#bs_${bucket.id}">
+          <span class="rpt-toc-label">${esc(title)}</span>
+          <span class="rpt-toc-leader" aria-hidden="true"></span>
+          <span class="rpt-toc-page"></span>
+        </a></li>`;
+      });
+      html += `</ul>`;
+    }
+    html += `</li>`;
+  });
+  html += `</ul></nav>`;
+  return html;
+}
+
 function renderReportSections() {
   destroySortables();
-  let html = renderEmergingTopicsBar();
+  // Emerging topics now live in the #emerging-toolbar strip above the report
+  // paper — keeping them out of the printable body avoids the banner showing
+  // up in PDFs / DOCX. The toolbar self-hides via :empty when there's nothing.
+  const toolbar = document.getElementById('emerging-toolbar');
+  if (toolbar) toolbar.innerHTML = renderEmergingTopicsBar();
+
   const sectionRank = {'Results Summary': 0, 'Earnings Call Q&A': 1, 'Other': 2};
-  const reportSections = [...new Set(
+  const sectionOrder = [...new Set(
     state.buckets
       .filter(bucket => getReportSubquotes(state.current_bank, bucket.id).length > 0)
       .map(bucket => bucket.report_section || 'Results Summary')
   )].sort((a, b) => (sectionRank[a] ?? 99) - (sectionRank[b] ?? 99) || a.localeCompare(b));
-
-  reportSections.forEach(secName => {
-    const sectionBuckets = state.buckets.filter(
-      bucket => (bucket.report_section || 'Results Summary') === secName
-    );
-    const hasContent = sectionBuckets.some(bucket =>
+  // Build the sections→buckets map once so TOC and body render from the same
+  // list; prevents the two from drifting if one of the inputs changes.
+  const orderedSections = sectionOrder.map(secName => ({
+    name: secName,
+    buckets: state.buckets.filter(bucket =>
+      (bucket.report_section || 'Results Summary') === secName &&
       getReportSubquotes(state.current_bank, bucket.id).length > 0
-    );
-    if (!hasContent) return;
+    ),
+  })).filter(s => s.buckets.length);
 
-    html += `<div class="rpt-l1">${secName}</div>`;
+  let html = renderBannerCover();
+  html += renderTableOfContents(orderedSections);
+
+  orderedSections.forEach(({name: secName, buckets: sectionBuckets}) => {
+    const secId = 'sec_' + sanitizeId(secName);
+    html += `<div class="rpt-l1" id="${secId}">${secName}</div>`;
 
     sectionBuckets.forEach(bucket => {
       const quotes = getReportSubquotes(state.current_bank, bucket.id);
@@ -2039,6 +2661,260 @@ function saveReport() {
   const a    = document.createElement('a');
   a.href = url; a.download = `call_summary_${ts}.html`; a.click();
   URL.revokeObjectURL(url);
+}
+
+// ============================================================
+// DOCX EXPORT (client-side, dolanmiu/docx via UNPKG)
+// ============================================================
+// The business workflow is: open the saved HTML, adjust content/selections in
+// the browser, THEN export to PDF or DOCX. So DOCX generation must happen
+// entirely in the page. We lazy-load the UMD bundle the first time the user
+// clicks DOCX so the initial page load stays lean; subsequent clicks reuse
+// the cached promise.
+function ensureDocxLibrary() {
+  if (window.docx) return Promise.resolve(window.docx);
+  if (window._docxLibPromise) return window._docxLibPromise;
+  window._docxLibPromise = new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'https://unpkg.com/docx@8.5.0/build/index.umd.js';
+    s.crossOrigin = 'anonymous';
+    s.onload  = () => window.docx ? resolve(window.docx) : reject(new Error('docx library loaded but window.docx is undefined'));
+    s.onerror = () => reject(new Error('Failed to load docx library from unpkg'));
+    document.head.appendChild(s);
+  });
+  return window._docxLibPromise;
+}
+
+// SVG banners need to be rasterised for DOCX — Word's ImageRun only
+// reliably handles PNG/JPEG. We draw the image into an offscreen canvas and
+// export as PNG; this also normalises sizing so the cover always looks the
+// same regardless of the source SVG's intrinsic dimensions.
+function rasterizeImageForDocx(src, maxWidth = 1200) {
+  return new Promise((resolve) => {
+    if (!src) return resolve(null);
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const scale = Math.min(1, maxWidth / Math.max(1, img.naturalWidth || img.width));
+        const w = Math.round((img.naturalWidth || img.width) * scale) || maxWidth;
+        const h = Math.round((img.naturalHeight || img.height) * scale) || 200;
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, w, h);
+        ctx.drawImage(img, 0, 0, w, h);
+        canvas.toBlob(async (blob) => {
+          if (!blob) return resolve(null);
+          const ab = await blob.arrayBuffer();
+          resolve({ data: new Uint8Array(ab), width: w, height: h });
+        }, 'image/png');
+      } catch (e) {
+        console.warn('rasterizeImageForDocx failed:', e);
+        resolve(null);
+      }
+    };
+    img.onerror = () => resolve(null);
+    img.src = src;
+  });
+}
+
+// Extract plain text for DOCX — mirrors getSubquoteFormats but centralised so
+// both verbatim and condensed paths get the same whitespace normalisation.
+function subquoteTextForDocx(sq, fmt) {
+  const sents = sq.type === 'md' ? sq.sentences : sq.answer_sentences;
+  if (!sents || !sents.length) return '';
+  const key = fmt === 'verbatim' ? 'text' : (fmt || 'text');
+  return sents.map(s => (s[key] || s.text || '').trim()).filter(Boolean).join(' ');
+}
+
+async function saveDocx() {
+  const btn = document.getElementById('docx-btn');
+  const origHtml = btn ? btn.innerHTML : '';
+  if (btn) { btn.disabled = true; btn.innerHTML = 'Building DOCX&hellip;'; }
+
+  let docxLib;
+  try {
+    docxLib = await ensureDocxLibrary();
+  } catch (e) {
+    alert('Could not load the DOCX library from the internet.\n\n' + e.message);
+    if (btn) { btn.disabled = false; btn.innerHTML = origHtml; }
+    return;
+  }
+
+  const {
+    Document, Packer, Paragraph, TextRun, HeadingLevel,
+    ImageRun, AlignmentType, PageBreak, TableOfContents, LevelFormat,
+  } = docxLib;
+
+  const bankId = state.current_bank;
+  const bank   = state.banks[bankId] || {};
+  const bs     = getBankState(bankId);
+
+  const titleText = [bank.name, state.period].filter(Boolean).join(' \u2014 ') || 'Call Summary';
+  const children = [];
+
+  // ── Page 1: masthead banner + title + TOC ────────────────────────────
+  // The banner is a compact masthead above the title; the TOC field follows
+  // on the same page. A single page break after the TOC bumps the content
+  // onto page 2.
+  if (state.banner_visible && state.banner_src) {
+    const raster = await rasterizeImageForDocx(state.banner_src, 1200);
+    if (raster) {
+      const pxWidth = 480;
+      const pxHeight = Math.round(raster.height * (pxWidth / raster.width));
+      children.push(new Paragraph({
+        alignment: AlignmentType.CENTER,
+        spacing: { before: 0, after: 200 },
+        children: [new ImageRun({ data: raster.data, transformation: { width: pxWidth, height: pxHeight } })],
+      }));
+    }
+  }
+  children.push(new Paragraph({
+    heading: HeadingLevel.TITLE,
+    alignment: AlignmentType.CENTER,
+    spacing: { before: 80, after: 80 },
+    children: [new TextRun({ text: titleText, bold: true, size: 40 })],
+  }));
+  children.push(new Paragraph({
+    alignment: AlignmentType.CENTER,
+    spacing: { before: 0, after: 360 },
+    children: [new TextRun({ text: 'Investor Relations PM Call Summary', italics: true, size: 22, color: '4A5268' })],
+  }));
+
+  // ── Table of contents (still on page 1) ──────────────────────────────
+  // `TableOfContents` emits a Word TOC field — Word fills it in when the
+  // document is opened (the user gets a "Update fields?" prompt, which is
+  // standard for native Word TOCs). `headingStyleRange: "1-2"` pulls H1 + H2.
+  children.push(new Paragraph({
+    heading: HeadingLevel.HEADING_1,
+    spacing: { before: 0, after: 120 },
+    children: [new TextRun({ text: 'Contents', bold: true })],
+  }));
+  children.push(new TableOfContents('Contents', {
+    hyperlink: true,
+    headingStyleRange: '1-2',
+  }));
+  children.push(new Paragraph({ children: [new PageBreak()] }));
+
+  // ── Report sections (same ordering as screen render) ─────────────────
+  const sectionRank = {'Results Summary': 0, 'Earnings Call Q&A': 1, 'Other': 2};
+  const sectionOrder = [...new Set(state.buckets
+    .filter(b => getReportSubquotes(bankId, b.id).length > 0)
+    .map(b => b.report_section || 'Results Summary')
+  )].sort((a, b) => (sectionRank[a] ?? 99) - (sectionRank[b] ?? 99) || a.localeCompare(b));
+
+  sectionOrder.forEach((secName, sIdx) => {
+    const sectionBuckets = state.buckets.filter(b =>
+      (b.report_section || 'Results Summary') === secName &&
+      getReportSubquotes(bankId, b.id).length > 0);
+    if (!sectionBuckets.length) return;
+
+    if (sIdx > 0) children.push(new Paragraph({ children: [new PageBreak()] }));
+    children.push(new Paragraph({
+      heading: HeadingLevel.HEADING_1,
+      spacing: { before: 240, after: 160 },
+      children: [new TextRun({ text: secName, bold: true })],
+    }));
+
+    sectionBuckets.forEach(bucket => {
+      const quotes = getReportSubquotes(bankId, bucket.id);
+      if (!quotes.length) return;
+      const title = (state.bucket_user_titles || {})[bucket.id] || bucket.name;
+
+      children.push(new Paragraph({
+        heading: HeadingLevel.HEADING_2,
+        spacing: { before: 200, after: 80 },
+        children: [new TextRun({ text: title, bold: true })],
+      }));
+      if (bucket.generated_headline) {
+        children.push(new Paragraph({
+          spacing: { before: 0, after: 140 },
+          children: [new TextRun({ text: bucket.generated_headline, italics: true, color: '4A5268' })],
+        }));
+      }
+
+      quotes.forEach(sq => {
+        const fmt  = (bs.subquote_formats && bs.subquote_formats[sq.id]) || 'verbatim';
+        const text = subquoteTextForDocx(sq, fmt);
+        if (!text) return;
+
+        // QA answers are preceded by a short italic context line so the
+        // reader always knows what question the finding addresses.
+        if (sq.type === 'qa') {
+          const verbatim = (sq.question_sentences || []).map(s => s.text).join(' ').trim();
+          const summary  = (sq.analyst_question_summary || '').trim();
+          const context  = summary || verbatim;
+          if (context) {
+            children.push(new Paragraph({
+              spacing: { before: 100, after: 40 },
+              indent: { left: 360 },
+              children: [new TextRun({
+                text: `In response to the analyst question: ${context}`,
+                italics: true, color: '4A5268', size: 20,
+              })],
+            }));
+          }
+        }
+
+        children.push(new Paragraph({
+          bullet: { level: 0 },
+          spacing: { before: 40, after: 40 },
+          children: [new TextRun({ text })],
+        }));
+
+        // Attribution is only emitted when the screen toggle is on, so the
+        // DOCX matches what the user sees in the report preview.
+        if (_attribVisible) {
+          const isMD = sq.type === 'md';
+          const nm = isMD ? sq.speaker : (sq.executive_name || 'Executive');
+          const tt = isMD ? (sq.speaker_title || '') : (sq.executive_title || '');
+          const attrib = tt ? `${nm}, ${tt}` : nm;
+          children.push(new Paragraph({
+            alignment: AlignmentType.RIGHT,
+            spacing: { before: 0, after: 140 },
+            children: [new TextRun({ text: `\u2014 ${attrib}`, italics: true, size: 18, color: '7A7364' })],
+          }));
+        }
+      });
+    });
+  });
+
+  const doc = new Document({
+    creator: 'Call Summary Editor',
+    title: titleText,
+    description: 'Investor Relations PM Call Summary',
+    styles: {
+      default: {
+        document:  { run: { font: 'Georgia', size: 22 } },
+        heading1:  { run: { font: 'Georgia', size: 32, bold: true, color: '0F1B2D' }, paragraph: { spacing: { before: 320, after: 160 } } },
+        heading2:  { run: { font: 'Georgia', size: 26, bold: true, color: '0F1B2D' }, paragraph: { spacing: { before: 200, after: 80 } } },
+        title:     { run: { font: 'Georgia', size: 44, bold: true, color: '0F1B2D' } },
+      },
+    },
+    numbering: {
+      config: [{
+        reference: 'default-bullets',
+        levels: [{ level: 0, format: LevelFormat.BULLET, text: '\u2022', alignment: AlignmentType.LEFT,
+                   style: { paragraph: { indent: { left: 360, hanging: 260 } } } }],
+      }],
+    },
+    sections: [{ properties: {}, children }],
+  });
+
+  try {
+    const blob = await Packer.toBlob(doc);
+    const ts = new Date().toISOString().replace(/[:.]/g,'').slice(0,15);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `call_summary_${ts}.docx`; a.click();
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    alert('Failed to build DOCX: ' + e.message);
+    console.error(e);
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = origHtml; }
+  }
 }
 
 // ============================================================
