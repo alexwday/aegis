@@ -570,6 +570,7 @@ body{
   margin-top:5px;
 }
 .bkt-info{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.bkt-name-row{display:flex;align-items:center;gap:8px;width:100%;min-width:0}
 .bkt-name-input{
   font-family:var(--font-serif);
   font-size:16px;font-weight:700;
@@ -579,6 +580,7 @@ body{
   letter-spacing:.005em;
   line-height:1.3;
 }
+.bkt-name-row .bkt-name-input{flex:1;min-width:0}
 .bkt-name-input:focus{background:var(--surface-1);border-radius:3px;padding:2px 6px;margin:-2px -6px;width:calc(100% + 12px)}
 .bkt-headline{
   font-size:12px;color:var(--text-2);
@@ -667,17 +669,16 @@ body{
 .cfg-enable-toggle input:checked::after{transform:translateX(14px)}
 .cfg-enable-toggle input:disabled{cursor:default}
 
-/* Category highlight */
+/* Category highlight — sits inside .bkt-name-row, right after the name input. */
 .bkt-focus{
   background:none;
   border:1px solid transparent;
   color:var(--text-3);
   cursor:pointer;
   padding:4px 6px;border-radius:var(--r-sm);
-  margin-right:4px;line-height:0;flex-shrink:0;
+  line-height:0;flex-shrink:0;
   display:inline-flex;align-items:center;justify-content:center;
   transition:background .15s,color .15s,border-color .15s;
-  margin-top:3px;
 }
 .bkt-focus:hover{color:var(--accent);background:var(--accent-soft)}
 .bkt-focus.active{color:#5A2A0E;background:var(--accent-soft);border-color:var(--accent)}
@@ -1323,14 +1324,16 @@ function scrollToFirstHighlightedSentence() {
   if (first) first.scrollIntoView({behavior:'smooth', block:'center'});
 }
 
-// Reverse-direction jump: clicking the body of a finding in the report
-// scrolls the transcript to that finding's first sentence. Buttons and
-// sentence spans keep their own handlers (stopPropagation), so only plain
-// text / attribution / whitespace clicks reach this delegated listener.
-function scrollTranscriptToFinding(card) {
-  const firstSent = card.querySelector('.s-tok[data-sid]');
-  if (!firstSent) return;
-  const sid = firstSent.dataset.sid;
+// Reverse-direction jump: clicking anywhere on a finding in the report
+// scrolls the transcript to that finding. All classification is reachable
+// only from the transcript-side popover; report clicks never open it. If
+// the user clicked directly on a sentence span, jump to THAT sentence so
+// the transcript lands on the exact text they pointed at. Otherwise fall
+// back to the first sentence of the finding.
+function scrollTranscriptToFinding(card, preferredSentEl) {
+  const sentEl = preferredSentEl || card.querySelector('.s-tok[data-sid]');
+  if (!sentEl) return;
+  const sid = sentEl.dataset.sid;
   openTranscriptPanel();
   const el = document.querySelector(`#transcript-body .s-tok[data-sid="${sid}"]`);
   if (!el) return;
@@ -1341,11 +1344,11 @@ function scrollTranscriptToFinding(card) {
 
 function handleReportCardClick(e) {
   if (e.target.closest('button')) return;
-  if (e.target.closest('.s-tok')) return;
   if (e.target.closest('input, textarea, label, select, a')) return;
   const card = e.target.closest('.q-card');
   if (!card) return;
-  scrollTranscriptToFinding(card);
+  const clickedSent = e.target.closest('.s-tok[data-sid]');
+  scrollTranscriptToFinding(card, clickedSent);
 }
 
 // ── Resize handle for transcript panel ──
@@ -2466,17 +2469,19 @@ function renderReportSections() {
   <div class="bkt-header" onclick="toggleBucket('${bucket.id}')">
     <div class="bkt-bar" style="background:${bucket.color_accent}"></div>
     <div class="bkt-info">
-      <input class="bkt-name-input" value="${escAttr(titleVal)}" readonly
-             onmousedown="if(this.hasAttribute('readonly'))event.preventDefault()"
-             onclick="if(!this.hasAttribute('readonly'))event.stopPropagation()"
-             ondblclick="event.stopPropagation();this.removeAttribute('readonly');this.focus();this.select()"
-             onblur="this.setAttribute('readonly','');saveBucketTitle('${bucket.id}',this.value)"
-             onkeydown="if(event.key==='Enter')this.blur()">
+      <div class="bkt-name-row">
+        <input class="bkt-name-input" value="${escAttr(titleVal)}" readonly
+               onmousedown="if(this.hasAttribute('readonly'))event.preventDefault()"
+               onclick="if(!this.hasAttribute('readonly'))event.stopPropagation()"
+               ondblclick="event.stopPropagation();this.removeAttribute('readonly');this.focus();this.select()"
+               onblur="this.setAttribute('readonly','');saveBucketTitle('${bucket.id}',this.value)"
+               onkeydown="if(event.key==='Enter')this.blur()">
+        <button class="bkt-focus ${isHighlighted ? 'active' : ''}"
+                onclick="event.stopPropagation();toggleCategoryHighlight('${bucket.id}')"
+                title="Highlight this category's findings in the transcript">${HIGHLIGHTER_SVG}</button>
+      </div>
       ${bucket.generated_headline ? `<span class="bkt-headline">${esc(bucket.generated_headline)}</span>` : ''}
     </div>
-    <button class="bkt-focus ${isHighlighted ? 'active' : ''}"
-            onclick="event.stopPropagation();toggleCategoryHighlight('${bucket.id}')"
-            title="Highlight this category's findings in the transcript">${HIGHLIGHTER_SVG}</button>
     <svg class="bkt-chevron open" id="bkv_${bucket.id}" viewBox="0 0 10 10"><path d="M2 4l3 3 3-3"/></svg>
   </div>
   <div class="bkt-quotes" id="bq_${bucket.id}" data-bucket-id="${bucket.id}">
@@ -2596,17 +2601,17 @@ function renderSubquoteText(sq, fmt, bs) {
   if (!sents) return '';
 
   if (useSpans) {
-    // Show sentence spans (clickable for MD, read-only for QA)
+    // Report-panel sentence spans are read-only. Classification is reachable
+    // only from the transcript side — clicks here bubble up to the delegated
+    // handler on #report-body, which scrolls the transcript to this finding.
     return `<p>${sents.map(s => {
       const bid = effectivePrimary(s.sid);
       const bkt = getBucket(bid);
       const text = fmt === 'condensed' ? (s.condensed || s.text) : s.text;
-      const scores64 = btoa(unescape(encodeURIComponent(JSON.stringify(s.scores))));
       return `<span class="s-tok${isQA?' qa-sent':''}"
         data-sid="${s.sid}" data-btype="${isQA?'qa':'md'}"
-        data-primary="${bid}" data-scores="${scores64}"
-        style="background:${bkt.color_bg};border-bottom-color:${bkt.color_accent}"
-        onclick="showSentencePopover(event,this)">${esc(text)}</span>`;
+        data-primary="${bid}"
+        style="background:${bkt.color_bg};border-bottom-color:${bkt.color_accent}">${esc(text)}</span>`;
     }).join(' ')}</p>`;
   }
 
