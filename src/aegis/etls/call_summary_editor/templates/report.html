@@ -2233,10 +2233,12 @@ function enableEmergingCategory(proposalId, options = {}) {
       : { kind: 'derived', value: effectivePrimary(evidenceId) };
     originalStatuses[evidenceId] = getSentenceReviewStatus(evidenceId);
     bs.sentence_user_primary[evidenceId] = bucket.id;
-    // Every linked finding lands in the review queue — promoted if it was
-    // rejected, demoted if it was selected. The user then re-confirms each
-    // one in the new category's card list.
-    setSentenceReviewStatus(evidenceId, 'candidate');
+    // Emerging topics default to ON, so every linked finding is promoted to
+    // 'selected' under the new bucket — this is what puts the category into
+    // the TOC and the preview body. disableEmergingCategory restores the
+    // snapshotted original status, so flipping the topic off reverts each
+    // finding (including ones that were originally rejected or in review).
+    setSentenceReviewStatus(evidenceId, 'selected');
   });
   proposal._original_assignments = originalAssignments;
   proposal._original_statuses = originalStatuses;
