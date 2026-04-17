@@ -138,7 +138,7 @@ body{
 
 #transcript-panel{flex:1;display:flex;flex-direction:row;background:var(--surface-3);overflow:hidden;min-width:0}
 
-#tp-content{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0;transition:opacity .15s,flex .2s}
+#tp-content{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0;position:relative;transition:opacity .15s,flex .2s}
 .tp-collapsed #tp-content{opacity:0;pointer-events:none;overflow:hidden;flex:0}
 
 #tp-rail{
@@ -701,19 +701,27 @@ body{
 .bkt-focus.active{color:#5A2A0E;background:var(--accent-soft);border-color:var(--accent)}
 .bkt-focus svg{display:block;pointer-events:none}
 #tp-highlight-pill{
-  display:none;align-items:center;justify-content:space-between;gap:8px;
-  padding:8px 12px;margin:10px 14px 4px;
-  background:var(--accent-soft);
-  border:1px solid var(--accent-line);
-  border-radius:var(--r-md);
-  font-size:11.5px;color:#5A2A0E;font-weight:600;
+  display:none;position:absolute;top:10px;right:14px;z-index:10;
+  align-items:center;gap:4px;
+  padding:4px 4px 4px 11px;
+  background:#DBEAFE;
+  border:1px solid #93C5FD;
+  border-radius:999px;
+  font-size:11px;color:#1E3A8A;font-weight:600;
+  letter-spacing:.02em;
+  box-shadow:0 2px 8px rgba(37,99,235,.18);
 }
-#tp-highlight-pill.active{display:flex}
-#tp-highlight-pill .tp-pill-clear{background:none;border:none;color:#5A2A0E;cursor:pointer;font-size:14px;line-height:1;padding:0 2px}
-#tp-highlight-pill .tp-pill-clear:hover{color:var(--danger)}
+#tp-highlight-pill.active{display:inline-flex}
+#tp-highlight-pill .tp-pill-clear{
+  background:none;border:none;color:#1E3A8A;cursor:pointer;
+  font-size:13px;line-height:1;padding:0;width:16px;height:16px;
+  display:inline-flex;align-items:center;justify-content:center;
+  border-radius:999px;
+}
+#tp-highlight-pill .tp-pill-clear:hover{background:rgba(30,58,138,.12);color:#1E3A8A}
 .tp-highlighted{
-  background:var(--accent-soft)!important;
-  border-left:3px solid var(--accent)!important;
+  background:#DBEAFE!important;
+  border-left:3px solid #2563EB!important;
   padding-left:9px!important;
   margin-left:-12px!important;
 }
@@ -1012,7 +1020,7 @@ body{
       <div id="transcript-panel">
         <div id="tp-content">
           <div id="tp-highlight-pill">
-            <span id="tp-highlight-pill-label">Highlighting: —</span>
+            <span>Highlighting</span>
             <button class="tp-pill-clear" onclick="clearCategoryHighlight()" title="Clear highlight">&times;</button>
           </div>
           <div id="transcript-body"></div>
@@ -1126,6 +1134,8 @@ document.addEventListener('DOMContentLoaded', () => {
       .trim()
   );
   document.addEventListener('mousedown', maybeClosePopover);
+  const reportBody = document.getElementById('report-body');
+  if (reportBody) reportBody.addEventListener('click', handleReportCardClick);
   renderApp();
 });
 
@@ -1223,6 +1233,7 @@ function toggleCategoryHighlight(bucketId) {
   renderTranscriptBody();
   renderCurrentBank();
   updateHighlightPill();
+  scrollToFirstHighlightedSentence();
 }
 
 function clearCategoryHighlight() {
@@ -1235,16 +1246,45 @@ function clearCategoryHighlight() {
 
 function updateHighlightPill() {
   const pill = document.getElementById('tp-highlight-pill');
-  const label = document.getElementById('tp-highlight-pill-label');
-  if (!pill || !label) return;
-  const bucketId = state.highlighted_bucket_id;
-  if (!bucketId) {
+  if (!pill) return;
+  if (state.highlighted_bucket_id) {
+    pill.classList.add('active');
+  } else {
     pill.classList.remove('active');
-    return;
   }
-  const bucket = state.buckets.find(b => b.id === bucketId);
-  label.textContent = 'Highlighting: ' + (bucket ? bucket.name : bucketId);
-  pill.classList.add('active');
+}
+
+// Scroll the transcript body to the first highlighted sentence so the user
+// lands on the category's first footprint rather than wherever the panel
+// was previously scrolled.
+function scrollToFirstHighlightedSentence() {
+  const first = document.querySelector('#transcript-body .tp-highlighted');
+  if (first) first.scrollIntoView({behavior:'smooth', block:'center'});
+}
+
+// Reverse-direction jump: clicking the body of a finding in the report
+// scrolls the transcript to that finding's first sentence. Buttons and
+// sentence spans keep their own handlers (stopPropagation), so only plain
+// text / attribution / whitespace clicks reach this delegated listener.
+function scrollTranscriptToFinding(card) {
+  const firstSent = card.querySelector('.s-tok[data-sid]');
+  if (!firstSent) return;
+  const sid = firstSent.dataset.sid;
+  openTranscriptPanel();
+  const el = document.querySelector(`#transcript-body .s-tok[data-sid="${sid}"]`);
+  if (!el) return;
+  el.scrollIntoView({behavior:'smooth', block:'center'});
+  el.classList.add('s-highlight');
+  setTimeout(() => el.classList.remove('s-highlight'), 900);
+}
+
+function handleReportCardClick(e) {
+  if (e.target.closest('button')) return;
+  if (e.target.closest('.s-tok')) return;
+  if (e.target.closest('input, textarea, label, select, a')) return;
+  const card = e.target.closest('.q-card');
+  if (!card) return;
+  scrollTranscriptToFinding(card);
 }
 
 // ── Resize handle for transcript panel ──
