@@ -606,6 +606,12 @@ async def test_analyze_config_coverage_prompt_requests_sectioned_single_cell_des
     assert "The proposal must be additive only" in update_prompt
     assert "Never remove, narrow, or overwrite" in update_prompt
     assert "`Keywords` are hint fields for non-exhaustive strong phrases" in update_prompt
+    assert "## Category Name Guidance" in emerging_prompt
+    assert "Treat `category_name` as a reusable taxonomy label" in emerging_prompt
+    assert "Use a generalized, bank-agnostic title" in emerging_prompt
+    assert "Do not use sentence-like titles" in emerging_prompt
+    assert "Example existing titles:" in emerging_prompt
+    assert "- Efficiency" in emerging_prompt
 
 
 @pytest.mark.asyncio

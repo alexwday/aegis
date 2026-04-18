@@ -23,6 +23,14 @@ from aegis.utils.logging import get_logger
 
 logger = get_logger()
 
+_GENERALIZED_CATEGORY_NAME_DESCRIPTION = (
+    "Generalized, bank-agnostic category title in the same style as the current config "
+    "sheet. Use a reusable industry label that could apply next quarter across multiple "
+    "banks. Prefer a short noun-phrase title; keep transcript-specific wording, claims, "
+    "metrics, bank names, and timing context in the description or examples, not in the "
+    "title."
+)
+
 try:
     import spacy
 
@@ -119,7 +127,7 @@ class ProposedConfigRow(BaseModel):
 
     transcript_sections: str = Field(description="MD, QA, or ALL")
     report_section: str = Field(description="Results Summary or Earnings Call Q&A")
-    category_name: str
+    category_name: str = Field(description=_GENERALIZED_CATEGORY_NAME_DESCRIPTION)
     category_description: str = Field(
         description=(
             "Business-editable category guidance kept in one multiline cell. Prefer section "
@@ -446,7 +454,10 @@ _CONFIG_ROW_SCHEMA = {
             "type": "string",
             "description": "Use Results Summary or Earnings Call Q&A exactly.",
         },
-        "category_name": {"type": "string"},
+        "category_name": {
+            "type": "string",
+            "description": _GENERALIZED_CATEGORY_NAME_DESCRIPTION,
+        },
         "category_description": {
             "type": "string",
             "description": (
@@ -539,9 +550,11 @@ TOOL_EMERGING_TOPICS = {
             "Call this tool to identify brand-new emerging topics worth tracking in future "
             "quarters — themes that do not fit any existing category. For each topic return "
             "a copy-ready config row (including `report_section` so it lands in Results "
-            "Summary or Earnings Call Q&A) and the finding ids that belong under it. Finding "
-            "ids may come from any status (selected/candidate/rejected) and may currently sit "
-            "in other buckets — if the user enables the topic, those findings will be moved."
+            "Summary or Earnings Call Q&A) and the finding ids that belong under it. New "
+            "`category_name` values must be generalized, industry-reusable taxonomy labels, "
+            "not transcript-specific findings or quotes. Finding ids may come from any status "
+            "(selected/candidate/rejected) and may currently sit in other buckets — if the "
+            "user enables the topic, those findings will be moved."
         ),
         "parameters": {
             "type": "object",
@@ -1017,6 +1030,32 @@ def _structured_description_template_guidance() -> str:
         "`Topics` define the category's scope, `Keywords` are non-exhaustive hint fields for "
         "strong phrases that should clearly map in, and `Instructions` define boundaries and "
         "tie-breaks."
+    )
+
+
+def _generalized_category_name_guidance(example_names: Optional[List[str]] = None) -> str:
+    """Return naming guidance for new taxonomy rows."""
+    guidance = (
+        "Treat `category_name` as a reusable taxonomy label, not a summary of this one "
+        "transcript.\n"
+        "- Use a generalized, bank-agnostic title that could plausibly apply to multiple "
+        "banks next quarter.\n"
+        "- Prefer a short noun-phrase title, typically 1-6 words, in the same style as the "
+        "existing config sheet.\n"
+        "- Keep company-specific wording, one-off facts, speaker phrasing, metrics, and "
+        "timing context in `category_description`, `change_summary`, or examples — not in "
+        "`category_name`.\n"
+        "- Do not use sentence-like titles, transcript quotes, or bank-specific labels."
+    )
+    if not example_names:
+        return guidance
+
+    compact_examples = [name.strip() for name in example_names if name and name.strip()][:5]
+    if not compact_examples:
+        return guidance
+
+    return guidance + "\nExample existing titles:\n" + "\n".join(
+        f"- {name}" for name in compact_examples
     )
 
 
@@ -3150,9 +3189,12 @@ async def analyze_config_coverage(
         digest_rows=min(len(evidence_rows), 150),
     )
 
-    existing_names = {
-        category.get("category_name", "").strip().lower() for category in categories
-    }
+    existing_category_names = [
+        str(category.get("category_name", "")).strip()
+        for category in categories
+        if str(category.get("category_name", "")).strip()
+    ]
+    existing_names = {name.lower() for name in existing_category_names}
     update_proposals: List[Dict[str, Any]] = []
     emerging_proposals: List[Dict[str, Any]] = []
 
@@ -3300,6 +3342,10 @@ async def analyze_config_coverage(
                     "config row and the finding ids that belong under it (ids can come from "
                     "any status — selected/candidate/rejected — and may currently sit in "
                     "other buckets; enabling the topic in the UI will reassign them). Keep "
+                    "the new row's `category_name` as a generalized, industry-reusable "
+                    "taxonomy label in the same style as the current sheet. The title should "
+                    "name the reusable theme itself, not the company-specific or "
+                    "quarter-specific way it appeared in this transcript. Keep "
                     "the new row's `category_description` as one multiline cell with section "
                     "headings. Prioritize `Topics`, `Keywords`, and `Instructions`, but "
                     "optional extra headings are allowed. Do not write narrative "
@@ -3322,18 +3368,26 @@ async def analyze_config_coverage(
                     "`Earnings Call Q&A`.\n"
                     "4. `proposed_row.transcript_sections` must be exactly `MD`, `QA`, or "
                     "`ALL`.\n"
-                    "5. `proposed_row.category_name` must be unique versus the existing sheet.\n"
-                    "6. `proposed_row.category_description` should stay as one multiline "
+                    "5. `proposed_row.category_name` must be unique versus the existing sheet "
+                    "and must read like a reusable category title from the config, not like a "
+                    "transcript-specific finding title.\n"
+                    "6. Make `proposed_row.category_name` generalized and bank-agnostic so it "
+                    "could be reused to track the same theme across the industry next quarter. "
+                    "Keep bank-specific or quarter-specific nuance in `category_description`, "
+                    "`change_summary`, or the examples instead.\n"
+                    "7. `proposed_row.category_description` should stay as one multiline "
                     "cell and use the preferred sectioned format shown below.\n"
-                    "7. Use section headings and short list items, not paragraph prose. "
+                    "8. Use section headings and short list items, not paragraph prose. "
                     "`Topics` are scope fields, `Keywords` are hint fields for non-exhaustive "
                     "strong phrases, and `Instructions` are inclusion/exclusion/tie-break "
                     "rules.\n"
-                    "8. `linked_finding_ids` must use only ids that appear in the findings "
+                    "9. `linked_finding_ids` must use only ids that appear in the findings "
                     "digest below. Include every finding that would genuinely belong under "
                     "the topic, across all statuses.\n"
-                    "9. Keep `change_summary` to 1-2 sentences of reasoning.\n"
-                    "10. Cap the response at 4 proposals.\n\n"
+                    "10. Keep `change_summary` to 1-2 sentences of reasoning.\n"
+                    "11. Cap the response at 4 proposals.\n\n"
+                    "## Category Name Guidance\n"
+                    f"{_generalized_category_name_guidance(existing_category_names)}\n\n"
                     "## Preferred Description Format\n"
                     f"{_structured_description_template_guidance()}\n\n"
                     "## Current Category Sheet\n"
