@@ -147,11 +147,16 @@ def test_generate_html_injects_period_and_state():
     assert 'id="config-changes-btn"' in html
     assert 'id="emerging-topics-btn"' in html
     assert 'id="proposal-modal"' in html
-    assert "Config Change Proposals" in html
+    assert "Config Proposals" in html
     assert "No description provided." not in html
     assert "function renderEmergingTopicsModalBody()" in html
-    assert "function renderEmergingTopicsBar()" in html
     assert "function disableEmergingCategory(" in html
+    assert "function ensurePdfLibrary()" in html
+    assert "function savePdf()" in html
+    assert "function getReportCoverMeta(" in html
+    assert "function getReportCoverTitle()" in html
+    assert "Contents (continued)" in html
+    assert "window.print()" not in html
     # The Configured/Suggested/Emerging source badge row was removed from the
     # bucket header in favor of an inline `<bucket name>: <generated headline>`
     # layout — the source provenance is no longer surfaced to users.

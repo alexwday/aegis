@@ -333,6 +333,17 @@ def test_browser_candidate_sentence_can_be_selected_and_added_to_report(
     )
 
 
+def test_browser_report_cover_uses_bank_period_and_pm_call_summary_title(
+    browser_page: Page,
+    served_report: str,
+) -> None:
+    browser_page.goto(served_report)
+
+    cover = browser_page.locator("#report-page .rpt-cover")
+    expect(cover).to_contain_text("Royal Bank of Canada — Q1 2026")
+    expect(cover).to_contain_text("PM Call Summary")
+
+
 def test_browser_selected_sentence_can_be_rejected_and_removed_from_report(
     browser_page: Page,
     served_report: str,
@@ -373,6 +384,108 @@ def test_browser_qa_answer_can_be_selected_and_renders_question_context(
     expect(browser_page.locator("#report-page")).to_contain_text(
         "We generated capital through earnings and lower RWA intensity."
     )
+
+
+def test_browser_category_highlight_only_outlines_report_findings(
+    browser_page: Page,
+    served_report: str,
+) -> None:
+    browser_page.goto(served_report)
+    _open_transcript(browser_page)
+
+    browser_page.locator("#bs_bucket_0 .bkt-focus").click()
+
+    highlight_state = browser_page.evaluate(
+        """
+        () => {
+          const read = sid => {
+            const el = document.querySelector(`#transcript-body .s-tok[data-sid="${sid}"]`);
+            if (!el) {
+              throw new Error(`Missing transcript sentence for ${sid}`);
+            }
+            return {
+              highlighted: el.classList.contains('tp-highlighted'),
+              reportIncluded: el.classList.contains('tp-report-included'),
+            };
+          };
+          return {
+            md1: read('md_1'),
+            md2: read('md_2'),
+            md3: read('md_3'),
+          };
+        }
+        """
+    )
+
+    assert highlight_state == {
+        "md1": {"highlighted": True, "reportIncluded": True},
+        "md2": {"highlighted": True, "reportIncluded": False},
+        "md3": {"highlighted": True, "reportIncluded": False},
+    }
+
+
+def test_browser_category_highlight_scrolls_to_first_included_finding(
+    browser_page: Page,
+    served_report: str,
+) -> None:
+    browser_page.goto(served_report)
+    _open_transcript(browser_page)
+
+    browser_page.locator("#transcript-body").get_by_text(
+        "Capital generation remains strong across the franchise.",
+        exact=True,
+    ).click()
+    browser_page.locator("#s-popover").get_by_text("Rejected", exact=True).click()
+
+    browser_page.locator("#transcript-body").get_by_text(
+        "We generated capital through earnings and lower RWA intensity.",
+        exact=True,
+    ).click()
+    browser_page.locator("#s-popover").get_by_text("Selected for report", exact=True).click()
+
+    browser_page.evaluate(
+        """
+        () => {
+          window.__scrollTargets = [];
+          const original = Element.prototype.scrollIntoView;
+          Element.prototype.scrollIntoView = function(...args) {
+            window.__scrollTargets.push(this.dataset?.sid || this.id || this.className || null);
+            if (original) {
+              return original.apply(this, args);
+            }
+            return undefined;
+          };
+        }
+        """
+    )
+
+    browser_page.locator("#bs_bucket_1 .bkt-focus").click()
+
+    scroll_result = browser_page.evaluate(
+        """
+        () => {
+          const read = sid => {
+            const el = document.querySelector(`#transcript-body .s-tok[data-sid="${sid}"]`);
+            if (!el) {
+              throw new Error(`Missing transcript sentence for ${sid}`);
+            }
+            return {
+              highlighted: el.classList.contains('tp-highlighted'),
+              reportIncluded: el.classList.contains('tp-report-included'),
+            };
+          };
+          return {
+            lastScrollTarget: window.__scrollTargets[window.__scrollTargets.length - 1] || null,
+            qaQuestion: read('qa_q1'),
+            qaAnswer: read('qa_a1'),
+          };
+        }
+        """
+    )
+
+    assert scroll_result["lastScrollTarget"] == "qa_a1"
+    assert scroll_result["qaQuestion"] == {"highlighted": True, "reportIncluded": False}
+    assert scroll_result["qaAnswer"] == {"highlighted": True, "reportIncluded": True}
 
 
 def test_browser_adopt_emerging_topic_creates_new_bucket_with_linked_evidence(

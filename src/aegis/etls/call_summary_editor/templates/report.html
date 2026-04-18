@@ -569,16 +569,38 @@ body{
    the L1 heading below keeps its normal text column. */
 .rpt-cover{
   margin:-8px -64px 28px;
-  padding:0 64px 20px;
+  padding:0 0 22px;
   text-align:center;
   border-bottom:1px solid var(--rule);
 }
 .rpt-cover img{
-  max-width:100%;
-  max-height:120px;
+  display:block;
+  width:100%;
+  height:auto;
+  max-width:none;
+  max-height:170px;
   object-fit:contain;
-  display:inline-block;
+  object-position:center;
+  margin:0 auto;
 }
+.rpt-cover-copy{margin:18px auto 0;max-width:920px;padding:0 52px}
+.rpt-cover-meta{
+  font-family:var(--font-sans);
+  font-size:12px;
+  font-weight:700;
+  letter-spacing:.14em;
+  text-transform:uppercase;
+  color:var(--text-3);
+}
+.rpt-cover-title{
+  font-family:var(--font-serif);
+  font-size:32px;
+  font-weight:700;
+  line-height:1.15;
+  color:var(--ink);
+  margin-top:10px;
+}
+.rpt-cover-noimg{padding-top:18px}
 
 /* Table of contents — editorial list with dotted leaders. Page numbers are
    populated by `target-counter` in print only; on screen they stay empty so
@@ -803,11 +825,10 @@ body{
   padding-left:9px!important;
   margin-left:-12px!important;
 }
-/* Within a highlighted category, only sentences that are actually in the
-   report (status=selected → .s-incl) get the blue outline. Candidate and
-   rejected siblings keep the plain blue fill, so the user can tell at a
-   glance which highlighted findings made it into the report output. */
-.s-tok.tp-highlighted.s-incl{
+/* Within a highlighted category, only sentences that are actually part of a
+   report finding get the blue outline. This excludes QA question context,
+   which can be status=selected but is never itself a finding card. */
+.s-tok.tp-highlighted.tp-report-included{
   outline:2px solid #2563EB;
   outline-offset:1px;
   border-radius:3px;
@@ -1073,7 +1094,17 @@ body{
     page-break-inside:avoid;
     page-break-after:avoid;break-after:avoid;
   }
-  .rpt-cover img{max-width:100%;max-height:140px;display:inline-block}
+  .rpt-cover img{
+    width:100%!important;
+    height:auto!important;
+    max-width:none!important;
+    max-height:168px;
+    display:block;
+    margin:0 auto;
+  }
+  .rpt-cover-copy{margin:16px auto 0!important;max-width:none!important;padding:0 4px!important}
+  .rpt-cover-meta{font-size:11px!important;letter-spacing:.16em!important}
+  .rpt-cover-title{font-size:28px!important;margin-top:8px!important}
 
   /* TOC: ends on its own page; reveal leaders + page numbers. */
   .rpt-toc{
@@ -1085,12 +1116,12 @@ body{
   .rpt-toc-leader{display:inline-block!important;flex:1!important;opacity:1!important;border-bottom-color:#B8AD94!important}
   .rpt-toc-page{display:none!important}
   .rpt-toc-l1>a, .rpt-toc-l2>a{color:#14213A!important;text-decoration:none!important}
-  /* `target-counter(attr(href url), page)` resolves the fragment link to the
+  /* `target-counter(attr(href), page)` resolves the fragment link to the
      page counter of the target — Chromium/WebKit populate this at print time.
      Kept as a single ::after on the anchor so the leader still sits to its
      left inside the flex row. */
   .rpt-toc-l1>a::after, .rpt-toc-l2>a::after{
-    content: target-counter(attr(href url), page);
+    content: target-counter(attr(href), page);
     color:#7A7364;
     font-variant-numeric:tabular-nums;
     font-size:11.5px;
@@ -1122,7 +1153,21 @@ body{
   .bkt-quotes{padding:2px 0 2px 10px;display:block!important}
 
   .q-card{background:none!important;border:none!important;border-radius:0!important;margin-bottom:6px;page-break-inside:avoid;padding-left:14px;position:relative}
-  .q-card::before{content:"2";position:absolute;left:0;top:2px;font-size:12px;line-height:1.5;color:#333;background:none!important;width:auto!important}
+  .q-card.q-card-selected,
+  .q-card.q-card-cat-highlighted{background:none!important;box-shadow:none!important}
+  .q-card::before{
+    content:"\2022";
+    position:absolute;
+    left:0;top:2px;
+    font-size:12px;
+    line-height:1.5;
+    color:#333;
+    background:none!important;
+    width:auto!important;
+    display:block!important;
+  }
+  .q-card.q-card-selected::before,
+  .q-card.q-card-cat-highlighted::before{display:block!important}
   .q-card-header{display:none!important}
   .qa-card-q{display:none!important}
   .q-attrib{font-size:9.5px;padding:0;text-align:right;color:#5A5A5A}
@@ -1322,7 +1367,7 @@ function toggleHeaderMenu(type, btnEl) {
   } else if (type === 'save') {
     menu.innerHTML = `
       <div class="hdr-menu-item" onclick="closeHeaderMenus();saveReport()">&#128190; Save</div>
-      <div class="hdr-menu-item" onclick="closeHeaderMenus();window.print()">&#128196; PDF</div>
+      <div class="hdr-menu-item" onclick="closeHeaderMenus();savePdf()">&#128196; PDF</div>
       <div class="hdr-menu-item" onclick="closeHeaderMenus();saveDocx()">&#128221; DOCX</div>
     `;
   } else {
@@ -1351,16 +1396,59 @@ function closeHeaderMenusOnOutsideClick(e) {
 // ============================================================
 // TABS
 // ============================================================
+function getCurrentBankData(bankId = state && state.current_bank) {
+  return (state && state.banks && bankId && state.banks[bankId]) || {};
+}
+
+function getReportPeriodLabel() {
+  const fq = (state && state.meta && state.meta.fiscal_quarter) || '';
+  const fy = (state && state.meta && state.meta.fiscal_year) || '';
+  return [fq, fy].filter(Boolean).join(' ');
+}
+
+function getBannerPeriodLabel() {
+  const fq = (state && state.meta && state.meta.fiscal_quarter) || '';
+  const fy = String((state && state.meta && state.meta.fiscal_year) || '');
+  const shortYear = fy.length === 4 ? "'" + fy.slice(2) : fy;
+  return fq && fy ? `${fq}${shortYear}` : '';
+}
+
+function getReportCoverMeta(bankId = state && state.current_bank) {
+  const bank = getCurrentBankData(bankId);
+  return [bank.company_name || '', getReportPeriodLabel()].filter(Boolean).join(' \u2014 ');
+}
+
+function getReportCoverTitle() {
+  return 'PM Call Summary';
+}
+
+function getReportExportTitle(bankId = state && state.current_bank) {
+  return [getReportCoverMeta(bankId), getReportCoverTitle()].filter(Boolean).join(' \u2014 ');
+}
+
+function getOrderedSections(bankId = state && state.current_bank) {
+  const sectionRank = {'Results Summary': 0, 'Earnings Call Q&A': 1, 'Other': 2};
+  const sectionOrder = [...new Set(
+    state.buckets
+      .filter(bucket => getReportSubquotes(bankId, bucket.id).length > 0)
+      .map(bucket => bucket.report_section || 'Results Summary')
+  )].sort((a, b) => (sectionRank[a] ?? 99) - (sectionRank[b] ?? 99) || a.localeCompare(b));
+  return sectionOrder.map(secName => ({
+    name: secName,
+    buckets: state.buckets.filter(bucket =>
+      (bucket.report_section || 'Results Summary') === secName &&
+      getReportSubquotes(bankId, bucket.id).length > 0
+    ),
+  })).filter(s => s.buckets.length);
+}
+
 function renderTabs() {
   const bar = document.getElementById('tab-bar');
   const meta = document.getElementById('banner-meta');
-  const fq = state.meta && state.meta.fiscal_quarter || '';
-  const fy = state.meta && state.meta.fiscal_year || '';
-  const shortYear = fy.length === 4 ? "'" + fy.slice(2) : fy;
-  const period = fq && fy ? `${fq}${shortYear}` : '';
+  const period = getBannerPeriodLabel();
   const bankIds = Object.keys(state.banks);
-  const currentBank = state.banks[state.current_bank];
-  const bankName = currentBank ? currentBank.company_name : '';
+  const currentBank = getCurrentBankData();
+  const bankName = currentBank.company_name || '';
 
   if (meta) {
     meta.innerHTML = bankName
@@ -1453,6 +1541,21 @@ function updateHighlightPill() {
 // lands on the category's first footprint rather than wherever the panel
 // was previously scrolled.
 function scrollToFirstHighlightedSentence() {
+  const highlightedBucketId = state.highlighted_bucket_id;
+  if (!highlightedBucketId) return;
+
+  const firstIncluded = getReportSubquotes(state.current_bank, highlightedBucketId)[0];
+  const firstIncludedSid = firstIncluded && getSubquoteSentenceIds(firstIncluded)[0];
+  if (firstIncludedSid) {
+    const includedEl = document.querySelector(
+      `#transcript-body .s-tok[data-sid="${firstIncludedSid}"]`
+    );
+    if (includedEl) {
+      includedEl.scrollIntoView({behavior:'smooth', block:'center'});
+      return;
+    }
+  }
+
   const first = document.querySelector('#transcript-body .tp-highlighted');
   if (first) first.scrollIntoView({behavior:'smooth', block:'center'});
 }
@@ -1722,11 +1825,20 @@ function tSpan(sent, blockType, inc) {
   const isQa = blockType === 'qa';
   const status = getSentenceReviewStatus(sent.sid);
   const cls = status === 'selected' ? 's-incl' : status === 'candidate' ? 's-cand' : 's-excl';
+  const matchesHighlightedBucket = !!(
+    state.highlighted_bucket_id && (
+      bid === state.highlighted_bucket_id ||
+      ((sent.candidate_bucket_ids || []).includes(state.highlighted_bucket_id))
+    )
+  );
   // When a category is focused from the report preview, highlight every
-  // sentence whose current bucket matches — across all three statuses so
-  // the user sees the full footprint of the category (included/review/rejected).
-  const highlightCls = state.highlighted_bucket_id && bid === state.highlighted_bucket_id
-    ? ' tp-highlighted' : '';
+  // sentence tied to that category across all three statuses, even when the
+  // sentence is only a candidate for that bucket and has not been promoted
+  // into the report yet.
+  const highlightCls = matchesHighlightedBucket ? ' tp-highlighted' : '';
+  const reportIncludedCls =
+    state.highlighted_bucket_id && bid === state.highlighted_bucket_id && inc && inc.has(sent.sid)
+      ? ' tp-report-included' : '';
   // Single-finding selection: outline every sentence that belongs to the
   // selected subquote. Kept in sync with setSelectedFinding via the cached
   // _selectedFindingSids Set; this path covers full re-renders that bypass
@@ -1734,7 +1846,7 @@ function tSpan(sent, blockType, inc) {
   const selectCls = _selectedFindingSids && _selectedFindingSids.has(sent.sid)
     ? ' tp-sent-selected' : '';
   const scores64 = btoa(unescape(encodeURIComponent(JSON.stringify(sent.scores))));
-  return `<span class="s-tok ${cls}${isQa?' qa-sent':''}${highlightCls}${selectCls}"
+  return `<span class="s-tok ${cls}${isQa?' qa-sent':''}${highlightCls}${reportIncludedCls}${selectCls}"
     data-sid="${sent.sid}" data-btype="${blockType}" data-primary="${bid}" data-scores="${scores64}"
     onclick="showSentencePopover(event,this)">${esc(sent.text)}</span>`;
 }
@@ -2612,8 +2724,17 @@ function renderReportPanel() {
 // banner toggle is on so the cover tracks the same visibility as the print
 // masthead / screen banner.
 function renderBannerCover() {
-  if (!state.banner_visible || !state.banner_src) return '';
-  return `<div class="rpt-cover"><img src="${escAttr(state.banner_src)}" alt="Banner"></div>`;
+  const hasBanner = !!(state.banner_visible && state.banner_src);
+  const metaText = getReportCoverMeta();
+  const titleText = getReportCoverTitle();
+  if (!hasBanner && !metaText && !titleText) return '';
+  return `<div class="rpt-cover${hasBanner ? '' : ' rpt-cover-noimg'}">
+    ${hasBanner ? `<img src="${escAttr(state.banner_src)}" alt="Banner">` : ''}
+    <div class="rpt-cover-copy">
+      ${metaText ? `<div class="rpt-cover-meta">${esc(metaText)}</div>` : ''}
+      ${titleText ? `<div class="rpt-cover-title">${esc(titleText)}</div>` : ''}
+    </div>
+  </div>`;
 }
 
 function sanitizeId(s) { return String(s).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, ''); }
@@ -2632,7 +2753,7 @@ function renderTableOfContents(orderedSections) {
     html += `<li class="rpt-toc-l1"><a href="#${secId}">
       <span class="rpt-toc-label">${esc(secName)}</span>
       <span class="rpt-toc-leader" aria-hidden="true"></span>
-      <span class="rpt-toc-page"></span>
+      <span class="rpt-toc-page" data-target="#${secId}"></span>
     </a>`;
     if (buckets.length) {
       html += `<ul class="rpt-toc-sublist">`;
@@ -2641,7 +2762,7 @@ function renderTableOfContents(orderedSections) {
         html += `<li class="rpt-toc-l2"><a href="#bs_${bucket.id}">
           <span class="rpt-toc-label">${esc(title)}</span>
           <span class="rpt-toc-leader" aria-hidden="true"></span>
-          <span class="rpt-toc-page"></span>
+          <span class="rpt-toc-page" data-target="#bs_${bucket.id}"></span>
         </a></li>`;
       });
       html += `</ul>`;
@@ -2654,21 +2775,7 @@ function renderTableOfContents(orderedSections) {
 
 function renderReportSections() {
   destroySortables();
-  const sectionRank = {'Results Summary': 0, 'Earnings Call Q&A': 1, 'Other': 2};
-  const sectionOrder = [...new Set(
-    state.buckets
-      .filter(bucket => getReportSubquotes(state.current_bank, bucket.id).length > 0)
-      .map(bucket => bucket.report_section || 'Results Summary')
-  )].sort((a, b) => (sectionRank[a] ?? 99) - (sectionRank[b] ?? 99) || a.localeCompare(b));
-  // Build the sections→buckets map once so TOC and body render from the same
-  // list; prevents the two from drifting if one of the inputs changes.
-  const orderedSections = sectionOrder.map(secName => ({
-    name: secName,
-    buckets: state.buckets.filter(bucket =>
-      (bucket.report_section || 'Results Summary') === secName &&
-      getReportSubquotes(state.current_bank, bucket.id).length > 0
-    ),
-  })).filter(s => s.buckets.length);
+  const orderedSections = getOrderedSections(state.current_bank);
 
   let html = renderBannerCover();
   html += renderTableOfContents(orderedSections);
@@ -3161,13 +3268,29 @@ function saveReport() {
 }
 
 // ============================================================
-// DOCX EXPORT (client-side, dolanmiu/docx via UNPKG)
+// PDF / DOCX EXPORT
 // ============================================================
-// The business workflow is: open the saved HTML, adjust content/selections in
-// the browser, THEN export to PDF or DOCX. So DOCX generation must happen
-// entirely in the page. We lazy-load the UMD bundle the first time the user
-// clicks DOCX so the initial page load stays lean; subsequent clicks reuse
-// the cached promise.
+// Export happens fully client-side from the saved HTML so the user can refine
+// the draft first, then download a clean PDF or DOCX that matches the edited
+// state rather than the original ETL output.
+function ensurePdfLibrary() {
+  if (window.jspdf && window.jspdf.jsPDF) return Promise.resolve(window.jspdf);
+  if (window._jspdfLibPromise) return window._jspdfLibPromise;
+  window._jspdfLibPromise = new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js';
+    s.crossOrigin = 'anonymous';
+    s.onload = () => (
+      window.jspdf && window.jspdf.jsPDF
+        ? resolve(window.jspdf)
+        : reject(new Error('jsPDF loaded but window.jspdf.jsPDF is unavailable'))
+    );
+    s.onerror = () => reject(new Error('Failed to load jsPDF from unpkg'));
+    document.head.appendChild(s);
+  });
+  return window._jspdfLibPromise;
+}
+
 function ensureDocxLibrary() {
   if (window.docx) return Promise.resolve(window.docx);
   if (window._docxLibPromise) return window._docxLibPromise;
@@ -3175,18 +3298,20 @@ function ensureDocxLibrary() {
     const s = document.createElement('script');
     s.src = 'https://unpkg.com/docx@8.5.0/build/index.umd.js';
     s.crossOrigin = 'anonymous';
-    s.onload  = () => window.docx ? resolve(window.docx) : reject(new Error('docx library loaded but window.docx is undefined'));
+    s.onload = () => (
+      window.docx
+        ? resolve(window.docx)
+        : reject(new Error('docx library loaded but window.docx is undefined'))
+    );
     s.onerror = () => reject(new Error('Failed to load docx library from unpkg'));
     document.head.appendChild(s);
   });
   return window._docxLibPromise;
 }
 
-// SVG banners need to be rasterised for DOCX — Word's ImageRun only
-// reliably handles PNG/JPEG. We draw the image into an offscreen canvas and
-// export as PNG; this also normalises sizing so the cover always looks the
-// same regardless of the source SVG's intrinsic dimensions.
-function rasterizeImageForDocx(src, maxWidth = 1200) {
+// Rasterise SVG/PNG/JPEG banners to PNG bytes + data URL so both jsPDF and
+// DOCX ImageRun can share the same in-browser asset preparation path.
+function rasterizeImageForExport(src, maxWidth = 1600) {
   return new Promise((resolve) => {
     if (!src) return resolve(null);
     const img = new Image();
@@ -3196,18 +3321,20 @@ function rasterizeImageForDocx(src, maxWidth = 1200) {
         const w = Math.round((img.naturalWidth || img.width) * scale) || maxWidth;
         const h = Math.round((img.naturalHeight || img.height) * scale) || 200;
         const canvas = document.createElement('canvas');
-        canvas.width = w; canvas.height = h;
+        canvas.width = w;
+        canvas.height = h;
         const ctx = canvas.getContext('2d');
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, w, h);
         ctx.drawImage(img, 0, 0, w, h);
+        const dataUrl = canvas.toDataURL('image/png');
         canvas.toBlob(async (blob) => {
           if (!blob) return resolve(null);
           const ab = await blob.arrayBuffer();
-          resolve({ data: new Uint8Array(ab), width: w, height: h });
+          resolve({ data: new Uint8Array(ab), dataUrl, width: w, height: h });
         }, 'image/png');
       } catch (e) {
-        console.warn('rasterizeImageForDocx failed:', e);
+        console.warn('rasterizeImageForExport failed:', e);
         resolve(null);
       }
     };
@@ -3216,11 +3343,8 @@ function rasterizeImageForDocx(src, maxWidth = 1200) {
   });
 }
 
-// Extract plain text for DOCX — mirrors getSubquoteFormats but centralised so
-// both verbatim and condensed paths get the same whitespace normalisation.
-// Honours user edits: if the subquote has a manual text override it wins over
-// the sentence-derived rendering. Accepts `bs` optionally; defaults to the
-// current bank's state.
+// Extract plain text for exports — mirrors the screen-format toggle but strips
+// browser-only highlighting spans. User text overrides win over sentence data.
 function subquoteTextForDocx(sq, fmt, bs) {
   const bankState = bs || (state && state.current_bank ? getBankState(state.current_bank) : null);
   const override = bankState ? getSubquoteTextOverride(sq.id, bankState) : null;
@@ -3231,17 +3355,593 @@ function subquoteTextForDocx(sq, fmt, bs) {
   return sents.map(s => (s[key] || s.text || '').trim()).filter(Boolean).join(' ');
 }
 
+function getQaContextText(sq) {
+  if (!sq || sq.type !== 'qa') return '';
+  const verbatim = (sq.question_sentences || []).map(s => s.text).join(' ').trim();
+  const summary = (sq.analyst_question_summary || '').trim();
+  const context = summary || verbatim;
+  return context ? `In response to the analyst question: ${context}` : '';
+}
+
+function getFindingAttribution(sq) {
+  const isMD = sq.type === 'md';
+  const name = isMD ? sq.speaker : (sq.executive_name || 'Executive');
+  const title = isMD ? (sq.speaker_title || '') : (sq.executive_title || '');
+  return title ? `${name}, ${title}` : name;
+}
+
+function slugifyFilePart(value, fallback = 'report') {
+  const cleaned = String(value || '')
+    .trim()
+    .replace(/[^a-z0-9]+/gi, '_')
+    .replace(/^_+|_+$/g, '');
+  return cleaned || fallback;
+}
+
+function pdfWrapText(doc, text, maxWidth, fontName, fontStyle, fontSize) {
+  const blocks = String(text || '')
+    .replace(/\r\n/g, '\n')
+    .split(/\n+/)
+    .map(part => part.trim())
+    .filter(Boolean);
+  if (!blocks.length) return [];
+  doc.setFont(fontName, fontStyle);
+  doc.setFontSize(fontSize);
+  return blocks.flatMap(part => doc.splitTextToSize(part, maxWidth)).filter(Boolean);
+}
+
+function drawPdfLines(doc, lines, x, y, lineHeight, options = {}) {
+  if (!lines.length) return y;
+  lines.forEach((line, idx) => {
+    doc.text(line, x, y + (idx * lineHeight), options);
+  });
+  return y + (lines.length * lineHeight);
+}
+
+function getPdfLayout(doc) {
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  // Use narrower export margins than the screen preview so PDF lines carry
+  // more text across the page without changing the on-screen editing layout.
+  const marginLeft = 28;
+  const marginRight = 28;
+  const contentTop = 42;
+  const contentBottom = pageHeight - 42;
+  return {
+    pageWidth,
+    pageHeight,
+    marginLeft,
+    marginRight,
+    contentTop,
+    contentBottom,
+    contentWidth: pageWidth - marginLeft - marginRight,
+    footerY: pageHeight - 18,
+    cover: {
+      bannerMaxHeight: 150,
+      bannerGap: 18,
+      metaFontSize: 11,
+      metaLineHeight: 14,
+      titleFontSize: 26,
+      titleLineHeight: 28,
+      dividerBefore: 14,
+      dividerAfter: 18,
+    },
+    toc: {
+      headingFontSize: 16,
+      headingLineHeight: 20,
+      headingGapAfter: 10,
+      level1FontSize: 13,
+      level1LineHeight: 16,
+      level2FontSize: 11.5,
+      level2LineHeight: 14,
+      level2Indent: 18,
+      pageNumberWidth: 26,
+      entryGap: 4,
+    },
+    section: {
+      fontSize: 18,
+      lineHeight: 22,
+      gapAfter: 12,
+    },
+    bucket: {
+      titleFontSize: 14,
+      titleLineHeight: 17,
+      headlineFontSize: 11,
+      headlineLineHeight: 14,
+      gapAfter: 10,
+    },
+    finding: {
+      textIndent: 18,
+      bodyFontSize: 11.5,
+      bodyLineHeight: 15,
+      contextFontSize: 10.5,
+      contextLineHeight: 13,
+      attribFontSize: 9.5,
+      attribLineHeight: 12,
+      gapAfter: 8,
+    },
+  };
+}
+
+function getPdfBannerMetrics(raster, layout) {
+  if (!raster) return null;
+  const scale = Math.min(
+    layout.contentWidth / Math.max(1, raster.width),
+    layout.cover.bannerMaxHeight / Math.max(1, raster.height)
+  );
+  return {
+    width: Math.max(1, raster.width * scale),
+    height: Math.max(1, raster.height * scale),
+  };
+}
+
+function getPdfCoverMetrics(doc, layout, raster) {
+  const banner = getPdfBannerMetrics(raster, layout);
+  const metaLines = pdfWrapText(
+    doc,
+    getReportCoverMeta(),
+    layout.contentWidth,
+    'helvetica',
+    'bold',
+    layout.cover.metaFontSize
+  );
+  const titleLines = pdfWrapText(
+    doc,
+    getReportCoverTitle(),
+    layout.contentWidth,
+    'times',
+    'bold',
+    layout.cover.titleFontSize
+  );
+  let height = 0;
+  if (banner) height += banner.height + layout.cover.bannerGap;
+  if (metaLines.length) height += metaLines.length * layout.cover.metaLineHeight;
+  if (metaLines.length && titleLines.length) height += 6;
+  if (titleLines.length) height += titleLines.length * layout.cover.titleLineHeight;
+  if (banner || metaLines.length || titleLines.length) {
+    height += layout.cover.dividerBefore + 1 + layout.cover.dividerAfter;
+  }
+  return { banner, metaLines, titleLines, height };
+}
+
+function getPdfTocEntries(orderedSections) {
+  const entries = [];
+  orderedSections.forEach(({ name, buckets }) => {
+    entries.push({ level: 1, label: name, targetId: 'sec_' + sanitizeId(name) });
+    buckets.forEach(bucket => {
+      entries.push({
+        level: 2,
+        label: (state.bucket_user_titles || {})[bucket.id] || bucket.name,
+        targetId: `bs_${bucket.id}`,
+      });
+    });
+  });
+  return entries;
+}
+
+function measurePdfTocEntry(doc, entry, layout) {
+  const indent = entry.level === 2 ? layout.toc.level2Indent : 0;
+  const fontSize = entry.level === 1 ? layout.toc.level1FontSize : layout.toc.level2FontSize;
+  const fontStyle = entry.level === 1 ? 'bold' : 'normal';
+  const lineHeight = entry.level === 1 ? layout.toc.level1LineHeight : layout.toc.level2LineHeight;
+  const lines = pdfWrapText(
+    doc,
+    entry.label,
+    layout.contentWidth - indent - layout.toc.pageNumberWidth - 10,
+    'times',
+    fontStyle,
+    fontSize
+  );
+  return { lines, lineHeight, height: (lines.length * lineHeight) + layout.toc.entryGap };
+}
+
+function measurePdfSectionHeading(doc, sectionName, layout) {
+  const lines = pdfWrapText(
+    doc,
+    sectionName,
+    layout.contentWidth,
+    'times',
+    'bold',
+    layout.section.fontSize
+  );
+  return { lines, height: (lines.length * layout.section.lineHeight) + layout.section.gapAfter };
+}
+
+function measurePdfBucketHeader(doc, bucket, layout) {
+  const title = (state.bucket_user_titles || {})[bucket.id] || bucket.name;
+  const titleLines = pdfWrapText(
+    doc,
+    title,
+    layout.contentWidth,
+    'times',
+    'bold',
+    layout.bucket.titleFontSize
+  );
+  const headlineLines = bucket.generated_headline
+    ? pdfWrapText(
+        doc,
+        bucket.generated_headline,
+        layout.contentWidth,
+        'times',
+        'italic',
+        layout.bucket.headlineFontSize
+      )
+    : [];
+  let height = titleLines.length * layout.bucket.titleLineHeight;
+  if (headlineLines.length) height += 4 + (headlineLines.length * layout.bucket.headlineLineHeight);
+  height += layout.bucket.gapAfter;
+  return { titleLines, headlineLines, height };
+}
+
+function measurePdfFinding(doc, sq, bs, layout) {
+  const fmt = (bs.subquote_formats && bs.subquote_formats[sq.id]) || 'verbatim';
+  const text = subquoteTextForDocx(sq, fmt, bs);
+  const contentWidth = layout.contentWidth - layout.finding.textIndent;
+  const contextLines = pdfWrapText(
+    doc,
+    getQaContextText(sq),
+    contentWidth,
+    'times',
+    'italic',
+    layout.finding.contextFontSize
+  );
+  const textLines = pdfWrapText(
+    doc,
+    text,
+    contentWidth,
+    'times',
+    'normal',
+    layout.finding.bodyFontSize
+  );
+  const attribLines = _attribVisible
+    ? pdfWrapText(
+        doc,
+        `\u2014 ${getFindingAttribution(sq)}`,
+        layout.contentWidth,
+        'times',
+        'italic',
+        layout.finding.attribFontSize
+      )
+    : [];
+  let height = 0;
+  if (contextLines.length) height += (contextLines.length * layout.finding.contextLineHeight) + 4;
+  height += textLines.length * layout.finding.bodyLineHeight;
+  if (attribLines.length) height += 4 + (attribLines.length * layout.finding.attribLineHeight);
+  height += layout.finding.gapAfter;
+  return { contextLines, textLines, attribLines, height };
+}
+
+function buildPdfTocPages(doc, tocEntries, layout, coverMetrics) {
+  const pages = [[]];
+  let y = layout.contentTop
+    + coverMetrics.height
+    + layout.toc.headingLineHeight
+    + layout.toc.headingGapAfter;
+
+  tocEntries.forEach(entry => {
+    const metrics = measurePdfTocEntry(doc, entry, layout);
+    if (pages[pages.length - 1].length && y + metrics.height > layout.contentBottom) {
+      pages.push([]);
+      y = layout.contentTop + layout.toc.headingLineHeight + layout.toc.headingGapAfter;
+    }
+    pages[pages.length - 1].push(entry);
+    y += metrics.height;
+  });
+
+  return pages;
+}
+
+function buildPdfBodyPlan(doc, orderedSections, bankId, layout) {
+  const bs = getBankState(bankId);
+  let page = 1;
+  let y = layout.contentTop;
+  const pageMap = new Map();
+
+  orderedSections.forEach((section, sectionIdx) => {
+    if (sectionIdx > 0) {
+      page += 1;
+      y = layout.contentTop;
+    }
+
+    pageMap.set('sec_' + sanitizeId(section.name), page);
+    y += measurePdfSectionHeading(doc, section.name, layout).height;
+
+    section.buckets.forEach(bucket => {
+      const quotes = getReportSubquotes(bankId, bucket.id);
+      if (!quotes.length) return;
+
+      const headerMetrics = measurePdfBucketHeader(doc, bucket, layout);
+      const firstFindingHeight = quotes.length
+        ? measurePdfFinding(doc, quotes[0], bs, layout).height
+        : 0;
+      const bucketStartHeight = headerMetrics.height + firstFindingHeight;
+      if (y + bucketStartHeight > layout.contentBottom && y > layout.contentTop) {
+        page += 1;
+        y = layout.contentTop;
+      }
+
+      pageMap.set(`bs_${bucket.id}`, page);
+      y += headerMetrics.height;
+
+      quotes.forEach(sq => {
+        const findingMetrics = measurePdfFinding(doc, sq, bs, layout);
+        if (y + findingMetrics.height > layout.contentBottom && y > layout.contentTop) {
+          page += 1;
+          y = layout.contentTop;
+        }
+        y += findingMetrics.height;
+      });
+      y += 4;
+    });
+  });
+
+  return { pageMap, pageCount: page };
+}
+
+function drawPdfCoverIntro(doc, layout, coverMetrics, raster) {
+  let y = layout.contentTop;
+  if (coverMetrics.banner && raster) {
+    const x = layout.marginLeft + ((layout.contentWidth - coverMetrics.banner.width) / 2);
+    doc.addImage(raster.dataUrl, 'PNG', x, y, coverMetrics.banner.width, coverMetrics.banner.height);
+    y += coverMetrics.banner.height + layout.cover.bannerGap;
+  }
+
+  if (coverMetrics.metaLines.length) {
+    doc.setTextColor(122, 115, 100);
+    y = drawPdfLines(
+      doc,
+      coverMetrics.metaLines,
+      layout.pageWidth / 2,
+      y,
+      layout.cover.metaLineHeight,
+      { align: 'center' }
+    );
+  }
+
+  if (coverMetrics.metaLines.length && coverMetrics.titleLines.length) y += 6;
+
+  if (coverMetrics.titleLines.length) {
+    doc.setTextColor(15, 27, 45);
+    y = drawPdfLines(
+      doc,
+      coverMetrics.titleLines,
+      layout.pageWidth / 2,
+      y,
+      layout.cover.titleLineHeight,
+      { align: 'center' }
+    );
+  }
+
+  if (coverMetrics.banner || coverMetrics.metaLines.length || coverMetrics.titleLines.length) {
+    y += layout.cover.dividerBefore;
+    doc.setDrawColor(217, 208, 188);
+    doc.setLineWidth(1);
+    doc.line(layout.marginLeft, y, layout.pageWidth - layout.marginRight, y);
+    y += layout.cover.dividerAfter;
+  }
+  return y;
+}
+
+function drawPdfTocHeading(doc, layout, y, label) {
+  doc.setFont('times', 'bold');
+  doc.setFontSize(layout.toc.headingFontSize);
+  doc.setTextColor(15, 27, 45);
+  doc.text(label, layout.marginLeft, y);
+  y += layout.toc.headingLineHeight;
+  doc.setDrawColor(231, 223, 204);
+  doc.line(layout.marginLeft, y - 5, layout.pageWidth - layout.marginRight, y - 5);
+  return y + layout.toc.headingGapAfter;
+}
+
+function drawPdfTocEntries(doc, layout, entries, actualPageMap, y) {
+  entries.forEach(entry => {
+    const metrics = measurePdfTocEntry(doc, entry, layout);
+    const indent = entry.level === 2 ? layout.toc.level2Indent : 0;
+    const x = layout.marginLeft + indent;
+    doc.setTextColor(entry.level === 1 ? 15 : 74, entry.level === 1 ? 27 : 82, entry.level === 1 ? 45 : 104);
+    y = drawPdfLines(doc, metrics.lines, x, y, metrics.lineHeight);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(11);
+    doc.setTextColor(122, 115, 100);
+    const pageNumber = actualPageMap.get(entry.targetId);
+    if (pageNumber != null) {
+      doc.text(
+        String(pageNumber),
+        layout.pageWidth - layout.marginRight,
+        y - metrics.lineHeight,
+        { align: 'right' }
+      );
+    }
+    y += layout.toc.entryGap;
+  });
+  return y;
+}
+
+function drawPdfSectionHeading(doc, layout, sectionName, y) {
+  const metrics = measurePdfSectionHeading(doc, sectionName, layout);
+  doc.setTextColor(15, 27, 45);
+  y = drawPdfLines(doc, metrics.lines, layout.marginLeft, y, layout.section.lineHeight);
+  doc.setDrawColor(184, 173, 148);
+  doc.line(layout.marginLeft, y - 6, layout.pageWidth - layout.marginRight, y - 6);
+  return y + layout.section.gapAfter;
+}
+
+function drawPdfBucketHeader(doc, layout, bucket, y) {
+  const metrics = measurePdfBucketHeader(doc, bucket, layout);
+  doc.setTextColor(15, 27, 45);
+  y = drawPdfLines(doc, metrics.titleLines, layout.marginLeft, y, layout.bucket.titleLineHeight);
+  if (metrics.headlineLines.length) {
+    y += 4;
+    doc.setTextColor(74, 82, 104);
+    y = drawPdfLines(
+      doc,
+      metrics.headlineLines,
+      layout.marginLeft,
+      y,
+      layout.bucket.headlineLineHeight
+    );
+  }
+  return y + layout.bucket.gapAfter;
+}
+
+function drawPdfFinding(doc, layout, sq, bs, y) {
+  const metrics = measurePdfFinding(doc, sq, bs, layout);
+  const textX = layout.marginLeft + layout.finding.textIndent;
+
+  if (metrics.contextLines.length) {
+    doc.setTextColor(74, 82, 104);
+    y = drawPdfLines(
+      doc,
+      metrics.contextLines,
+      textX,
+      y,
+      layout.finding.contextLineHeight
+    );
+    y += 4;
+  }
+
+  doc.setFillColor(20, 33, 58);
+  doc.circle(layout.marginLeft + 5, y - 4, 1.4, 'F');
+  doc.setTextColor(20, 33, 58);
+  y = drawPdfLines(doc, metrics.textLines, textX, y, layout.finding.bodyLineHeight);
+
+  if (metrics.attribLines.length) {
+    y += 4;
+    doc.setTextColor(122, 115, 100);
+    y = drawPdfLines(
+      doc,
+      metrics.attribLines,
+      layout.pageWidth - layout.marginRight,
+      y,
+      layout.finding.attribLineHeight,
+      { align: 'right' }
+    );
+  }
+
+  return y + layout.finding.gapAfter;
+}
+
+function drawPdfPageNumbers(doc, layout) {
+  const totalPages = doc.getNumberOfPages();
+  for (let pageNum = 1; pageNum <= totalPages; pageNum += 1) {
+    doc.setPage(pageNum);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.setTextColor(122, 115, 100);
+    doc.text(String(pageNum), layout.pageWidth - layout.marginRight, layout.footerY, { align: 'right' });
+  }
+}
+
+function renderPdfBody(doc, layout, orderedSections, bankId) {
+  const bs = getBankState(bankId);
+
+  orderedSections.forEach((section, sectionIdx) => {
+    doc.addPage();
+    let y = layout.contentTop;
+    y = drawPdfSectionHeading(doc, layout, section.name, y);
+
+    section.buckets.forEach(bucket => {
+      const quotes = getReportSubquotes(bankId, bucket.id);
+      if (!quotes.length) return;
+
+      const headerMetrics = measurePdfBucketHeader(doc, bucket, layout);
+      const firstFindingHeight = quotes.length
+        ? measurePdfFinding(doc, quotes[0], bs, layout).height
+        : 0;
+      if (y + headerMetrics.height + firstFindingHeight > layout.contentBottom && y > layout.contentTop) {
+        doc.addPage();
+        y = layout.contentTop;
+      }
+
+      y = drawPdfBucketHeader(doc, layout, bucket, y);
+
+      quotes.forEach(sq => {
+        const findingMetrics = measurePdfFinding(doc, sq, bs, layout);
+        if (y + findingMetrics.height > layout.contentBottom && y > layout.contentTop) {
+          doc.addPage();
+          y = layout.contentTop;
+        }
+        y = drawPdfFinding(doc, layout, sq, bs, y);
+      });
+      y += 4;
+    });
+  });
+}
+
+async function savePdf() {
+  let pdfLib;
+  try {
+    pdfLib = await ensurePdfLibrary();
+  } catch (e) {
+    alert('Could not load the PDF library from the internet.\n\n' + e.message);
+    return;
+  }
+
+  const { jsPDF } = pdfLib;
+  const bankId = state.current_bank;
+  const bank = getCurrentBankData(bankId);
+  const orderedSections = getOrderedSections(bankId);
+  const raster = state.banner_visible && state.banner_src
+    ? await rasterizeImageForExport(state.banner_src, 1800)
+    : null;
+
+  const doc = new jsPDF({
+    orientation: 'portrait',
+    unit: 'pt',
+    format: 'letter',
+    compress: true,
+  });
+  const layout = getPdfLayout(doc);
+  const coverMetrics = getPdfCoverMetrics(doc, layout, raster);
+  const tocEntries = getPdfTocEntries(orderedSections);
+  const tocPages = buildPdfTocPages(doc, tocEntries, layout, coverMetrics);
+  const bodyPlan = buildPdfBodyPlan(doc, orderedSections, bankId, layout);
+  const actualPageMap = new Map(
+    [...bodyPlan.pageMap.entries()].map(([targetId, pageNum]) => [targetId, pageNum + tocPages.length])
+  );
+
+  doc.setProperties({
+    title: getReportExportTitle(bankId) || 'PM Call Summary',
+    subject: 'PM Call Summary',
+    creator: 'Call Summary Editor',
+  });
+
+  let tocY = drawPdfCoverIntro(doc, layout, coverMetrics, raster);
+  tocY = drawPdfTocHeading(doc, layout, tocY, 'Contents');
+  drawPdfTocEntries(doc, layout, tocPages[0] || [], actualPageMap, tocY);
+
+  for (let idx = 1; idx < tocPages.length; idx += 1) {
+    doc.addPage();
+    let y = drawPdfTocHeading(doc, layout, layout.contentTop, 'Contents (continued)');
+    drawPdfTocEntries(doc, layout, tocPages[idx], actualPageMap, y);
+  }
+
+  renderPdfBody(doc, layout, orderedSections, bankId);
+  drawPdfPageNumbers(doc, layout);
+
+  const ts = new Date().toISOString().replace(/[:.]/g, '').slice(0, 15);
+  const bankToken = slugifyFilePart(bank.ticker || bank.company_name, 'bank');
+  const periodToken = slugifyFilePart(getReportPeriodLabel(), 'period');
+  doc.save(`call_summary_${bankToken}_${periodToken}_${ts}.pdf`);
+}
+
 async function saveDocx() {
   const btn = document.getElementById('docx-btn');
   const origHtml = btn ? btn.innerHTML : '';
-  if (btn) { btn.disabled = true; btn.innerHTML = 'Building DOCX&hellip;'; }
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = 'Building DOCX&hellip;';
+  }
 
   let docxLib;
   try {
     docxLib = await ensureDocxLibrary();
   } catch (e) {
     alert('Could not load the DOCX library from the internet.\n\n' + e.message);
-    if (btn) { btn.disabled = false; btn.innerHTML = origHtml; }
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = origHtml;
+    }
     return;
   }
 
@@ -3251,44 +3951,46 @@ async function saveDocx() {
   } = docxLib;
 
   const bankId = state.current_bank;
-  const bank   = state.banks[bankId] || {};
-  const bs     = getBankState(bankId);
-
-  const titleText = [bank.name, state.period].filter(Boolean).join(' \u2014 ') || 'Call Summary';
+  const bank = getCurrentBankData(bankId);
+  const bs = getBankState(bankId);
+  const orderedSections = getOrderedSections(bankId);
+  const titleText = getReportCoverMeta(bankId) || 'Call Summary';
+  const subtitleText = getReportCoverTitle();
   const children = [];
 
-  // ── Page 1: masthead banner + title + TOC ────────────────────────────
-  // The banner is a compact masthead above the title; the TOC field follows
-  // on the same page. A single page break after the TOC bumps the content
-  // onto page 2.
   if (state.banner_visible && state.banner_src) {
-    const raster = await rasterizeImageForDocx(state.banner_src, 1200);
+    const raster = await rasterizeImageForExport(state.banner_src, 1800);
     if (raster) {
-      const pxWidth = 480;
-      const pxHeight = Math.round(raster.height * (pxWidth / raster.width));
+      let pxWidth = Math.min(620, raster.width);
+      let pxHeight = Math.round(raster.height * (pxWidth / raster.width));
+      if (pxHeight > 150) {
+        const scale = 150 / pxHeight;
+        pxWidth = Math.round(pxWidth * scale);
+        pxHeight = Math.round(pxHeight * scale);
+      }
       children.push(new Paragraph({
         alignment: AlignmentType.CENTER,
-        spacing: { before: 0, after: 200 },
-        children: [new ImageRun({ data: raster.data, transformation: { width: pxWidth, height: pxHeight } })],
+        spacing: { before: 0, after: 180 },
+        children: [new ImageRun({
+          data: raster.data,
+          transformation: { width: pxWidth, height: pxHeight },
+        })],
       }));
     }
   }
+
   children.push(new Paragraph({
     heading: HeadingLevel.TITLE,
     alignment: AlignmentType.CENTER,
-    spacing: { before: 80, after: 80 },
+    spacing: { before: 60, after: 80 },
     children: [new TextRun({ text: titleText, bold: true, size: 40 })],
   }));
   children.push(new Paragraph({
     alignment: AlignmentType.CENTER,
-    spacing: { before: 0, after: 360 },
-    children: [new TextRun({ text: 'Investor Relations PM Call Summary', italics: true, size: 22, color: '4A5268' })],
+    spacing: { before: 0, after: 320 },
+    children: [new TextRun({ text: subtitleText, bold: true, size: 24, color: '4A5268' })],
   }));
 
-  // ── Table of contents (still on page 1) ──────────────────────────────
-  // `TableOfContents` emits a Word TOC field — Word fills it in when the
-  // document is opened (the user gets a "Update fields?" prompt, which is
-  // standard for native Word TOCs). `headingStyleRange: "1-2"` pulls H1 + H2.
   children.push(new Paragraph({
     heading: HeadingLevel.HEADING_1,
     spacing: { before: 0, after: 120 },
@@ -3300,19 +4002,7 @@ async function saveDocx() {
   }));
   children.push(new Paragraph({ children: [new PageBreak()] }));
 
-  // ── Report sections (same ordering as screen render) ─────────────────
-  const sectionRank = {'Results Summary': 0, 'Earnings Call Q&A': 1, 'Other': 2};
-  const sectionOrder = [...new Set(state.buckets
-    .filter(b => getReportSubquotes(bankId, b.id).length > 0)
-    .map(b => b.report_section || 'Results Summary')
-  )].sort((a, b) => (sectionRank[a] ?? 99) - (sectionRank[b] ?? 99) || a.localeCompare(b));
-
-  sectionOrder.forEach((secName, sIdx) => {
-    const sectionBuckets = state.buckets.filter(b =>
-      (b.report_section || 'Results Summary') === secName &&
-      getReportSubquotes(bankId, b.id).length > 0);
-    if (!sectionBuckets.length) return;
-
+  orderedSections.forEach(({ name: secName, buckets: sectionBuckets }, sIdx) => {
     if (sIdx > 0) children.push(new Paragraph({ children: [new PageBreak()] }));
     children.push(new Paragraph({
       heading: HeadingLevel.HEADING_1,
@@ -3333,31 +4023,31 @@ async function saveDocx() {
       if (bucket.generated_headline) {
         children.push(new Paragraph({
           spacing: { before: 0, after: 140 },
-          children: [new TextRun({ text: bucket.generated_headline, italics: true, color: '4A5268' })],
+          children: [new TextRun({
+            text: bucket.generated_headline,
+            italics: true,
+            color: '4A5268',
+          })],
         }));
       }
 
       quotes.forEach(sq => {
-        const fmt  = (bs.subquote_formats && bs.subquote_formats[sq.id]) || 'verbatim';
-        const text = subquoteTextForDocx(sq, fmt);
+        const fmt = (bs.subquote_formats && bs.subquote_formats[sq.id]) || 'verbatim';
+        const text = subquoteTextForDocx(sq, fmt, bs);
         if (!text) return;
 
-        // QA answers are preceded by a short italic context line so the
-        // reader always knows what question the finding addresses.
-        if (sq.type === 'qa') {
-          const verbatim = (sq.question_sentences || []).map(s => s.text).join(' ').trim();
-          const summary  = (sq.analyst_question_summary || '').trim();
-          const context  = summary || verbatim;
-          if (context) {
-            children.push(new Paragraph({
-              spacing: { before: 100, after: 40 },
-              indent: { left: 360 },
-              children: [new TextRun({
-                text: `In response to the analyst question: ${context}`,
-                italics: true, color: '4A5268', size: 20,
-              })],
-            }));
-          }
+        const context = getQaContextText(sq);
+        if (context) {
+          children.push(new Paragraph({
+            spacing: { before: 100, after: 40 },
+            indent: { left: 360 },
+            children: [new TextRun({
+              text: context,
+              italics: true,
+              color: '4A5268',
+              size: 20,
+            })],
+          }));
         }
 
         children.push(new Paragraph({
@@ -3366,17 +4056,16 @@ async function saveDocx() {
           children: [new TextRun({ text })],
         }));
 
-        // Attribution is only emitted when the screen toggle is on, so the
-        // DOCX matches what the user sees in the report preview.
         if (_attribVisible) {
-          const isMD = sq.type === 'md';
-          const nm = isMD ? sq.speaker : (sq.executive_name || 'Executive');
-          const tt = isMD ? (sq.speaker_title || '') : (sq.executive_title || '');
-          const attrib = tt ? `${nm}, ${tt}` : nm;
           children.push(new Paragraph({
             alignment: AlignmentType.RIGHT,
             spacing: { before: 0, after: 140 },
-            children: [new TextRun({ text: `\u2014 ${attrib}`, italics: true, size: 18, color: '7A7364' })],
+            children: [new TextRun({
+              text: `\u2014 ${getFindingAttribution(sq)}`,
+              italics: true,
+              size: 18,
+              color: '7A7364',
+            })],
           }));
         }
       });
@@ -3385,38 +4074,68 @@ async function saveDocx() {
 
   const doc = new Document({
     creator: 'Call Summary Editor',
-    title: titleText,
-    description: 'Investor Relations PM Call Summary',
+    title: getReportExportTitle(bankId) || 'PM Call Summary',
+    description: subtitleText,
     styles: {
       default: {
-        document:  { run: { font: 'Georgia', size: 22 } },
-        heading1:  { run: { font: 'Georgia', size: 32, bold: true, color: '0F1B2D' }, paragraph: { spacing: { before: 320, after: 160 } } },
-        heading2:  { run: { font: 'Georgia', size: 26, bold: true, color: '0F1B2D' }, paragraph: { spacing: { before: 200, after: 80 } } },
-        title:     { run: { font: 'Georgia', size: 44, bold: true, color: '0F1B2D' } },
+        document: { run: { font: 'Georgia', size: 22 } },
+        heading1: {
+          run: { font: 'Georgia', size: 32, bold: true, color: '0F1B2D' },
+          paragraph: { spacing: { before: 320, after: 160 } },
+        },
+        heading2: {
+          run: { font: 'Georgia', size: 26, bold: true, color: '0F1B2D' },
+          paragraph: { spacing: { before: 200, after: 80 } },
+        },
+        title: { run: { font: 'Georgia', size: 44, bold: true, color: '0F1B2D' } },
       },
     },
     numbering: {
       config: [{
         reference: 'default-bullets',
-        levels: [{ level: 0, format: LevelFormat.BULLET, text: '\u2022', alignment: AlignmentType.LEFT,
-                   style: { paragraph: { indent: { left: 360, hanging: 260 } } } }],
+        levels: [{
+          level: 0,
+          format: LevelFormat.BULLET,
+          text: '\u2022',
+          alignment: AlignmentType.LEFT,
+          style: { paragraph: { indent: { left: 360, hanging: 260 } } },
+        }],
       }],
     },
-    sections: [{ properties: {}, children }],
+    sections: [{
+      properties: {
+        page: {
+          margin: {
+            top: 1080,
+            right: 720,
+            bottom: 1080,
+            left: 720,
+          },
+        },
+      },
+      children,
+    }],
   });
 
   try {
     const blob = await Packer.toBlob(doc);
-    const ts = new Date().toISOString().replace(/[:.]/g,'').slice(0,15);
+    const ts = new Date().toISOString().replace(/[:.]/g, '').slice(0, 15);
+    const bankToken = slugifyFilePart(bank.ticker || bank.company_name, 'bank');
+    const periodToken = slugifyFilePart(getReportPeriodLabel(), 'period');
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url; a.download = `call_summary_${ts}.docx`; a.click();
+    a.href = url;
+    a.download = `call_summary_${bankToken}_${periodToken}_${ts}.docx`;
+    a.click();
     URL.revokeObjectURL(url);
   } catch (e) {
     alert('Failed to build DOCX: ' + e.message);
     console.error(e);
   } finally {
-    if (btn) { btn.disabled = false; btn.innerHTML = origHtml; }
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = origHtml;
+    }
   }
 }
 
