@@ -1453,6 +1453,28 @@ def _make_context_finding_record(
     }
 
 
+def _looks_like_operator_turn(turn: Dict[str, Any]) -> bool:
+    """Return whether a QA answer turn appears to be operator-only."""
+    speaker = str(turn.get("speaker", "")).strip().lower()
+    title = str(turn.get("speaker_title", "")).strip().lower()
+    affiliation = str(turn.get("speaker_affiliation", "")).strip().lower()
+    combined = " ".join(part for part in (speaker, title, affiliation) if part).strip()
+    return (
+        speaker in {"operator", "conference operator"}
+        or title == "operator"
+        or combined.startswith("operator")
+        or "conference operator" in combined
+    )
+
+
+def _pick_primary_executive_turn(answer_turns: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """Choose the best executive turn to represent a QA conversation."""
+    for turn in answer_turns:
+        if not _looks_like_operator_turn(turn):
+            return turn
+    return answer_turns[0] if answer_turns else None
+
+
 def _seed_selected_report_sentences(
     processed_md: List[Dict[str, Any]],
     processed_qa: List[Dict[str, Any]],
@@ -2413,11 +2435,15 @@ async def classify_qa_conversation(  # pylint: disable=unused-argument
 
     question_turns = [turn for turn in turns if turn["role"] == "q"]
     answer_turns = [turn for turn in turns if turn["role"] == "a"]
+    executive_turn = _pick_primary_executive_turn(answer_turns)
 
     analyst_name = question_turns[0]["speaker"] if question_turns else "Analyst"
     analyst_affiliation = question_turns[0]["speaker_affiliation"] if question_turns else ""
-    executive_name = answer_turns[0]["speaker"] if answer_turns else "Executive"
-    executive_title = answer_turns[0]["speaker_title"] if answer_turns else ""
+    executive_name = executive_turn["speaker"] if executive_turn else "Executive"
+    executive_title = executive_turn["speaker_title"] if executive_turn else ""
+    executive_affiliation = (
+        executive_turn["speaker_affiliation"] if executive_turn else ""
+    )
 
     # Assign per-role sentence ids and flat sentence text lists on each turn
     # so grouping + record construction can operate on uniform turn-scoped
@@ -2653,6 +2679,9 @@ async def classify_qa_conversation(  # pylint: disable=unused-argument
                 min_bucket_score_for_assignment=min_bucket_score_for_assignment,
             )
             record["para_idx"] = para_idx
+            record["speaker"] = turn.get("speaker", "")
+            record["speaker_title"] = turn.get("speaker_title", "")
+            record["speaker_affiliation"] = turn.get("speaker_affiliation", "")
             answer_records.append(record)
             turn_records.append(record)
             a_finding_counter += 1
@@ -2737,6 +2766,7 @@ async def classify_qa_conversation(  # pylint: disable=unused-argument
         "analyst_affiliation": analyst_affiliation,
         "executive_name": executive_name,
         "executive_title": executive_title,
+        "executive_affiliation": executive_affiliation,
         "analyst_question_summary": analyst_question_summary,
         "turns": turns,
         "question_sentences": question_records,

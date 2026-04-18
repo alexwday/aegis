@@ -1713,3 +1713,90 @@ async def test_classify_qa_conversation_groups_each_block_in_parallel():
     assert result["answer_sentences"][0]["sentence_ids"] == ["RY-CA_QA_1_as0"]
     assert result["question_sentences"][0]["sid"] == "RY-CA_QA_1_qf0"
     assert result["question_sentences"][0]["status"] == "context"
+
+
+@pytest.mark.asyncio
+async def test_classify_qa_conversation_skips_operator_for_executive_attribution():
+    categories = [
+        {
+            "transcript_sections": "QA",
+            "report_section": "Earnings Call Q&A",
+            "category_name": "Capital",
+            "category_description": "Capital and CET1 discussion.",
+        }
+    ]
+    conv_blocks = [
+        {
+            "speaker": "Analyst",
+            "speaker_affiliation": "Big Bank",
+            "speaker_title": "",
+            "speaker_type_hint": "q",
+            "paragraphs": ["Can you walk through capital?"],
+        },
+        {
+            "speaker": "Operator",
+            "speaker_affiliation": "",
+            "speaker_title": "",
+            "speaker_type_hint": "a",
+            "paragraphs": ["Our next question comes from Jane Analyst."],
+        },
+        {
+            "speaker": "Chief Financial Officer",
+            "speaker_affiliation": "RBC",
+            "speaker_title": "CFO",
+            "speaker_type_hint": "a",
+            "paragraphs": ["Capital remains strong and earnings drove the build."],
+        },
+    ]
+
+    mock_call_tool = _qa_call_tool_dispatcher(
+        {
+            "primary_bucket_index": 0,
+            "analyst_question_summary": "on capital generation",
+            "answer_findings": [
+                {
+                    "index": 1,
+                    "scores": [],
+                    "importance_score": 1.0,
+                    "condensed": "Operator handoff.",
+                },
+                {
+                    "index": 2,
+                    "scores": [{"bucket_index": 0, "score": 8.4}],
+                    "importance_score": 7.4,
+                    "condensed": "Capital remains strong.",
+                },
+            ],
+        }
+    )
+
+    with patch(
+        "aegis.etls.call_summary_editor.interactive_pipeline._call_tool",
+        new=mock_call_tool,
+    ):
+        result = await classify_qa_conversation(
+            conv_idx=1,
+            conv_blocks=conv_blocks,
+            ticker="RY-CA",
+            categories=categories,
+            categories_text_qa="",
+            company_name="RBC",
+            fiscal_year=2026,
+            fiscal_quarter="Q1",
+            report_inclusion_threshold=4.0,
+            selected_importance_threshold=6.5,
+            candidate_importance_threshold=4.0,
+            min_bucket_score_for_assignment=6.0,
+            context={"execution_id": "test"},
+            llm_params={"model": "gpt-test"},
+        )
+
+    assert result["executive_name"] == "Chief Financial Officer"
+    assert result["executive_title"] == "CFO"
+    assert result["executive_affiliation"] == "RBC"
+    assert result["answer_sentences"][0]["speaker"] == "Operator"
+    assert result["answer_sentences"][0]["speaker_title"] == ""
+    assert result["answer_sentences"][1]["speaker"] == "Chief Financial Officer"
+    assert result["answer_sentences"][1]["speaker_title"] == "CFO"
+    assert result["answer_sentences"][1]["speaker_affiliation"] == "RBC"
+    assert result["answer_sentences"][1]["selected_bucket_id"] == "bucket_0"

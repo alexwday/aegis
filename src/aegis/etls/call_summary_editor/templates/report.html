@@ -38,6 +38,8 @@
   --accent-hover:#8F4516;
   --accent-soft:#F2DDC3;
   --accent-line:#D49764;
+  --selection:#2563EB;
+  --selection-soft:#DBEAFE;
   --positive:#1F6F3F;
   --positive-soft:#DCECE1;
   --candidate:#B17015;
@@ -324,13 +326,13 @@ body{
 
 /* Cross-highlight: flash sentence in report panel */
 .s-tok.s-highlight{
-  outline:2px solid var(--accent);outline-offset:1px;
-  background:var(--accent-soft)!important;border-radius:3px;
+  outline:2px solid var(--selection);outline-offset:1px;
+  background:var(--selection-soft)!important;border-radius:3px;
   animation:s-flash .6s ease-out;
 }
 @keyframes s-flash{
-  0%{outline-color:var(--accent);background:var(--accent-soft)}
-  100%{outline-color:var(--accent);background:var(--accent-soft)}
+  0%{outline-color:var(--selection);background:var(--selection-soft)}
+  100%{outline-color:var(--selection);background:var(--selection-soft)}
 }
 /* Persistent single-finding selection — click a q-card in the report or a
    sentence in the transcript to mark one finding. Border only, no fill. */
@@ -864,6 +866,9 @@ body{
   border-radius:2px;
 }
 .q-card:hover::before{background:var(--accent-line)}
+.q-card.q-card-batch-inner{margin-bottom:8px}
+.q-card.q-card-batch-inner::before{bottom:4px}
+.q-card.q-card-batch-end{margin-bottom:14px}
 .q-card.sortable-ghost{opacity:.4;background:var(--surface-1)}
 .q-card.sortable-chosen{box-shadow:0 6px 20px rgba(15,27,45,.14);background:var(--surface-3)}
 .q-card-header{
@@ -1949,6 +1954,87 @@ function _qaTurnLabel(turn) {
   return turn.speaker_title ? `${name}, ${turn.speaker_title}` : name;
 }
 
+function getQaAnswerSpeakerMeta(conv, sent) {
+  if (sent && (sent.speaker || sent.speaker_title || sent.speaker_affiliation)) {
+    return {
+      name: sent.speaker || conv.executive_name || 'Executive',
+      title: sent.speaker_title || conv.executive_title || '',
+      affiliation: sent.speaker_affiliation || conv.executive_affiliation || '',
+    };
+  }
+
+  const sid = sent && sent.sid;
+  if (sid) {
+    const answerTurn = _qaConvTurns(conv).find(turn =>
+      turn.role === 'a' && (turn.sentences || []).some(item => item.sid === sid)
+    );
+    if (answerTurn) {
+      return {
+        name: answerTurn.speaker || conv.executive_name || 'Executive',
+        title: answerTurn.speaker_title || conv.executive_title || '',
+        affiliation: answerTurn.speaker_affiliation || conv.executive_affiliation || '',
+      };
+    }
+  }
+
+  return {
+    name: conv.executive_name || 'Executive',
+    title: conv.executive_title || '',
+    affiliation: conv.executive_affiliation || '',
+  };
+}
+
+function getSubquoteSpeakerMeta(sq) {
+  if (!sq) {
+    return { name: 'Unknown Speaker', title: '', affiliation: '' };
+  }
+  if (sq.type === 'md') {
+    return {
+      name: sq.speaker || 'Unknown Speaker',
+      title: sq.speaker_title || '',
+      affiliation: sq.speaker_affiliation || '',
+    };
+  }
+  return {
+    name: sq.executive_name || 'Executive',
+    title: sq.executive_title || '',
+    affiliation: sq.executive_affiliation || '',
+  };
+}
+
+function getSubquoteSpeakerKey(sq) {
+  const meta = getSubquoteSpeakerMeta(sq);
+  return [meta.name, meta.title, meta.affiliation].join('||');
+}
+
+function clusterSubquotesBySpeaker(quotes) {
+  const speakerOrder = [];
+  const bySpeaker = new Map();
+  quotes.forEach(sq => {
+    const key = getSubquoteSpeakerKey(sq);
+    if (!bySpeaker.has(key)) {
+      bySpeaker.set(key, []);
+      speakerOrder.push(key);
+    }
+    bySpeaker.get(key).push(sq);
+  });
+  return speakerOrder.flatMap(key => bySpeaker.get(key) || []);
+}
+
+function buildSpeakerBatchMeta(quotes) {
+  const meta = new Map();
+  quotes.forEach((sq, idx) => {
+    const key = getSubquoteSpeakerKey(sq);
+    const prevKey = idx > 0 ? getSubquoteSpeakerKey(quotes[idx - 1]) : null;
+    const nextKey = idx < quotes.length - 1 ? getSubquoteSpeakerKey(quotes[idx + 1]) : null;
+    meta.set(sq.id, {
+      showAttribution: key !== nextKey,
+      batchClass: key === nextKey ? 'q-card-batch-inner' : 'q-card-batch-end',
+    });
+  });
+  return meta;
+}
+
 function renderQAConvBlocks(conv, inc, convIdx) {
   const turns = _qaConvTurns(conv);
   const turnsHtml = turns.map(turn => {
@@ -2270,40 +2356,67 @@ function computeMDSubquotes(blk, bs) {
  * The analyst question stays attached as context on each resulting sub-quote.
  */
 function computeQASubquotes(conv, bs) {
-  const visibleAnswers = (conv.answer_sentences || []).filter(
-    s => getSentenceReviewStatus(s.sid) === 'selected'
-  );
-  if (!visibleAnswers.length) return [];
+  const answers = conv.answer_sentences || [];
+  if (!answers.length) return [];
 
   const groups = [];
   let cur = null;
-  for (const sent of visibleAnswers) {
+  for (const sent of answers) {
+    if (getSentenceReviewStatus(sent.sid) !== 'selected') {
+      if (cur) {
+        delete cur._speaker_key;
+        groups.push(cur);
+        cur = null;
+      }
+      continue;
+    }
     const effectiveBucket =
       (bs.sentence_user_primary && bs.sentence_user_primary[sent.sid]) ||
       sent.selected_bucket_id ||
       sent.primary ||
       '';
-    if (!effectiveBucket) continue;
-    if (!cur || cur.effective_bucket !== effectiveBucket) {
-      if (cur) groups.push(cur);
+    const speakerMeta = getQaAnswerSpeakerMeta(conv, sent);
+    const speakerKey = [
+      speakerMeta.name,
+      speakerMeta.title,
+      speakerMeta.affiliation,
+    ].join('||');
+    if (!effectiveBucket) {
+      if (cur) {
+        delete cur._speaker_key;
+        groups.push(cur);
+        cur = null;
+      }
+      continue;
+    }
+    if (!cur || cur.effective_bucket !== effectiveBucket || cur._speaker_key !== speakerKey) {
+      if (cur) {
+        delete cur._speaker_key;
+        groups.push(cur);
+      }
       cur = {
         id: `SQ_${sent.sid}`,
         type: 'qa',
         conv_id: conv.id,
         analyst_name: conv.analyst_name,
         analyst_affiliation: conv.analyst_affiliation,
-        executive_name: conv.executive_name,
-        executive_title: conv.executive_title,
+        executive_name: speakerMeta.name,
+        executive_title: speakerMeta.title,
+        executive_affiliation: speakerMeta.affiliation,
         analyst_question_summary: conv.analyst_question_summary || '',
         effective_bucket: effectiveBucket,
         question_sentences: conv.question_sentences || [],
         answer_sentences: [sent],
+        _speaker_key: speakerKey,
       };
     } else {
       cur.answer_sentences.push(sent);
     }
   }
-  if (cur) groups.push(cur);
+  if (cur) {
+    delete cur._speaker_key;
+    groups.push(cur);
+  }
   return groups;
 }
 
@@ -2363,11 +2476,12 @@ function getReportSubquotes(bankId, bucketId) {
     eligible.forEach(sq => { if (!order.includes(sq.id)) ordered.push(sq); });
     return ordered;
   }
-  return [...eligible].sort((a, b) =>
+  const ranked = [...eligible].sort((a, b) =>
     getSubquoteImportance(b) - getSubquoteImportance(a) ||
     getSubquoteBucketScore(b) - getSubquoteBucketScore(a) ||
     a.id.localeCompare(b.id)
   );
+  return clusterSubquotesBySpeaker(ranked);
 }
 
 function getConfigChangeProposals(bankId) {
@@ -2787,6 +2901,7 @@ function renderReportSections() {
     sectionBuckets.forEach(bucket => {
       const quotes = getReportSubquotes(state.current_bank, bucket.id);
       if (quotes.length === 0) return;
+      const speakerBatchMeta = buildSpeakerBatchMeta(quotes);
 
       const userTitle = (state.bucket_user_titles || {})[bucket.id];
       const titleVal  = userTitle != null ? userTitle : bucket.name;
@@ -2819,7 +2934,7 @@ function renderReportSections() {
     <svg class="bkt-chevron open" id="bkv_${bucket.id}" viewBox="0 0 10 10"><path d="M2 4l3 3 3-3"/></svg>
   </div>
   <div class="bkt-quotes" id="bq_${bucket.id}" data-bucket-id="${bucket.id}">
-    ${quotes.map(sq => renderSubquoteCard(sq, bucket)).join('')}
+    ${quotes.map(sq => renderSubquoteCard(sq, bucket, speakerBatchMeta.get(sq.id) || {})).join('')}
   </div>
 </div>`;
     });
@@ -2829,9 +2944,8 @@ function renderReportSections() {
   initSortables();
 }
 
-function renderSubquoteCard(sq, bucket) {
+function renderSubquoteCard(sq, bucket, displayMeta = {}) {
   const bankId = state.current_bank;
-  const bank   = state.banks[bankId];
   const bs     = getBankState(bankId);
   // fmt is now a 2-value toggle: 'verbatim' (off) or 'condensed' (on = summarize).
   const fmt    = (bs.subquote_formats && bs.subquote_formats[sq.id]) || 'verbatim';
@@ -2851,8 +2965,9 @@ function renderSubquoteCard(sq, bucket) {
     : '';
 
   // Attribution line
-  const attribName = isMD ? sq.speaker : (sq.executive_name || 'Executive');
-  const attribTitle = isMD ? (sq.speaker_title || '') : (sq.executive_title || '');
+  const speakerMeta = getSubquoteSpeakerMeta(sq);
+  const attribName = speakerMeta.name;
+  const attribTitle = speakerMeta.title;
   const attribLine = attribTitle ? `${attribName}, ${attribTitle}` : attribName;
 
   // QA card shows the analyst question as context above the executive
@@ -2904,7 +3019,13 @@ function renderSubquoteCard(sq, bucket) {
   if (state.selected_subquote_id === sq.id) {
     cardStateCls.push('q-card-selected');
   }
+  if (displayMeta.batchClass) {
+    cardStateCls.push(displayMeta.batchClass);
+  }
   const cardClsAttr = cardStateCls.length ? ' ' + cardStateCls.join(' ') : '';
+  const attribHtml = displayMeta.showAttribution === false
+    ? ''
+    : `<div class="q-attrib">&mdash; ${esc(attribLine)}</div>`;
 
   return `
 <div class="q-card${cardClsAttr}" data-subquote-id="${sq.id}">
@@ -2920,7 +3041,7 @@ function renderSubquoteCard(sq, bucket) {
   ${qaContextHtml}
   <div class="q-text">${textContent}</div>
   ${expandBtn}
-  <div class="q-attrib">&mdash; ${esc(attribLine)}</div>
+  ${attribHtml}
 </div>`;
 }
 
@@ -3370,12 +3491,40 @@ function getFindingAttribution(sq) {
   return title ? `${name}, ${title}` : name;
 }
 
-function slugifyFilePart(value, fallback = 'report') {
-  const cleaned = String(value || '')
+function sanitizeFilenamePart(value, fallback = 'report') {
+  const normalized = String(value || '')
     .trim()
-    .replace(/[^a-z0-9]+/gi, '_')
-    .replace(/^_+|_+$/g, '');
-  return cleaned || fallback;
+    .replace(/[<>:"/\\|?*\x00-\x1F]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .replace(/[. ]+$/g, '')
+    .trim();
+  return normalized || fallback;
+}
+
+function formatExportTimestamp(date = new Date()) {
+  const pad = num => String(num).padStart(2, '0');
+  return [
+    date.getFullYear(),
+    pad(date.getMonth() + 1),
+    pad(date.getDate()),
+  ].join('-') + ' ' + [
+    pad(date.getHours()),
+    pad(date.getMinutes()),
+    pad(date.getSeconds()),
+  ].join('-');
+}
+
+function buildExportFilename(ext, bankId = state && state.current_bank) {
+  const bank = getCurrentBankData(bankId);
+  const bankLabel = sanitizeFilenamePart(bank.company_name || bank.ticker || bankId, 'Bank');
+  const periodLabel = sanitizeFilenamePart(getReportPeriodLabel(), 'Period');
+  const reportScope = sanitizeFilenamePart(
+    [bankLabel, periodLabel].filter(Boolean).join(' '),
+    bankLabel || periodLabel || 'Report'
+  );
+  const timestamp = sanitizeFilenamePart(formatExportTimestamp(), 'Date Time');
+  const extension = String(ext || '').replace(/^\.+/, '') || 'txt';
+  return `PM Call Summary - ${reportScope} - ${timestamp}.${extension}`;
 }
 
 function pdfWrapText(doc, text, maxWidth, fontName, fontStyle, fontSize) {
@@ -3879,7 +4028,6 @@ async function savePdf() {
 
   const { jsPDF } = pdfLib;
   const bankId = state.current_bank;
-  const bank = getCurrentBankData(bankId);
   const orderedSections = getOrderedSections(bankId);
   const raster = state.banner_visible && state.banner_src
     ? await rasterizeImageForExport(state.banner_src, 1800)
@@ -3919,10 +4067,7 @@ async function savePdf() {
   renderPdfBody(doc, layout, orderedSections, bankId);
   drawPdfPageNumbers(doc, layout);
 
-  const ts = new Date().toISOString().replace(/[:.]/g, '').slice(0, 15);
-  const bankToken = slugifyFilePart(bank.ticker || bank.company_name, 'bank');
-  const periodToken = slugifyFilePart(getReportPeriodLabel(), 'period');
-  doc.save(`call_summary_${bankToken}_${periodToken}_${ts}.pdf`);
+  doc.save(buildExportFilename('pdf', bankId));
 }
 
 async function saveDocx() {
@@ -3951,7 +4096,6 @@ async function saveDocx() {
   } = docxLib;
 
   const bankId = state.current_bank;
-  const bank = getCurrentBankData(bankId);
   const bs = getBankState(bankId);
   const orderedSections = getOrderedSections(bankId);
   const titleText = getReportCoverMeta(bankId) || 'Call Summary';
@@ -4119,13 +4263,10 @@ async function saveDocx() {
 
   try {
     const blob = await Packer.toBlob(doc);
-    const ts = new Date().toISOString().replace(/[:.]/g, '').slice(0, 15);
-    const bankToken = slugifyFilePart(bank.ticker || bank.company_name, 'bank');
-    const periodToken = slugifyFilePart(getReportPeriodLabel(), 'period');
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `call_summary_${bankToken}_${periodToken}_${ts}.docx`;
+    a.download = buildExportFilename('docx', bankId);
     a.click();
     URL.revokeObjectURL(url);
   } catch (e) {
