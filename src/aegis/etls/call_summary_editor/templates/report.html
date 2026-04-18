@@ -559,6 +559,7 @@ body{
   max-width:820px;
   margin:0 auto;
   position:relative;
+  counter-reset:report-section;
 }
 #report-page::before{
   content:"";
@@ -588,19 +589,35 @@ body{
 .rpt-cover-copy{margin:18px auto 0;max-width:920px;padding:0 52px}
 .rpt-cover-meta{
   font-family:var(--font-sans);
-  font-size:12px;
+  font-size:11.5px;
   font-weight:700;
-  letter-spacing:.14em;
+  letter-spacing:.18em;
   text-transform:uppercase;
   color:var(--text-3);
+  display:inline-block;
+  padding:8px 22px;
+  border-top:1px solid var(--rule);
+  border-bottom:1px solid var(--rule);
+  min-width:240px;
 }
 .rpt-cover-title{
   font-family:var(--font-serif);
   font-size:32px;
   font-weight:700;
   line-height:1.15;
+  letter-spacing:-.005em;
   color:var(--ink);
-  margin-top:10px;
+  margin-top:18px;
+  padding-bottom:16px;
+  position:relative;
+}
+.rpt-cover-title::after{
+  content:"";
+  position:absolute;
+  left:50%;bottom:0;
+  width:48px;height:2px;
+  transform:translateX(-50%);
+  background:var(--accent);
 }
 .rpt-cover-noimg{padding-top:18px}
 
@@ -621,19 +638,43 @@ body{
   border-bottom:1px solid var(--rule-2);
   letter-spacing:.005em;
 }
-.rpt-toc-list,.rpt-toc-sublist{list-style:none;padding:0;margin:0}
-.rpt-toc-sublist{padding-left:18px;margin:2px 0 10px}
+.rpt-toc-list{list-style:none;padding:0;margin:0;counter-reset:toc-section}
+.rpt-toc-sublist{list-style:none;padding-left:0;margin:2px 0 10px}
+.rpt-toc-l1{counter-increment:toc-section;counter-reset:toc-bucket 0}
+.rpt-toc-l2{counter-increment:toc-bucket}
 .rpt-toc-l1>a,.rpt-toc-l2>a{
-  display:flex;align-items:baseline;gap:6px;
+  display:flex;align-items:baseline;gap:10px;
   padding:3px 0;
   text-decoration:none;
   font-family:var(--font-serif);
   color:var(--text-1);
   transition:color .1s;
 }
-.rpt-toc-l1>a{font-weight:700;font-size:14px;color:var(--ink);padding:5px 0}
-.rpt-toc-l2>a{font-weight:400;font-size:12.5px;color:var(--text-2)}
+.rpt-toc-l1>a{font-weight:700;font-size:14px;color:var(--ink);padding:6px 0}
+.rpt-toc-l2>a{font-weight:400;font-size:12.5px;color:var(--text-2);padding-left:32px}
 .rpt-toc-l1>a:hover,.rpt-toc-l2>a:hover{color:var(--accent)}
+.rpt-toc-l1>a::before{
+  content:counter(toc-section,upper-roman) ".";
+  font-family:var(--font-sans);
+  font-weight:700;
+  font-size:10.5px;
+  letter-spacing:.14em;
+  color:var(--accent);
+  min-width:32px;
+  flex-shrink:0;
+  font-variant-numeric:tabular-nums;
+}
+.rpt-toc-l2>a::before{
+  content:counter(toc-bucket,decimal-leading-zero);
+  font-family:var(--font-sans);
+  font-weight:600;
+  font-size:10px;
+  letter-spacing:.06em;
+  color:var(--text-3);
+  min-width:24px;
+  flex-shrink:0;
+  font-variant-numeric:tabular-nums;
+}
 .rpt-toc-label{flex-shrink:1;min-width:0}
 .rpt-toc-leader{
   flex:1;min-width:24px;
@@ -654,7 +695,8 @@ body{
   .rpt-toc-leader{display:none}
 }
 
-/* L1 section heading */
+/* L1 section heading. Body counters are scoped to #report-page so the
+   ordinal restarts each time the report is re-rendered. */
 .rpt-l1{
   font-family:var(--font-serif);
   font-size:22px;font-weight:700;
@@ -665,11 +707,30 @@ body{
   text-transform:none;
   letter-spacing:0;
   line-height:1.25;
+  counter-increment:report-section;
+  counter-reset:report-bucket 0;
+}
+.rpt-l1::before{
+  content:counter(report-section,upper-roman) ".";
+  font-family:var(--font-sans);
+  font-size:11px;
+  font-weight:700;
+  letter-spacing:.18em;
+  color:var(--accent);
+  margin-right:14px;
+  padding-right:14px;
+  border-right:1px solid var(--rule);
+  display:inline-block;
+  vertical-align:middle;
+  position:relative;
+  top:-3px;
+  font-variant-numeric:tabular-nums;
 }
 .rpt-l1:not(:first-child){margin-top:32px}
 
-/* L2 bucket heading */
-.bkt-section{margin-bottom:18px;overflow:hidden}
+/* L2 bucket heading. Bucket counter restarts on each .rpt-l1 (declared
+   above) so each section's buckets begin at 01. */
+.bkt-section{margin-bottom:18px;overflow:hidden;counter-increment:report-bucket}
 .bkt-header{
   display:flex;align-items:flex-start;gap:12px;
   padding:8px 0 10px;
@@ -683,7 +744,19 @@ body{
   margin-top:5px;
 }
 .bkt-info{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
-.bkt-name-row{display:flex;align-items:center;gap:8px;width:100%;min-width:0}
+.bkt-name-row{display:flex;align-items:center;gap:10px;width:100%;min-width:0}
+.bkt-name-row::before{
+  content:counter(report-bucket,decimal-leading-zero);
+  font-family:var(--font-sans);
+  font-size:11px;
+  font-weight:700;
+  letter-spacing:.06em;
+  color:var(--accent);
+  flex-shrink:0;
+  font-variant-numeric:tabular-nums;
+  align-self:baseline;
+  padding-top:3px;
+}
 .bkt-name-input{
   font-family:var(--font-serif);
   font-size:16px;font-weight:700;
@@ -880,7 +953,27 @@ body{
 .drag-handle{color:var(--rule);cursor:grab;font-size:14px;flex-shrink:0;user-select:none;transition:color .15s}
 .q-card:hover .drag-handle{color:var(--text-3)}
 .drag-handle:active{cursor:grabbing}
-.q-attrib{text-align:right;font-size:10.5px;color:var(--text-3);font-style:italic;padding:4px 0 0;font-family:var(--font-serif)}
+.q-attrib{
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+  gap:12px;
+  font-family:var(--font-sans);
+  font-size:9.5px;
+  font-weight:700;
+  letter-spacing:.18em;
+  text-transform:uppercase;
+  color:var(--text-3);
+  font-style:normal;
+  padding:8px 0 0;
+}
+.q-attrib::before{
+  content:"";
+  display:block;
+  width:48px;height:1px;
+  background:var(--rule-2);
+  flex-shrink:0;
+}
 .attrib-off .q-attrib{display:none}
 .q-hdr-spacer{flex:1}
 .q-del{
@@ -976,18 +1069,56 @@ body{
 }
 .q-expand-btn:hover{color:var(--accent-hover)}
 
-/* QA conversation context */
+/* QA conversation context — editorial eyebrow + italic question. The
+   "Q" pill belongs to the transcript panel; in the polished report the
+   context reads as a small-caps lead-in followed by the analyst's quoted
+   question, no UI badge required. */
 .qa-card-q{
-  padding:0 0 8px;margin-bottom:8px;
+  padding:0 0 10px;margin-bottom:10px;
   background:transparent;
-  border-bottom:1px dotted var(--rule-2);
+  border-bottom:none;
   font-size:11.5px;color:var(--text-3);
+}
+.qa-card-q-eyebrow{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  font-family:var(--font-sans);
+  font-size:9.5px;
+  font-weight:700;
+  letter-spacing:.18em;
+  text-transform:uppercase;
+  color:var(--text-3);
+  margin-bottom:6px;
+}
+.qa-card-q-eyebrow-name{color:var(--text-2)}
+.qa-card-q-eyebrow::after{
+  content:"";
+  flex:1;
+  height:1px;
+  background:var(--rule-3);
 }
 .qa-card-q-text{
   font-family:var(--font-serif);
   font-size:13px;color:var(--text-2);
-  margin-top:4px;line-height:1.6;
+  margin-top:0;line-height:1.65;
   font-style:italic;
+}
+.qa-card-q-text::before{
+  content:"\201C";
+  font-size:18px;
+  line-height:0;
+  color:var(--rule);
+  margin-right:4px;
+  vertical-align:-2px;
+}
+.qa-card-q-text::after{
+  content:"\201D";
+  font-size:18px;
+  line-height:0;
+  color:var(--rule);
+  margin-left:2px;
+  vertical-align:-2px;
 }
 
 /* ════════════════════════════════════════════════════════════════
@@ -2979,16 +3110,19 @@ function renderSubquoteCard(sq, bucket, displayMeta = {}) {
   if (!isMD) {
     const verbatim = (sq.question_sentences || []).map(s => s.text).join(' ');
     const summary = (sq.analyst_question_summary || '').trim();
-    const contextLine = summary
-      ? `In response to the analyst question: ${esc(summary)}`
-      : `In response to the analyst question: ${esc(verbatim)}`;
+    const questionText = summary || verbatim;
     const verbatimTitle = summary ? ` title="${escAttr(verbatim)}"` : '';
+    const analystName = esc(sq.analyst_name || 'Analyst');
+    const analystAffil = sq.analyst_affiliation
+      ? ` <span style="opacity:.7">(${esc(sq.analyst_affiliation)})</span>`
+      : '';
     qaContextHtml = `
     <div class="qa-card-q">
-      <span class="qa-lbl q">Q</span>
-      <strong>${esc(sq.analyst_name||'Analyst')}</strong>
-      ${sq.analyst_affiliation ? `<span style="color:#65676B"> (${esc(sq.analyst_affiliation)})</span>` : ''}
-      <div class="qa-card-q-text"${verbatimTitle}>${contextLine}</div>
+      <div class="qa-card-q-eyebrow">
+        <span>In response to</span>
+        <span class="qa-card-q-eyebrow-name">${analystName}${analystAffil}</span>
+      </div>
+      <div class="qa-card-q-text"${verbatimTitle}>${esc(questionText)}</div>
     </div>`;
   }
 
@@ -3025,7 +3159,7 @@ function renderSubquoteCard(sq, bucket, displayMeta = {}) {
   const cardClsAttr = cardStateCls.length ? ' ' + cardStateCls.join(' ') : '';
   const attribHtml = displayMeta.showAttribution === false
     ? ''
-    : `<div class="q-attrib">&mdash; ${esc(attribLine)}</div>`;
+    : `<div class="q-attrib"><span>${esc(attribLine)}</span></div>`;
 
   return `
 <div class="q-card${cardClsAttr}" data-subquote-id="${sq.id}">
@@ -3476,14 +3610,6 @@ function subquoteTextForDocx(sq, fmt, bs) {
   return sents.map(s => (s[key] || s.text || '').trim()).filter(Boolean).join(' ');
 }
 
-function getQaContextText(sq) {
-  if (!sq || sq.type !== 'qa') return '';
-  const verbatim = (sq.question_sentences || []).map(s => s.text).join(' ').trim();
-  const summary = (sq.analyst_question_summary || '').trim();
-  const context = summary || verbatim;
-  return context ? `In response to the analyst question: ${context}` : '';
-}
-
 function getFindingAttribution(sq) {
   const isMD = sq.type === 'md';
   const name = isMD ? sq.speaker : (sq.executive_name || 'Executive');
@@ -3547,14 +3673,54 @@ function drawPdfLines(doc, lines, x, y, lineHeight, options = {}) {
   return y + (lines.length * lineHeight);
 }
 
+// Numerals for the editorial spine. CSS does the work in the HTML preview;
+// PDF and DOCX have to format the numbers manually because they don't read
+// CSS counters.
+function toRomanNumeral(n) {
+  const numerals = [
+    ['M', 1000], ['CM', 900], ['D', 500], ['CD', 400],
+    ['C', 100], ['XC', 90], ['L', 50], ['XL', 40],
+    ['X', 10], ['IX', 9], ['V', 5], ['IV', 4], ['I', 1],
+  ];
+  let value = Math.max(1, Math.floor(Number(n) || 1));
+  let result = '';
+  for (const [letter, magnitude] of numerals) {
+    while (value >= magnitude) { result += letter; value -= magnitude; }
+  }
+  return result;
+}
+
+function padTwoDigit(n) {
+  const v = Math.max(0, Math.floor(Number(n) || 0));
+  return v < 10 ? '0' + v : String(v);
+}
+
+// Returns null when the subquote isn't a QA finding or has no question text.
+// Used by both the PDF and DOCX renderers so the editorial eyebrow + italic
+// quote treatment stays consistent across formats.
+function getQaContextParts(sq) {
+  if (!sq || sq.type !== 'qa') return null;
+  const verbatim = (sq.question_sentences || []).map(s => s.text).join(' ').trim();
+  const summary = (sq.analyst_question_summary || '').trim();
+  const question = summary || verbatim;
+  if (!question) return null;
+  const analystName = (sq.analyst_name || 'Analyst').trim();
+  const analystAffil = (sq.analyst_affiliation || '').trim();
+  const eyebrowName = analystAffil ? `${analystName} (${analystAffil})` : analystName;
+  return { eyebrow: 'In response to', name: eyebrowName, question };
+}
+
 function getPdfLayout(doc) {
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
   // Use narrower export margins than the screen preview so PDF lines carry
   // more text across the page without changing the on-screen editing layout.
+  // contentTopBody leaves room for the running header on body pages; the
+  // cover and TOC use the looser contentTop so the masthead breathes.
   const marginLeft = 28;
   const marginRight = 28;
   const contentTop = 42;
+  const contentTopBody = 64;
   const contentBottom = pageHeight - 42;
   return {
     pageWidth,
@@ -3562,18 +3728,29 @@ function getPdfLayout(doc) {
     marginLeft,
     marginRight,
     contentTop,
+    contentTopBody,
     contentBottom,
     contentWidth: pageWidth - marginLeft - marginRight,
     footerY: pageHeight - 18,
+    runningHeaderY: 30,
+    runningHeaderRuleY: 40,
+    accent: { r: 178, g: 90, b: 30 },      // --accent
+    rule:   { r: 217, g: 208, b: 188 },    // --rule
+    rule2:  { r: 231, g: 223, b: 204 },    // --rule-2
+    text3:  { r: 122, g: 115, b: 100 },    // --text-3
+    text2:  { r: 74,  g: 82,  b: 104 },    // --text-2
+    ink:    { r: 15,  g: 27,  b: 45 },     // --ink
     cover: {
       bannerMaxHeight: 150,
       bannerGap: 18,
-      metaFontSize: 11,
-      metaLineHeight: 14,
+      metaFontSize: 10.5,
+      metaLineHeight: 13,
+      metaPadding: 8,
       titleFontSize: 26,
       titleLineHeight: 28,
       dividerBefore: 14,
       dividerAfter: 18,
+      titleAccentWidth: 36,
     },
     toc: {
       headingFontSize: 16,
@@ -3583,14 +3760,18 @@ function getPdfLayout(doc) {
       level1LineHeight: 16,
       level2FontSize: 11.5,
       level2LineHeight: 14,
-      level2Indent: 18,
+      level2Indent: 28,
       pageNumberWidth: 26,
       entryGap: 4,
+      ordinalWidth: 30,
     },
     section: {
       fontSize: 18,
       lineHeight: 22,
       gapAfter: 12,
+      ordinalFontSize: 10,
+      ordinalGap: 12,
+      ordinalRulePad: 10,
     },
     bucket: {
       titleFontSize: 14,
@@ -3598,6 +3779,8 @@ function getPdfLayout(doc) {
       headlineFontSize: 11,
       headlineLineHeight: 14,
       gapAfter: 10,
+      ordinalFontSize: 10,
+      ordinalGap: 10,
     },
     finding: {
       textIndent: 18,
@@ -3605,9 +3788,13 @@ function getPdfLayout(doc) {
       bodyLineHeight: 15,
       contextFontSize: 10.5,
       contextLineHeight: 13,
-      attribFontSize: 9.5,
-      attribLineHeight: 12,
-      gapAfter: 8,
+      eyebrowFontSize: 8.5,
+      eyebrowLineHeight: 11,
+      eyebrowGap: 4,
+      attribFontSize: 8.5,
+      attribLineHeight: 11,
+      attribRuleWidth: 36,
+      gapAfter: 10,
     },
   };
 }
@@ -3644,9 +3831,18 @@ function getPdfCoverMetrics(doc, layout, raster) {
   );
   let height = 0;
   if (banner) height += banner.height + layout.cover.bannerGap;
-  if (metaLines.length) height += metaLines.length * layout.cover.metaLineHeight;
-  if (metaLines.length && titleLines.length) height += 6;
-  if (titleLines.length) height += titleLines.length * layout.cover.titleLineHeight;
+  if (metaLines.length) {
+    // Top hairline + padding + lines + padding + bottom hairline
+    height += (layout.cover.metaPadding * 2)
+      + (metaLines.length * layout.cover.metaLineHeight)
+      + 1;
+  }
+  if (metaLines.length && titleLines.length) height += 18;
+  if (titleLines.length) {
+    height += titleLines.length * layout.cover.titleLineHeight;
+    // Title accent rule + spacing
+    height += 12 + 2 + 4;
+  }
   if (banner || metaLines.length || titleLines.length) {
     height += layout.cover.dividerBefore + 1 + layout.cover.dividerAfter;
   }
@@ -3685,23 +3881,33 @@ function measurePdfTocEntry(doc, entry, layout) {
 }
 
 function measurePdfSectionHeading(doc, sectionName, layout) {
+  // Reserve a fixed gutter for the Roman ordinal + vertical separator so
+  // wrapped heading lines hang under the title (not under the ordinal).
+  const gutter = 48;
   const lines = pdfWrapText(
     doc,
     sectionName,
-    layout.contentWidth,
+    layout.contentWidth - gutter,
     'times',
     'bold',
     layout.section.fontSize
   );
-  return { lines, height: (lines.length * layout.section.lineHeight) + layout.section.gapAfter };
+  return {
+    lines,
+    gutter,
+    height: (lines.length * layout.section.lineHeight) + layout.section.gapAfter,
+  };
 }
 
 function measurePdfBucketHeader(doc, bucket, layout) {
+  // Reserve a fixed gutter so the title and headline sit right of the
+  // ordinal number. Wrapped lines align under each other.
+  const gutter = 30;
   const title = (state.bucket_user_titles || {})[bucket.id] || bucket.name;
   const titleLines = pdfWrapText(
     doc,
     title,
-    layout.contentWidth,
+    layout.contentWidth - gutter,
     'times',
     'bold',
     layout.bucket.titleFontSize
@@ -3710,7 +3916,7 @@ function measurePdfBucketHeader(doc, bucket, layout) {
     ? pdfWrapText(
         doc,
         bucket.generated_headline,
-        layout.contentWidth,
+        layout.contentWidth - gutter,
         'times',
         'italic',
         layout.bucket.headlineFontSize
@@ -3719,21 +3925,40 @@ function measurePdfBucketHeader(doc, bucket, layout) {
   let height = titleLines.length * layout.bucket.titleLineHeight;
   if (headlineLines.length) height += 4 + (headlineLines.length * layout.bucket.headlineLineHeight);
   height += layout.bucket.gapAfter;
-  return { titleLines, headlineLines, height };
+  return { titleLines, headlineLines, gutter, height };
 }
 
 function measurePdfFinding(doc, sq, bs, layout) {
   const fmt = (bs.subquote_formats && bs.subquote_formats[sq.id]) || 'verbatim';
   const text = subquoteTextForDocx(sq, fmt, bs);
   const contentWidth = layout.contentWidth - layout.finding.textIndent;
-  const contextLines = pdfWrapText(
-    doc,
-    getQaContextText(sq),
-    contentWidth,
-    'times',
-    'italic',
-    layout.finding.contextFontSize
-  );
+  const qaParts = getQaContextParts(sq);
+  // Eyebrow line: "IN RESPONSE TO   ANALYST NAME (AFFIL)" — measured on a
+  // single uppercase line. We size it with helvetica-bold + char-spacing
+  // so the small-caps feel comes through in the export.
+  const eyebrowText = qaParts
+    ? `${qaParts.eyebrow.toUpperCase()}   ${qaParts.name.toUpperCase()}`
+    : '';
+  const eyebrowLines = eyebrowText
+    ? pdfWrapText(
+        doc,
+        eyebrowText,
+        contentWidth,
+        'helvetica',
+        'bold',
+        layout.finding.eyebrowFontSize
+      )
+    : [];
+  const questionLines = qaParts
+    ? pdfWrapText(
+        doc,
+        `\u201C${qaParts.question}\u201D`,
+        contentWidth,
+        'times',
+        'italic',
+        layout.finding.contextFontSize
+      )
+    : [];
   const textLines = pdfWrapText(
     doc,
     text,
@@ -3745,19 +3970,20 @@ function measurePdfFinding(doc, sq, bs, layout) {
   const attribLines = _attribVisible
     ? pdfWrapText(
         doc,
-        `\u2014 ${getFindingAttribution(sq)}`,
-        layout.contentWidth,
-        'times',
-        'italic',
+        getFindingAttribution(sq).toUpperCase(),
+        layout.contentWidth - layout.finding.attribRuleWidth - 12,
+        'helvetica',
+        'bold',
         layout.finding.attribFontSize
       )
     : [];
   let height = 0;
-  if (contextLines.length) height += (contextLines.length * layout.finding.contextLineHeight) + 4;
+  if (eyebrowLines.length) height += (eyebrowLines.length * layout.finding.eyebrowLineHeight) + layout.finding.eyebrowGap;
+  if (questionLines.length) height += (questionLines.length * layout.finding.contextLineHeight) + 4;
   height += textLines.length * layout.finding.bodyLineHeight;
-  if (attribLines.length) height += 4 + (attribLines.length * layout.finding.attribLineHeight);
+  if (attribLines.length) height += 6 + (attribLines.length * layout.finding.attribLineHeight);
   height += layout.finding.gapAfter;
-  return { contextLines, textLines, attribLines, height };
+  return { eyebrowLines, questionLines, textLines, attribLines, height };
 }
 
 function buildPdfTocPages(doc, tocEntries, layout, coverMetrics) {
@@ -3783,13 +4009,13 @@ function buildPdfTocPages(doc, tocEntries, layout, coverMetrics) {
 function buildPdfBodyPlan(doc, orderedSections, bankId, layout) {
   const bs = getBankState(bankId);
   let page = 1;
-  let y = layout.contentTop;
+  let y = layout.contentTopBody;
   const pageMap = new Map();
 
   orderedSections.forEach((section, sectionIdx) => {
     if (sectionIdx > 0) {
       page += 1;
-      y = layout.contentTop;
+      y = layout.contentTopBody;
     }
 
     pageMap.set('sec_' + sanitizeId(section.name), page);
@@ -3804,9 +4030,9 @@ function buildPdfBodyPlan(doc, orderedSections, bankId, layout) {
         ? measurePdfFinding(doc, quotes[0], bs, layout).height
         : 0;
       const bucketStartHeight = headerMetrics.height + firstFindingHeight;
-      if (y + bucketStartHeight > layout.contentBottom && y > layout.contentTop) {
+      if (y + bucketStartHeight > layout.contentBottom && y > layout.contentTopBody) {
         page += 1;
-        y = layout.contentTop;
+        y = layout.contentTopBody;
       }
 
       pageMap.set(`bs_${bucket.id}`, page);
@@ -3814,9 +4040,9 @@ function buildPdfBodyPlan(doc, orderedSections, bankId, layout) {
 
       quotes.forEach(sq => {
         const findingMetrics = measurePdfFinding(doc, sq, bs, layout);
-        if (y + findingMetrics.height > layout.contentBottom && y > layout.contentTop) {
+        if (y + findingMetrics.height > layout.contentBottom && y > layout.contentTopBody) {
           page += 1;
-          y = layout.contentTop;
+          y = layout.contentTopBody;
         }
         y += findingMetrics.height;
       });
@@ -3835,8 +4061,27 @@ function drawPdfCoverIntro(doc, layout, coverMetrics, raster) {
     y += coverMetrics.banner.height + layout.cover.bannerGap;
   }
 
+  // Meta line wrapped in paired hairlines — masthead nameplate device.
   if (coverMetrics.metaLines.length) {
-    doc.setTextColor(122, 115, 100);
+    const metaPad = layout.cover.metaPadding;
+    const metaBlockHeight = (coverMetrics.metaLines.length * layout.cover.metaLineHeight);
+    const metaTextWidth = Math.max(
+      ...coverMetrics.metaLines.map(line => doc.getTextWidth(line))
+    );
+    const ruleSpan = Math.min(layout.contentWidth, Math.max(220, metaTextWidth + 60));
+    const ruleStartX = (layout.pageWidth - ruleSpan) / 2;
+    const ruleEndX = ruleStartX + ruleSpan;
+
+    doc.setDrawColor(layout.rule.r, layout.rule.g, layout.rule.b);
+    doc.setLineWidth(0.5);
+    // Top hairline above the meta text
+    doc.line(ruleStartX, y, ruleEndX, y);
+    y += metaPad;
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(layout.cover.metaFontSize);
+    doc.setTextColor(layout.text3.r, layout.text3.g, layout.text3.b);
+    if (typeof doc.setCharSpace === 'function') doc.setCharSpace(0.8);
     y = drawPdfLines(
       doc,
       coverMetrics.metaLines,
@@ -3845,12 +4090,18 @@ function drawPdfCoverIntro(doc, layout, coverMetrics, raster) {
       layout.cover.metaLineHeight,
       { align: 'center' }
     );
+    if (typeof doc.setCharSpace === 'function') doc.setCharSpace(0);
+    y += metaPad - (layout.cover.metaLineHeight - layout.cover.metaFontSize);
+    // Bottom hairline
+    doc.line(ruleStartX, y, ruleEndX, y);
   }
 
-  if (coverMetrics.metaLines.length && coverMetrics.titleLines.length) y += 6;
+  if (coverMetrics.metaLines.length && coverMetrics.titleLines.length) y += 18;
 
   if (coverMetrics.titleLines.length) {
-    doc.setTextColor(15, 27, 45);
+    doc.setFont('times', 'bold');
+    doc.setFontSize(layout.cover.titleFontSize);
+    doc.setTextColor(layout.ink.r, layout.ink.g, layout.ink.b);
     y = drawPdfLines(
       doc,
       coverMetrics.titleLines,
@@ -3859,12 +4110,18 @@ function drawPdfCoverIntro(doc, layout, coverMetrics, raster) {
       layout.cover.titleLineHeight,
       { align: 'center' }
     );
+    // Accent rule under title — anchors the masthead.
+    y += 12;
+    const accentX = (layout.pageWidth - layout.cover.titleAccentWidth) / 2;
+    doc.setFillColor(layout.accent.r, layout.accent.g, layout.accent.b);
+    doc.rect(accentX, y, layout.cover.titleAccentWidth, 2, 'F');
+    y += 4;
   }
 
   if (coverMetrics.banner || coverMetrics.metaLines.length || coverMetrics.titleLines.length) {
     y += layout.cover.dividerBefore;
-    doc.setDrawColor(217, 208, 188);
-    doc.setLineWidth(1);
+    doc.setDrawColor(layout.rule.r, layout.rule.g, layout.rule.b);
+    doc.setLineWidth(0.5);
     doc.line(layout.marginLeft, y, layout.pageWidth - layout.marginRight, y);
     y += layout.cover.dividerAfter;
   }
@@ -3906,26 +4163,63 @@ function drawPdfTocEntries(doc, layout, entries, actualPageMap, y) {
   return y;
 }
 
-function drawPdfSectionHeading(doc, layout, sectionName, y) {
+function drawPdfSectionHeading(doc, layout, sectionName, sectionNumber, y) {
   const metrics = measurePdfSectionHeading(doc, sectionName, layout);
-  doc.setTextColor(15, 27, 45);
-  y = drawPdfLines(doc, metrics.lines, layout.marginLeft, y, layout.section.lineHeight);
+  const headingX = layout.marginLeft + metrics.gutter;
+  const ruleX = headingX - 14;
+
+  // Roman numeral ordinal in accent (small caps via Helvetica-bold +
+  // explicit char-spacing for an editorial small-caps feel).
+  const ordinalText = toRomanNumeral(sectionNumber) + '.';
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(layout.section.ordinalFontSize);
+  doc.setTextColor(layout.accent.r, layout.accent.g, layout.accent.b);
+  if (typeof doc.setCharSpace === 'function') doc.setCharSpace(0.6);
+  doc.text(ordinalText, layout.marginLeft, y);
+  if (typeof doc.setCharSpace === 'function') doc.setCharSpace(0);
+
+  // Vertical separator rule — sized to the first line cap-height so it
+  // reads as a typographic device, not a divider.
+  doc.setDrawColor(layout.rule.r, layout.rule.g, layout.rule.b);
+  doc.setLineWidth(0.6);
+  doc.line(ruleX, y - layout.section.fontSize + 4, ruleX, y + 2);
+
+  // Heading text
+  doc.setFont('times', 'bold');
+  doc.setFontSize(layout.section.fontSize);
+  doc.setTextColor(layout.ink.r, layout.ink.g, layout.ink.b);
+  y = drawPdfLines(doc, metrics.lines, headingX, y, layout.section.lineHeight);
+
   doc.setDrawColor(184, 173, 148);
+  doc.setLineWidth(0.5);
   doc.line(layout.marginLeft, y - 6, layout.pageWidth - layout.marginRight, y - 6);
   return y + layout.section.gapAfter;
 }
 
-function drawPdfBucketHeader(doc, layout, bucket, y) {
+function drawPdfBucketHeader(doc, layout, bucket, bucketNumber, y) {
   const metrics = measurePdfBucketHeader(doc, bucket, layout);
-  doc.setTextColor(15, 27, 45);
-  y = drawPdfLines(doc, metrics.titleLines, layout.marginLeft, y, layout.bucket.titleLineHeight);
+  const titleX = layout.marginLeft + metrics.gutter;
+
+  // Two-digit ordinal — accent color, tabular nums for clean column.
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(layout.bucket.ordinalFontSize);
+  doc.setTextColor(layout.accent.r, layout.accent.g, layout.accent.b);
+  doc.text(padTwoDigit(bucketNumber), layout.marginLeft, y);
+
+  doc.setFont('times', 'bold');
+  doc.setFontSize(layout.bucket.titleFontSize);
+  doc.setTextColor(layout.ink.r, layout.ink.g, layout.ink.b);
+  y = drawPdfLines(doc, metrics.titleLines, titleX, y, layout.bucket.titleLineHeight);
+
   if (metrics.headlineLines.length) {
     y += 4;
-    doc.setTextColor(74, 82, 104);
+    doc.setFont('times', 'italic');
+    doc.setFontSize(layout.bucket.headlineFontSize);
+    doc.setTextColor(layout.text2.r, layout.text2.g, layout.text2.b);
     y = drawPdfLines(
       doc,
       metrics.headlineLines,
-      layout.marginLeft,
+      titleX,
       y,
       layout.bucket.headlineLineHeight
     );
@@ -3937,11 +4231,32 @@ function drawPdfFinding(doc, layout, sq, bs, y) {
   const metrics = measurePdfFinding(doc, sq, bs, layout);
   const textX = layout.marginLeft + layout.finding.textIndent;
 
-  if (metrics.contextLines.length) {
-    doc.setTextColor(74, 82, 104);
+  // Editorial eyebrow — "IN RESPONSE TO   ANALYST NAME (AFFIL)" — small
+  // caps in helvetica-bold with extra char-spacing.
+  if (metrics.eyebrowLines.length) {
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(layout.finding.eyebrowFontSize);
+    doc.setTextColor(layout.text3.r, layout.text3.g, layout.text3.b);
+    if (typeof doc.setCharSpace === 'function') doc.setCharSpace(0.8);
     y = drawPdfLines(
       doc,
-      metrics.contextLines,
+      metrics.eyebrowLines,
+      textX,
+      y,
+      layout.finding.eyebrowLineHeight
+    );
+    if (typeof doc.setCharSpace === 'function') doc.setCharSpace(0);
+    y += layout.finding.eyebrowGap;
+  }
+
+  // Italic question text in opening/closing curly quotes
+  if (metrics.questionLines.length) {
+    doc.setFont('times', 'italic');
+    doc.setFontSize(layout.finding.contextFontSize);
+    doc.setTextColor(layout.text2.r, layout.text2.g, layout.text2.b);
+    y = drawPdfLines(
+      doc,
+      metrics.questionLines,
       textX,
       y,
       layout.finding.contextLineHeight
@@ -3949,14 +4264,26 @@ function drawPdfFinding(doc, layout, sq, bs, y) {
     y += 4;
   }
 
+  // Body bullet + text
   doc.setFillColor(20, 33, 58);
   doc.circle(layout.marginLeft + 5, y - 4, 1.4, 'F');
+  doc.setFont('times', 'normal');
+  doc.setFontSize(layout.finding.bodyFontSize);
   doc.setTextColor(20, 33, 58);
   y = drawPdfLines(doc, metrics.textLines, textX, y, layout.finding.bodyLineHeight);
 
+  // Attribution: small caps with thin lead-in rule
   if (metrics.attribLines.length) {
-    y += 4;
-    doc.setTextColor(122, 115, 100);
+    y += 8;
+    const ruleY = y - (layout.finding.attribFontSize / 2) - 1;
+    const ruleEndX = layout.pageWidth - layout.marginRight - layout.finding.attribRuleWidth - 8;
+    doc.setDrawColor(layout.rule2.r, layout.rule2.g, layout.rule2.b);
+    doc.setLineWidth(0.5);
+    doc.line(ruleEndX, ruleY, ruleEndX + layout.finding.attribRuleWidth, ruleY);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(layout.finding.attribFontSize);
+    doc.setTextColor(layout.text3.r, layout.text3.g, layout.text3.b);
+    if (typeof doc.setCharSpace === 'function') doc.setCharSpace(0.8);
     y = drawPdfLines(
       doc,
       metrics.attribLines,
@@ -3965,6 +4292,7 @@ function drawPdfFinding(doc, layout, sq, bs, y) {
       layout.finding.attribLineHeight,
       { align: 'right' }
     );
+    if (typeof doc.setCharSpace === 'function') doc.setCharSpace(0);
   }
 
   return y + layout.finding.gapAfter;
@@ -3976,39 +4304,74 @@ function drawPdfPageNumbers(doc, layout) {
     doc.setPage(pageNum);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(10);
-    doc.setTextColor(122, 115, 100);
+    doc.setTextColor(layout.text3.r, layout.text3.g, layout.text3.b);
     doc.text(String(pageNum), layout.pageWidth - layout.marginRight, layout.footerY, { align: 'right' });
   }
 }
 
-function renderPdfBody(doc, layout, orderedSections, bankId) {
+// Editorial running header — publication name (left) + current section
+// (right), separated from the body by a hairline rule. Drawn only on body
+// pages; the cover and TOC stay clean.
+function drawPdfRunningHeader(doc, layout, leftLabel, rightLabel) {
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8.5);
+  doc.setTextColor(layout.text3.r, layout.text3.g, layout.text3.b);
+  if (typeof doc.setCharSpace === 'function') doc.setCharSpace(0.8);
+  if (leftLabel) {
+    doc.text(String(leftLabel).toUpperCase(), layout.marginLeft, layout.runningHeaderY);
+  }
+  if (rightLabel) {
+    doc.text(
+      String(rightLabel).toUpperCase(),
+      layout.pageWidth - layout.marginRight,
+      layout.runningHeaderY,
+      { align: 'right' }
+    );
+  }
+  if (typeof doc.setCharSpace === 'function') doc.setCharSpace(0);
+  doc.setDrawColor(layout.rule2.r, layout.rule2.g, layout.rule2.b);
+  doc.setLineWidth(0.4);
+  doc.line(
+    layout.marginLeft,
+    layout.runningHeaderRuleY,
+    layout.pageWidth - layout.marginRight,
+    layout.runningHeaderRuleY
+  );
+}
+
+function renderPdfBody(doc, layout, orderedSections, bankId, runningHeaderLeft) {
   const bs = getBankState(bankId);
 
-  orderedSections.forEach((section, sectionIdx) => {
+  const startBodyPage = (sectionLabel) => {
     doc.addPage();
-    let y = layout.contentTop;
-    y = drawPdfSectionHeading(doc, layout, section.name, y);
+    drawPdfRunningHeader(doc, layout, runningHeaderLeft, sectionLabel);
+    return layout.contentTopBody;
+  };
 
+  orderedSections.forEach((section, sectionIdx) => {
+    let y = startBodyPage(section.name);
+    y = drawPdfSectionHeading(doc, layout, section.name, sectionIdx + 1, y);
+
+    let bucketNum = 0;
     section.buckets.forEach(bucket => {
       const quotes = getReportSubquotes(bankId, bucket.id);
       if (!quotes.length) return;
+      bucketNum += 1;
 
       const headerMetrics = measurePdfBucketHeader(doc, bucket, layout);
       const firstFindingHeight = quotes.length
         ? measurePdfFinding(doc, quotes[0], bs, layout).height
         : 0;
-      if (y + headerMetrics.height + firstFindingHeight > layout.contentBottom && y > layout.contentTop) {
-        doc.addPage();
-        y = layout.contentTop;
+      if (y + headerMetrics.height + firstFindingHeight > layout.contentBottom && y > layout.contentTopBody) {
+        y = startBodyPage(section.name);
       }
 
-      y = drawPdfBucketHeader(doc, layout, bucket, y);
+      y = drawPdfBucketHeader(doc, layout, bucket, bucketNum, y);
 
       quotes.forEach(sq => {
         const findingMetrics = measurePdfFinding(doc, sq, bs, layout);
-        if (y + findingMetrics.height > layout.contentBottom && y > layout.contentTop) {
-          doc.addPage();
-          y = layout.contentTop;
+        if (y + findingMetrics.height > layout.contentBottom && y > layout.contentTopBody) {
+          y = startBodyPage(section.name);
         }
         y = drawPdfFinding(doc, layout, sq, bs, y);
       });
@@ -4064,7 +4427,10 @@ async function savePdf() {
     drawPdfTocEntries(doc, layout, tocPages[idx], actualPageMap, y);
   }
 
-  renderPdfBody(doc, layout, orderedSections, bankId);
+  // Running header pulls the publication name from the cover meta — same
+  // string that anchors the masthead. Falls back to a generic label.
+  const runningHeaderLeft = (getReportCoverMeta(bankId) || 'PM Call Summary').trim();
+  renderPdfBody(doc, layout, orderedSections, bankId, runningHeaderLeft);
   drawPdfPageNumbers(doc, layout);
 
   doc.save(buildExportFilename('pdf', bankId));
@@ -4093,6 +4459,7 @@ async function saveDocx() {
   const {
     Document, Packer, Paragraph, TextRun, HeadingLevel,
     ImageRun, AlignmentType, PageBreak, TableOfContents, LevelFormat,
+    BorderStyle,
   } = docxLib;
 
   const bankId = state.current_bank;
@@ -4123,16 +4490,40 @@ async function saveDocx() {
     }
   }
 
+  // Cover meta line — paired hairlines top + bottom for masthead authority.
+  // titleText carries the publication metadata ("Company Name — Period");
+  // subtitleText is the actual report title that follows.
+  children.push(new Paragraph({
+    alignment: AlignmentType.CENTER,
+    spacing: { before: 60, after: 60 },
+    border: {
+      top:    { style: BorderStyle.SINGLE, size: 4, color: 'D9D0BC', space: 8 },
+      bottom: { style: BorderStyle.SINGLE, size: 4, color: 'D9D0BC', space: 8 },
+    },
+    children: [new TextRun({
+      text: titleText.toUpperCase(),
+      bold: true,
+      size: 22,
+      color: '7A7364',
+      characterSpacing: 56,
+    })],
+  }));
   children.push(new Paragraph({
     heading: HeadingLevel.TITLE,
     alignment: AlignmentType.CENTER,
-    spacing: { before: 60, after: 80 },
-    children: [new TextRun({ text: titleText, bold: true, size: 40 })],
+    spacing: { before: 240, after: 80 },
+    children: [new TextRun({ text: subtitleText, bold: true, size: 40 })],
   }));
+  // Accent rule under title — narrow centered colored bar (rendered as a
+  // bottom border on a narrow indented paragraph). Anchors the masthead.
   children.push(new Paragraph({
     alignment: AlignmentType.CENTER,
-    spacing: { before: 0, after: 320 },
-    children: [new TextRun({ text: subtitleText, bold: true, size: 24, color: '4A5268' })],
+    spacing: { before: 80, after: 320 },
+    indent: { left: 4500, right: 4500 },
+    border: {
+      bottom: { style: BorderStyle.SINGLE, size: 16, color: 'B25A1E', space: 1 },
+    },
+    children: [new TextRun({ text: '', size: 4 })],
   }));
 
   children.push(new Paragraph({
@@ -4148,21 +4539,33 @@ async function saveDocx() {
 
   orderedSections.forEach(({ name: secName, buckets: sectionBuckets }, sIdx) => {
     if (sIdx > 0) children.push(new Paragraph({ children: [new PageBreak()] }));
+    // L1 heading: Roman numeral ordinal in accent color, vertical separator,
+    // then the section name. The bold on the name comes from the heading
+    // style; the ordinal is set with explicit run formatting in accent.
+    const romanText = toRomanNumeral(sIdx + 1) + '.';
     children.push(new Paragraph({
       heading: HeadingLevel.HEADING_1,
       spacing: { before: 240, after: 160 },
-      children: [new TextRun({ text: secName, bold: true })],
+      children: [
+        new TextRun({ text: romanText + '   ', color: 'B25A1E', bold: true }),
+        new TextRun({ text: secName, bold: true }),
+      ],
     }));
 
+    let bucketNum = 0;
     sectionBuckets.forEach(bucket => {
       const quotes = getReportSubquotes(bankId, bucket.id);
       if (!quotes.length) return;
+      bucketNum += 1;
       const title = (state.bucket_user_titles || {})[bucket.id] || bucket.name;
 
       children.push(new Paragraph({
         heading: HeadingLevel.HEADING_2,
         spacing: { before: 200, after: 80 },
-        children: [new TextRun({ text: title, bold: true })],
+        children: [
+          new TextRun({ text: padTwoDigit(bucketNum) + '   ', color: 'B25A1E', bold: true }),
+          new TextRun({ text: title, bold: true }),
+        ],
       }));
       if (bucket.generated_headline) {
         children.push(new Paragraph({
@@ -4180,13 +4583,34 @@ async function saveDocx() {
         const text = subquoteTextForDocx(sq, fmt, bs);
         if (!text) return;
 
-        const context = getQaContextText(sq);
-        if (context) {
+        // QA context — small-caps eyebrow + italic question, mirroring HTML/PDF.
+        const qaParts = getQaContextParts(sq);
+        if (qaParts) {
           children.push(new Paragraph({
-            spacing: { before: 100, after: 40 },
+            spacing: { before: 120, after: 30 },
+            indent: { left: 360 },
+            children: [
+              new TextRun({
+                text: qaParts.eyebrow.toUpperCase() + '   ',
+                bold: true,
+                size: 16,
+                color: '7A7364',
+                characterSpacing: 36,
+              }),
+              new TextRun({
+                text: qaParts.name.toUpperCase(),
+                bold: true,
+                size: 16,
+                color: '4A5268',
+                characterSpacing: 36,
+              }),
+            ],
+          }));
+          children.push(new Paragraph({
+            spacing: { before: 0, after: 60 },
             indent: { left: 360 },
             children: [new TextRun({
-              text: context,
+              text: '\u201C' + qaParts.question + '\u201D',
               italics: true,
               color: '4A5268',
               size: 20,
@@ -4201,15 +4625,25 @@ async function saveDocx() {
         }));
 
         if (_attribVisible) {
+          // Small-caps attribution — leading em-dash stands in for the
+          // visual lead-in rule used in HTML/PDF.
           children.push(new Paragraph({
             alignment: AlignmentType.RIGHT,
-            spacing: { before: 0, after: 140 },
-            children: [new TextRun({
-              text: `\u2014 ${getFindingAttribution(sq)}`,
-              italics: true,
-              size: 18,
-              color: '7A7364',
-            })],
+            spacing: { before: 80, after: 160 },
+            children: [
+              new TextRun({
+                text: '\u2014\u2014\u2014   ',
+                color: 'D9D0BC',
+                size: 16,
+              }),
+              new TextRun({
+                text: getFindingAttribution(sq).toUpperCase(),
+                bold: true,
+                size: 14,
+                color: '7A7364',
+                characterSpacing: 36,
+              }),
+            ],
           }));
         }
       });
