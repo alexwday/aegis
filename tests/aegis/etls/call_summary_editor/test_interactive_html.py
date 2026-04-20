@@ -160,6 +160,10 @@ def test_generate_html_injects_period_and_state():
     assert ".s-tok.s-highlight{" in html
     assert "outline:2px solid var(--selection);outline-offset:1px;" in html
     assert "background:var(--selection-soft)!important;border-radius:3px;" in html
+    assert ".s-tok.tp-highlighted{" in html
+    assert "border-left:none!important;" in html
+    assert ".s-tok.tp-highlighted.tp-report-included{" in html
+    assert "box-shadow:inset 0 -4px 0 var(--selection);" in html
     assert "function sanitizeFilenamePart(" in html
     assert "function formatExportTimestamp(" in html
     assert "function buildExportFilename(" in html

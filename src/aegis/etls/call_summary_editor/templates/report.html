@@ -389,7 +389,8 @@ body{
 }
 /* Persistent category highlight on the report side — every finding belonging
    to state.highlighted_bucket_id gets the blue fill plus the same blue border
-   as a single selection, matching .tp-highlighted on the transcript side. */
+   as a single selection, matching the category-focus treatment in the
+   transcript pane. */
 .q-card.q-card-cat-highlighted{
   background:#DBEAFE;
   box-shadow:0 0 0 2px #2563EB;
@@ -1012,19 +1013,21 @@ body{
   border-radius:999px;
 }
 #tp-highlight-pill .tp-pill-clear:hover{background:rgba(30,58,138,.12);color:#1E3A8A}
-.tp-highlighted{
+.s-tok.tp-highlighted{
   background:#DBEAFE!important;
-  border-left:3px solid #2563EB!important;
-  padding-left:9px!important;
-  margin-left:-12px!important;
+  border-left:none!important;
+  padding-left:0!important;
+  margin-left:0!important;
+  border-radius:3px;
+  box-decoration-break:clone;
+  -webkit-box-decoration-break:clone;
 }
 /* Within a highlighted category, only sentences that are actually part of a
-   report finding get the blue outline. This excludes QA question context,
-   which can be status=selected but is never itself a finding card. */
+   report finding get a thick blue underline. This excludes QA question
+   context, which can be status=selected but is never itself a finding card. */
 .s-tok.tp-highlighted.tp-report-included{
-  outline:2px solid #2563EB;
-  outline-offset:1px;
-  border-radius:3px;
+  border-bottom-color:transparent;
+  box-shadow:inset 0 -4px 0 var(--selection);
 }
 /* Single-finding selection on transcript sentences — outline (not border)
    so the inline text flow isn't pushed around. Mirrors the blue border on

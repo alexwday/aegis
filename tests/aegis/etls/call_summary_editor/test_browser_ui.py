@@ -424,6 +424,45 @@ def test_browser_category_highlight_only_outlines_report_findings(
     }
 
 
+def test_browser_category_highlight_uses_underline_without_left_edge_bar(
+    browser_page: Page,
+    served_report: str,
+) -> None:
+    browser_page.goto(served_report)
+    _open_transcript(browser_page)
+
+    browser_page.locator("#bs_bucket_0 .bkt-focus").click()
+
+    style_state = browser_page.evaluate(
+        """
+        () => {
+          const read = sid => {
+            const el = document.querySelector(`#transcript-body .s-tok[data-sid="${sid}"]`);
+            if (!el) {
+              throw new Error(`Missing transcript sentence for ${sid}`);
+            }
+            const style = window.getComputedStyle(el);
+            return {
+              outlineWidth: style.outlineWidth,
+              borderLeftWidth: style.borderLeftWidth,
+              boxShadow: style.boxShadow,
+            };
+          };
+          return {
+            included: read('md_1'),
+            candidate: read('md_2'),
+          };
+        }
+        """
+    )
+
+    assert style_state["included"]["outlineWidth"] == "0px"
+    assert style_state["included"]["borderLeftWidth"] == "0px"
+    assert "rgb(37, 99, 235)" in style_state["included"]["boxShadow"]
+    assert style_state["candidate"]["borderLeftWidth"] == "0px"
+    assert style_state["candidate"]["boxShadow"] == "none"
+
+
 def test_browser_category_highlight_scrolls_to_first_included_finding(
     browser_page: Page,
     served_report: str,
