@@ -59,6 +59,12 @@
   --r-sm:4px;
   --r-md:8px;
   --r-lg:12px;
+
+  /* Shared height for the two fixed top bars: the transcript's section
+     label (#tp-section-label) and the report preview toolbar
+     (#report-header). Both panels set min-height to this so they stay
+     aligned across the top of the app. */
+  --top-bar-h:54px;
 }
 
 /* ════════════════════════════════════════════════════════════════
@@ -199,7 +205,9 @@ body{
    BELOW it, keeping the seam with #tp-rail visually continuous. */
 #tp-section-label{
   flex-shrink:0;
-  padding:14px 18px 12px;
+  min-height:var(--top-bar-h);
+  display:flex;align-items:center;gap:10px;
+  padding:0 12px 0 18px;
   background:var(--ink);
   color:var(--text-on-ink);
   font-family:var(--font-serif);
@@ -207,6 +215,24 @@ body{
   text-transform:uppercase;letter-spacing:.14em;
   border-bottom:1px solid var(--ink-2);
 }
+#tp-section-text{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* Findings-view toggle — single icon button in the transcript header.
+   Inactive = default speaker-block view; active (highlighted) = findings list
+   view where each finding is rendered as its own <li>. */
+.tp-view-btn{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:28px;height:24px;padding:0;
+  background:rgba(251,248,239,.06);
+  border:1px solid rgba(251,248,239,.14);
+  border-radius:var(--r-sm);
+  color:rgba(251,248,239,.55);
+  cursor:pointer;
+  transition:background .15s,color .15s,border-color .15s;
+}
+.tp-view-btn:hover{color:#fff;background:rgba(251,248,239,.12);border-color:rgba(251,248,239,.22)}
+.tp-view-btn.active{background:rgba(251,248,239,.18);color:#fff;border-color:rgba(251,248,239,.28)}
+.tp-view-btn svg{display:block}
 
 #tp-scroll{
   flex:1;
@@ -251,6 +277,26 @@ body{
 .t-speaker-title{font-size:10.5px;color:var(--text-3);font-style:italic}
 .t-block-text{font-size:12px;line-height:1.6;color:var(--text-1)}
 .t-para-break{display:block;height:8px}
+
+/* Findings view — one <li> per finding. Bullet sits outside the indent so the
+   finding text aligns cleanly. Used inside both MD .t-block-text and QA
+   .t-qa-text containers, so the font/color cascade naturally. */
+.t-findings-list{
+  list-style:none;padding:0;margin:0;
+}
+.t-findings-list > li{
+  position:relative;
+  padding:2px 0 2px 16px;
+}
+.t-findings-list > li + li{margin-top:6px}
+.t-findings-list > li::before{
+  content:"";
+  position:absolute;
+  left:4px;top:10px;
+  width:4px;height:4px;
+  border-radius:50%;
+  background:var(--text-3);
+}
 
 /* QA group */
 .t-qa-group{
@@ -356,7 +402,12 @@ body{
 .q-card.q-card-cat-highlighted::before{display:none}
 
 /* ════════════════════════════════════════════════════════════════
-   SENTENCE POPOVER
+   SENTENCE POPOVER — condensed layout
+   Header row = review-status icon toggles + importance chip.
+   Body       = Top Matches list + "show all" expander.
+   The quoted finding text and review-status footer were removed; the
+   "Create custom classification" form was lifted out to a dedicated
+   header button so the popover stays compact.
    ════════════════════════════════════════════════════════════════ */
 #s-popover{
   position:fixed;z-index:9999;
@@ -364,71 +415,105 @@ body{
   border:1px solid var(--rule);
   border-radius:var(--r-md);
   box-shadow:var(--shadow-lg);
-  width:440px;max-width:min(440px,calc(100vw - 16px));
+  width:320px;max-width:min(320px,calc(100vw - 16px));
   display:none;overflow:hidden;
 }
-#s-pop-text{
-  padding:14px 16px;
-  font-family:var(--font-serif);
-  font-size:13px;color:var(--text-1);
+#s-pop-header{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:8px 10px 8px 8px;
+  background:linear-gradient(to bottom,var(--surface-3),var(--paper-2));
   border-bottom:1px solid var(--rule-3);
-  line-height:1.65;font-style:italic;
-  max-height:180px;overflow:auto;
 }
-#s-pop-title{
-  padding:8px 16px 6px;
-  font-size:10px;text-transform:uppercase;letter-spacing:.12em;
+#s-pop-status-icons{display:inline-flex;align-items:center;gap:3px}
+.s-status-icon{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:30px;height:28px;padding:0;
+  background:transparent;border:1px solid transparent;border-radius:var(--r-sm);
   color:var(--text-3);
-  background:var(--surface-3);
-  border-bottom:1px solid var(--rule-3);
-  font-weight:600;
+  cursor:pointer;
+  transition:background .15s,color .15s,border-color .15s;
 }
-#s-pop-scores{max-height:420px;overflow-y:auto}
-.s-score-section{padding:10px 0;border-bottom:1px solid var(--rule-3)}
-.s-score-section:last-child{border-bottom:none}
-.s-score-section-title{padding:0 16px 8px;font-size:10px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.1em}
-.s-score-row{display:flex;align-items:flex-start;gap:10px;padding:8px 16px;cursor:pointer;transition:background .1s}
+.s-status-icon:hover{background:var(--paper-2);color:var(--ink);border-color:var(--rule-2)}
+/* Per-status active colors reinforce semantic meaning: green = promoted
+   to report, amber = held as candidate context, red = explicitly rejected. */
+.s-status-icon[data-status="selected"].active{
+  background:rgba(34,197,94,.14);color:#16A34A;border-color:rgba(34,197,94,.34);
+}
+.s-status-icon[data-status="candidate"].active{
+  background:rgba(245,158,11,.14);color:#D97706;border-color:rgba(245,158,11,.34);
+}
+.s-status-icon[data-status="rejected"].active{
+  background:rgba(239,68,68,.12);color:#DC2626;border-color:rgba(239,68,68,.3);
+}
+.s-status-icon.disabled,.s-status-icon:disabled{opacity:.4;cursor:not-allowed;pointer-events:none}
+.s-status-icon svg{display:block}
+#s-pop-importance{
+  font-size:10px;font-weight:700;
+  letter-spacing:.03em;
+  color:var(--text-2);
+  background:var(--paper);
+  padding:4px 9px;border-radius:999px;
+  border:1px solid var(--rule-2);
+  font-variant-numeric:tabular-nums;
+  white-space:nowrap;
+  box-shadow:0 1px 0 rgba(15,27,45,.04);
+}
+#s-pop-importance .s-score-num{color:var(--ink);margin-left:2px}
+#s-pop-importance.hidden{display:none}
+#s-pop-readonly-note{
+  padding:10px 14px;
+  font-size:11.5px;color:var(--text-2);font-style:italic;
+  line-height:1.55;
+  border-top:1px solid var(--rule-3);
+  background:var(--surface-3);
+}
+#s-pop-readonly-note.hidden{display:none}
+#s-pop-scores{max-height:380px;overflow-y:auto}
+#s-pop-scores.hidden{display:none}
+.s-score-section{padding:6px 0 4px}
+.s-score-row{
+  display:flex;align-items:center;gap:10px;
+  padding:7px 12px 7px 14px;
+  cursor:pointer;
+  position:relative;
+  transition:background .1s;
+}
 .s-score-row:hover{background:var(--surface-1)}
-.s-score-row.current{background:var(--accent-soft)}
+/* Current (primary) bucket gets the soft accent fill plus an inset colored
+   bar on the left edge — the bar uses the bucket's own accent so the visual
+   match between transcript highlight and popover row is obvious. */
+.s-score-row.current{
+  background:var(--accent-soft);
+  box-shadow:inset 3px 0 0 var(--cur-accent,var(--accent));
+}
 .s-score-row.readonly{cursor:default}
 .s-score-row.readonly:hover{background:transparent}
-.s-score-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:5px}
+.s-score-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;box-shadow:0 0 0 2px var(--paper-2)}
 .s-score-main{flex:1;min-width:0}
 .s-score-name{font-size:12.5px;color:var(--ink);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.s-score-val{font-size:11px;font-weight:700;color:var(--text-3);min-width:28px;text-align:right;padding-top:3px;font-variant-numeric:tabular-nums}
-.s-score-check{font-size:13px;color:var(--accent);margin-left:2px;min-width:12px}
+.s-score-val{font-size:11px;font-weight:700;color:var(--text-3);min-width:28px;text-align:right;font-variant-numeric:tabular-nums}
+.s-score-check{font-size:13px;color:#16A34A;min-width:12px;font-weight:700}
 .s-expand-btn{
-  margin:8px 16px;padding:8px 12px;
-  border:1px solid var(--rule);border-radius:var(--r-sm);
-  background:var(--paper-2);color:var(--ink);
-  font-size:11.5px;font-weight:600;
-  cursor:pointer;width:calc(100% - 32px);text-align:left;
-  transition:background .15s;
+  margin:6px 12px 8px;padding:7px 12px;
+  border:1px solid var(--rule);border-radius:999px;
+  background:var(--paper-2);color:var(--text-2);
+  font-size:11px;font-weight:600;letter-spacing:.01em;
+  cursor:pointer;width:calc(100% - 24px);
+  display:inline-flex;align-items:center;justify-content:center;gap:7px;
+  transition:background .15s,color .15s,border-color .15s;
 }
-.s-expand-btn:hover{background:var(--surface-1)}
-#s-pop-all{display:none;padding-top:8px}
-.s-pop-form{padding:10px 16px 4px;display:grid;gap:8px}
-.s-pop-form input,.s-pop-form textarea,.s-pop-form select{
-  width:100%;
-  border:1px solid var(--rule);
-  border-radius:var(--r-sm);
-  padding:8px 10px;
-  font-size:12px;
-  font-family:inherit;
-  background:var(--paper-2);color:var(--text-1);
-  transition:border-color .15s,box-shadow .15s;
+.s-expand-btn:hover{background:var(--surface-1);color:var(--ink);border-color:var(--rule-2)}
+.s-expand-btn::after{
+  content:'';
+  width:6px;height:6px;
+  border-right:1.5px solid currentColor;
+  border-bottom:1.5px solid currentColor;
+  transform:rotate(45deg) translateY(-2px);
+  opacity:.7;
+  transition:transform .15s;
 }
-.s-pop-form input:focus,.s-pop-form textarea:focus,.s-pop-form select:focus{
-  outline:none;
-  border-color:var(--accent);
-  box-shadow:0 0 0 3px var(--accent-soft);
-}
-.s-pop-form textarea{min-height:64px;resize:vertical;font-family:var(--font-serif);font-size:13px;line-height:1.55}
-.s-pop-form-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.s-pop-form-actions{display:flex;justify-content:flex-end;padding:4px 16px 14px;gap:8px}
-#s-pop-custom{display:none}
-#s-pop-footer{padding:9px 16px;border-top:1px solid var(--rule-3);background:var(--surface-3)}
-.s-pop-note{font-size:10.5px;color:var(--text-3);font-style:italic}
+.s-expand-btn.expanded::after{transform:rotate(-135deg) translateY(2px)}
+#s-pop-all{display:none}
 
 /* ════════════════════════════════════════════════════════════════
    REPORT PANEL — header + paper
@@ -437,9 +522,10 @@ body{
 
 #report-header{
   flex-shrink:0;
+  min-height:var(--top-bar-h);
   background:var(--ink);
   border-bottom:1px solid var(--ink-2);
-  padding:11px 22px;
+  padding:0 22px;
   display:flex;align-items:center;justify-content:flex-end;
   position:relative;
 }
@@ -457,8 +543,8 @@ body{
 /* Icon-only dropdown trigger — the Settings and Save menus are compact gear
    and disk glyphs. Square padding keeps the hit target balanced, and the SVG
    inherits currentColor so it picks up the existing header button color. */
-.btn.hdr-menu-trigger.btn-icon{padding:7px 8px;line-height:0}
-.btn.hdr-menu-trigger.btn-icon svg{display:block;width:16px;height:16px}
+.btn.btn-icon{padding:7px 8px;line-height:0}
+.btn.btn-icon svg{display:block;width:16px;height:16px}
 .report-actions .btn{
   color:var(--text-on-ink);
   border-color:rgba(251,248,239,.18);
@@ -527,6 +613,38 @@ body{
 .modal-close:hover{background:var(--surface-1);color:var(--ink)}
 .modal-body{flex:1;overflow-y:auto;padding:20px 22px;background:var(--paper-2)}
 .modal-empty{font-size:12.5px;color:var(--text-3);font-style:italic;text-align:center;padding:24px}
+/* Narrower variant — used by the Add Category modal so a two-field form
+   doesn't float in a wide container. */
+.modal-box-sm{width:min(460px,100%)}
+
+/* Add Category modal form */
+.add-cat-form{display:flex;flex-direction:column;gap:14px}
+.add-cat-field{display:flex;flex-direction:column;gap:6px}
+.add-cat-label{font-size:11.5px;font-weight:700;color:var(--text-2);letter-spacing:.02em}
+.add-cat-optional{font-weight:500;color:var(--text-3);font-size:10.5px;text-transform:none;letter-spacing:0}
+.add-cat-field input{
+  width:100%;
+  border:1px solid var(--rule);
+  border-radius:var(--r-sm);
+  padding:9px 11px;
+  font-size:13px;
+  font-family:inherit;
+  background:var(--paper-2);color:var(--text-1);
+  transition:border-color .15s,box-shadow .15s;
+}
+.add-cat-field input:focus{
+  outline:none;
+  border-color:var(--accent);
+  box-shadow:0 0 0 3px var(--accent-soft);
+}
+.add-cat-error{
+  font-size:11.5px;color:#B91C1C;
+  background:#FEF2F2;border:1px solid #FECACA;
+  border-radius:var(--r-sm);
+  padding:8px 10px;
+}
+.add-cat-error.hidden{display:none}
+.add-cat-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:4px}
 
 /* Emerging topics toggle bar (used in the proposal modal) */
 .emg-bar{
@@ -1359,6 +1477,8 @@ body{
             Emerging Topics
             <span class="badge-count hidden" id="emerging-topics-badge">0</span>
           </button>
+          <button class="btn btn-secondary btn-icon" id="add-category-btn"
+                  onclick="openAddCategoryModal()" title="Add a category" aria-label="Add a category"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
           <button class="btn btn-secondary hdr-menu-trigger btn-icon"
                   onclick="toggleHeaderMenu('settings', this)" title="Settings" aria-label="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
           <button class="btn btn-secondary hdr-menu-trigger btn-icon"
@@ -1381,15 +1501,51 @@ body{
         <div class="modal-body" id="modal-body"></div>
       </div>
     </div>
+    <!-- "Add Category" modal — creates a standalone bucket from a name +
+         optional subtitle. New buckets immediately appear in the sentence
+         popover's "Show all classifications" list on the next click. -->
+    <div class="modal-overlay" id="add-category-modal" onclick="handleAddCategoryBackdropClick(event)">
+      <div class="modal-box modal-box-sm" onclick="event.stopPropagation()">
+        <div class="modal-header">
+          <div>
+            <div class="modal-title">Add Category</div>
+            <div class="modal-subtitle">Create a category you can assign findings to from the sentence popover.</div>
+          </div>
+          <button class="modal-close" onclick="closeAddCategoryModal()" title="Close">&times;</button>
+        </div>
+        <div class="modal-body">
+          <form id="add-category-form" class="add-cat-form" onsubmit="submitAddCategoryForm(event)">
+            <label class="add-cat-field">
+              <span class="add-cat-label">Category Name</span>
+              <input id="add-cat-name" type="text" required maxlength="120" placeholder="e.g. Capital Markets Outlook">
+            </label>
+            <label class="add-cat-field">
+              <span class="add-cat-label">Subtitle <span class="add-cat-optional">(optional)</span></span>
+              <input id="add-cat-subtitle" type="text" maxlength="160" placeholder="One-line headline shown above the finding list">
+            </label>
+            <div id="add-cat-error" class="add-cat-error hidden"></div>
+            <div class="add-cat-actions">
+              <button type="button" class="btn btn-secondary btn-sm" onclick="closeAddCategoryModal()">Cancel</button>
+              <button type="submit" class="btn btn-primary btn-sm">Create Category</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
-<!-- Sentence score popover (single DOM element, repositioned on click) -->
+<!-- Sentence score popover (single DOM element, repositioned on click).
+     Condensed layout: header row holds review-status icon toggles and an
+     importance chip; body holds the category list + expand-all. The
+     readonly-note div is swapped in for analyst question sentences. -->
 <div id="s-popover">
-  <div id="s-pop-text"></div>
-  <div id="s-pop-title">Category Scores</div>
+  <div id="s-pop-header">
+    <div id="s-pop-status-icons" role="group" aria-label="Review status"></div>
+    <div id="s-pop-importance" class="importance-chip" title="Importance score">—</div>
+  </div>
+  <div id="s-pop-readonly-note" class="hidden"></div>
   <div id="s-pop-scores"></div>
-  <div id="s-pop-footer"><span class="s-pop-note" id="s-pop-note"></span></div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js"></script>
@@ -1418,6 +1574,16 @@ let _activeSid = null; // sentence currently shown in popover
 const HIGHLIGHTER_SVG = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 11-6 6v3h9l3-3"/><path d="m22 12-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4"/></svg>';
 const EDIT_SVG = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>';
 const REVERT_SVG = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>';
+// Transcript findings-view toggle icon — a bulleted list. When the button is
+// active, each finding renders as its own <li>; when inactive, the default
+// speaker-block / paragraph layout is used.
+const VIEW_FINDINGS_SVG = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="4" cy="6" r="1" fill="currentColor"/><circle cx="4" cy="12" r="1" fill="currentColor"/><circle cx="4" cy="18" r="1" fill="currentColor"/></svg>';
+// Review-status icons shown in the condensed sentence popover. Selected =
+// promoted to the report, Candidate = kept as context but not in the report,
+// Rejected = explicitly removed from the review.
+const STATUS_SELECTED_SVG = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg>';
+const STATUS_CANDIDATE_SVG = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke-dasharray="3 3"/></svg>';
+const STATUS_REJECTED_SVG = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m9 9 6 6m0-6-6 6"/></svg>';
 
 const DYNAMIC_BUCKET_COLORS = [
   {bg:'#E3F2FD', accent:'#1565C0'},
@@ -1472,6 +1638,24 @@ let _attribVisible = false;
 function toggleAttrib() {
   _attribVisible = !_attribVisible;
   document.getElementById('report-page').classList.toggle('attrib-off', !_attribVisible);
+}
+
+// Transcript view mode — 'blocks' is the default (paragraph-style speaker
+// blocks) and 'findings' renders each finding as its own bullet list item
+// inside the same speaker block shell. UI chrome only, so it lives outside
+// `state` and doesn't round-trip through save/load.
+let _transcriptView = 'blocks';
+function setTranscriptView(view) {
+  if (view !== 'blocks' && view !== 'findings') return;
+  if (_transcriptView === view) return;
+  _transcriptView = view;
+  renderTranscriptBody();
+}
+
+// Flip between the two transcript views. Bound to the single bullet-list
+// button in #tp-section-label — active = findings, inactive = blocks.
+function toggleTranscriptView() {
+  setTranscriptView(_transcriptView === 'findings' ? 'blocks' : 'findings');
 }
 
 // ============================================================
@@ -1955,6 +2139,19 @@ function tSpansWithParas(sentences, btype, inc) {
   return html;
 }
 
+// Body text for a speaker block / QA turn, routed by the transcript view mode.
+// Blocks view keeps the paragraph layout; findings view renders each finding
+// (each entry in `sentences` is a finding record) as its own <li>.
+function tFindingsBody(sentences, btype, inc) {
+  if (_transcriptView === 'findings') {
+    if (!sentences || !sentences.length) return '';
+    return '<ul class="t-findings-list">'
+      + sentences.map(s => `<li>${tSpan(s, btype, inc)}</li>`).join('')
+      + '</ul>';
+  }
+  return tSpansWithParas(sentences, btype, inc);
+}
+
 // ── Transcript sentence span (included/excluded styling) ──
 function tSpan(sent, blockType, inc) {
   const bid = effectivePrimary(sent.sid);
@@ -2008,7 +2205,7 @@ function renderTranscriptBodyBlocks() {
     if (!firstSection) firstSection = 'Management Discussion';
     html += `<div class="t-section-header" data-section="Management Discussion">Management Discussion</div>`;
     bank.md_blocks.forEach(blk => {
-      const sentHtml = tSpansWithParas(blk.sentences, 'md', inc);
+      const sentHtml = tFindingsBody(blk.sentences, 'md', inc);
       html += `<div class="t-block">
         <div class="t-block-header"><span class="t-speaker-name">${esc(blk.speaker)}</span>
         ${blk.speaker_title ? `<span class="t-speaker-title">${esc(blk.speaker_title)}</span>` : ''}</div>
@@ -2023,7 +2220,12 @@ function renderTranscriptBodyBlocks() {
     });
   }
   const tb = document.getElementById('transcript-body');
-  tb.innerHTML = `<div id="tp-section-label">${esc(firstSection)}</div><div id="tp-scroll">${html}</div>`;
+  const findingsOn = _transcriptView === 'findings';
+  const btnTitle = findingsOn ? 'Switch to speaker blocks view' : 'Switch to findings list view';
+  tb.innerHTML = `<div id="tp-section-label">`
+    + `<span id="tp-section-text">${esc(firstSection)}</span>`
+    + `<button type="button" class="tp-view-btn${findingsOn ? ' active' : ''}" onclick="toggleTranscriptView()" title="${btnTitle}" aria-label="${btnTitle}" aria-pressed="${findingsOn}">${VIEW_FINDINGS_SVG}</button>`
+    + `</div><div id="tp-scroll">${html}</div>`;
   bindTpSectionLabelScroll();
 }
 
@@ -2032,8 +2234,11 @@ function renderTranscriptBodyBlocks() {
 // one whose top has crossed the scroll viewport's top edge.
 function bindTpSectionLabelScroll() {
   const scrollEl = document.getElementById('tp-scroll');
-  const label = document.getElementById('tp-section-label');
-  if (!scrollEl || !label) return;
+  // Target the inner text span, not the outer label — the label now also
+  // holds the view-toggle buttons, which would be wiped if we assigned to
+  // label.textContent on every scroll tick.
+  const textEl = document.getElementById('tp-section-text');
+  if (!scrollEl || !textEl) return;
   const headers = Array.from(scrollEl.querySelectorAll('.t-section-header'));
   if (headers.length <= 1) return;
   const update = () => {
@@ -2042,7 +2247,7 @@ function bindTpSectionLabelScroll() {
     for (const h of headers) {
       if (h.getBoundingClientRect().top - viewportTop <= 0) current = h.dataset.section;
     }
-    if (label.textContent !== current) label.textContent = current;
+    if (textEl.textContent !== current) textEl.textContent = current;
   };
   scrollEl.addEventListener('scroll', update, { passive: true });
   update();
@@ -2138,28 +2343,53 @@ function getSubquoteSpeakerKey(sq) {
   return [meta.name, meta.title, meta.affiliation].join('||');
 }
 
+// QA findings from the same analyst conversation share a single eyebrow
+// ("In response to...") and question summary in the rendered report, so they
+// need to cluster by conv_id — not by executive speaker. MD blocks have no
+// conversation, so they keep clustering by speaker.
+function getSubquoteClusterKey(sq) {
+  if (sq && sq.type === 'qa') return 'qa::' + (sq.conv_id || sq.id);
+  return 'md::' + getSubquoteSpeakerKey(sq);
+}
+
 function clusterSubquotesBySpeaker(quotes) {
-  const speakerOrder = [];
-  const bySpeaker = new Map();
+  const order = [];
+  const byKey = new Map();
   quotes.forEach(sq => {
-    const key = getSubquoteSpeakerKey(sq);
-    if (!bySpeaker.has(key)) {
-      bySpeaker.set(key, []);
-      speakerOrder.push(key);
+    const key = getSubquoteClusterKey(sq);
+    if (!byKey.has(key)) {
+      byKey.set(key, []);
+      order.push(key);
     }
-    bySpeaker.get(key).push(sq);
+    byKey.get(key).push(sq);
   });
-  return speakerOrder.flatMap(key => bySpeaker.get(key) || []);
+  return order.flatMap(key => {
+    const cluster = byKey.get(key) || [];
+    // Within a QA cluster, re-sort by sid so the bullets read in natural
+    // conversation order (af0, af1, af2…) instead of the importance order
+    // inherited from the outer sort.
+    if (key.startsWith('qa::') && cluster.length > 1) {
+      return [...cluster].sort((a, b) =>
+        a.id.localeCompare(b.id, undefined, { numeric: true })
+      );
+    }
+    return cluster;
+  });
 }
 
 function buildSpeakerBatchMeta(quotes) {
   const meta = new Map();
   quotes.forEach((sq, idx) => {
-    const key = getSubquoteSpeakerKey(sq);
-    const prevKey = idx > 0 ? getSubquoteSpeakerKey(quotes[idx - 1]) : null;
-    const nextKey = idx < quotes.length - 1 ? getSubquoteSpeakerKey(quotes[idx + 1]) : null;
+    const key = getSubquoteClusterKey(sq);
+    const prevKey = idx > 0 ? getSubquoteClusterKey(quotes[idx - 1]) : null;
+    const nextKey = idx < quotes.length - 1 ? getSubquoteClusterKey(quotes[idx + 1]) : null;
     meta.set(sq.id, {
       showAttribution: key !== nextKey,
+      // First subquote of a cluster prints the eyebrow + question; the rest
+      // render as plain bullets under it. For MD the flag is harmless (the
+      // card never renders a QA eyebrow), but keeping it uniform simplifies
+      // the call sites.
+      showQaContext: key !== prevKey,
       batchClass: key === nextKey ? 'q-card-batch-inner' : 'q-card-batch-end',
     });
   });
@@ -2170,7 +2400,7 @@ function renderQAConvBlocks(conv, inc, convIdx) {
   const turns = _qaConvTurns(conv);
   const turnsHtml = turns.map(turn => {
     const label = _qaTurnLabel(turn);
-    const sentHtml = tSpansWithParas(turn.sentences || [], 'qa', inc);
+    const sentHtml = tFindingsBody(turn.sentences || [], 'qa', inc);
     const cls = turn.role === 'q' ? 't-qa-q' : 't-qa-a';
     const lblCls = turn.role === 'q' ? 'q' : 'a';
     const lblText = turn.role === 'q' ? 'Q' : 'A';
@@ -2191,7 +2421,10 @@ function renderPopoverScoreRow(bucket, score, sid, options={}) {
   const scoreText = Number.isFinite(score) ? score.toFixed(1) : '—';
   const cls = `s-score-row${current?' current':''}${readonly?' readonly':''}`;
   const onclick = readonly ? '' : `onclick="reassignSentence('${sid}','${bucket.id}')"`;
-  return `<div class="${cls}" ${onclick}>
+  // Pipe the bucket's own accent color into a CSS custom property so the
+  // left-edge bar on the current row matches the dot / transcript highlight.
+  const style = current ? ` style="--cur-accent:${bucket.color_accent}"` : '';
+  return `<div class="${cls}"${style} ${onclick}>
     <div class="s-score-dot" style="background:${bucket.color_accent}"></div>
     <div class="s-score-main">
       <div class="s-score-name">${esc(bucketLabel(bucket))}</div>
@@ -2209,39 +2442,55 @@ function togglePopoverAll(evt) {
   const open = panel.style.display === 'block';
   panel.style.display = open ? 'none' : 'block';
   btn.textContent = open ? btn.dataset.showLabel : btn.dataset.hideLabel;
+  btn.classList.toggle('expanded', !open);
 }
 
-function toggleCustomBucketForm(evt) {
-  evt.stopPropagation();
-  const panel = document.getElementById('s-pop-custom');
-  const btn = document.getElementById('s-pop-custom-btn');
-  if (!panel || !btn) return;
-  const open = panel.style.display === 'block';
-  panel.style.display = open ? 'none' : 'block';
-  btn.textContent = open ? 'Create custom classification' : 'Hide custom classification form';
+// Add Category modal — opened from the report header's plus button.
+// Creates a standalone bucket from a name + optional subtitle. The bucket
+// applies to all transcript sections (ALL) so it shows up in every sentence
+// popover's "Show all classifications" list; the user then reassigns
+// findings to it from the transcript side.
+function openAddCategoryModal() {
+  const modal = document.getElementById('add-category-modal');
+  if (!modal) return;
+  document.getElementById('add-category-form').reset();
+  const err = document.getElementById('add-cat-error');
+  err.textContent = '';
+  err.classList.add('hidden');
+  modal.classList.add('active');
+  // Defer focus so the browser paints the modal before we steal focus into it.
+  setTimeout(() => { document.getElementById('add-cat-name')?.focus(); }, 0);
 }
 
-function createCustomBucketForActiveSentence() {
-  if (!_activeSid) return;
-  const context = getSentenceContext(_activeSid);
-  if (!context.editable) return;
+function closeAddCategoryModal() {
+  document.getElementById('add-category-modal')?.classList.remove('active');
+}
 
-  const name = (document.getElementById('s-custom-name')?.value || '').trim();
-  const reportSection = document.getElementById('s-custom-section')?.value || 'Results Summary';
-  const subtitle = (document.getElementById('s-custom-subtitle')?.value || '').trim();
-  const description = (document.getElementById('s-custom-description')?.value || '').trim();
-  if (!name) return;
+function handleAddCategoryBackdropClick(evt) {
+  if (evt.target.id === 'add-category-modal') closeAddCategoryModal();
+}
 
-  const bucket = createBucketFromRow({
+function submitAddCategoryForm(evt) {
+  evt.preventDefault();
+  const name = (document.getElementById('add-cat-name').value || '').trim();
+  const subtitle = (document.getElementById('add-cat-subtitle').value || '').trim();
+  const err = document.getElementById('add-cat-error');
+  if (!name) {
+    err.textContent = 'Category name is required.';
+    err.classList.remove('hidden');
+    return;
+  }
+  createBucketFromRow({
     category_name: name,
-    category_description: description,
-    transcript_sections: context.transcriptSection,
-    report_section: reportSection,
+    category_description: '',
+    transcript_sections: 'ALL',
+    report_section: 'Results Summary',
   }, {
     generated_headline: subtitle,
     source: 'suggested',
   });
-  reassignSentence(_activeSid, bucket.id);
+  closeAddCategoryModal();
+  renderCurrentBank();
 }
 
 function setActiveSentenceStatus(status) {
@@ -2263,6 +2512,27 @@ function setActiveSentenceStatus(status) {
   renderCurrentBank();
 }
 
+// Build the three status-icon toggle buttons for the popover header. Each
+// button reflects the current review status (only one is `.active` at a
+// time) and clicking it routes through setActiveSentenceStatus, which also
+// closes the popover and triggers a re-render. Readonly mode (analyst
+// question sentences) shows the icons disabled so the layout stays stable.
+function renderStatusIconsHtml(currentStatus, readonly) {
+  const items = [
+    { status: 'selected',  label: 'Mark as selected for report',  svg: STATUS_SELECTED_SVG },
+    { status: 'candidate', label: 'Mark as candidate only',       svg: STATUS_CANDIDATE_SVG },
+    { status: 'rejected',  label: 'Mark as rejected',             svg: STATUS_REJECTED_SVG },
+  ];
+  return items.map(item => {
+    const active = item.status === currentStatus;
+    const disabled = readonly;
+    const cls = `s-status-icon${active ? ' active' : ''}${disabled ? ' disabled' : ''}`;
+    const onclick = disabled ? '' : ` onclick="setActiveSentenceStatus('${item.status}')"`;
+    const aria = disabled ? ' aria-disabled="true"' : ` aria-pressed="${active}"`;
+    return `<button type="button" class="${cls}" data-status="${item.status}" title="${item.label}" aria-label="${item.label}"${onclick}${aria}>${item.svg}</button>`;
+  }).join('');
+}
+
 function showSentencePopover(evt, el) {
   evt.stopPropagation();
   const sid    = el.dataset.sid;
@@ -2275,111 +2545,87 @@ function showSentencePopover(evt, el) {
   // Cross-highlight: find this sentence in the report panel and scroll to it
   highlightInReport(sid);
 
-  // Populate text preview
-  document.getElementById('s-pop-text').textContent = `"${sent.text}"`;
-
-  // Note line
   const bucketState = getApplicableBucketsForSentence(sid);
   const readonly = !bucketState.context.editable;
   const currentStatus = getSentenceReviewStatus(sid);
-  document.getElementById('s-pop-note').textContent = readonly
-    ? 'Analyst question sentences are context only \u2014 they are not classified into a category and never become a finding on their own.'
-    : `Current review status: ${currentStatus}. Click a category to promote it into the report.`;
 
-  const curPrimary = effectivePrimary(sid);
-  const applicableBuckets = bucketState.buckets;
-  const scoredRows = applicableBuckets
-    .map(b => ({ bucket: b, score: scores[b.id] || 0 }))
-    .sort((a, b) => b.score - a.score || bucketLabel(a.bucket).localeCompare(bucketLabel(b.bucket)));
+  // Header: status icons + importance chip. The chip reads the raw 0–10
+  // score off the sentence; if missing (older state files) we hide it rather
+  // than print 0.0 which would be misleading.
+  document.getElementById('s-pop-status-icons').innerHTML =
+    renderStatusIconsHtml(currentStatus, readonly);
+  const impEl = document.getElementById('s-pop-importance');
+  const impVal = Number(sent.importance_score);
+  if (Number.isFinite(impVal) && impVal > 0) {
+    impEl.innerHTML = `Score<span class="s-score-num">${impVal.toFixed(1)}</span>`;
+    impEl.classList.remove('hidden');
+  } else {
+    impEl.classList.add('hidden');
+  }
 
-  const topIds = scoredRows.slice(0, 3).map(row => row.bucket.id);
-  if (!topIds.includes(curPrimary)) topIds.push(curPrimary);
-  const topRows = applicableBuckets
-    .filter(bucket => topIds.includes(bucket.id))
-    .map(bucket => ({ bucket, score: scores[bucket.id] || 0 }))
-    .sort((a, b) => (b.bucket.id === curPrimary) - (a.bucket.id === curPrimary) || b.score - a.score);
-  const allRows = applicableBuckets
-    .map(bucket => ({ bucket, score: scores[bucket.id] || 0 }))
-    .sort((a, b) =>
-      (b.bucket.id === curPrimary) - (a.bucket.id === curPrimary) ||
-      b.score - a.score ||
-      bucketLabel(a.bucket).localeCompare(bucketLabel(b.bucket))
-    );
+  // Readonly note replaces the category list for analyst question sentences;
+  // otherwise it stays hidden.
+  const noteEl = document.getElementById('s-pop-readonly-note');
+  const scoresEl = document.getElementById('s-pop-scores');
+  if (readonly) {
+    noteEl.textContent = 'Analyst question sentences are context only \u2014 they are not classified into a category and never become a finding on their own.';
+    noteEl.classList.remove('hidden');
+    scoresEl.classList.add('hidden');
+    scoresEl.innerHTML = '';
+  } else {
+    noteEl.classList.add('hidden');
+    scoresEl.classList.remove('hidden');
 
-  const topHtml = topRows.map(({bucket, score}) =>
-    renderPopoverScoreRow(bucket, score, sid, {
+    const curPrimary = effectivePrimary(sid);
+    const applicableBuckets = bucketState.buckets;
+    // Sort the full applicable list by score desc once — this is also the
+    // order used in the expanded view. The top slice is "top 3 + the current
+    // bucket if it wasn't already in the top 3", and the remaining slice is
+    // everything else.
+    const scoredRows = applicableBuckets
+      .map(bucket => ({ bucket, score: scores[bucket.id] || 0 }))
+      .sort((a, b) =>
+        (b.bucket.id === curPrimary) - (a.bucket.id === curPrimary) ||
+        b.score - a.score ||
+        bucketLabel(a.bucket).localeCompare(bucketLabel(b.bucket))
+      );
+    const topIds = new Set(scoredRows.slice(0, 3).map(row => row.bucket.id));
+    topIds.add(curPrimary);
+    const topRows = scoredRows.filter(row => topIds.has(row.bucket.id));
+    const remainingRows = scoredRows.filter(row => !topIds.has(row.bucket.id));
+    const remainingCount = remainingRows.length;
+
+    const renderRow = ({bucket, score}) => renderPopoverScoreRow(bucket, score, sid, {
       readonly,
       current: bucket.id === curPrimary,
-    })
-  ).join('');
-  const remainingCount = Math.max(allRows.length - topRows.length, 0);
-  const allHtml = allRows.map(({bucket, score}) =>
-    renderPopoverScoreRow(bucket, score, sid, {
-      readonly,
-      current: bucket.id === curPrimary,
-    })
-  ).join('');
+    });
+    const topHtml = topRows.map(renderRow).join('');
+    const remainingHtml = remainingRows.map(renderRow).join('');
 
-  const customHtml = readonly ? '' : `
-    <div class="s-score-section">
-      <div class="s-score-section-title">Review Status</div>
-      <div class="s-score-row${currentStatus==='selected'?' current':''}" onclick="setActiveSentenceStatus('selected')">
-        <div class="s-score-main"><div class="s-score-name">Selected for report</div></div>
-        <div class="s-score-check">${currentStatus==='selected' ? '&#10003;' : ''}</div>
-      </div>
-      <div class="s-score-row${currentStatus==='candidate'?' current':''}" onclick="setActiveSentenceStatus('candidate')">
-        <div class="s-score-main"><div class="s-score-name">Candidate only</div></div>
-        <div class="s-score-check">${currentStatus==='candidate' ? '&#10003;' : ''}</div>
-      </div>
-      <div class="s-score-row${currentStatus==='rejected'?' current':''}" onclick="setActiveSentenceStatus('rejected')">
-        <div class="s-score-main"><div class="s-score-name">Rejected</div></div>
-        <div class="s-score-check">${currentStatus==='rejected' ? '&#10003;' : ''}</div>
-      </div>
-    </div>
-    <div class="s-score-section">
-      <button id="s-pop-custom-btn" class="s-expand-btn" onclick="toggleCustomBucketForm(event)">Create custom classification</button>
-      <div id="s-pop-custom">
-        <div class="s-pop-form">
-          <input id="s-custom-name" type="text" placeholder="New classification name">
-          <div class="s-pop-form-row">
-            <select id="s-custom-section">
-              <option value="Results Summary">Results Summary</option>
-              <option value="Earnings Call Q&A">Earnings Call Q&A</option>
-            </select>
-            <input id="s-custom-subtitle" type="text" placeholder="Optional subtitle">
-          </div>
-          <textarea id="s-custom-description" placeholder="Optional description"></textarea>
-        </div>
-        <div class="s-pop-form-actions">
-          <button class="btn btn-primary btn-sm" onclick="createCustomBucketForActiveSentence()">Create and assign</button>
-        </div>
-      </div>
-    </div>`;
-
-  const allSectionHtml = allRows.length ? `
-    <div class="s-score-section">
+    // Single continuous list. Top rows are always visible; remaining rows
+    // live inside #s-pop-all (display:none) and the expand button flips that
+    // to block so they slot in immediately after the top rows.
+    const expandBtnHtml = remainingCount ? `
       <button id="s-pop-all-btn" class="s-expand-btn"
-              data-show-label="Show all classifications${remainingCount ? ` (${remainingCount} more)` : ''}"
-              data-hide-label="Hide all classifications"
+              data-show-label="Show all classifications (+${remainingCount})"
+              data-hide-label="Show fewer classifications"
               onclick="togglePopoverAll(event)">
-        Show all classifications${remainingCount ? ` (${remainingCount} more)` : ''}
-      </button>
-      <div id="s-pop-all">${allHtml}</div>
-    </div>` : '';
+        Show all classifications (+${remainingCount})
+      </button>` : '';
 
-  document.getElementById('s-pop-scores').innerHTML = `
-    <div class="s-score-section">
-      <div class="s-score-section-title">Top Matches</div>
-      ${topHtml || '<div class="s-score-row readonly"><div class="s-score-main"><div class="s-score-name">No scores available</div></div></div>'}
-    </div>
-    ${allSectionHtml}
-    ${customHtml}
-  `;
+    scoresEl.innerHTML = `
+      <div class="s-score-section">
+        ${topHtml || '<div class="s-score-row readonly"><div class="s-score-main"><div class="s-score-name">No scores available</div></div></div>'}
+        <div id="s-pop-all">${remainingHtml}</div>
+        ${expandBtnHtml}
+      </div>
+    `;
+  }
 
   // Position near click
   const pop = document.getElementById('s-popover');
   pop.style.display = 'block';
-  const pw = Math.min(420, window.innerWidth - 16), ph_est = 520;
+  const pw = Math.min(320, window.innerWidth - 16), ph_est = 440;
   let left = evt.clientX + 8;
   let top  = evt.clientY + 8;
   if (left + pw > window.innerWidth - 8)  left = evt.clientX - pw - 8;
@@ -2941,7 +3187,11 @@ function handleModalBackdropClick(evt) {
 }
 
 document.addEventListener('keydown', evt => {
-  if (evt.key === 'Escape') closeProposalModal();
+  if (evt.key !== 'Escape') return;
+  // Close whichever modal is active — both register the 'active' class on
+  // their overlay. If neither is open, closing is a no-op.
+  closeProposalModal();
+  closeAddCategoryModal();
 });
 
 // ============================================================
@@ -3106,8 +3356,10 @@ function renderSubquoteCard(sq, bucket, displayMeta = {}) {
   // single short clause) over the raw verbatim question, which can run on
   // for paragraphs and bury the actual context. The verbatim text is kept
   // as the title attribute so the user can hover to see the original.
+  // Only the first card of each QA cluster emits the eyebrow — subsequent
+  // findings in the same conversation render as plain bullets beneath it.
   let qaContextHtml = '';
-  if (!isMD) {
+  if (!isMD && displayMeta.showQaContext !== false) {
     const verbatim = (sq.question_sentences || []).map(s => s.text).join(' ');
     const summary = (sq.analyst_question_summary || '').trim();
     const questionText = summary || verbatim;
@@ -3928,11 +4180,14 @@ function measurePdfBucketHeader(doc, bucket, layout) {
   return { titleLines, headlineLines, gutter, height };
 }
 
-function measurePdfFinding(doc, sq, bs, layout) {
+function measurePdfFinding(doc, sq, bs, layout, displayMeta = {}) {
   const fmt = (bs.subquote_formats && bs.subquote_formats[sq.id]) || 'verbatim';
   const text = subquoteTextForDocx(sq, fmt, bs);
   const contentWidth = layout.contentWidth - layout.finding.textIndent;
-  const qaParts = getQaContextParts(sq);
+  // Suppress the eyebrow + question on follow-on findings from the same QA
+  // conversation so the exported PDF mirrors the HTML grouping (one question,
+  // multiple bullet findings).
+  const qaParts = displayMeta.showQaContext === false ? null : getQaContextParts(sq);
   // Eyebrow line: "IN RESPONSE TO   ANALYST NAME (AFFIL)" — measured on a
   // single uppercase line. We size it with helvetica-bold + char-spacing
   // so the small-caps feel comes through in the export.
@@ -4024,10 +4279,11 @@ function buildPdfBodyPlan(doc, orderedSections, bankId, layout) {
     section.buckets.forEach(bucket => {
       const quotes = getReportSubquotes(bankId, bucket.id);
       if (!quotes.length) return;
+      const batchMeta = buildSpeakerBatchMeta(quotes);
 
       const headerMetrics = measurePdfBucketHeader(doc, bucket, layout);
       const firstFindingHeight = quotes.length
-        ? measurePdfFinding(doc, quotes[0], bs, layout).height
+        ? measurePdfFinding(doc, quotes[0], bs, layout, batchMeta.get(quotes[0].id) || {}).height
         : 0;
       const bucketStartHeight = headerMetrics.height + firstFindingHeight;
       if (y + bucketStartHeight > layout.contentBottom && y > layout.contentTopBody) {
@@ -4039,7 +4295,7 @@ function buildPdfBodyPlan(doc, orderedSections, bankId, layout) {
       y += headerMetrics.height;
 
       quotes.forEach(sq => {
-        const findingMetrics = measurePdfFinding(doc, sq, bs, layout);
+        const findingMetrics = measurePdfFinding(doc, sq, bs, layout, batchMeta.get(sq.id) || {});
         if (y + findingMetrics.height > layout.contentBottom && y > layout.contentTopBody) {
           page += 1;
           y = layout.contentTopBody;
@@ -4227,8 +4483,8 @@ function drawPdfBucketHeader(doc, layout, bucket, bucketNumber, y) {
   return y + layout.bucket.gapAfter;
 }
 
-function drawPdfFinding(doc, layout, sq, bs, y) {
-  const metrics = measurePdfFinding(doc, sq, bs, layout);
+function drawPdfFinding(doc, layout, sq, bs, y, displayMeta = {}) {
+  const metrics = measurePdfFinding(doc, sq, bs, layout, displayMeta);
   const textX = layout.marginLeft + layout.finding.textIndent;
 
   // Editorial eyebrow — "IN RESPONSE TO   ANALYST NAME (AFFIL)" — small
@@ -4357,10 +4613,11 @@ function renderPdfBody(doc, layout, orderedSections, bankId, runningHeaderLeft) 
       const quotes = getReportSubquotes(bankId, bucket.id);
       if (!quotes.length) return;
       bucketNum += 1;
+      const batchMeta = buildSpeakerBatchMeta(quotes);
 
       const headerMetrics = measurePdfBucketHeader(doc, bucket, layout);
       const firstFindingHeight = quotes.length
-        ? measurePdfFinding(doc, quotes[0], bs, layout).height
+        ? measurePdfFinding(doc, quotes[0], bs, layout, batchMeta.get(quotes[0].id) || {}).height
         : 0;
       if (y + headerMetrics.height + firstFindingHeight > layout.contentBottom && y > layout.contentTopBody) {
         y = startBodyPage(section.name);
@@ -4369,11 +4626,12 @@ function renderPdfBody(doc, layout, orderedSections, bankId, runningHeaderLeft) 
       y = drawPdfBucketHeader(doc, layout, bucket, bucketNum, y);
 
       quotes.forEach(sq => {
-        const findingMetrics = measurePdfFinding(doc, sq, bs, layout);
+        const meta = batchMeta.get(sq.id) || {};
+        const findingMetrics = measurePdfFinding(doc, sq, bs, layout, meta);
         if (y + findingMetrics.height > layout.contentBottom && y > layout.contentTopBody) {
           y = startBodyPage(section.name);
         }
-        y = drawPdfFinding(doc, layout, sq, bs, y);
+        y = drawPdfFinding(doc, layout, sq, bs, y, meta);
       });
       y += 4;
     });
@@ -4557,6 +4815,7 @@ async function saveDocx() {
       const quotes = getReportSubquotes(bankId, bucket.id);
       if (!quotes.length) return;
       bucketNum += 1;
+      const batchMeta = buildSpeakerBatchMeta(quotes);
       const title = (state.bucket_user_titles || {})[bucket.id] || bucket.name;
 
       children.push(new Paragraph({
@@ -4584,7 +4843,10 @@ async function saveDocx() {
         if (!text) return;
 
         // QA context — small-caps eyebrow + italic question, mirroring HTML/PDF.
-        const qaParts = getQaContextParts(sq);
+        // Only render for the first subquote of each QA cluster; follow-on
+        // findings in the same conversation appear as bare bullets beneath.
+        const meta = batchMeta.get(sq.id) || {};
+        const qaParts = meta.showQaContext === false ? null : getQaContextParts(sq);
         if (qaParts) {
           children.push(new Paragraph({
             spacing: { before: 120, after: 30 },
