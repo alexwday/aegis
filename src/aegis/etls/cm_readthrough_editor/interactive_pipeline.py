@@ -44,33 +44,33 @@ class OutlookStatement(BaseModel):
     """Structured Outlook finding returned by the LLM tool."""
 
     category_index: int = Field(ge=0)
-    source_block_id: str = ""
-    source_sentence_ids: List[str] = Field(default_factory=list)
+    source_block_id: str
+    source_sentence_ids: List[str]
     relevance_score: int = Field(ge=1, le=10)
-    is_new_category: bool = False
+    is_new_category: bool
 
 
 class OutlookExtractionResponse(BaseModel):
     """Validated Outlook extraction response."""
 
-    has_content: bool = False
-    statements: List[OutlookStatement] = Field(default_factory=list)
+    has_content: bool
+    statements: List[OutlookStatement]
 
 
 class QAQuestion(BaseModel):
     """Structured analyst question returned by the LLM tool."""
 
     category_index: int = Field(ge=0)
-    source_block_id: str = ""
-    source_sentence_ids: List[str] = Field(default_factory=list)
-    is_new_category: bool = False
+    source_block_id: str
+    source_sentence_ids: List[str]
+    is_new_category: bool
 
 
 class QAExtractionResponse(BaseModel):
     """Validated Q&A extraction response."""
 
-    has_content: bool = False
-    questions: List[QAQuestion] = Field(default_factory=list)
+    has_content: bool
+    questions: List[QAQuestion]
 
 
 class QAConversationGroup(BaseModel):
@@ -78,7 +78,6 @@ class QAConversationGroup(BaseModel):
 
     conversation_id: str
     block_indices: List[int] = Field(
-        default_factory=list,
         description="1-based speaker block indices from the QA boundary prompt.",
     )
 
@@ -103,7 +102,8 @@ TOOL_QA_BOUNDARY = {
         "description": (
             "Call this tool when an indexed Q&A speaker-block list needs conversation "
             "boundaries. Group the blocks into contiguous analyst-to-executive exchanges "
-            "and return the ordered block indices for each conversation."
+            "and return a non-empty ordered `block_indices` array for every conversation. "
+            "Every indexed block must appear exactly once across the returned conversations."
         ),
         "parameters": {
             "type": "object",
@@ -693,7 +693,9 @@ async def detect_qa_boundaries(
         "5. Only the integers inside `<index>` tags are valid block indices.\n"
         "6. Ignore any numbers that appear inside speaker names, titles, affiliations, "
         "or preview text.\n"
-        "7. Return the grouped indices with the provided tool.\n\n"
+        "7. Every conversation object must include a non-empty `block_indices` array.\n"
+        "8. Do not return empty conversations.\n"
+        "9. Return the grouped indices with the provided tool.\n\n"
         "## Indexed Blocks\n"
         f"{_xml_block('qa_block_index', indexed_blocks_xml)}"
     )
@@ -1070,6 +1072,7 @@ async def _extract_outlook_for_bank(
                 bank_name=bank_info["bank_name"],
                 fiscal_year=fiscal_year,
                 quarter=fiscal_quarter,
+                categories_list=categories_text,
                 transcript_content=_render_outlook_transcript_prompt(md_blocks, qa_conversations),
             ),
         },
@@ -1157,6 +1160,7 @@ async def _extract_questions_for_bank(
                 bank_name=bank_info["bank_name"],
                 fiscal_year=fiscal_year,
                 quarter=fiscal_quarter,
+                categories_list=categories_text,
                 qa_content=_render_qa_bank_prompt(qa_conversations),
             ),
         },
