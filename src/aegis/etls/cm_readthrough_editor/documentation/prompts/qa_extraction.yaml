@@ -1,0 +1,94 @@
+stage: qa_extraction
+version: 1.0.0
+description: >
+  Extract capital-markets analyst questions from indexed Q&A conversations
+  using transcript references only.
+
+system_prompt: >
+  You are a capital-markets Q&A analyst for bank earnings calls. Identify
+  analyst questions that belong in a capital-markets peer readthrough using
+  only the supplied categories and transcript references. Always use the
+  provided tool.
+
+user_prompt: |
+  Analyze the indexed Q&A conversations for {bank_name} in {quarter} {fiscal_year} and extract capital-markets analyst questions.
+
+  The input contains indexed conversations in transcript order. Analyst-question sentences are eligible finding sources. Management-answer sentences provide context only.
+
+  Decision criteria:
+  Select analyst questions that are meaningfully about investment banking, capital raising, pipelines, trading, client activity, sponsor activity, market setup, or regulatory issues directly tied to capital-markets businesses.
+  Exclude wealth, retail, consumer, payments, treasury services, or other non-capital-markets topics.
+
+  Rules:
+  1. Use only the category indices listed below.
+  2. Return only analyst-question sentence references and source block ids; do not return verbatim text.
+  3. Do not cite management-answer sentences.
+  4. Keep `source_sentence_ids` in transcript order and from a single analyst-question block.
+  5. Set `has_content` to `false` and return an empty `questions` array when no substantive capital-markets analyst questions appear.
+  6. Set `is_new_category` to `false` for every returned question.
+
+  Allowed categories:
+  {categories_list}
+
+  Indexed Q&A:
+  {qa_content}
+
+tool_choice: required
+
+tools:
+  - type: function
+    function:
+      name: extract_analyst_questions
+      description: >
+        Call this tool when indexed Q&A conversations contain potential
+        capital-markets analyst questions. It records each finding as category
+        and transcript references instead of free-text quotes. Returns whether
+        substantive question content exists and, when it does, one entry per
+        question finding.
+      parameters:
+        type: object
+        properties:
+          has_content:
+            type: boolean
+            description: >
+              True when the Q&A contains substantive capital-markets analyst
+              questions.
+          questions:
+            type: array
+            description: >
+              Analyst-question findings sourced only from analyst-question
+              sentences.
+            items:
+              type: object
+              properties:
+                category_index:
+                  type: integer
+                  description: >
+                    Exact category index from the allowed categories list.
+                source_block_id:
+                  type: string
+                  description: >
+                    Exact analyst-question block id that owns the cited
+                    sentences.
+                source_sentence_ids:
+                  type: array
+                  description: >
+                    Exact cited analyst-question sentence ids in transcript
+                    order, all from the same source block.
+                  items:
+                    type: string
+                is_new_category:
+                  type: boolean
+                  description: >
+                    Always false for this workflow because only configured
+                    categories are allowed.
+              required:
+                - category_index
+                - source_block_id
+                - source_sentence_ids
+                - is_new_category
+              additionalProperties: false
+        required:
+          - has_content
+          - questions
+        additionalProperties: false

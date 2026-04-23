@@ -1,0 +1,35 @@
+# CM Readthrough ETL Configuration
+
+# LLM Model Configuration
+# Models are referenced from aegis.utils.settings.config
+# Tiers: small, medium, large
+models:
+  qa_boundary:
+    tier: medium
+  outlook_extraction:
+    tier: medium  # Uses config.llm.medium.model (32768 token support)
+  qa_extraction:
+    tier: medium  # Uses config.llm.medium.model (32768 token support)
+  subtitle_generation:
+    tier: medium  # Uses config.llm.medium.model (tool calling support)
+
+# LLM Parameters
+llm:
+  temperature: 0.1
+  max_tokens:
+    qa_boundary: 32768
+    outlook_extraction: 32768
+    qa_extraction: 32768
+    subtitle_generation: 256
+    default: 32768
+
+# Concurrency control
+concurrency:
+  max_concurrent_banks: 5
+  max_concurrent_subtitle_generation: 3
+
+# Retry configuration for LLM calls
+retry:
+  max_retries: 3
+  base_delay: 1.0
+  max_delay: 10.0

@@ -1,0 +1,99 @@
+stage: outlook_extraction
+version: 1.0.0
+description: >
+  Extract capital-markets Outlook findings from indexed Management Discussion
+  blocks and management Q&A answers using transcript references only.
+
+system_prompt: >
+  You are a capital-markets transcript analyst for bank earnings calls.
+  Identify Outlook findings from indexed Management Discussion blocks and
+  management Q&A answers using only the supplied categories and transcript
+  references. Always use the provided tool.
+
+user_prompt: |
+  Analyze the indexed transcript for {bank_name} in {quarter} {fiscal_year} and extract capital-markets Outlook findings.
+
+  The input contains indexed Management Discussion blocks plus indexed Q&A conversations in transcript order.
+  In Q&A, analyst-question sentences provide context, while management-answer sentences are eligible finding sources.
+
+  Decision criteria:
+  Select findings that belong in a capital-markets peer readthrough because they describe outlook, activity, pipelines, conversion, markets, sponsor activity, or capital-markets-related catalysts.
+  Exclude findings about wealth, retail, consumer, payments, treasury services, or other non-capital-markets businesses.
+
+  Rules:
+  1. Use only the category indices listed below.
+  2. Return only sentence references and source block ids; do not return verbatim text.
+  3. Cite only Management Discussion sentences or management-answer sentences from Q&A.
+  4. Keep `source_sentence_ids` in transcript order and from a single source block.
+  5. Set `has_content` to `false` and return an empty `statements` array when no substantive capital-markets Outlook appears.
+  6. Set `is_new_category` to `false` for every returned statement.
+
+  Allowed categories:
+  {categories_list}
+
+  Indexed transcript:
+  {transcript_content}
+
+tool_choice: required
+
+tools:
+  - type: function
+    function:
+      name: extract_capital_markets_outlook
+      description: >
+        Call this tool when the indexed bank transcript contains potential
+        capital-markets Outlook findings. It records each finding as category
+        and transcript references instead of free-text quotes. Returns whether
+        substantive content exists and, when it does, one entry per finding.
+      parameters:
+        type: object
+        properties:
+          has_content:
+            type: boolean
+            description: >
+              True when the transcript contains substantive capital-markets
+              Outlook findings.
+          statements:
+            type: array
+            description: >
+              Outlook findings sourced only from Management Discussion
+              sentences or management-answer sentences in Q&A.
+            items:
+              type: object
+              properties:
+                category_index:
+                  type: integer
+                  description: >
+                    Exact category index from the allowed categories list.
+                source_block_id:
+                  type: string
+                  description: >
+                    Exact block id that owns the cited sentences.
+                source_sentence_ids:
+                  type: array
+                  description: >
+                    Exact cited sentence ids in transcript order, all from the
+                    same source block.
+                  items:
+                    type: string
+                relevance_score:
+                  type: integer
+                  description: >
+                    Relevance from 1 to 10, where higher means more specific or
+                    decision-useful capital-markets Outlook.
+                is_new_category:
+                  type: boolean
+                  description: >
+                    Always false for this workflow because only configured
+                    categories are allowed.
+              required:
+                - category_index
+                - source_block_id
+                - source_sentence_ids
+                - relevance_score
+                - is_new_category
+              additionalProperties: false
+        required:
+          - has_content
+          - statements
+        additionalProperties: false
