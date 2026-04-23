@@ -168,7 +168,7 @@ class ETLConfig:
 
     @property
     def min_importance(self) -> float:
-        """Inclusion threshold for sentences/categories in the interactive report."""
+        """Legacy importance floor retained for report metadata and sampling paths."""
         return float(self._config.get("pipeline", {}).get("min_importance", 4.0))
 
     @property
@@ -179,7 +179,7 @@ class ETLConfig:
     @property
     def selected_importance_threshold(self) -> float:
         """Initial threshold for evidence auto-selected into the report draft."""
-        return float(self._config.get("pipeline", {}).get("selected_importance_threshold", 6.5))
+        return float(self._config.get("pipeline", {}).get("selected_importance_threshold", 6.0))
 
     @property
     def candidate_importance_threshold(self) -> float:
@@ -745,7 +745,7 @@ async def generate_call_summary(  # pylint: disable=too-many-statements
             qa_boundary_llm_params=qa_boundary_llm_params,
             md_llm_params=md_llm_params,
             qa_llm_params=qa_llm_params,
-            report_inclusion_threshold=min_importance,
+            report_inclusion_threshold=selected_importance_threshold,
             selected_importance_threshold=selected_importance_threshold,
             candidate_importance_threshold=candidate_importance_threshold,
             min_bucket_score_for_assignment=min_bucket_score_for_assignment,

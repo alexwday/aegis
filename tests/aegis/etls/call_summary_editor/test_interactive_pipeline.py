@@ -945,8 +945,8 @@ async def test_classify_qa_conversation_prompt_mentions_auto_include_threshold()
             company_name="Royal Bank of Canada",
             fiscal_year=2026,
             fiscal_quarter="Q1",
-            report_inclusion_threshold=4.0,
-            selected_importance_threshold=6.5,
+            report_inclusion_threshold=6.0,
+            selected_importance_threshold=6.0,
             candidate_importance_threshold=4.0,
             min_bucket_score_for_assignment=6.0,
             context={"execution_id": "test-exec"},
@@ -964,7 +964,86 @@ async def test_classify_qa_conversation_prompt_mentions_auto_include_threshold()
         if message["role"] == "user"
     )
     assert "Use bucket `score` on a 0-10 relevance scale." in user_prompt
-    assert "Scores >= 4.0 should remain visible for analyst review at minimum." in user_prompt
+    assert "Scores >= 6.0 should usually stay in the default report draft." in user_prompt
+    assert (
+        "that category should score at least 6 unless an `<instruction>` explicitly excludes it."
+        in user_prompt
+    )
+
+
+@pytest.mark.asyncio
+async def test_classify_md_block_prompt_mentions_keyword_score_floor():
+    categories = [
+        {
+            "transcript_sections": "MD",
+            "report_section": "Results Summary",
+            "category_name": "Revenue",
+            "category_description": (
+                "Topics:\n"
+                "- net interest income\n"
+                "Keywords:\n"
+                "- NII\n"
+                "Instructions:\n"
+                "- Use for revenue drivers."
+            ),
+        }
+    ]
+    block_raw = {
+        "id": "RY_MD_1",
+        "speaker": "CEO",
+        "speaker_title": "CEO",
+        "speaker_affiliation": "Royal Bank of Canada",
+        "paragraphs": ["NII should improve through the back half."],
+    }
+
+    mock_call_tool = AsyncMock(
+        side_effect=[
+            {"findings": [{"sentence_indices": [1]}]},
+            {
+                "findings": [
+                    {
+                        "index": 1,
+                        "scores": [{"bucket_index": 0, "score": 8.1}],
+                        "importance_score": 7.2,
+                        "condensed": "NII should improve through the back half.",
+                    }
+                ]
+            },
+        ]
+    )
+
+    with patch(
+        "aegis.etls.call_summary_editor.interactive_pipeline._call_tool",
+        new=mock_call_tool,
+    ):
+        await classify_md_block(
+            block_raw=block_raw,
+            block_index=0,
+            all_md_blocks=[block_raw],
+            categories=categories,
+            categories_text_md=format_categories_for_prompt(categories, "MD"),
+            company_name="Royal Bank of Canada",
+            fiscal_year=2026,
+            fiscal_quarter="Q1",
+            report_inclusion_threshold=6.0,
+            selected_importance_threshold=6.0,
+            candidate_importance_threshold=4.0,
+            min_bucket_score_for_assignment=6.0,
+            context={"execution_id": "test-exec"},
+            llm_params={"model": "gpt-test"},
+        )
+
+    classification_call = mock_call_tool.await_args_list[1]
+    user_prompt = next(
+        message["content"]
+        for message in classification_call.kwargs["messages"]
+        if message["role"] == "user"
+    )
+    assert "Scores >= 6.0 should usually stay in the default report draft." in user_prompt
+    assert (
+        "that category should score at least 6 unless an `<instruction>` explicitly excludes it."
+        in user_prompt
+    )
 
 
 @pytest.mark.asyncio

@@ -42,7 +42,7 @@ pipeline:
   # sentence status (`selected` / `candidate` / `rejected`) instead.
   min_importance: 4.0
   # Initial sentence status thresholds for the recall-first review workflow.
-  selected_importance_threshold: 6.5
+  selected_importance_threshold: 6.0
   candidate_importance_threshold: 4.0
   # Minimum existing-bucket score required before evidence is auto-assigned to
   # an existing category. Lower-scoring evidence remains unmapped for review.

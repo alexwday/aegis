@@ -1641,6 +1641,7 @@ let _attribVisible = false;
 function toggleAttrib() {
   _attribVisible = !_attribVisible;
   document.getElementById('report-page').classList.toggle('attrib-off', !_attribVisible);
+  renderReportSections();
 }
 
 // Transcript view mode — 'blocks' is the default (paragraph-style speaker
@@ -3363,22 +3364,22 @@ function renderSubquoteCard(sq, bucket, displayMeta = {}) {
   // findings in the same conversation render as plain bullets beneath it.
   let qaContextHtml = '';
   if (!isMD && displayMeta.showQaContext !== false) {
-    const verbatim = (sq.question_sentences || []).map(s => s.text).join(' ');
-    const summary = (sq.analyst_question_summary || '').trim();
-    const questionText = summary || verbatim;
-    const verbatimTitle = summary ? ` title="${escAttr(verbatim)}"` : '';
-    const analystName = esc(sq.analyst_name || 'Analyst');
-    const analystAffil = sq.analyst_affiliation
-      ? ` <span style="opacity:.7">(${esc(sq.analyst_affiliation)})</span>`
-      : '';
-    qaContextHtml = `
-    <div class="qa-card-q">
+    const qaParts = getQaContextParts(sq);
+    if (qaParts) {
+      const verbatimTitle = qaParts.hasSummary ? ` title="${escAttr(qaParts.verbatim)}"` : '';
+      const qaEyebrowHtml = qaParts.showNames
+        ? `
       <div class="qa-card-q-eyebrow">
-        <span>In response to</span>
-        <span class="qa-card-q-eyebrow-name">${analystName}${analystAffil}</span>
-      </div>
-      <div class="qa-card-q-text"${verbatimTitle}>${esc(questionText)}</div>
+        <span>${esc(qaParts.eyebrow)}</span>
+        <span class="qa-card-q-eyebrow-name">${esc(qaParts.name)}</span>
+      </div>`
+        : '';
+      qaContextHtml = `
+    <div class="qa-card-q">
+      ${qaEyebrowHtml}
+      <div class="qa-card-q-text"${verbatimTitle}>${esc(qaParts.question)}</div>
     </div>`;
+    }
   }
 
   // When the user has edited the finding, the Summarize toggle no longer
@@ -3959,10 +3960,18 @@ function getQaContextParts(sq) {
   const summary = (sq.analyst_question_summary || '').trim();
   const question = summary || verbatim;
   if (!question) return null;
+  const showNames = !!_attribVisible;
   const analystName = (sq.analyst_name || 'Analyst').trim();
   const analystAffil = (sq.analyst_affiliation || '').trim();
   const eyebrowName = analystAffil ? `${analystName} (${analystAffil})` : analystName;
-  return { eyebrow: 'In response to', name: eyebrowName, question };
+  return {
+    eyebrow: 'In response to',
+    name: eyebrowName,
+    question,
+    verbatim,
+    hasSummary: !!summary,
+    showNames,
+  };
 }
 
 function getPdfLayout(doc) {
@@ -4194,7 +4203,7 @@ function measurePdfFinding(doc, sq, bs, layout, displayMeta = {}) {
   // Eyebrow line: "IN RESPONSE TO   ANALYST NAME (AFFIL)" — measured on a
   // single uppercase line. We size it with helvetica-bold + char-spacing
   // so the small-caps feel comes through in the export.
-  const eyebrowText = qaParts
+  const eyebrowText = qaParts && qaParts.showNames
     ? `${qaParts.eyebrow.toUpperCase()}   ${qaParts.name.toUpperCase()}`
     : '';
   const eyebrowLines = eyebrowText
@@ -4851,26 +4860,28 @@ async function saveDocx() {
         const meta = batchMeta.get(sq.id) || {};
         const qaParts = meta.showQaContext === false ? null : getQaContextParts(sq);
         if (qaParts) {
-          children.push(new Paragraph({
-            spacing: { before: 120, after: 30 },
-            indent: { left: 360 },
-            children: [
-              new TextRun({
-                text: qaParts.eyebrow.toUpperCase() + '   ',
-                bold: true,
-                size: 16,
-                color: '7A7364',
-                characterSpacing: 36,
-              }),
-              new TextRun({
-                text: qaParts.name.toUpperCase(),
-                bold: true,
-                size: 16,
-                color: '4A5268',
-                characterSpacing: 36,
-              }),
-            ],
-          }));
+          if (qaParts.showNames) {
+            children.push(new Paragraph({
+              spacing: { before: 120, after: 30 },
+              indent: { left: 360 },
+              children: [
+                new TextRun({
+                  text: qaParts.eyebrow.toUpperCase() + '   ',
+                  bold: true,
+                  size: 16,
+                  color: '7A7364',
+                  characterSpacing: 36,
+                }),
+                new TextRun({
+                  text: qaParts.name.toUpperCase(),
+                  bold: true,
+                  size: 16,
+                  color: '4A5268',
+                  characterSpacing: 36,
+                }),
+              ],
+            }));
+          }
           children.push(new Paragraph({
             spacing: { before: 0, after: 60 },
             indent: { left: 360 },

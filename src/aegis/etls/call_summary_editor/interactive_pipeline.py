@@ -966,15 +966,17 @@ def _importance_scale_guidance(report_inclusion_threshold: float) -> str:
     threshold = f"{float(report_inclusion_threshold):.1f}"
     return (
         "Use `importance_score` to rank evidence for the editor's recall-first workflow.\n"
-        f"- Scores >= {threshold} should remain visible for analyst review at minimum.\n"
+        f"- Scores >= {threshold} should usually stay in the default report draft.\n"
+        "- Scores below that can still remain as review candidates when the content is useful "
+        "context but not strong enough to auto-keep in the draft.\n"
         "- Lower scores should be reserved for content that is mostly low-value, procedural, "
         "repetitive, or not worth surfacing by default.\n"
         "- Give higher scores when the quote is exact, specific, and likely worth keeping "
         "verbatim in the draft.\n"
         "- 0-1: ceremonial, legal boilerplate, operator instructions, or procedural remarks.\n"
         "- 2-3: low-signal detail that usually does not belong in the draft by default.\n"
-        "- 4-6: meaningful report-worthy content that should stay visible for review.\n"
-        "- 7-8: clearly important takeaway.\n"
+        "- 4-5: meaningful context worth keeping visible for review, but not auto-kept.\n"
+        "- 6-8: clearly report-worthy takeaway.\n"
         "- 9-10: headline-level or must-keep takeaway."
     )
 
@@ -987,7 +989,10 @@ def _bucket_score_scale_guidance() -> str:
         "- 1-3 means weak or tangential overlap.\n"
         "- 4-5 means a plausible but not definitive fit.\n"
         "- 6-8 means a strong fit that can support assignment.\n"
-        "- 9-10 means a direct, highly confident fit."
+        "- 9-10 means a direct, highly confident fit.\n"
+        "- If a finding explicitly includes a business-authored `<keyword>` for a category "
+        "(or a very close surface-form variant), that category should score at least 6 unless "
+        "an `<instruction>` explicitly excludes it."
     )
 
 

@@ -86,6 +86,25 @@ class TestETLConfig:
         with pytest.raises(FileNotFoundError):
             ETLConfig(str(tmp_path / "nonexistent.yaml"))
 
+    def test_selected_importance_threshold_matches_editor_default(self):
+        config_path = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)),
+            "..",
+            "..",
+            "..",
+            "..",
+            "src",
+            "aegis",
+            "etls",
+            "call_summary_editor",
+            "config",
+            "config.yaml",
+        )
+
+        cfg = ETLConfig(config_path)
+
+        assert cfg.selected_importance_threshold == 6.0
+
 
 # ---------------------------------------------------------------------------
 # get_bank_info_from_config

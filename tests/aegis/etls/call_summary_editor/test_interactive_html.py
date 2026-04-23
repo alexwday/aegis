@@ -174,6 +174,8 @@ def test_generate_html_injects_period_and_state():
     assert "function getSubquoteSpeakerMeta(" in html
     assert "function clusterSubquotesBySpeaker(" in html
     assert "function buildSpeakerBatchMeta(" in html
+    assert "const showNames = !!_attribVisible;" in html
+    assert "const eyebrowText = qaParts && qaParts.showNames" in html
     assert "if (getSentenceReviewStatus(sent.sid) !== 'selected')" in html
     assert "return clusterSubquotesBySpeaker(ranked);" in html
     assert "displayMeta.showAttribution === false" in html
