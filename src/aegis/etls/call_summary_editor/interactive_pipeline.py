@@ -85,12 +85,7 @@ class QAConversationGroup(BaseModel):
 
     conversation_id: str
     block_indices: List[int] = Field(
-        default_factory=list,
         description="1-based speaker block indices from the QA boundary prompt.",
-    )
-    block_ids: List[str] = Field(
-        default_factory=list,
-        description="Legacy block-level grouping output retained for compatibility.",
     )
 
 
@@ -256,7 +251,9 @@ TOOL_QA_BOUNDARY = {
         "description": (
             "Call this tool when an indexed Q&A speaker-block list needs conversation boundaries. "
             "It groups the blocks into contiguous analyst-to-executive exchanges and returns the "
-            "ordered block indices for each conversation. Use it once per indexed Q&A section."
+            "ordered non-empty block indices for each conversation. Every indexed block must "
+            "appear exactly once across the returned conversations. Use it once per indexed "
+            "Q&A section."
         ),
         "parameters": {
             "type": "object",
@@ -1607,17 +1604,9 @@ def _qa_boundary_retry_message(total_blocks: int, errors: List[str]) -> str:
 
 def _resolve_block_indices(
     conversation: QAConversationGroup,
-    block_id_to_index: Dict[str, int],
 ) -> List[int]:
     """Resolve tool output into 1-based block indices."""
-    if conversation.block_indices:
-        return list(conversation.block_indices)
-
-    resolved = []
-    for block_id in conversation.block_ids:
-        if block_id in block_id_to_index:
-            resolved.append(block_id_to_index[block_id])
-    return resolved
+    return list(conversation.block_indices)
 
 
 def _validate_qa_boundary_indices(
@@ -1716,12 +1705,13 @@ async def detect_qa_boundaries(
         "5. Only the integers inside `<index>` tags are valid block indices.\n"
         "6. Ignore any numbers that appear inside speaker names, titles, affiliations, "
         "or preview text.\n"
-        "7. Return the grouped indices with the provided tool.\n\n"
+        "7. Every conversation object must include a non-empty `block_indices` array.\n"
+        "8. Do not return empty conversations.\n"
+        "9. Return the grouped indices with the provided tool.\n\n"
         "## Indexed Blocks\n"
         f"{_xml_block('qa_block_index', '\n\n'.join(block_lines))}"
     )
     block_by_index = dict(enumerate(qa_raw_blocks, start=1))
-    block_id_to_index = {block["id"]: idx for idx, block in enumerate(qa_raw_blocks, start=1)}
     base_messages = [
         {"role": "developer", "content": system_prompt},
         {"role": "user", "content": user_prompt},
@@ -1778,7 +1768,7 @@ async def detect_qa_boundaries(
             break
 
         conversation_indices = [
-            _resolve_block_indices(conversation, block_id_to_index)
+            _resolve_block_indices(conversation)
             for conversation in result.conversations
         ]
         validation_errors = _validate_qa_boundary_indices(
