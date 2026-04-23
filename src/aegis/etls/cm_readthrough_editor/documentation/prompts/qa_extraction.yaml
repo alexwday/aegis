@@ -42,6 +42,12 @@ user_prompt: |
   10. If the question could just as easily belong in a general bank earnings summary, exclude it.
   11. Set `has_content` to `false` and return an empty `questions` array when no substantive capital-markets analyst questions appear.
   12. Set `is_new_category` to `false` for every returned question.
+  13. Assign `relevance_score` from 1 to 10:
+      - 9-10 = explicit, decision-useful capital-markets question about pipelines, issuance, trading/client flows, advisory, sponsors, underwriting, or CM-specific regulation/capital usage.
+      - 7-8 = clearly capital-markets related but less specific or less decision-useful.
+      - 4-6 = borderline or broad market question with some explicit CM linkage.
+      - 1-3 = weak/tangential CM linkage; include only when the question still passes both decision tests.
+  14. Fill `capital_markets_linkage` with a concise phrase explaining the explicit CM linkage, not a generic restatement.
 
   Inclusion examples:
   - An analyst asks about advisory pipelines, ECM or DCM issuance, trading client activity, market share, or sponsor-related demand.
@@ -90,6 +96,7 @@ tools:
               properties:
                 category_index:
                   type: integer
+                  minimum: 0
                   description: >
                     Exact category index from the allowed categories list.
                 source_block_id:
@@ -99,11 +106,25 @@ tools:
                     sentences.
                 source_sentence_ids:
                   type: array
+                  minItems: 1
                   description: >
                     Exact cited analyst-question sentence ids in transcript
                     order, all from the same source block.
                   items:
                     type: string
+                relevance_score:
+                  type: integer
+                  minimum: 1
+                  maximum: 10
+                  description: >
+                    Relevance from 1 to 10, where higher means more explicit,
+                    specific, and decision-useful capital-markets question
+                    content.
+                capital_markets_linkage:
+                  type: string
+                  description: >
+                    Concise phrase explaining the explicit link to the bank's
+                    capital-markets platform or business segment.
                 is_new_category:
                   type: boolean
                   description: >
@@ -113,6 +134,8 @@ tools:
                 - category_index
                 - source_block_id
                 - source_sentence_ids
+                - relevance_score
+                - capital_markets_linkage
                 - is_new_category
               additionalProperties: false
         required:

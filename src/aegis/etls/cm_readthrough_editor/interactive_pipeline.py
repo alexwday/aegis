@@ -44,8 +44,8 @@ class OutlookStatement(BaseModel):
     """Structured Outlook finding returned by the LLM tool."""
 
     category_index: int = Field(ge=0)
-    source_block_id: str
-    source_sentence_ids: List[str]
+    source_block_id: str = Field(min_length=1)
+    source_sentence_ids: List[str] = Field(min_length=1)
     relevance_score: int = Field(ge=1, le=10)
     is_new_category: bool
 
@@ -61,8 +61,10 @@ class QAQuestion(BaseModel):
     """Structured analyst question returned by the LLM tool."""
 
     category_index: int = Field(ge=0)
-    source_block_id: str
-    source_sentence_ids: List[str]
+    source_block_id: str = Field(min_length=1)
+    source_sentence_ids: List[str] = Field(min_length=1)
+    relevance_score: int = Field(ge=1, le=10)
+    capital_markets_linkage: str = Field(min_length=1)
     is_new_category: bool
 
 
@@ -91,7 +93,7 @@ class QABoundaryResult(BaseModel):
 class SubtitleResponse(BaseModel):
     """Validated section-subtitle response."""
 
-    subtitle: str
+    subtitle: str = Field(min_length=1)
 
 
 TOOL_QA_BOUNDARY = {
@@ -154,13 +156,14 @@ async def _call_tool(
     label: str,
     context: Dict[str, Any],
     llm_params: Dict[str, Any],
+    warn_on_missing: bool = True,
 ) -> Optional[Dict[str, Any]]:
     """Run one structured LLM tool call and parse its arguments."""
     call_llm_params = dict(llm_params)
-    call_llm_params.setdefault(
-        "tool_choice",
-        {"type": "function", "function": {"name": tool["function"]["name"]}},
-    )
+    call_llm_params["tool_choice"] = {
+        "type": "function",
+        "function": {"name": tool["function"]["name"]},
+    }
     response = await complete_with_tools(
         messages=messages,
         tools=[tool],
@@ -173,7 +176,13 @@ async def _call_tool(
     message = choices[0].get("message", {}) if choices else {}
     tool_calls = message.get("tool_calls") or []
     if not tool_calls:
-        logger.warning("LLM tool call missing structured output", stage=label)
+        if warn_on_missing:
+            logger.warning(
+                "LLM tool call missing structured output",
+                stage=label,
+                finish_reason=choices[0].get("finish_reason") if choices else None,
+                content_preview=_preview_text(message.get("content", ""), 300),
+            )
         return None
 
     arguments = tool_calls[0].get("function", {}).get("arguments", "{}")
@@ -193,7 +202,7 @@ def _clean_text(text: str) -> str:
 
 def _escape_for_prompt(value: Any) -> str:
     """Escape a value for safe interpolation inside XML-style prompt blocks."""
-    return _xml_escape(str(value or ""), entities={"\"": "&quot;"})
+    return _xml_escape(str(value or ""), entities={'"': "&quot;"})
 
 
 def _xml_block(tag: str, content: str) -> str:
@@ -284,13 +293,21 @@ def _format_categories_for_prompt(categories: Sequence[Dict[str, Any]]) -> str:
     for category in categories:
         lines.append("  <category>")
         lines.append(f"    <index>{int(category.get('category_index', -1))}</index>")
-        lines.append(f"    <name>{_clean_text(category.get('category_name', ''))}</name>")
-        lines.append(f"    <group>{_clean_text(category.get('category_group', ''))}</group>")
         lines.append(
-            f"    <transcript_sections>{_clean_text(category.get('transcript_sections', ''))}</transcript_sections>"
+            f"    <name>{_escape_for_prompt(_clean_text(category.get('category_name', '')))}</name>"
         )
         lines.append(
-            f"    <description>{_clean_text(category.get('category_description', ''))}</description>"
+            f"    <group>{_escape_for_prompt(_clean_text(category.get('category_group', '')))}</group>"
+        )
+        lines.append(
+            "    <transcript_sections>"
+            f"{_escape_for_prompt(_clean_text(category.get('transcript_sections', '')))}"
+            "</transcript_sections>"
+        )
+        lines.append(
+            "    <description>"
+            f"{_escape_for_prompt(_clean_text(category.get('category_description', '')))}"
+            "</description>"
         )
         examples = [
             _clean_text(category.get("example_1", "")),
@@ -301,7 +318,7 @@ def _format_categories_for_prompt(categories: Sequence[Dict[str, Any]]) -> str:
         if example_lines:
             lines.append("    <examples>")
             for example in example_lines:
-                lines.append(f"      <example>{example}</example>")
+                lines.append(f"      <example>{_escape_for_prompt(example)}</example>")
             lines.append("    </examples>")
         lines.append("  </category>")
     lines.append("</categories>")
@@ -400,7 +417,9 @@ def _find_matching_sentence_indices(
 
     sentence_norms = [_normalize_match_text(sentence.get("text", "")) for sentence in sentences]
     for idx, sentence_norm in enumerate(sentence_norms):
-        if sentence_norm and (target == sentence_norm or target in sentence_norm or sentence_norm in target):
+        if sentence_norm and (
+            target == sentence_norm or target in sentence_norm or sentence_norm in target
+        ):
             return [idx]
 
     best: List[int] = []
@@ -477,17 +496,68 @@ def _speaker_role(block: Dict[str, Any]) -> str:
     hint = _clean_text(block.get("speaker_type_hint", "")).lower()
     if hint in {"q", "question", "analyst"}:
         return "q"
+    if hint in {"a", "answer", "management", "executive", "company"}:
+        return "a"
+
+    participant_type = _clean_text(block.get("participant_type", "")).lower()
+    if (
+        any(marker in participant_type for marker in ("analyst", "question"))
+        or participant_type == "q"
+    ):
+        return "q"
+    if (
+        any(
+            marker in participant_type
+            for marker in ("company", "corporate", "management", "executive", "answer")
+        )
+        or participant_type == "a"
+    ):
+        return "a"
 
     speaker_title = _clean_text(block.get("speaker_title", "")).lower()
     speaker_affiliation = _clean_text(block.get("speaker_affiliation", "")).lower()
     speaker_name = _clean_text(block.get("speaker", "")).lower()
-    analyst_markers = ("analyst", "research", "securities", "capital markets")
+    company_name = _clean_text(
+        block.get("bank_name") or block.get("company_name") or block.get("issuer_name") or ""
+    )
+    if speaker_name.startswith("operator"):
+        return "a"
+    if company_name:
+        normalized_company = _normalize_match_text(company_name)
+        normalized_affiliation = _normalize_match_text(speaker_affiliation)
+        if (
+            normalized_company
+            and normalized_affiliation
+            and (
+                normalized_company in normalized_affiliation
+                or normalized_affiliation in normalized_company
+            )
+        ):
+            return "a"
+
+    executive_markers = (
+        "chief ",
+        "ceo",
+        "cfo",
+        "coo",
+        "cro",
+        "president",
+        "group head",
+        "head of",
+        "treasurer",
+        "controller",
+    )
+    if any(marker in speaker_title for marker in executive_markers):
+        return "a"
+
+    analyst_markers = ("analyst", "research analyst", "equity research")
     if any(marker in speaker_title for marker in analyst_markers):
+        return "q"
+    analyst_affiliation_markers = ("securities", "research", "capital markets", "equity markets")
+    if any(marker in speaker_affiliation for marker in analyst_affiliation_markers):
         return "q"
     if "analyst" in speaker_affiliation:
         return "q"
-    if speaker_name.startswith("operator"):
-        return "a"
     return "a"
 
 
@@ -527,6 +597,7 @@ def _build_qa_block_index(
             "speaker": block.get("speaker", "Unknown Speaker"),
             "speaker_title": block.get("speaker_title", ""),
             "speaker_affiliation": block.get("speaker_affiliation", ""),
+            "participant_type": block.get("participant_type", ""),
             "speaker_type_hint": block.get("speaker_type_hint", ""),
             "paragraphs": block.get("paragraphs", []),
         }
@@ -566,6 +637,7 @@ def _format_qa_block_prompt_entry(entry: Dict[str, Any]) -> str:
         "  <speaker_affiliation>"
         f"{_escape_for_prompt(entry.get('speaker_affiliation', ''))}"
         "</speaker_affiliation>\n"
+        f"  <participant_type>{_escape_for_prompt(entry.get('participant_type', ''))}</participant_type>\n"
         "  <preview>\n"
         f"{entry.get('preview', '')}\n"
         "  </preview>\n"
@@ -588,6 +660,77 @@ def _qa_boundary_retry_message(total_blocks: int, errors: List[str]) -> str:
         "## Validation Errors To Fix\n"
         f"{error_lines}\n\n"
         "Return a corrected grouping with the provided tool."
+    )
+
+
+def _validated_tool_retry_message(stage_name: str, errors: List[str]) -> str:
+    """Build corrective retry guidance for extraction tool validation failures."""
+    error_lines = "\n".join(f"- {error}" for error in errors) if errors else "- Unknown error"
+    return (
+        "## Retry Correction\n"
+        f"The previous {stage_name} tool response was invalid. Correct it and try again.\n\n"
+        "## Hard Constraints\n"
+        "1. Use the provided tool and return arguments that match the tool schema exactly.\n"
+        "2. Use only category indices, block ids, and sentence ids from the prompt.\n"
+        "3. Do not invent ids, categories, or additional response fields.\n"
+        "4. If no qualifying content exists, return `has_content: false` with an empty array.\n\n"
+        "## Validation Errors To Fix\n"
+        f"{error_lines}\n\n"
+        "Return a corrected tool call."
+    )
+
+
+async def _call_validated_tool(
+    *,
+    messages: List[Dict[str, str]],
+    tool: Dict[str, Any],
+    label: str,
+    context: Dict[str, Any],
+    llm_params: Dict[str, Any],
+    response_model: Any,
+    stage_name: str,
+    max_attempts: int = 3,
+) -> Any:
+    """Run a structured LLM tool call with bounded schema-validation retries."""
+    base_messages = list(messages)
+    retry_messages = list(base_messages)
+    last_validation_errors: List[str] = []
+
+    for attempt in range(max_attempts):
+        raw = await _call_tool(
+            messages=retry_messages,
+            tool=tool,
+            label=label,
+            context=context,
+            llm_params=llm_params,
+            warn_on_missing=False,
+        )
+        if not raw:
+            last_validation_errors = ["No parseable tool response returned"]
+        else:
+            try:
+                return response_model.model_validate(raw)
+            except ValidationError as exc:
+                last_validation_errors = [f"Tool output schema validation failed: {exc}"]
+                logger.warning(
+                    "LLM extraction response could not be validated",
+                    stage=label,
+                    attempt=attempt + 1,
+                    max_attempts=max_attempts,
+                    error=str(exc),
+                )
+
+        if attempt < max_attempts - 1:
+            retry_messages = base_messages + [
+                {
+                    "role": "user",
+                    "content": _validated_tool_retry_message(stage_name, last_validation_errors),
+                }
+            ]
+
+    raise RuntimeError(
+        f"{stage_name} failed validation after {max_attempts} attempts: "
+        + "; ".join(last_validation_errors or ["No parseable tool response returned"])
     )
 
 
@@ -755,8 +898,7 @@ async def detect_qa_boundaries(
             break
 
         conversation_indices = [
-            _resolve_block_indices(conversation)
-            for conversation in result.conversations
+            _resolve_block_indices(conversation) for conversation in result.conversations
         ]
         validation_errors = _validate_qa_boundary_indices(
             conversation_indices,
@@ -1009,7 +1151,9 @@ def _resolve_source_sentence_ids(
     allowed_sentence_ids: Sequence[str],
 ) -> List[str]:
     """Resolve model-returned sentence ids against the allowed sentence ids."""
-    allowed = {str(sentence_id): str(sentence_id) for sentence_id in allowed_sentence_ids if sentence_id}
+    allowed = {
+        str(sentence_id): str(sentence_id) for sentence_id in allowed_sentence_ids if sentence_id
+    }
     resolved: List[str] = []
     seen = set()
     for value in values or []:
@@ -1041,9 +1185,7 @@ async def _extract_outlook_for_bank(
 ) -> List[OutlookStatement]:
     """Extract CM Outlook findings from the full bank transcript."""
     eligible_sentences = [
-        sentence
-        for block in md_blocks
-        for sentence in block.get("sentences", [])
+        sentence for block in md_blocks for sentence in block.get("sentences", [])
     ] + [
         sentence
         for conversation in qa_conversations
@@ -1077,25 +1219,15 @@ async def _extract_outlook_for_bank(
             ),
         },
     ]
-    raw = await _call_tool(
+    result = await _call_validated_tool(
         messages=messages,
         tool=prompt["tool_definition"],
         label=f"outlook_bank:{bank_info['bank_symbol']}",
         context=context,
         llm_params=llm_params,
+        response_model=OutlookExtractionResponse,
+        stage_name=f"Outlook extraction for {bank_info['bank_symbol']}",
     )
-    if not raw:
-        return []
-
-    try:
-        result = OutlookExtractionResponse.model_validate(raw)
-    except ValidationError as exc:
-        logger.warning(
-            "Outlook extraction failed validation",
-            ticker=bank_info["bank_symbol"],
-            error=str(exc),
-        )
-        return []
 
     if not result.has_content:
         return []
@@ -1113,9 +1245,8 @@ async def _extract_outlook_for_bank(
             if statement.source_sentence_ids
             else ""
         )
-        statement.source_block_id = (
-            derived_block_id
-            or _resolve_source_block_id(statement.source_block_id, allowed_block_ids)
+        statement.source_block_id = derived_block_id or _resolve_source_block_id(
+            statement.source_block_id, allowed_block_ids
         )
         resolved.append(statement)
     return resolved
@@ -1165,25 +1296,15 @@ async def _extract_questions_for_bank(
             ),
         },
     ]
-    raw = await _call_tool(
+    result = await _call_validated_tool(
         messages=messages,
         tool=prompt["tool_definition"],
         label=f"qa_bank:{bank_info['bank_symbol']}",
         context=context,
         llm_params=llm_params,
+        response_model=QAExtractionResponse,
+        stage_name=f"Q&A extraction for {bank_info['bank_symbol']}",
     )
-    if not raw:
-        return []
-
-    try:
-        result = QAExtractionResponse.model_validate(raw)
-    except ValidationError as exc:
-        logger.warning(
-            "Q&A extraction failed validation",
-            ticker=bank_info["bank_symbol"],
-            error=str(exc),
-        )
-        return []
 
     if not result.has_content:
         return []
@@ -1201,9 +1322,8 @@ async def _extract_questions_for_bank(
             if question.source_sentence_ids
             else ""
         )
-        question.source_block_id = (
-            derived_block_id
-            or _resolve_source_block_id(question.source_block_id, allowed_block_ids)
+        question.source_block_id = derived_block_id or _resolve_source_block_id(
+            question.source_block_id, allowed_block_ids
         )
         resolved.append(question)
     return resolved
@@ -1230,7 +1350,9 @@ def _mark_outlook_findings_on_sentences(
         if not bucket_id:
             continue
         score = float(statement.relevance_score)
-        status = _status_for_score(score, selected_importance_threshold, candidate_importance_threshold)
+        status = _status_for_score(
+            score, selected_importance_threshold, candidate_importance_threshold
+        )
         matched = _apply_sentence_id_assignment(
             sentence_lookup=sentence_lookup,
             source_sentence_ids=statement.source_sentence_ids,
@@ -1303,6 +1425,9 @@ def _mark_qa_question_findings(
     conversation: Dict[str, Any],
     questions: Sequence[QAQuestion],
     categories: Sequence[Dict[str, Any]],
+    *,
+    selected_importance_threshold: float,
+    candidate_importance_threshold: float,
 ) -> None:
     """Map extracted analyst questions back onto question-turn sentences."""
     primary_bucket = ""
@@ -1320,18 +1445,22 @@ def _mark_qa_question_findings(
         )
         if not bucket_id:
             continue
+        score = float(question.relevance_score)
+        status = _status_for_score(
+            score, selected_importance_threshold, candidate_importance_threshold
+        )
         matched = _apply_sentence_id_assignment(
             sentence_lookup=sentence_lookup,
             source_sentence_ids=question.source_sentence_ids,
             source_block_id=question.source_block_id,
             bucket_id=bucket_id,
-            bucket_score=8.0,
-            importance_score=8.0,
-            status="selected",
+            bucket_score=score,
+            importance_score=score,
+            status=status,
         )
-        if matched and 8.0 >= primary_score:
+        if matched and status in {"selected", "candidate"} and score >= primary_score:
             primary_bucket = bucket_id
-            primary_score = 8.0
+            primary_score = score
         if not matched:
             logger.info(
                 "Q&A finding could not be aligned to transcript sentence ids",
@@ -1386,6 +1515,13 @@ async def build_interactive_bank_data(
         for idx, category in enumerate(categories)
     ]
     ticker = bank_info.get("full_ticker") or bank_info["bank_symbol"]
+    bank_identity = {
+        "bank_name": bank_info["bank_name"],
+        "bank_symbol": bank_info["bank_symbol"],
+        "full_ticker": ticker,
+    }
+    md_raw_blocks = [{**block, **bank_identity} for block in md_raw_blocks]
+    qa_raw_blocks = [{**block, **bank_identity} for block in qa_raw_blocks]
     outlook_categories = _categories_for_section(
         categories,
         report_section="Outlook",
@@ -1492,7 +1628,13 @@ async def build_interactive_bank_data(
             if question.source_block_id in conversation.get("source_block_ids", [])
         ]
         if conversation_questions:
-            _mark_qa_question_findings(conversation, conversation_questions, categories)
+            _mark_qa_question_findings(
+                conversation,
+                conversation_questions,
+                categories,
+                selected_importance_threshold=selected_importance_threshold,
+                candidate_importance_threshold=candidate_importance_threshold,
+            )
 
     selected_md = sum(
         1
@@ -1642,6 +1784,18 @@ def _collect_qa_subtitle_content(
     return content
 
 
+def _ensure_subtitle_prefix(subtitle: str, content_type: str, fallback: str) -> str:
+    """Normalize generated subtitles to the report's expected section prefixes."""
+    clean = _clean_text(subtitle)
+    if not clean:
+        return fallback
+    if content_type == "outlook" and not clean.lower().startswith("outlook:"):
+        return f"Outlook: {clean}"
+    if content_type == "questions" and not clean.lower().startswith("conference calls:"):
+        return f"Conference calls: {clean}"
+    return clean
+
+
 async def generate_section_subtitle(
     *,
     content_json: List[Dict[str, Any]],
@@ -1667,26 +1821,25 @@ async def generate_section_subtitle(
             ),
         },
     ]
-    raw = await _call_tool(
-        messages=messages,
-        tool=prompt["tool_definition"],
-        label=f"subtitle:{content_type}",
-        context=context,
-        llm_params=llm_params,
-    )
-    if not raw:
-        return fallback
     try:
-        result = SubtitleResponse.model_validate(raw)
-    except ValidationError as exc:
+        result = await _call_validated_tool(
+            messages=messages,
+            tool=prompt["tool_definition"],
+            label=f"subtitle:{content_type}",
+            context=context,
+            llm_params=llm_params,
+            response_model=SubtitleResponse,
+            stage_name=f"Subtitle generation for {content_type}",
+            max_attempts=3,
+        )
+    except RuntimeError as exc:
         logger.warning(
-            "Subtitle generation failed validation",
+            "Subtitle generation failed; using fallback",
             content_type=content_type,
             error=str(exc),
         )
         return fallback
-    subtitle = _clean_text(result.subtitle)
-    return subtitle or fallback
+    return _ensure_subtitle_prefix(result.subtitle, content_type, fallback)
 
 
 async def generate_report_section_subtitles(

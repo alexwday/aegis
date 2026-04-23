@@ -20,7 +20,7 @@ llm:
     qa_boundary: 32768
     outlook_extraction: 32768
     qa_extraction: 32768
-    subtitle_generation: 256
+    subtitle_generation: 1024
     default: 32768
 
 # Concurrency control

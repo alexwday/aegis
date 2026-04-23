@@ -91,6 +91,7 @@ tools:
               properties:
                 category_index:
                   type: integer
+                  minimum: 0
                   description: >
                     Exact category index from the allowed categories list.
                 source_block_id:
@@ -99,6 +100,7 @@ tools:
                     Exact block id that owns the cited sentences.
                 source_sentence_ids:
                   type: array
+                  minItems: 1
                   description: >
                     Exact cited sentence ids in transcript order, all from the
                     same source block.
@@ -106,6 +108,8 @@ tools:
                     type: string
                 relevance_score:
                   type: integer
+                  minimum: 1
+                  maximum: 10
                   description: >
                     Relevance from 1 to 10, where higher means more specific or
                     decision-useful capital-markets Outlook.

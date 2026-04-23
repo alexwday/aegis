@@ -342,6 +342,7 @@ def extract_raw_blocks(
                 "speaker": _clean(participant.get("name", "Unknown Speaker")),
                 "speaker_title": _clean(participant.get("title", "")),
                 "speaker_affiliation": _clean(participant.get("affiliation", "")),
+                "participant_type": participant.get("type", ""),
                 "speaker_type_hint": speaker.get("speaker_type", ""),
                 "paragraphs": paragraphs,
             }

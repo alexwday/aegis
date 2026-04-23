@@ -8,7 +8,7 @@ system_prompt: >
   You are a capital-markets report editor. Generate one concise, professional
   section subtitle from aggregated multi-bank content. Keep the subtitle
   factual, thematic, and suitable for a readthrough report. Always use the
-  provided tool.
+  provided `generate_subtitle` tool. Do not answer in plain text.
 
 user_prompt: |
   Generate one section subtitle from the aggregated content below.
@@ -25,6 +25,7 @@ user_prompt: |
   3. If `content_type` is `outlook`, start the subtitle with `Outlook:`.
   4. If `content_type` is `questions`, start the subtitle with `Conference calls:`.
   5. Reflect the strongest common theme across the banks instead of listing multiple disconnected ideas.
+  6. Do not include markdown, bullets, quotation marks around the whole subtitle, or explanatory text.
 
   Content type: {content_type}
   Section context: {section_context}
@@ -49,7 +50,7 @@ tools:
             type: string
             description: >
               One concise subtitle that captures the dominant theme across the
-              provided content.
+              provided content. Include the required section prefix.
         required:
           - subtitle
         additionalProperties: false
