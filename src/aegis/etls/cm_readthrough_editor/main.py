@@ -743,7 +743,7 @@ async def generate_cm_readthrough_editor(  # pylint: disable=too-many-statements
                         "ticker": ticker,
                         "bank_name": bank_info["bank_name"],
                         "status": "skipped",
-                        "reason": "no transcript XML found on NAS",
+                        "reason": "no transcript data on NAS",
                     }
 
                 parsed_transcript = parse_transcript_xml(xml_result.xml_bytes)
@@ -996,7 +996,7 @@ async def preflight_cm_readthrough_editor(
             try:
                 xml_result = find_transcript_xml(nas_conn, bank_info, fiscal_year, quarter)
                 if xml_result is None:
-                    status["failure"] = "no transcript XML found on NAS"
+                    status["failure"] = "no transcript data on NAS"
                 else:
                     status["transcript_path"] = xml_result.file_path
                     parsed_transcript = parse_transcript_xml(xml_result.xml_bytes)

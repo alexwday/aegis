@@ -37,8 +37,10 @@ QA_SECTION_PATTERNS = (
 
 try:
     from smb.SMBConnection import SMBConnection
+    from smb.smb_structs import OperationFailure
 except ImportError:  # pragma: no cover - exercised via runtime environment
     SMBConnection = Any  # type: ignore[misc,assignment]
+    OperationFailure = Exception  # type: ignore[misc,assignment]
 
 
 @dataclass(frozen=True)
@@ -104,6 +106,18 @@ def nas_list_files(conn: SMBConnection, path: str) -> List[Any]:
         return []
 
 
+def nas_path_exists(conn: SMBConnection, path: str) -> bool:
+    """Return True when a NAS directory exists and can be listed."""
+    try:
+        conn.listPath(_nas_share(), _nas_full(path))
+        return True
+    except OperationFailure:
+        return False
+    except Exception as exc:
+        logger.warning("Failed to check NAS directory", path=path, error=str(exc))
+        return False
+
+
 def nas_download_file(conn: SMBConnection, path: str) -> Optional[bytes]:
     """Download a NAS file into memory."""
     import io
@@ -130,6 +144,17 @@ def find_transcript_xml(
         f"{base_data_path}/{fiscal_year}/{fiscal_quarter}/"
         f"{institution['bank_type']}/{institution['path_safe_name']}"
     )
+
+    if not nas_path_exists(conn, folder):
+        logger.info(
+            "No transcript data on NAS for bank and period",
+            bank_name=institution.get("bank_name", ""),
+            ticker=institution.get("full_ticker") or institution.get("symbol", ""),
+            fiscal_year=fiscal_year,
+            fiscal_quarter=fiscal_quarter,
+            folder=folder,
+        )
+        return None
 
     files = nas_list_files(conn, folder)
     xml_files = [
