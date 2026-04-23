@@ -1,14 +1,15 @@
 stage: outlook_extraction
-version: 1.0.0
+version: 1.2.0
 description: >
   Extract capital-markets Outlook findings from indexed Management Discussion
   blocks and management Q&A answers using transcript references only.
 
 system_prompt: >
   You are a capital-markets transcript analyst for bank earnings calls.
-  Identify Outlook findings from indexed Management Discussion blocks and
-  management Q&A answers using only the supplied categories and transcript
-  references. Always use the provided tool.
+  Only identify findings that are relevant to both an allowed category and
+  the bank's capital-markets platform or business segment. Category fit alone
+  is not enough. Exclude general bank commentary and non-capital-markets
+  businesses. Always use the provided tool.
 
 user_prompt: |
   Analyze the indexed transcript for {bank_name} in {quarter} {fiscal_year} and extract capital-markets Outlook findings.
@@ -17,16 +18,41 @@ user_prompt: |
   In Q&A, analyst-question sentences provide context, while management-answer sentences are eligible finding sources.
 
   Decision criteria:
-  Select findings that belong in a capital-markets peer readthrough because they describe outlook, activity, pipelines, conversion, markets, sponsor activity, or capital-markets-related catalysts.
-  Exclude findings about wealth, retail, consumer, payments, treasury services, or other non-capital-markets businesses.
+  A valid finding must pass both tests below.
+  1. Category-fit test: the finding must clearly match one of the allowed category descriptions.
+  2. Capital-markets-platform test: the finding must clearly relate to the bank's capital-markets business or platform, such as investment banking, capital markets issuance, trading, sales and trading, sponsor activity, markets client activity, pipelines, or capital-markets-related catalysts affecting those businesses.
+
+  Final guardrail:
+  Before returning any finding, ask whether it belongs in a capital-markets segment readthrough for peers and investors. If the answer is no or unclear, exclude it.
+
+  Exclude any statement that fails either test.
+  In particular, exclude findings about wealth, retail, consumer, cards, deposits, mortgages, payments, treasury services, asset management, private banking, or other non-capital-markets businesses even if they are financially important.
+  Also exclude generic corporate or commercial banking commentary unless it is explicitly tied to capital-markets activity, underwriting, issuance, syndication, hedging, sponsor finance, trading flows, or market-making.
+  Exclude generic capital, balance-sheet, liquidity, or regulatory commentary unless it is explicitly about capital-markets platform capacity, trading inventory, leverage constraints, underwriting appetite, or the ability to support capital-markets clients.
 
   Rules:
   1. Use only the category indices listed below.
   2. Return only sentence references and source block ids; do not return verbatim text.
   3. Cite only Management Discussion sentences or management-answer sentences from Q&A.
   4. Keep `source_sentence_ids` in transcript order and from a single source block.
-  5. Set `has_content` to `false` and return an empty `statements` array when no substantive capital-markets Outlook appears.
-  6. Set `is_new_category` to `false` for every returned statement.
+  5. Only return a finding if it is relevant to both the category and the capital-markets platform or segment.
+  6. If a statement fits a category description but is not specifically about the capital-markets platform or business segment, exclude it.
+  7. If a statement is about capital markets broadly but does not clearly fit an allowed category, exclude it.
+  8. Prefer specific business-segment commentary over broad macro observations unless the macro point is explicitly tied to capital-markets activity, pipelines, trading, or client engagement.
+  9. If the capital-markets business linkage is implied but not explicit, exclude the statement.
+  10. If the statement could just as easily belong in a general bank earnings summary, exclude it.
+  11. Set `has_content` to `false` and return an empty `statements` array when no substantive capital-markets Outlook appears.
+  12. Set `is_new_category` to `false` for every returned statement.
+
+  Inclusion examples:
+  - Management says advisory pipelines, ECM issuance, or trading client activity are improving.
+  - Management explains how volatility, regulation, or policy is affecting investment banking conversion or markets revenue opportunity.
+  - Management discusses sponsor activity, deal backlog, underwriting appetite, or capital-markets client engagement.
+
+  Exclusion examples:
+  - Management discusses wealth-management recruiting, deposit pricing, card spend, or consumer credit.
+  - Management discusses enterprise CET1, liquidity, or expense management with no explicit capital-markets business linkage.
+  - Management discusses commercial lending growth without tying it to syndication, issuance, sponsor finance, hedging, or another capital-markets activity.
 
   Allowed categories:
   {categories_list}
@@ -42,9 +68,11 @@ tools:
       name: extract_capital_markets_outlook
       description: >
         Call this tool when the indexed bank transcript contains potential
-        capital-markets Outlook findings. It records each finding as category
-        and transcript references instead of free-text quotes. Returns whether
-        substantive content exists and, when it does, one entry per finding.
+        capital-markets Outlook findings that are relevant to both an allowed
+        category and the bank's capital-markets platform or business segment.
+        It records each finding as category and transcript references instead
+        of free-text quotes. Returns whether substantive content exists and,
+        when it does, one entry per finding.
       parameters:
         type: object
         properties:
