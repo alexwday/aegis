@@ -1,24 +1,30 @@
-"""
-CM Readthrough ETL - Generate capital markets readthrough reports.
+"""CM readthrough ETL replacement with legacy DOCX and editor HTML outputs."""
 
-This ETL processes multiple banks' earnings call transcripts to extract
-Investment Banking & Trading outlook and categorized analyst questions.
-"""
-
-from .main import (
-    main,
-    generate_cm_readthrough,
-    CMReadthroughResult,
-    CMReadthroughError,
-    CMReadthroughUserError,
-    CMReadthroughSystemError,
-)
+from typing import Any
 
 __all__ = [
-    "main",
     "generate_cm_readthrough",
+    "generate_cm_readthrough_editor",
     "CMReadthroughResult",
+    "CMReadthroughEditorResult",
     "CMReadthroughError",
     "CMReadthroughUserError",
     "CMReadthroughSystemError",
+    "CMReadthroughEditorError",
+    "CMReadthroughEditorUserError",
+    "CMReadthroughEditorSystemError",
 ]
+
+
+def __getattr__(name: str) -> Any:
+    """Lazily expose public symbols from ``main`` without eager module import."""
+    aliases = {
+        "CMReadthroughError": "CMReadthroughEditorError",
+        "CMReadthroughUserError": "CMReadthroughEditorUserError",
+        "CMReadthroughSystemError": "CMReadthroughEditorSystemError",
+    }
+    if name in __all__:
+        from . import main as _main  # pylint: disable=import-outside-toplevel
+
+        return getattr(_main, aliases.get(name, name))
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

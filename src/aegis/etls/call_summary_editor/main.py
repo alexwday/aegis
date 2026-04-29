@@ -36,6 +36,7 @@ from aegis.etls.call_summary_editor.interactive_pipeline import (
     count_included_categories,
     generate_bucket_headlines,
 )
+from aegis.etls.call_summary_editor.docx_export import create_call_summary_docx_from_state
 from aegis.etls.call_summary_editor.nas_source import (
     extract_raw_blocks,
     find_transcript_xml,
@@ -83,6 +84,8 @@ class CallSummaryResult:
     filepath: str
     total_categories: int
     included_categories: int
+    html_filepath: str = ""
+    docx_filepath: str = ""
     total_cost: float = 0.0
     total_tokens: int = 0
 
@@ -288,9 +291,7 @@ def load_categories_from_xlsx(bank_type: str, execution_id: str) -> List[Dict[st
             xlsx_path=xlsx_path,
             error=str(exc),
         )
-        raise RuntimeError(
-            f"Failed to read categories from {xlsx_path}: {exc}"
-        ) from exc
+        raise RuntimeError(f"Failed to read categories from {xlsx_path}: {exc}") from exc
 
     if len(all_sheets) > 1:
         logger.warning(
@@ -461,24 +462,38 @@ INTERACTIVE_REPORT_METADATA: Dict[str, str] = {
     "report_type": "call_summary_editor",
 }
 
+LEGACY_REPORT_METADATA: Dict[str, str] = {
+    "report_name": "Earnings Call Summary",
+    "report_description": (
+        "AI-generated comprehensive summary of quarterly earnings call transcripts, "
+        "extracting key financial metrics, strategic insights, and management guidance. "
+        "Includes categorized analysis of financial performance, credit quality, "
+        "capital position, business segments, and forward-looking statements."
+    ),
+    "report_type": "call_summary",
+}
+
 
 def _generate_interactive_report(
     report_state: Dict[str, Any],
     etl_context: Dict[str, Any],
     min_importance: float,
+    output_dir: str | None = None,
 ) -> tuple[str, str]:
     """Write the interactive HTML report to the ETL output directory."""
     bank_info = etl_context["bank_info"]
     quarter = etl_context["quarter"]
     fiscal_year = etl_context["fiscal_year"]
 
-    output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "output")
-    os.makedirs(output_dir, exist_ok=True)
+    resolved_output_dir = output_dir or os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "output"
+    )
+    os.makedirs(resolved_output_dir, exist_ok=True)
 
     ticker_for_filename = bank_info.get("full_ticker") or bank_info["bank_symbol"]
     filename_base = f"{ticker_for_filename}_{fiscal_year}_{quarter}_call_summary_editor"
     html_filename = f"{filename_base}.html"
-    filepath = os.path.join(output_dir, html_filename)
+    filepath = os.path.join(resolved_output_dir, html_filename)
 
     html_content = generate_interactive_html(
         state=report_state,
@@ -497,6 +512,40 @@ def _generate_interactive_report(
         quarter=quarter,
     )
     return filepath, html_filename
+
+
+def _generate_legacy_docx_report(
+    report_state: Dict[str, Any],
+    etl_context: Dict[str, Any],
+    output_dir: str | None = None,
+) -> tuple[str, str]:
+    """Write the legacy call-summary DOCX from the editor's initial report state."""
+    bank_info = etl_context["bank_info"]
+    quarter = etl_context["quarter"]
+    fiscal_year = etl_context["fiscal_year"]
+
+    resolved_output_dir = output_dir or os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "output"
+    )
+    os.makedirs(resolved_output_dir, exist_ok=True)
+
+    filename_base = f"{bank_info['bank_symbol']}_{fiscal_year}_{quarter}_call_summary"
+    docx_filename = f"{filename_base}.docx"
+    filepath = os.path.join(resolved_output_dir, docx_filename)
+
+    create_call_summary_docx_from_state(
+        report_state=report_state,
+        output_path=filepath,
+        bank_symbol=bank_info["bank_symbol"],
+    )
+    logger.info(
+        "Saved legacy DOCX report",
+        filepath=filepath,
+        bank=bank_info["bank_symbol"],
+        fiscal_year=fiscal_year,
+        quarter=quarter,
+    )
+    return filepath, docx_filename
 
 
 async def _save_interactive_report_to_database(
@@ -614,8 +663,120 @@ async def _save_interactive_report_to_database(
     )
 
 
+async def _save_legacy_docx_report_to_database(
+    *,
+    filepath: str,
+    docx_filename: str,
+    total_categories: int,
+    included_categories: int,
+    etl_context: Dict[str, Any],
+) -> None:
+    """Persist legacy call_summary DOCX report metadata to aegis_reports."""
+    bank_info = etl_context["bank_info"]
+    quarter = etl_context["quarter"]
+    fiscal_year = etl_context["fiscal_year"]
+    execution_id = etl_context["execution_id"]
+
+    generation_timestamp = datetime.now()
+
+    async with get_connection() as conn:
+        await conn.execute(
+            text(
+                """
+                DELETE FROM aegis_reports
+                WHERE bank_id = :bank_id
+                  AND fiscal_year = :fiscal_year
+                  AND quarter = :quarter
+                  AND report_type = :report_type
+                """
+            ),
+            {
+                "bank_id": bank_info["bank_id"],
+                "fiscal_year": fiscal_year,
+                "quarter": quarter,
+                "report_type": LEGACY_REPORT_METADATA["report_type"],
+            },
+        )
+
+        await conn.execute(
+            text(
+                """
+                INSERT INTO aegis_reports (
+                    report_name,
+                    report_description,
+                    report_type,
+                    bank_id,
+                    bank_name,
+                    bank_symbol,
+                    fiscal_year,
+                    quarter,
+                    local_filepath,
+                    s3_document_name,
+                    s3_pdf_name,
+                    generation_date,
+                    generated_by,
+                    execution_id,
+                    metadata
+                ) VALUES (
+                    :report_name,
+                    :report_description,
+                    :report_type,
+                    :bank_id,
+                    :bank_name,
+                    :bank_symbol,
+                    :fiscal_year,
+                    :quarter,
+                    :local_filepath,
+                    :s3_document_name,
+                    :s3_pdf_name,
+                    :generation_date,
+                    :generated_by,
+                    :execution_id,
+                    :metadata
+                )
+                """
+            ),
+            {
+                "report_name": LEGACY_REPORT_METADATA["report_name"],
+                "report_description": LEGACY_REPORT_METADATA["report_description"],
+                "report_type": LEGACY_REPORT_METADATA["report_type"],
+                "bank_id": bank_info["bank_id"],
+                "bank_name": bank_info["bank_name"],
+                "bank_symbol": bank_info["bank_symbol"],
+                "fiscal_year": fiscal_year,
+                "quarter": quarter,
+                "local_filepath": filepath,
+                "s3_document_name": docx_filename,
+                "s3_pdf_name": None,
+                "generation_date": generation_timestamp,
+                "generated_by": "call_summary_etl",
+                "execution_id": execution_id,
+                "metadata": json.dumps(
+                    {
+                        "output_format": "docx",
+                        "source_output": "call_summary_editor_initial_report",
+                        "bank_type": bank_info["bank_type"],
+                        "categories_processed": total_categories,
+                        "categories_included": included_categories,
+                        "categories_rejected": total_categories - included_categories,
+                    }
+                ),
+            },
+        )
+
+    logger.info(
+        "Saved legacy DOCX metadata to database",
+        filepath=filepath,
+        total_categories=total_categories,
+        included_categories=included_categories,
+        bank=bank_info["bank_symbol"],
+        fiscal_year=fiscal_year,
+        quarter=quarter,
+    )
+
+
 async def generate_call_summary(  # pylint: disable=too-many-statements
-    bank_name: str, fiscal_year: int, quarter: str
+    bank_name: str, fiscal_year: int, quarter: str, output_dir: str | None = None
 ) -> CallSummaryResult:
     """
     Generate an interactive HTML call summary editor report.
@@ -792,12 +953,25 @@ async def generate_call_summary(  # pylint: disable=too-many-statements
             report_state=report_state,
             etl_context=etl_context,
             min_importance=min_importance,
+            output_dir=output_dir,
+        )
+        docx_filepath, docx_filename = _generate_legacy_docx_report(
+            report_state=report_state,
+            etl_context=etl_context,
+            output_dir=output_dir,
         )
         marks.append(("document", time.monotonic()))
 
         await _save_interactive_report_to_database(
             filepath=filepath,
             html_filename=html_filename,
+            total_categories=total_categories,
+            included_categories=included_categories,
+            etl_context=etl_context,
+        )
+        await _save_legacy_docx_report_to_database(
+            filepath=docx_filepath,
+            docx_filename=docx_filename,
             total_categories=total_categories,
             included_categories=included_categories,
             etl_context=etl_context,
@@ -823,6 +997,8 @@ async def generate_call_summary(  # pylint: disable=too-many-statements
             filepath=filepath,
             total_categories=total_categories,
             included_categories=included_categories,
+            html_filepath=filepath,
+            docx_filepath=docx_filepath,
             total_cost=cost_summary["total_cost"],
             total_tokens=cost_summary["total_tokens"],
         )
@@ -996,7 +1172,8 @@ def main():
             generate_call_summary(bank_name=args.bank, fiscal_year=args.year, quarter=args.quarter)
         )
         print(
-            f"✅ Complete: {result.filepath}\n"
+            f"✅ Complete: {result.html_filepath or result.filepath}\n"
+            f"   DOCX: {result.docx_filepath}\n"
             f"   Categories: {result.included_categories}/{result.total_categories} included\n"
             f"   LLM cost: ${result.total_cost:.4f}, Tokens: {result.total_tokens:,}"
         )

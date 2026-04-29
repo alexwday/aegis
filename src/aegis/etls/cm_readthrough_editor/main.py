@@ -18,7 +18,7 @@ import sys
 from dataclasses import dataclass
 from datetime import datetime
 from functools import lru_cache
-from typing import Dict, Any, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 from sqlalchemy import text
 import pandas as pd
 import yaml
@@ -33,6 +33,7 @@ from aegis.etls.cm_readthrough_editor.interactive_pipeline import (
     count_included_categories,
     generate_report_section_subtitles,
 )
+from aegis.etls.cm_readthrough_editor.docx_export import create_cm_readthrough_docx_from_state
 from aegis.etls.cm_readthrough_editor.nas_source import (
     extract_raw_blocks,
     find_transcript_xml,
@@ -73,6 +74,11 @@ class CMReadthroughEditorUserError(CMReadthroughEditorError):
     """Expected user-facing error (bad input, no data, etc.)."""
 
 
+CMReadthroughError = CMReadthroughEditorError
+CMReadthroughSystemError = CMReadthroughEditorSystemError
+CMReadthroughUserError = CMReadthroughEditorUserError
+
+
 @dataclass
 class CMReadthroughEditorResult:
     """Successful CM readthrough editor generation result."""
@@ -80,10 +86,29 @@ class CMReadthroughEditorResult:
     filepath: str
     total_categories: int
     included_categories: int
+    html_filepath: str = ""
+    docx_filepath: str = ""
+    execution_id: str = ""
     banks_requested: int = 0
     banks_included: int = 0
     banks_with_findings: int = 0
     skipped_banks: int = 0
+    total_cost: float = 0.0
+    total_tokens: int = 0
+
+
+@dataclass
+class CMReadthroughResult:
+    """Compatibility result for the legacy cm_readthrough API."""
+
+    filepath: str
+    execution_id: str
+    banks_processed: int
+    banks_with_outlook: int
+    banks_with_section2: int
+    banks_with_section3: int
+    html_filepath: str = ""
+    docx_filepath: str = ""
     total_cost: float = 0.0
     total_tokens: int = 0
 
@@ -159,7 +184,11 @@ class ETLConfig:
     @property
     def max_concurrent_banks(self) -> int:
         """Get the maximum number of banks to process concurrently."""
-        return int(self._config.get("concurrency", {}).get("max_concurrent_banks", MAX_CONCURRENT_EXTRACTIONS))
+        return int(
+            self._config.get("concurrency", {}).get(
+                "max_concurrent_banks", MAX_CONCURRENT_EXTRACTIONS
+            )
+        )
 
     @property
     def min_importance(self) -> float:
@@ -279,7 +308,9 @@ def load_categories_from_xlsx() -> List[Dict[str, Any]]:
                 df[col] = ""
 
         for idx, row in df.iterrows():
-            category_name = str(row["category_name"]).strip() if pd.notna(row["category_name"]) else ""
+            category_name = (
+                str(row["category_name"]).strip() if pd.notna(row["category_name"]) else ""
+            )
             if category_name.lower() == "category":
                 continue
 
@@ -300,10 +331,20 @@ def load_categories_from_xlsx() -> List[Dict[str, Any]]:
                     "report_section": report_section,
                     "category_name": category_name,
                     "category_description": str(row["category_description"]).strip(),
-                    "example_1": str(row["example_1"]).strip() if pd.notna(row["example_1"]) else "",
-                    "example_2": str(row["example_2"]).strip() if pd.notna(row["example_2"]) else "",
-                    "example_3": str(row["example_3"]).strip() if pd.notna(row["example_3"]) else "",
-                    "category_group": str(row["category_group"]).strip() if pd.notna(row["category_group"]) else "",
+                    "example_1": (
+                        str(row["example_1"]).strip() if pd.notna(row["example_1"]) else ""
+                    ),
+                    "example_2": (
+                        str(row["example_2"]).strip() if pd.notna(row["example_2"]) else ""
+                    ),
+                    "example_3": (
+                        str(row["example_3"]).strip() if pd.notna(row["example_3"]) else ""
+                    ),
+                    "category_group": (
+                        str(row["category_group"]).strip()
+                        if pd.notna(row["category_group"])
+                        else ""
+                    ),
                 }
             )
 
@@ -421,6 +462,15 @@ INTERACTIVE_REPORT_METADATA: Dict[str, str] = {
     "report_type": "cm_readthrough_editor",
 }
 
+LEGACY_REPORT_METADATA: Dict[str, str] = {
+    "report_name": "Capital Markets Readthrough",
+    "report_description": (
+        "AI-generated analysis of capital markets commentary from quarterly "
+        "earnings calls across major U.S. and European banks."
+    ),
+    "report_type": "cm_readthrough",
+}
+
 
 def _all_banks_from_config() -> List[Dict[str, Any]]:
     """Return monitored institutions in config order."""
@@ -445,6 +495,103 @@ def _resolve_requested_banks(bank_identifier: Optional[str]) -> List[Dict[str, A
     return _all_banks_from_config()
 
 
+async def find_latest_available_quarter(
+    bank_id: int,
+    min_fiscal_year: int,
+    min_quarter: str,
+    bank_name: str = "",
+) -> Optional[Tuple[int, str]]:
+    """
+    Find the latest transcript quarter available for a bank at or after a minimum period.
+
+    Args:
+        bank_id: Bank ID from monitored institutions.
+        min_fiscal_year: Minimum fiscal year to consider.
+        min_quarter: Minimum fiscal quarter to consider.
+        bank_name: Optional display name for logging.
+
+    Returns:
+        ``(fiscal_year, quarter)`` when transcript data is available, otherwise ``None``.
+    """
+    quarter_map = {"Q1": 1, "Q2": 2, "Q3": 3, "Q4": 4}
+    min_quarter_num = quarter_map.get(min_quarter, 1)
+
+    query = text(
+        """
+        SELECT fiscal_year, quarter
+        FROM aegis_data_availability
+        WHERE bank_id = :bank_id
+          AND 'transcripts' = ANY(database_names)
+          AND (
+              fiscal_year > :min_year
+              OR (
+                  fiscal_year = :min_year
+                  AND CASE quarter
+                      WHEN 'Q1' THEN 1
+                      WHEN 'Q2' THEN 2
+                      WHEN 'Q3' THEN 3
+                      WHEN 'Q4' THEN 4
+                  END >= :min_quarter
+              )
+          )
+        ORDER BY fiscal_year DESC,
+                 CASE quarter
+                     WHEN 'Q4' THEN 4
+                     WHEN 'Q3' THEN 3
+                     WHEN 'Q2' THEN 2
+                     WHEN 'Q1' THEN 1
+                 END DESC
+        LIMIT 1
+        """
+    )
+
+    async with get_connection() as conn:
+        result = await conn.execute(
+            query,
+            {
+                "bank_id": bank_id,
+                "min_year": min_fiscal_year,
+                "min_quarter": min_quarter_num,
+            },
+        )
+        row = result.fetchone()
+
+    if not row:
+        logger.warning(
+            "No transcript availability found at or after requested period",
+            bank_id=bank_id,
+            bank_name=bank_name,
+            fiscal_year=min_fiscal_year,
+            quarter=min_quarter,
+        )
+        return None
+
+    latest_year = row.fiscal_year
+    latest_quarter = row.quarter
+    latest_quarter_num = quarter_map.get(latest_quarter, 0)
+    if latest_year > min_fiscal_year or (
+        latest_year == min_fiscal_year and latest_quarter_num > min_quarter_num
+    ):
+        logger.info(
+            "Using later transcript period for CM readthrough",
+            bank_id=bank_id,
+            bank_name=bank_name,
+            requested_fiscal_year=min_fiscal_year,
+            requested_quarter=min_quarter,
+            selected_fiscal_year=latest_year,
+            selected_quarter=latest_quarter,
+        )
+    else:
+        logger.info(
+            "Using requested transcript period for CM readthrough",
+            bank_id=bank_id,
+            bank_name=bank_name,
+            fiscal_year=latest_year,
+            quarter=latest_quarter,
+        )
+    return latest_year, latest_quarter
+
+
 def _scope_slug(requested_banks: List[Dict[str, Any]], requested_all_banks: bool) -> str:
     """Build a filename-safe scope label."""
     if requested_all_banks:
@@ -464,16 +611,11 @@ def _count_bank_findings(bank_data: Dict[str, Any]) -> int:
             if sentence.get("status") in {"selected", "candidate"}
         )
     for conversation in bank_data.get("qa_conversations", []):
-        render_mode = conversation.get("render_mode", "answer")
-        findings = (
-            conversation.get("question_sentences", [])
-            if render_mode == "question"
-            else conversation.get("answer_sentences", [])
+        findings = conversation.get("question_sentences", []) + conversation.get(
+            "answer_sentences", []
         )
         count += sum(
-            1
-            for sentence in findings
-            if sentence.get("status") in {"selected", "candidate"}
+            1 for sentence in findings if sentence.get("status") in {"selected", "candidate"}
         )
     return count
 
@@ -489,11 +631,8 @@ def _count_banks_with_selected_findings(banks_data: Dict[str, Dict[str, Any]]) -
                 break
         if not has_selected:
             for conversation in bank_data.get("qa_conversations", []):
-                render_mode = conversation.get("render_mode", "answer")
-                findings = (
-                    conversation.get("question_sentences", [])
-                    if render_mode == "question"
-                    else conversation.get("answer_sentences", [])
+                findings = conversation.get("question_sentences", []) + conversation.get(
+                    "answer_sentences", []
                 )
                 if any(sentence.get("status") == "selected" for sentence in findings):
                     has_selected = True
@@ -507,18 +646,21 @@ def _generate_interactive_report(
     report_state: Dict[str, Any],
     etl_context: Dict[str, Any],
     min_importance: float,
+    output_dir: str | None = None,
 ) -> tuple[str, str]:
     """Write the interactive HTML report to the ETL output directory."""
     quarter = etl_context["quarter"]
     fiscal_year = etl_context["fiscal_year"]
 
-    output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "output")
-    os.makedirs(output_dir, exist_ok=True)
+    resolved_output_dir = output_dir or os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "output"
+    )
+    os.makedirs(resolved_output_dir, exist_ok=True)
 
     scope_slug = etl_context["scope_slug"]
     filename_base = f"CM_Readthrough_Editor_{fiscal_year}_{quarter}_{scope_slug}"
     html_filename = f"{filename_base}.html"
-    filepath = os.path.join(output_dir, html_filename)
+    filepath = os.path.join(resolved_output_dir, html_filename)
 
     html_content = generate_interactive_html(
         state=report_state,
@@ -537,6 +679,38 @@ def _generate_interactive_report(
         quarter=quarter,
     )
     return filepath, html_filename
+
+
+def _generate_legacy_docx_report(
+    report_state: Dict[str, Any],
+    etl_context: Dict[str, Any],
+    output_path: str | None = None,
+    output_dir: str | None = None,
+) -> tuple[str, str]:
+    """Write the legacy CM readthrough DOCX from the editor's initial report state."""
+    quarter = etl_context["quarter"]
+    fiscal_year = etl_context["fiscal_year"]
+
+    if output_path:
+        filepath = output_path
+        docx_filename = os.path.basename(output_path)
+        os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
+    else:
+        resolved_output_dir = output_dir or os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "output"
+        )
+        os.makedirs(resolved_output_dir, exist_ok=True)
+        docx_filename = f"CM_Readthrough_{fiscal_year}_{quarter}.docx"
+        filepath = os.path.join(resolved_output_dir, docx_filename)
+
+    create_cm_readthrough_docx_from_state(report_state=report_state, output_path=filepath)
+    logger.info(
+        "Saved legacy CM DOCX report",
+        filepath=filepath,
+        fiscal_year=fiscal_year,
+        quarter=quarter,
+    )
+    return filepath, docx_filename
 
 
 async def _save_interactive_report_to_database(
@@ -657,8 +831,127 @@ async def _save_interactive_report_to_database(
     )
 
 
+async def _save_legacy_docx_report_to_database(
+    *,
+    filepath: str,
+    docx_filename: str,
+    total_categories: int,
+    included_categories: int,
+    etl_context: Dict[str, Any],
+) -> None:
+    """Persist legacy cm_readthrough DOCX report metadata to aegis_reports."""
+    quarter = etl_context["quarter"]
+    fiscal_year = etl_context["fiscal_year"]
+    execution_id = etl_context["execution_id"]
+    generation_timestamp = datetime.now()
+
+    async with get_connection() as conn:
+        await conn.execute(
+            text(
+                """
+                DELETE FROM aegis_reports
+                WHERE fiscal_year = :fiscal_year
+                  AND quarter = :quarter
+                  AND report_type = :report_type
+                """
+            ),
+            {
+                "fiscal_year": fiscal_year,
+                "quarter": quarter,
+                "report_type": LEGACY_REPORT_METADATA["report_type"],
+            },
+        )
+
+        await conn.execute(
+            text(
+                """
+                INSERT INTO aegis_reports (
+                    report_name,
+                    report_description,
+                    report_type,
+                    bank_id,
+                    bank_name,
+                    bank_symbol,
+                    fiscal_year,
+                    quarter,
+                    local_filepath,
+                    s3_document_name,
+                    s3_pdf_name,
+                    generation_date,
+                    generated_by,
+                    execution_id,
+                    metadata
+                ) VALUES (
+                    :report_name,
+                    :report_description,
+                    :report_type,
+                    :bank_id,
+                    :bank_name,
+                    :bank_symbol,
+                    :fiscal_year,
+                    :quarter,
+                    :local_filepath,
+                    :s3_document_name,
+                    :s3_pdf_name,
+                    :generation_date,
+                    :generated_by,
+                    :execution_id,
+                    :metadata
+                )
+                """
+            ),
+            {
+                "report_name": LEGACY_REPORT_METADATA["report_name"],
+                "report_description": LEGACY_REPORT_METADATA["report_description"],
+                "report_type": LEGACY_REPORT_METADATA["report_type"],
+                "bank_id": None,
+                "bank_name": None,
+                "bank_symbol": None,
+                "fiscal_year": fiscal_year,
+                "quarter": quarter,
+                "local_filepath": filepath,
+                "s3_document_name": docx_filename,
+                "s3_pdf_name": None,
+                "generation_date": generation_timestamp,
+                "generated_by": "cm_readthrough_etl",
+                "execution_id": execution_id,
+                "metadata": json.dumps(
+                    {
+                        "output_format": "docx",
+                        "source_output": "cm_readthrough_editor_initial_report",
+                        "scope": etl_context["scope_slug"],
+                        "banks_requested": etl_context["banks_requested"],
+                        "banks_included": etl_context["banks_included"],
+                        "banks_with_findings": etl_context["banks_with_findings"],
+                        "skipped_banks": etl_context.get("skipped_banks", []),
+                        "section_subtitles": etl_context.get("section_subtitles", {}),
+                        "categories_processed": total_categories,
+                        "categories_included": included_categories,
+                        "categories_rejected": total_categories - included_categories,
+                    }
+                ),
+            },
+        )
+
+    logger.info(
+        "Saved legacy CM DOCX metadata to database",
+        filepath=filepath,
+        total_categories=total_categories,
+        included_categories=included_categories,
+        banks_requested=etl_context["banks_requested"],
+        banks_included=etl_context["banks_included"],
+        fiscal_year=fiscal_year,
+        quarter=quarter,
+    )
+
+
 async def generate_cm_readthrough_editor(  # pylint: disable=too-many-statements
-    bank_name: Optional[str], fiscal_year: int, quarter: str
+    bank_name: Optional[str],
+    fiscal_year: int,
+    quarter: str,
+    use_latest: bool = False,
+    output_path: Optional[str] = None,
+    output_dir: Optional[str] = None,
 ) -> CMReadthroughEditorResult:
     """
     Generate an interactive HTML CM readthrough editor report.
@@ -686,7 +979,15 @@ async def generate_cm_readthrough_editor(  # pylint: disable=too-many-statements
         bank_filter=bank_name,
         fiscal_year=fiscal_year,
         quarter=quarter,
+        use_latest=use_latest,
     )
+    if use_latest:
+        logger.info(
+            "CM readthrough editor received use_latest=True; "
+            "selecting latest available transcript period per bank",
+            fiscal_year=fiscal_year,
+            quarter=quarter,
+        )
 
     nas_conn = None
     try:
@@ -730,13 +1031,34 @@ async def generate_cm_readthrough_editor(  # pylint: disable=too-many-statements
         async def _process_bank(bank_info: Dict[str, Any]) -> Dict[str, Any]:
             async with semaphore:
                 ticker = bank_info.get("full_ticker") or bank_info["bank_symbol"]
+                transcript_year = fiscal_year
+                transcript_quarter = quarter
+
+                if use_latest:
+                    latest_period = await find_latest_available_quarter(
+                        bank_id=int(bank_info["bank_id"]),
+                        min_fiscal_year=fiscal_year,
+                        min_quarter=quarter,
+                        bank_name=bank_info["bank_name"],
+                    )
+                    if latest_period is None:
+                        return {
+                            "ticker": ticker,
+                            "bank_name": bank_info["bank_name"],
+                            "status": "skipped",
+                            "reason": "no transcript availability in database",
+                            "requested_fiscal_year": fiscal_year,
+                            "requested_quarter": quarter,
+                        }
+                    transcript_year, transcript_quarter = latest_period
+
                 async with nas_lock:
                     xml_result = await asyncio.to_thread(
                         find_transcript_xml,
                         nas_conn,
                         bank_info,
-                        fiscal_year,
-                        quarter,
+                        transcript_year,
+                        transcript_quarter,
                     )
                 if xml_result is None:
                     return {
@@ -744,6 +1066,8 @@ async def generate_cm_readthrough_editor(  # pylint: disable=too-many-statements
                         "bank_name": bank_info["bank_name"],
                         "status": "skipped",
                         "reason": "no transcript data on NAS",
+                        "source_fiscal_year": transcript_year,
+                        "source_quarter": transcript_quarter,
                     }
 
                 parsed_transcript = parse_transcript_xml(xml_result.xml_bytes)
@@ -754,6 +1078,8 @@ async def generate_cm_readthrough_editor(  # pylint: disable=too-many-statements
                         "status": "skipped",
                         "reason": "transcript XML failed to parse",
                         "transcript_path": xml_result.file_path,
+                        "source_fiscal_year": transcript_year,
+                        "source_quarter": transcript_quarter,
                     }
 
                 md_raw_blocks, qa_raw_blocks = extract_raw_blocks(parsed_transcript, ticker)
@@ -764,6 +1090,8 @@ async def generate_cm_readthrough_editor(  # pylint: disable=too-many-statements
                         "status": "skipped",
                         "reason": "transcript contained no MD or QA speaker blocks",
                         "transcript_path": xml_result.file_path,
+                        "source_fiscal_year": transcript_year,
+                        "source_quarter": transcript_quarter,
                     }
 
                 bank_data = await build_interactive_bank_data(
@@ -771,8 +1099,8 @@ async def generate_cm_readthrough_editor(  # pylint: disable=too-many-statements
                     qa_raw_blocks=qa_raw_blocks,
                     categories=categories,
                     bank_info=bank_info,
-                    fiscal_year=fiscal_year,
-                    fiscal_quarter=quarter,
+                    fiscal_year=transcript_year,
+                    fiscal_quarter=transcript_quarter,
                     transcript_title=parsed_transcript.get("title", ""),
                     context=context,
                     qa_boundary_llm_params=qa_boundary_llm_params,
@@ -782,6 +1110,8 @@ async def generate_cm_readthrough_editor(  # pylint: disable=too-many-statements
                     candidate_importance_threshold=candidate_importance_threshold,
                 )
                 bank_data["transcript_path"] = xml_result.file_path
+                bank_data["source_fiscal_year"] = transcript_year
+                bank_data["source_quarter"] = transcript_quarter
                 bank_data["finding_count"] = _count_bank_findings(bank_data)
                 return {
                     "ticker": ticker,
@@ -815,13 +1145,21 @@ async def generate_cm_readthrough_editor(  # pylint: disable=too-many-statements
                 continue
 
             if result["status"] != "ok":
-                skipped_banks.append(
-                    {
-                        "ticker": result["ticker"],
-                        "bank_name": result["bank_name"],
-                        "reason": result["reason"],
-                    }
-                )
+                skipped_bank = {
+                    "ticker": result["ticker"],
+                    "bank_name": result["bank_name"],
+                    "reason": result["reason"],
+                }
+                for field in (
+                    "requested_fiscal_year",
+                    "requested_quarter",
+                    "source_fiscal_year",
+                    "source_quarter",
+                    "transcript_path",
+                ):
+                    if field in result:
+                        skipped_bank[field] = result[field]
+                skipped_banks.append(skipped_bank)
                 logger.info(
                     "Skipping bank from consolidated CM editor",
                     bank=result["bank_name"],
@@ -834,9 +1172,7 @@ async def generate_cm_readthrough_editor(  # pylint: disable=too-many-statements
             banks_data[bank_data["ticker"]] = bank_data
 
         if not banks_data:
-            scope_label = (
-                f"bank filter '{bank_name}'" if bank_name else "the monitored bank set"
-            )
+            scope_label = f"bank filter '{bank_name}'" if bank_name else "the monitored bank set"
             raise CMReadthroughEditorUserError(
                 f"No usable transcript XML was found for {scope_label} in {quarter} {fiscal_year}."
             )
@@ -882,6 +1218,13 @@ async def generate_cm_readthrough_editor(  # pylint: disable=too-many-statements
             report_state=report_state,
             etl_context=etl_context,
             min_importance=min_importance,
+            output_dir=output_dir,
+        )
+        docx_filepath, docx_filename = _generate_legacy_docx_report(
+            report_state=report_state,
+            etl_context=etl_context,
+            output_path=output_path,
+            output_dir=output_dir,
         )
         marks.append(("document", time.monotonic()))
 
@@ -889,6 +1232,13 @@ async def generate_cm_readthrough_editor(  # pylint: disable=too-many-statements
             await _save_interactive_report_to_database(
                 filepath=filepath,
                 html_filename=html_filename,
+                total_categories=total_categories,
+                included_categories=included_categories,
+                etl_context=etl_context,
+            )
+            await _save_legacy_docx_report_to_database(
+                filepath=docx_filepath,
+                docx_filename=docx_filename,
                 total_categories=total_categories,
                 included_categories=included_categories,
                 etl_context=etl_context,
@@ -922,6 +1272,9 @@ async def generate_cm_readthrough_editor(  # pylint: disable=too-many-statements
             filepath=filepath,
             total_categories=total_categories,
             included_categories=included_categories,
+            html_filepath=filepath,
+            docx_filepath=docx_filepath,
+            execution_id=execution_id,
             banks_requested=len(requested_banks),
             banks_included=len(banks_data),
             banks_with_findings=banks_with_findings,
@@ -965,8 +1318,41 @@ async def generate_cm_readthrough_editor(  # pylint: disable=too-many-statements
                 pass
 
 
+async def generate_cm_readthrough(
+    fiscal_year: int,
+    quarter: str,
+    use_latest: bool = False,
+    output_path: Optional[str] = None,
+    output_dir: Optional[str] = None,
+) -> CMReadthroughResult:
+    """Compatibility wrapper matching the legacy cm_readthrough API."""
+    result = await generate_cm_readthrough_editor(
+        bank_name=None,
+        fiscal_year=fiscal_year,
+        quarter=quarter,
+        use_latest=use_latest,
+        output_path=output_path,
+        output_dir=output_dir,
+    )
+    return CMReadthroughResult(
+        filepath=result.docx_filepath or result.filepath,
+        execution_id=result.execution_id,
+        banks_processed=result.banks_requested,
+        banks_with_outlook=result.banks_with_findings,
+        banks_with_section2=result.banks_with_findings,
+        banks_with_section3=0,
+        html_filepath=result.html_filepath or result.filepath,
+        docx_filepath=result.docx_filepath,
+        total_cost=result.total_cost,
+        total_tokens=result.total_tokens,
+    )
+
+
 async def preflight_cm_readthrough_editor(
-    bank_name: Optional[str], fiscal_year: int, quarter: str
+    bank_name: Optional[str],
+    fiscal_year: int,
+    quarter: str,
+    use_latest: bool = False,
 ) -> Dict[str, Any]:
     """Validate requested banks' NAS/XML availability without calling the LLM."""
     requested_banks = _resolve_requested_banks(bank_name)
@@ -974,6 +1360,7 @@ async def preflight_cm_readthrough_editor(
         "bank_filter": bank_name,
         "fiscal_year": fiscal_year,
         "quarter": quarter,
+        "use_latest": use_latest,
         "requested_banks": len(requested_banks),
         "ok_banks": 0,
         "failed_banks": 0,
@@ -992,9 +1379,33 @@ async def preflight_cm_readthrough_editor(
                 "bank_type": bank_info["bank_type"],
                 "ok": False,
                 "failure": None,
+                "requested_fiscal_year": fiscal_year,
+                "requested_quarter": quarter,
             }
             try:
-                xml_result = find_transcript_xml(nas_conn, bank_info, fiscal_year, quarter)
+                transcript_year = fiscal_year
+                transcript_quarter = quarter
+                if use_latest:
+                    latest_period = await find_latest_available_quarter(
+                        bank_id=int(bank_info["bank_id"]),
+                        min_fiscal_year=fiscal_year,
+                        min_quarter=quarter,
+                        bank_name=bank_info["bank_name"],
+                    )
+                    if latest_period is None:
+                        status["failure"] = "no transcript availability in database"
+                        summary["statuses"].append(status)
+                        continue
+                    transcript_year, transcript_quarter = latest_period
+                status["source_fiscal_year"] = transcript_year
+                status["source_quarter"] = transcript_quarter
+
+                xml_result = find_transcript_xml(
+                    nas_conn,
+                    bank_info,
+                    transcript_year,
+                    transcript_quarter,
+                )
                 if xml_result is None:
                     status["failure"] = "no transcript data on NAS"
                 else:
@@ -1083,6 +1494,12 @@ def main():
     parser.add_argument("--year", type=int, help="Fiscal year")
     parser.add_argument("--quarter", choices=["Q1", "Q2", "Q3", "Q4"], help="Quarter")
     parser.add_argument(
+        "--use-latest",
+        action="store_true",
+        help="Use the latest available transcript period at or after --year/--quarter.",
+    )
+    parser.add_argument("--output", type=str, help="Optional DOCX output file path.")
+    parser.add_argument(
         "--preflight",
         action="store_true",
         help="Validate bank config, NAS transcript, and XML parseability without calling the LLM.",
@@ -1111,7 +1528,12 @@ def main():
         scope_label = args.bank or "all monitored banks"
         print(f"\n🔍 Preflight check: {scope_label} {args.quarter} {args.year}\n")
         status = asyncio.run(
-            preflight_cm_readthrough_editor(bank_name=args.bank, fiscal_year=args.year, quarter=args.quarter)
+            preflight_cm_readthrough_editor(
+                bank_name=args.bank,
+                fiscal_year=args.year,
+                quarter=args.quarter,
+                use_latest=args.use_latest,
+            )
         )
         print(f"  requested_banks: {status['requested_banks']}")
         print(f"  ok_banks: {status['ok_banks']}")
@@ -1119,17 +1541,30 @@ def main():
         for bank_status in status["statuses"]:
             bank_label = f"{bank_status['bank_symbol']} ({bank_status['bank_name']})"
             outcome = "OK" if bank_status["ok"] else f"FAIL: {bank_status['failure']}"
-            print(f"  - {bank_label}: {outcome}")
+            source_period = ""
+            if "source_fiscal_year" in bank_status and "source_quarter" in bank_status:
+                source_period = (
+                    f" [{bank_status['source_quarter']} {bank_status['source_fiscal_year']}]"
+                )
+            print(f"  - {bank_label}: {outcome}{source_period}")
         sys.exit(0 if status["failed_banks"] == 0 else 1)
 
     try:
         result = asyncio.run(
-            generate_cm_readthrough_editor(bank_name=args.bank, fiscal_year=args.year, quarter=args.quarter)
+            generate_cm_readthrough_editor(
+                bank_name=args.bank,
+                fiscal_year=args.year,
+                quarter=args.quarter,
+                use_latest=args.use_latest,
+                output_path=args.output,
+            )
         )
         print(
-            f"✅ Complete: {result.filepath}\n"
+            f"✅ Complete: {result.html_filepath or result.filepath}\n"
+            f"   DOCX: {result.docx_filepath}\n"
             f"   Banks: {result.banks_included}/{result.banks_requested} included "
-            f"({result.banks_with_findings} with selected findings, {result.skipped_banks} skipped)\n"
+            f"({result.banks_with_findings} with selected findings, "
+            f"{result.skipped_banks} skipped)\n"
             f"   Categories: {result.included_categories}/{result.total_categories} included\n"
             f"   LLM cost: ${result.total_cost:.4f}, Tokens: {result.total_tokens:,}"
         )

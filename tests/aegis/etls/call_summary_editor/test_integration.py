@@ -143,6 +143,11 @@ def _setup_mocks():
         new_callable=AsyncMock,
         return_value=None,
     )
+    patches["save_docx"] = patch(
+        "aegis.etls.call_summary_editor.main._save_legacy_docx_report_to_database",
+        new_callable=AsyncMock,
+        return_value=None,
+    )
     return patches
 
 
@@ -161,15 +166,21 @@ class TestGenerateCallSummaryIntegration:
             assert result.included_categories == 1
             assert result.total_categories == 1
             assert result.filepath.endswith(".html")
+            assert result.html_filepath.endswith(".html")
+            assert result.docx_filepath.endswith(".docx")
             assert os.path.exists(result.filepath)
+            assert os.path.exists(result.docx_filepath)
 
             managers["save"].assert_called_once()
+            managers["save_docx"].assert_called_once()
             managers["find_xml"].assert_called_once()
         finally:
             for patcher in patches.values():
                 patcher.stop()
             if "result" in locals() and os.path.exists(result.filepath):
                 os.remove(result.filepath)
+            if "result" in locals() and os.path.exists(result.docx_filepath):
+                os.remove(result.docx_filepath)
 
     @pytest.mark.asyncio
     async def test_auth_failure_returns_error(self):
@@ -220,7 +231,10 @@ def test_benchmark_cli_outputs_json(tmp_path, monkeypatch, capsys):
     predicted_path = tmp_path / "predicted.json"
     expected_path = tmp_path / "expected.json"
     predicted_path.write_text(
-        '[{"sid":"md_1","selected_bucket_id":"bucket_0","status":"selected","parent_record_id":"RY-CA_MD_1"}]',
+        (
+            '[{"sid":"md_1","selected_bucket_id":"bucket_0",'
+            '"status":"selected","parent_record_id":"RY-CA_MD_1"}]'
+        ),
         encoding="utf-8",
     )
     expected_path.write_text(

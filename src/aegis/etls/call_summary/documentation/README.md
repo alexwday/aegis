@@ -4,7 +4,8 @@ The Call Summary ETL can be executed directly via command line for a specific ba
 
 | Method | Command | Description |
 |--------|---------|-------------|
-| **Direct Command Line** | `python -m aegis.etls.call_summary.main --bank RY --year 2025 --quarter Q2` | Run the ETL for a specific bank and quarter directly from the command line. |
+| **Direct Command Line** | `python -m aegis.etls.call_summary --bank RY --year 2025 --quarter Q2` | Run the ETL for a specific bank and quarter directly from the command line. |
+| **Recall Benchmark** | `python -m aegis.etls.call_summary benchmark --predicted output/RY-CA_2025_Q2_call_summary_editor.html --expected expected_items.json` | Score predicted evidence against analyst-reviewed expectations and report recall / miss reasons. |
 | **Orchestrator Scheduling** | `python scripts/etl_orchestrator.py` | Automatically process all monitored institutions defined in `config/monitored_institutions.yaml`. |
 
 ### CLI Options
@@ -14,56 +15,83 @@ The Call Summary ETL can be executed directly via command line for a specific ba
 | `--bank` | Yes | string | Bank identifier — accepts bank ID, full name (e.g., `"Royal Bank of Canada"`), or symbol (e.g., `RY`) |
 | `--year` | Yes | int | Fiscal year |
 | `--quarter` | Yes | choice | Quarter: `Q1`, `Q2`, `Q3`, or `Q4` |
+| `benchmark --predicted` | Benchmark only | path | Saved report HTML or JSON payload containing predicted evidence |
+| `benchmark --expected` | Benchmark only | path | Analyst-reviewed JSON expectations |
+| `benchmark --format` | No | choice | Benchmark output format: `markdown` or `json` |
+| `benchmark --output` | No | path | Optional output file for the benchmark report |
 
 ### Examples
 
 ```bash
 # Run by bank symbol
-python -m aegis.etls.call_summary.main --bank RY --year 2025 --quarter Q3
+python -m aegis.etls.call_summary --bank RY --year 2025 --quarter Q3
 
 # Run by full bank name
-python -m aegis.etls.call_summary.main --bank "Royal Bank of Canada" --year 2025 --quarter Q3
+python -m aegis.etls.call_summary --bank "Royal Bank of Canada" --year 2025 --quarter Q3
 
 # Run by bank ID
-python -m aegis.etls.call_summary.main --bank 1 --year 2025 --quarter Q3
+python -m aegis.etls.call_summary --bank 1 --year 2025 --quarter Q3
+
+# Benchmark a saved report against analyst-reviewed expectations
+python -m aegis.etls.call_summary benchmark \
+  --predicted output/RY-CA_2025_Q3_call_summary_editor.html \
+  --expected expected_items.json \
+  --format markdown
+
+# Run browser-level UI tests against local HTML fixtures
+RUN_CALL_SUMMARY_EDITOR_BROWSER_TESTS=1 \
+python -m pytest tests/aegis/etls/call_summary/test_browser_ui.py -q
+```
+
+### Browser UI Test Notes
+
+- Browser tests do **not** require NAS access; they run against local generated HTML fixtures.
+- Install the Python dependency from `requirements.txt`, then install Chromium once with:
+
+```bash
+source venv/bin/activate
+python -m playwright install chromium
 ```
 
 
 ## Inputs
 
-The ETL requires transcript data from the database and configuration files defining categories and LLM parameters.
+The Call Summary Editor ETL resolves transcript XML from NAS, parses raw speaker blocks, and generates an interactive HTML review file while still using Aegis tables for availability checks and final report persistence.
 
 | Input | Location | Description |
 |-------|----------|-------------|
-| **aegis_transcripts table** | PostgreSQL | Parsed and chunked earnings call transcripts (MD and Q&A sections) |
-| **prompts table** | PostgreSQL | LLM prompts: `research_plan` and `category_extraction` (layer=call_summary_etl) |
+| **Transcript XML** | NAS share | Raw FactSet earnings transcript XML resolved from `bank/year/quarter` using institution type and `path_safe_name` |
 | **config.yaml** | `config/` | LLM model tiers and parameters (temperature, max_tokens) |
-| **monitored_institutions.yaml** | `config/` | Institution metadata (id, name, type) for bank type classification and orchestrator processing |
+| **monitored_institutions.yaml** | `config/` | Institution metadata including id, name, bank type, full ticker, and NAS `path_safe_name` |
 | **canadian_banks_categories.xlsx** | `config/categories/` | Category definitions for Canadian banks |
 | **us_banks_categories.xlsx** | `config/categories/` | Category definitions for US banks |
+| **NAS environment variables** | Runtime env | SMB credentials and base path (`NAS_USERNAME`, `NAS_PASSWORD`, `NAS_SERVER_IP`, `NAS_SERVER_NAME`, `NAS_SHARE_NAME`, `NAS_BASE_PATH`, `CLIENT_MACHINE_NAME`) |
 
 
 ## Process
 
-The ETL transforms raw transcript data into structured call summaries through five sequential stages.
+The ETL transforms raw transcript XML into an interactive HTML editor through six sequential stages.
 
 | Stage | Purpose | Sub-steps | Output |
 |-------|---------|-----------|--------|
-| **1. Setup & Validation** | Validate inputs and prepare execution environment before expensive LLM operations | • `get_bank_info()`: Query `aegis_data_availability` by name/symbol/ID<br>• `verify_data_availability()`: Check transcripts exist for bank-period<br>• `get_bank_type()`: Look up bank type from `monitored_institutions.yaml`<br>• `load_categories_from_xlsx()`: Load Canadian/US category Excel based on bank type<br>• `setup_authentication()` + `setup_ssl()`: OAuth token and certificates | Ensures valid bank-period combination exists and establishes secure API connections, preventing wasted compute on invalid requests |
-| **2. Transcript Retrieval** | Retrieve and format raw transcript data to provide complete context for LLM analysis | • `retrieve_full_section(sections="ALL")`: Query `aegis_transcripts` WHERE bank_id, fiscal_year, quarter<br>• `format_full_section_chunks()`: Group by speaker_block_id/qa_group_id, concatenate chunks | Provides full MD and Q&A transcript text needed for intelligent category planning and accurate content extraction |
-| **3. Research Planning** | Determine which categories apply and create targeted extraction strategies with deduplication guidance | • `load_prompt_from_db(layer="call_summary_etl", name="research_plan")`<br>• `complete_with_tools()`: LLM function call with categories list<br>• Returns `category_plans[]` with extraction_strategy and cross_category_notes (only for applicable categories) | Reduces unnecessary LLM calls by filtering non-applicable categories and establishes cross-category deduplication framework to prevent content overlap |
-| **4. Category Extraction** | Transform unstructured transcript text into organized summary statements with supporting evidence | • Loop categories: `retrieve_full_section(sections=category["transcripts_section"])` where section = MD/QA/ALL per category Excel<br>• Build `previous_summary` and `extracted_themes` from prior categories<br>• `complete_with_tools()`: LLM call with deduplication context<br>• Parse tool response: summary_statements[] with evidence[] | Produces structured category insights while dynamically preventing duplication of themes already covered in earlier categories |
-| **5. Document Generation** | Create formatted deliverables and persist results for downstream consumption | • `_generate_document()`: Create DOCX with banner, TOC, section headings<br>• Sort by report_section, add content via `add_structured_content_to_doc()`<br>• `_save_to_database()`: DELETE existing, INSERT into `aegis_reports` | Generates both human-readable Word documents for manual review and structured database records for programmatic access by Reports subagent |
+| **1. Setup & Validation** | Resolve bank metadata and prepare execution environment before transcript retrieval | • `get_bank_info_from_config()`: Resolve bank by id/name/symbol<br>• `load_categories_from_xlsx()`: Load Canadian/US category Excel based on bank type<br>• `setup_authentication()` + `setup_ssl()`: Prepare LLM auth and SSL config | Establishes secure API connections and category config before attempting NAS retrieval |
+| **2. Transcript Source Resolution** | Resolve and download the best raw transcript XML for the requested bank/period directly from NAS | • `get_nas_connection()`: Open SMB session<br>• `find_transcript_xml()`: Build NAS path from year/quarter/type/`path_safe_name`, choose best filename version<br>• `nas_download_file()`: Load XML bytes | NAS is the authoritative availability check: if the XML is not present here, the ETL fails for that bank-period |
+| **3. XML Parsing & Block Extraction** | Convert XML into structured speaker metadata and ordered transcript blocks | • `parse_transcript_xml()`: Extract title, participants, and section structure<br>• `extract_raw_blocks()`: Build MD speaker blocks and raw QA blocks with speaker/title/affiliation/type hints | Produces source-agnostic structured transcript data that can later come from NAS or S3 |
+| **4. Recall-First Evidence Extraction** | Score every MD and QA sentence as verbatim evidence with explicit review state | • `detect_qa_boundaries()`: Group indexed QA speaker blocks into exchanges via a single tool call<br>• `classify_md_block()`: Sentence-level MD evidence extraction per paragraph<br>• `classify_qa_conversation()`: Question/answer evidence extraction per exchange<br>• evidence statuses: `selected`, `candidate`, `rejected` | Produces verbatim evidence records with source ids, speaker metadata, bucket candidates, and explicit review status |
+| **5. Two-Pass Taxonomy Review** | Review mapped evidence and uncovered evidence separately to improve the taxonomy | • mapped pass: propose `update_existing` changes from already-mapped evidence<br>• uncovered pass: extract emerging topics from unmapped evidence and return `new_category` or `update_existing` proposals<br>• optional `generate_bucket_headlines()`: create headlines only from selected evidence when enabled | Produces structured `config_change_proposals` plus optional headlines while preserving emerging-topic visibility |
+| **6. HTML Generation & Persistence** | Render the interactive report and persist metadata for downstream retrieval | • `build_report_state()`: Build mock-compatible client state JSON<br>• `generate_html()`: Inject state into the HTML template copied from the mock ETL<br>• editor UI: transcript review, emerging-topics review area, config proposal drawer, report drafting controls<br>• `_save_interactive_report_to_database()`: Replace existing row and insert HTML report metadata into `aegis_reports` | Generates interactive HTML output and a database record that points downstream consumers to the report |
 
 
 ## Output
 
-The ETL generates both a formatted Word document and a database record stored in `aegis_reports` for downstream consumption.
+The ETL generates both a legacy DOCX report and an interactive HTML editor file. Full-scope runs create corresponding database records in `aegis_reports`: `call_summary` for the DOCX report and `call_summary_editor` for the HTML editor.
 
 | Output | Location | Description |
 |--------|----------|-------------|
-| **DOCX File** | `output/[SYMBOL]_[YEAR]_[QUARTER].docx` | Formatted Word document with banner, table of contents, and category sections organized by report section |
-| **Database Record** | `aegis_reports` table | Full report metadata including bank info, generation timestamp, and JSON metadata (categories processed/included/rejected) |
+| **DOCX File** | `output/[FULL_TICKER]_[YEAR]_[QUARTER]_call_summary.docx` | Legacy Call Summary report generated from the initial editor draft |
+| **HTML File** | `output/[FULL_TICKER]_[YEAR]_[QUARTER]_call_summary_editor.html` | Interactive transcript review and report-drafting HTML file using the mock editor UI |
+| **Database Records** | `aegis_reports` table | Two records for full-scope runs: `call_summary` DOCX metadata and `call_summary_editor` HTML metadata |
+| **Benchmark Report** | stdout or user-supplied `--output` path | Recall / miss-reason report comparing saved editor state with analyst-reviewed expectations |
 
 
 ## Dependencies

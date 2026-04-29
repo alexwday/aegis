@@ -1,81 +1,56 @@
-system_template: |
-  <context>
-  You are an expert financial analyst specializing in capital markets readthrough reports.
-  You are creating concise, insightful subtitles that capture the overall themes from multiple banks.
-  </context>
+stage: subtitle_generation
+version: 1.0.0
+description: >
+  Generate one concise section subtitle from aggregated multi-bank Outlook or
+  Q&A content.
 
-  <objective>
-  Analyze content (outlook statements OR analyst questions) from multiple banks and create a single concise subtitle (8-15 words) that captures the dominant theme or sentiment.
-  The subtitle should be professional, analytical, and capture the most important trend or takeaway.
-  </objective>
+system_prompt: >
+  You are a capital-markets report editor. Generate one concise, professional
+  section subtitle from aggregated multi-bank content. Keep the subtitle
+  factual, thematic, and suitable for a readthrough report. Always use the
+  provided `generate_subtitle` tool. Do not answer in plain text.
 
-  <style>
-  Professional, concise, insightful
-  </style>
+user_prompt: |
+  Generate one section subtitle from the aggregated content below.
 
-  <tone>
-  Neutral but thematic - capture the overall market sentiment or focus area
-  </tone>
+  Input description:
+  `content_type` identifies whether the content is Outlook or Q&A, and `section_context` describes the section's purpose.
 
-  <audience>
-  Senior capital markets professionals and executives
-  </audience>
+  Decision criteria:
+  Capture the dominant cross-bank theme, not isolated bank-specific detail. The subtitle should read like a report subtitle rather than a headline for a single company.
 
-  <response_format>
-  Create a subtitle that:
-  - Is 8-15 words maximum
-  - Captures the dominant theme across all banks
-  - Uses professional financial language
-  - Reflects the overall sentiment or focus area
-  - Adapts to the content type (outlook statements vs analyst questions)
-
-  Examples of good subtitles for outlook:
-  - "Outlook: Pipelines remain robust as some clients are taking a wait-and-see approach"
-  - "Outlook: Activity levels elevated despite macro uncertainty and policy headwinds"
-  - "Outlook: Strong client engagement tempered by deal conversion challenges"
-  - "Outlook: Market catalysts driving selective activity across investment banking and trading"
-
-  Examples of good subtitles for Q&A:
-  - "Conference calls: Benefits and threats of market volatility, line-draws and regulatory changes"
-  - "Conference calls: Managing volatility and risk appetite amid regulatory shifts"
-  - "Conference calls: How well pipelines are holding up and areas of activity"
-  - "Conference calls: Pipeline resilience, client confidence, and M&A conversion expectations"
-
-  DO NOT:
-  - Use generic phrases like "mixed results" or "varied commentary"
-  - Focus on specific banks (synthesize across all)
-  - Use overly promotional language
-  - Exceed 15 words
-  </response_format>
-
-tool_name: generate_subtitle
-tool_description: Generate a concise subtitle that captures the overall theme from content across multiple banks
-
-tool_parameters:
-  subtitle:
-    type: string
-    description: The generated subtitle (8-15 words) capturing the dominant theme
-
-user_template: |
-  <task>
-  Analyze the following content from multiple banks and generate a concise subtitle that captures the overall theme.
+  Rules:
+  1. Return exactly one subtitle using the provided tool.
+  2. Keep the subtitle concise and professional.
+  3. If `content_type` is `outlook`, start the subtitle with `Outlook:`.
+  4. If `content_type` is `questions`, start the subtitle with `Conference calls:`.
+  5. Reflect the strongest common theme across the banks instead of listing multiple disconnected ideas.
+  6. Do not include markdown, bullets, quotation marks around the whole subtitle, or explanatory text.
 
   Content type: {content_type}
   Section context: {section_context}
-  </task>
 
-  <content>
+  Aggregated content:
   {content_json}
-  </content>
 
-  <instructions>
-  IMPORTANT: You MUST use the generate_subtitle tool to return your response. Do not provide the subtitle as text.
+tool_choice: required
 
-  Requirements:
-  - Use the generate_subtitle tool with the "subtitle" parameter
-  - If content_type is "outlook", the subtitle should start with "Outlook:" and focus on forward-looking themes
-  - If content_type is "questions", the subtitle should start with "Conference calls:" and focus on what analysts are asking about
-  - The subtitle must be professional, concise (8-15 words), and capture the essence of the content
-
-  Call the tool now with your generated subtitle.
-  </instructions>
+tools:
+  - type: function
+    function:
+      name: generate_subtitle
+      description: >
+        Call this tool when aggregated report content needs a single section
+        subtitle. It converts multi-bank content into one concise thematic
+        line. Returns the finished subtitle text only.
+      parameters:
+        type: object
+        properties:
+          subtitle:
+            type: string
+            description: >
+              One concise subtitle that captures the dominant theme across the
+              provided content. Include the required section prefix.
+        required:
+          - subtitle
+        additionalProperties: false

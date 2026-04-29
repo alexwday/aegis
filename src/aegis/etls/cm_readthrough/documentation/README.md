@@ -1,65 +1,91 @@
 ## How to Run
 
-The CM Readthrough ETL can be executed directly via command line for a specific quarter, or scheduled via the orchestrator to process all monitored institutions automatically.
+The CM readthrough ETL can be executed directly via command line for a specific bank/quarter, or run across all monitored institutions for a consolidated report.
 
 | Method | Command | Description |
 |--------|---------|-------------|
-| **Direct Command Line** | `python -m aegis.etls.cm_readthrough.main --year 2025 --quarter Q2` | Run the ETL for a specific quarter to process all monitored banks. |
+| **Direct Command Line** | `python -m aegis.etls.cm_readthrough --bank RY --year 2025 --quarter Q2` | Run the ETL for one bank and quarter directly from the command line. |
+| **Consolidated Run** | `python -m aegis.etls.cm_readthrough --year 2025 --quarter Q2` | Run the ETL across all monitored banks and build one consolidated editor HTML report. |
+| **Recall Benchmark** | `python -m aegis.etls.cm_readthrough benchmark --predicted output/CM_Readthrough_Editor_2025_Q2_all_banks.html --expected expected_items.json` | Score predicted evidence against analyst-reviewed expectations and report recall / miss reasons. |
 | **Orchestrator Scheduling** | `python scripts/etl_orchestrator.py` | Automatically process all monitored institutions defined in `config/monitored_institutions.yaml`. |
+
+### CLI Options
+
+| Option | Required | Type | Description |
+|--------|----------|------|-------------|
+| `--bank` | No | string | Optional bank identifier — accepts bank ID, full name (e.g., `"Royal Bank of Canada"`), or symbol (e.g., `RY`) |
+| `--year` | Yes | int | Fiscal year |
+| `--quarter` | Yes | choice | Quarter: `Q1`, `Q2`, `Q3`, or `Q4` |
+| `--preflight` | No | flag | Validate category config, NAS resolution, and XML parseability without calling the LLM |
+| `benchmark --predicted` | Benchmark only | path | Saved report HTML or JSON payload containing predicted evidence |
+| `benchmark --expected` | Benchmark only | path | Analyst-reviewed JSON expectations |
+| `benchmark --format` | No | choice | Benchmark output format: `markdown` or `json` |
+| `benchmark --output` | No | path | Optional output file for the benchmark report |
+
+### Examples
+
+```bash
+# Run by bank symbol
+python -m aegis.etls.cm_readthrough --bank RY --year 2025 --quarter Q3
+
+# Run all monitored banks
+python -m aegis.etls.cm_readthrough --year 2025 --quarter Q3
+
+# Run by full bank name
+python -m aegis.etls.cm_readthrough --bank "Royal Bank of Canada" --year 2025 --quarter Q3
+
+# Run by bank ID
+python -m aegis.etls.cm_readthrough --bank 1 --year 2025 --quarter Q3
+
+# Validate NAS/XML availability without LLM calls
+python -m aegis.etls.cm_readthrough --preflight --year 2025 --quarter Q3
+
+# Benchmark a saved report against analyst-reviewed expectations
+python -m aegis.etls.cm_readthrough benchmark \
+  --predicted output/CM_Readthrough_Editor_2025_Q3_all_banks.html \
+  --expected expected_items.json \
+  --format markdown
+```
 
 
 ## Inputs
 
-The ETL requires transcript data from the database and configuration files defining categories and LLM parameters.
+The CM readthrough editor ETL resolves transcript XML from NAS, parses raw speaker blocks, and generates an interactive multi-bank HTML review file while still using Aegis tables for final report persistence.
 
 | Input | Location | Description |
 |-------|----------|-------------|
-| **aegis_transcripts table** | PostgreSQL | Parsed and chunked earnings call transcripts (MD and Q&A sections) |
-| **prompts table** | PostgreSQL | LLM prompts: `outlook_extraction`, `qa_extraction_dynamic`, `subtitle_generation`, and `batch_formatting` (layer=cm_readthrough_etl) |
-| **config.yaml** | `config/` | LLM model tiers and parameters (temperature, max_tokens, concurrency) |
-| **monitored_institutions.yaml** | `config/` | Institution metadata (id, name, type) for multi-bank processing |
-| **outlook_categories.xlsx** | `config/categories/` | Category definitions for outlook statement extraction |
-| **qa_market_volatility_regulatory_categories.xlsx** | `config/categories/` | Category definitions for Section 2 Q&A (Global Markets, Risk Management, Corporate Banking, Regulatory Changes) |
-| **qa_pipelines_activity_categories.xlsx** | `config/categories/` | Category definitions for Section 3 Q&A (Investment Banking/M&A, Transaction Banking) |
-
-## Runtime Standardization Controls
-
-The CM readthrough ETL now follows the same reliability/contract standards used in the other production ETLs.
-
-| Control | Location | Notes |
-|--------|----------|-------|
-| **Typed result + typed errors** | `main.py` (`CMReadthroughResult`, `CMReadthroughUserError`, `CMReadthroughSystemError`) | Runtime returns structured success metadata and classifies user vs system failures |
-| **Per-task token budgets** | `config/config.yaml` (`llm.max_tokens`) | `outlook_extraction`, `qa_extraction`, `subtitle_generation`, `batch_formatting`, plus `default` fallback |
-| **Retry/backoff policy** | `config/config.yaml` (`retry`) + `main.py` | Exponential backoff with jitter for tool-call stages |
-| **Schema validation for tool outputs** | `main.py` (Pydantic models) | Validates extraction/formatting/subtitle tool responses before use |
-| **Prompt safety** | `main.py` (`_sanitize_for_prompt`) | Escapes braces for safe `.format()` prompt injection |
-| **Observability** | `main.py` (`_accumulate_llm_cost`, `_timing_summary`) | Stage-level LLM usage and timing logs on completion |
-| **Transcript retrieval safeguards** | `transcript_utils.py` | Diagnostics only on misses; retrieval failures raise explicit runtime errors |
-| **Document validation** | `document_converter.py` (`validate_document_content`) | Prevents writing invalid/empty report documents |
+| **Transcript XML** | NAS share | Raw FactSet earnings transcript XML resolved from `bank/year/quarter` using institution type and `path_safe_name` |
+| **config.yaml** | `config/` | LLM model tiers and parameters (temperature, max_tokens) |
+| **monitored_institutions.yaml** | `config/` | Institution metadata including id, name, bank type, full ticker, and NAS `path_safe_name` |
+| **outlook_categories.xlsx** | `config/categories/` | Outlook category definitions for the first report section |
+| **qa_categories.xlsx** | `config/categories/` | Flat Q&A category definitions for the merged second report section |
+| **NAS environment variables** | Runtime env | SMB credentials and base path (`NAS_USERNAME`, `NAS_PASSWORD`, `NAS_SERVER_IP`, `NAS_SERVER_NAME`, `NAS_SHARE_NAME`, `NAS_BASE_PATH`, `CLIENT_MACHINE_NAME`) plus optional transcript-root override `CALL_SUMMARY_NAS_DATA_PATH` |
 
 
 ## Process
 
-The ETL transforms raw transcript data from multiple banks into a structured capital markets readthrough report through six sequential stages with concurrent execution.
+The ETL transforms raw transcript XML into an interactive HTML editor through six sequential stages.
 
 | Stage | Purpose | Sub-steps | Output |
 |-------|---------|-----------|--------|
-| **1. Setup & Validation** | Validate inputs and prepare execution environment before expensive LLM operations | • Load `monitored_institutions.yaml`: Get list of 20+ monitored banks for processing<br>• Load `outlook_categories.xlsx`: Category definitions for outlook extraction<br>• Load `qa_market_volatility_regulatory_categories.xlsx`: 4 category definitions for Section 2<br>• Load `qa_pipelines_activity_categories.xlsx`: 2 category definitions for Section 3<br>• `setup_authentication()` + `setup_ssl()`: OAuth token and certificates | Ensures all category definitions are loaded and establishes secure API connections for multi-bank concurrent processing |
-| **2. Parallel Extraction** | Retrieve transcripts and extract content from all monitored banks concurrently across three content types | • **Phase 1 (Parallel)**: Outlook extraction for each bank<br>&nbsp;&nbsp;- `retrieve_full_section(sections="ALL")` for MD+QA per bank<br>&nbsp;&nbsp;- `load_prompt_from_db(layer="cm_readthrough_etl", name="outlook_extraction")`<br>&nbsp;&nbsp;- `complete_with_tools()`: Returns `{has_content: bool, statements: []}`<br>• **Phase 2 (Parallel)**: Section 2 Q&A extraction for each bank<br>&nbsp;&nbsp;- `retrieve_full_section(sections="QA")` per bank<br>&nbsp;&nbsp;- `load_prompt_from_db(layer="cm_readthrough_etl", name="qa_extraction_dynamic")`<br>&nbsp;&nbsp;- `complete_with_tools()`: Returns `{has_content: bool, questions: []}`<br>• **Phase 3 (Parallel)**: Section 3 Q&A extraction for each bank<br>&nbsp;&nbsp;- Same pattern as Phase 2 with different categories<br>• Semaphore limit: max 5 concurrent banks | Produces three result sets (outlook, section2_questions, section3_questions) with automatic bank filtering via `has_content` flag, processing 20+ banks efficiently through concurrent execution |
-| **3. Aggregation & Sorting** | Consolidate results from parallel extraction phases and filter banks with no content | • `aggregate_results()`: Process 3 result sets (outlook, section2, section3)<br>• Filter by `has_content=True` to exclude banks without relevant data<br>• Organize by bank name, preserve bank_symbol for ticker display<br>• Returns 3 dictionaries: `all_outlook`, `all_section2`, `all_section3` | Creates structured dictionaries mapping bank names to their statements/questions, automatically excluding banks with no relevant capital markets content |
-| **4. Subtitle Generation** | Generate intelligent subtitles for all three sections by analyzing aggregated content | • Concurrent generation for 3 sections (outlook, section2, section3)<br>• `load_prompt_from_db(layer="cm_readthrough_etl", name="subtitle_generation")`<br>• For each section: Summarize first 3 items per bank, format as JSON<br>• `complete_with_tools()`: LLM generates concise 8-15 word subtitle capturing themes<br>• Returns subtitle strings or falls back to default if generation fails | Produces thematically coherent subtitles that reflect actual extracted content rather than generic descriptions |
-| **5. Batch Formatting** | Format all statements with HTML emphasis tags in a single LLM call (currently disabled for performance) | • `format_outlook_batch()`: Single LLM call for all banks' outlook statements<br>• `load_prompt_from_db(layer="cm_readthrough_etl", name="batch_formatting")`<br>• `complete_with_tools()`: Returns formatted statements with HTML tags<br>• **Currently disabled for performance** - using unformatted statements | When enabled, provides consistent HTML formatting (`<strong><u>`) across all statements while reducing LLM calls from N banks to 1 total |
-| **6. Document Generation** | Create formatted deliverables and persist results for downstream consumption | • `create_combined_document()`: Create DOCX with landscape orientation, dark blue headers<br>• Section 1: 2-column table (Banks/Segments, Outlook statements)<br>• Section 2: 3-column table (Bank, Category, Verbatim question with analyst)<br>• Section 3: 3-column table (Bank, Category, Verbatim question with analyst)<br>• `save_to_database()`: DELETE existing cm_readthrough report, INSERT into `aegis_reports` | Generates both human-readable Word documents for manual review and structured database records for programmatic access by Reports subagent |
+| **1. Setup & Validation** | Resolve bank metadata and prepare execution environment before transcript retrieval | • `get_bank_info_from_config()`: Resolve bank by id/name/symbol<br>• `load_categories_from_xlsx()`: Load Outlook + flat Q&A category Excel configs<br>• `setup_authentication()` + `setup_ssl()`: Prepare LLM auth and SSL config | Establishes secure API connections and category config before attempting NAS retrieval |
+| **2. Transcript Source Resolution** | Resolve and download the best raw transcript XML for the requested bank/period directly from NAS | • `get_nas_connection()`: Open SMB session<br>• `find_transcript_xml()`: Build NAS path from year/quarter/type/`path_safe_name`, choose best filename version<br>• `nas_download_file()`: Load XML bytes | NAS is the authoritative availability check: if the XML is not present here, the ETL fails for that bank-period |
+| **3. XML Parsing & Block Extraction** | Convert XML into structured speaker metadata and ordered transcript blocks | • `parse_transcript_xml()`: Extract title, participants, and section structure<br>• `extract_raw_blocks()`: Build MD speaker blocks and raw QA blocks with speaker/title/affiliation/type hints | Produces source-agnostic structured transcript data that can later come from NAS or S3 |
+| **4. QA Boundary Detection** | Group raw Q&A speaker turns into analyst-to-management conversations | • `detect_qa_boundaries()`: Group indexed QA speaker blocks into ordered conversations using the same method as `call_summary_editor` | Produces stable Q&A conversations before extraction |
+| **5. CM Extraction** | Extract capital-markets Outlook findings and capital-markets analyst questions | • bank-level Outlook extraction over all MD blocks + full QA conversations in order<br>• bank-level Q&A extraction over all QA conversations<br>• sentence-id + source-block-id linking back to transcript state | Produces transcript-grounded CM findings for each bank |
+| **6. HTML Generation & Persistence** | Render the interactive report and persist metadata for downstream retrieval | • `build_report_state()`: Build the CM editor client state JSON<br>• `generate_html()`: Inject state into the HTML template<br>• `_save_interactive_report_to_database()`: Replace existing row and insert HTML report metadata into `aegis_reports` | Generates interactive HTML output and a database record that points downstream consumers to the report |
 
 
 ## Output
 
-The ETL generates both a formatted Word document and a database record stored in `aegis_reports` for downstream consumption.
+The ETL generates both a legacy DOCX report and an interactive HTML editor file. Full-scope runs create corresponding database records in `aegis_reports`: `cm_readthrough` for the DOCX report and `cm_readthrough_editor` for the HTML editor.
 
 | Output | Location | Description |
 |--------|----------|-------------|
-| **DOCX File** | `output/CM_Readthrough_[YEAR]_[QUARTER].docx` | Formatted Word document with landscape orientation, dark blue headers, and three sections: Outlook (2-column), Section 2 Q&A (3-column), Section 3 Q&A (3-column) |
-| **Database Record** | `aegis_reports` table | Cross-bank report metadata with report_type='cm_readthrough', generation timestamp, and JSON metadata (banks_processed, banks_with_outlook/section2/section3, subtitles) |
+| **DOCX File** | `output/CM_Readthrough_[YEAR]_[QUARTER]_[SCOPE].docx` | Legacy CM Readthrough report generated from the initial editor draft |
+| **HTML File** | `output/CM_Readthrough_Editor_[YEAR]_[QUARTER]_[SCOPE].html` | Interactive consolidated CM readthrough editor HTML file |
+| **Database Records** | `aegis_reports` table | Two records for full-scope runs: `cm_readthrough` DOCX metadata and `cm_readthrough_editor` HTML metadata |
+| **Benchmark Report** | stdout or user-supplied `--output` path | Recall / miss-reason report comparing saved editor state with analyst-reviewed expectations |
 
 
 ## Dependencies
@@ -73,5 +99,5 @@ The ETL leverages core Aegis infrastructure for database access, LLM operations,
 | **Connections** | `aegis.connections.oauth_connector` | OAuth 2.0 authentication for API access |
 | **Utils** | `aegis.utils.logging` | Structured logging with execution tracking and colored output |
 | **Utils** | `aegis.utils.ssl` | SSL certificate configuration for secure API connections |
-| **Utils** | `aegis.utils.prompt_loader` | Database-based prompt retrieval and loading system |
+| **ETL** | `aegis.etls.prompt_schema` | Standard-schema prompt loader for ETL-local YAML prompt bundles |
 | **Utils** | `aegis.utils.settings` | Singleton configuration management with .env file support |

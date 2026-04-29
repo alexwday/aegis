@@ -1,12 +1,12 @@
 """Tests for interactive HTML rendering helpers."""
 
-from aegis.etls.call_summary_editor import interactive_html
-from aegis.etls.call_summary_editor.interactive_html import (
+from aegis.etls.call_summary import interactive_html
+from aegis.etls.call_summary.interactive_html import (
     build_report_state,
     generate_html,
     resolve_banner_path,
 )
-from aegis.etls.call_summary_editor.docx_export import create_call_summary_docx_from_state
+from aegis.etls.call_summary.docx_export import create_call_summary_docx_from_state
 
 
 def test_resolve_banner_path_falls_back_to_png_when_svg_is_missing(tmp_path, monkeypatch):

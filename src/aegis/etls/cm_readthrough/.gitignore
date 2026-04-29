@@ -12,3 +12,7 @@ banner.png
 *_test.py
 *_optimized.yaml
 test_*.py
+
+# Python cache
+__pycache__/
+*.pyc

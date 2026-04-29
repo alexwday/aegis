@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CM Readthrough — __PERIOD__</title>
+<title>Call Summary — __PERIOD__</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=Inter:wght@400;500;600;700;800&display=swap');
 
@@ -233,126 +233,6 @@ body{
 .tp-view-btn:hover{color:#fff;background:rgba(251,248,239,.12);border-color:rgba(251,248,239,.22)}
 .tp-view-btn.active{background:rgba(251,248,239,.18);color:#fff;border-color:rgba(251,248,239,.28)}
 .tp-view-btn svg{display:block}
-.tp-bank-btn{
-  display:inline-flex;align-items:center;gap:8px;
-  min-height:28px;max-width:min(50%, 320px);
-  padding:0 10px;
-  background:rgba(251,248,239,.06);
-  border:1px solid rgba(251,248,239,.14);
-  border-radius:999px;
-  color:rgba(251,248,239,.88);
-  cursor:pointer;
-  font-family:var(--font-sans);
-  font-size:11px;font-weight:600;
-  letter-spacing:.06em;text-transform:uppercase;
-  transition:background .15s,color .15s,border-color .15s;
-}
-.tp-bank-btn:hover{color:#fff;background:rgba(251,248,239,.12);border-color:rgba(251,248,239,.24)}
-.tp-bank-btn svg{display:block;flex-shrink:0}
-.tp-bank-btn-label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.tp-scope-btn{
-  display:inline-flex;align-items:center;justify-content:center;
-  min-height:28px;padding:0 10px;
-  background:rgba(251,248,239,.06);
-  border:1px solid rgba(251,248,239,.14);
-  border-radius:999px;
-  color:rgba(251,248,239,.88);
-  cursor:pointer;
-  font-family:var(--font-sans);
-  font-size:10.5px;font-weight:700;
-  letter-spacing:.08em;text-transform:uppercase;
-  white-space:nowrap;
-  transition:background .15s,color .15s,border-color .15s;
-}
-.tp-scope-btn:hover{color:#fff;background:rgba(251,248,239,.12);border-color:rgba(251,248,239,.24)}
-
-.tp-inline-toolbar{
-  display:flex;align-items:center;justify-content:flex-end;
-  gap:10px;padding:12px 18px 0;
-}
-.tp-inline-link{
-  background:none;border:none;padding:0;
-  color:var(--accent);cursor:pointer;
-  font-size:11.5px;font-weight:600;
-  letter-spacing:.01em;
-}
-.tp-inline-link:hover{color:var(--accent-hover);text-decoration:underline}
-
-.bank-menu{
-  position:fixed;z-index:10005;
-  width:min(420px, calc(100vw - 24px));
-  max-height:min(560px, calc(100vh - 32px));
-  background:var(--paper-2);
-  border:1px solid var(--rule-2);
-  border-radius:var(--r-lg);
-  box-shadow:var(--shadow-lg);
-  overflow:hidden;
-}
-.bank-menu-header{
-  padding:14px 16px 12px;
-  background:var(--surface-3);
-  border-bottom:1px solid var(--rule-2);
-}
-.bank-menu-title{
-  font-family:var(--font-serif);
-  font-size:16px;font-weight:700;color:var(--ink);
-}
-.bank-menu-subtitle{
-  margin-top:4px;
-  font-size:11.5px;line-height:1.5;color:var(--text-2);
-}
-.bank-menu-search{
-  width:100%;
-  margin-top:12px;
-  padding:9px 11px;
-  border:1px solid var(--rule-2);
-  border-radius:var(--r-md);
-  background:var(--paper-2);
-  color:var(--text-1);
-  font:inherit;
-}
-.bank-menu-search:focus{outline:none;border-color:var(--accent-line);box-shadow:0 0 0 3px rgba(178,90,30,.08)}
-.bank-menu-scroll{max-height:420px;overflow-y:auto;padding:8px 8px 10px}
-.bank-menu-group + .bank-menu-group{margin-top:6px}
-.bank-menu-group-title{
-  padding:8px 8px 6px;
-  font-size:10px;font-weight:700;letter-spacing:.14em;
-  color:var(--text-3);text-transform:uppercase;
-}
-.bank-menu-item{
-  width:100%;
-  display:flex;align-items:flex-start;justify-content:space-between;gap:12px;
-  padding:10px 12px;
-  border:none;border-radius:var(--r-md);
-  background:none;cursor:pointer;
-  text-align:left;
-  transition:background .12s,color .12s;
-}
-.bank-menu-item:hover{background:var(--surface-3)}
-.bank-menu-item.active{background:var(--accent-soft)}
-.bank-menu-item-main{min-width:0}
-.bank-menu-item-ticker{
-  font-size:10.5px;font-weight:700;letter-spacing:.12em;
-  color:var(--accent);text-transform:uppercase;
-}
-.bank-menu-item-name{
-  margin-top:3px;
-  font-size:12.5px;line-height:1.45;color:var(--text-1);
-}
-.bank-menu-item-count{
-  flex-shrink:0;
-  min-width:28px;height:22px;padding:0 8px;
-  display:inline-flex;align-items:center;justify-content:center;
-  border-radius:999px;
-  background:var(--surface-1);
-  color:var(--text-2);
-  font-size:11px;font-weight:700;
-}
-.bank-menu-empty{
-  padding:22px 16px;
-  text-align:center;
-  font-size:12px;font-style:italic;color:var(--text-3);
-}
 
 #tp-scroll{
   flex:1;
@@ -430,18 +310,6 @@ body{
 }
 .t-qa-q{padding:9px 12px 8px;background:var(--surface-1)}
 .t-qa-a{padding:9px 12px 8px;border-top:1px solid var(--rule-3)}
-.t-qa-toggle-row{
-  padding:8px 12px;
-  border-top:1px solid var(--rule-3);
-  background:var(--paper-2);
-}
-.t-qa-toggle{
-  background:none;border:none;padding:0;
-  color:var(--accent);cursor:pointer;
-  font-size:11px;font-weight:700;
-  letter-spacing:.01em;
-}
-.t-qa-toggle:hover{color:var(--accent-hover);text-decoration:underline}
 .qa-lbl{
   display:inline-block;
   font-size:9px;font-weight:700;
@@ -489,8 +357,6 @@ body{
   border-bottom-color:rgba(177,112,21,.5);
   color:var(--text-1);
 }
-.s-tok.s-ctx{background:transparent;border-bottom-color:transparent;color:var(--text-2)}
-.s-tok.s-ctx:hover{opacity:.9}
 .s-tok.s-excl{background:transparent;border-bottom-color:transparent;color:var(--text-3)}
 .s-tok.s-excl:hover{opacity:.65}
 
@@ -654,7 +520,6 @@ body{
    REPORT PANEL — header + paper
    ════════════════════════════════════════════════════════════════ */
 #report-panel{flex:1;display:flex;flex-direction:column;background:var(--paper);min-width:0}
-#report-panel{position:relative}
 
 #report-header{
   flex-shrink:0;
@@ -804,269 +669,21 @@ body{
 
 /* Report body + page */
 #report-body{flex:1;overflow-y:auto;padding:32px 24px 48px;background:var(--paper)}
-#report-top-btn{
-  position:absolute;right:28px;bottom:28px;z-index:8;
-  padding:9px 12px;
-  border:1px solid var(--rule-2);
-  border-radius:999px;
-  background:rgba(255,255,255,.92);
-  color:var(--ink);
-  font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
-  box-shadow:var(--shadow-md);
-  cursor:pointer;
-  transition:background .15s,border-color .15s,color .15s;
-}
-#report-top-btn:hover{background:var(--surface-3);border-color:var(--rule);color:var(--accent-hover)}
 #report-page{
+  background:var(--paper-2);
   min-height:calc(100% - 48px);
-  max-width:none;
+  border-radius:2px;
+  box-shadow:var(--shadow-md);
+  padding:56px 64px 72px;
+  max-width:820px;
   margin:0 auto;
   position:relative;
   counter-reset:report-section;
-  display:flex;
-  flex-direction:column;
-  align-items:center;
-  gap:28px;
-  background:transparent;
-  box-shadow:none;
-  padding:0;
 }
-#report-page::before{display:none}
-.rpt-sheet{
-  width:min(100%, 1120px);
-  background:var(--paper-2);
-  border-radius:2px;
-  box-shadow:var(--shadow-md);
-  position:relative;
-  overflow:hidden;
-}
-.rpt-sheet-portrait{
-  width:min(100%, 820px);
-  padding:56px 64px 72px;
-}
-.rpt-sheet-landscape{
-  padding:30px 34px 38px;
-}
-.rpt-sheet-landscape::before{
+#report-page::before{
   content:"";
-  position:absolute;
-  top:0;left:0;right:0;
-  height:3px;
+  position:absolute;top:0;left:64px;right:64px;height:3px;
   background:var(--accent);
-}
-.cm-page-header{
-  margin:0 0 20px;
-}
-.cm-main-title{
-  font-family:var(--font-serif);
-  font-size:22px;
-  font-weight:700;
-  line-height:1.2;
-  color:var(--ink);
-  letter-spacing:.002em;
-}
-.cm-section-subtitle{
-  margin-top:8px;
-  font-family:var(--font-serif);
-  font-size:12.5px;
-  font-style:italic;
-  color:var(--text-2);
-  line-height:1.55;
-}
-.cm-table{
-  width:100%;
-  border-collapse:collapse;
-  table-layout:fixed;
-  border:1px solid var(--rule-2);
-  background:var(--paper-2);
-}
-.cm-table col.cm-col-bank{width:84px}
-.cm-table col.cm-col-theme{width:220px}
-.cm-table col.cm-col-question-bank{width:84px}
-.cm-table th,
-.cm-table td{
-  border:1px solid var(--rule-2);
-  padding:10px 12px;
-  vertical-align:top;
-}
-.cm-table th{
-  background:var(--ink);
-  color:var(--text-on-ink);
-  font-family:var(--font-sans);
-  font-size:11.5px;
-  font-weight:700;
-  letter-spacing:.04em;
-  text-align:left;
-}
-.cm-table .cm-bank-cell{
-  text-align:center;
-  font-family:var(--font-sans);
-  font-size:11.5px;
-  font-weight:700;
-  color:var(--ink);
-  vertical-align:middle;
-  letter-spacing:.06em;
-}
-.cm-table .cm-theme-cell{
-  font-family:var(--font-serif);
-  font-size:13px;
-  font-weight:700;
-  color:var(--ink);
-  line-height:1.45;
-}
-.cm-outlook-cell{
-  font-size:12.5px;
-  line-height:1.6;
-}
-.cm-outlook-category + .cm-outlook-category{
-  margin-top:12px;
-  padding-top:10px;
-  border-top:1px solid var(--rule-3);
-}
-.cm-category-title{
-  font-family:var(--font-serif);
-  font-size:13px;
-  font-weight:700;
-  color:var(--ink);
-  margin:0 0 4px;
-}
-.cm-category-headline{
-  margin:0 0 6px;
-  font-family:var(--font-serif);
-  font-size:12px;
-  font-style:italic;
-  color:var(--text-2);
-  line-height:1.55;
-}
-.cm-finding.q-card,
-.cm-question-item.q-card{
-  margin:0;
-  padding:2px 44px 2px 0;
-  background:none;
-  border:none;
-  border-radius:0;
-  box-shadow:none;
-  position:relative;
-}
-.cm-finding.q-card + .cm-finding.q-card,
-.cm-question-item.q-card + .cm-question-item.q-card{
-  margin-top:6px;
-}
-.cm-finding.q-card::before,
-.cm-question-item.q-card::before{
-  display:none;
-}
-.cm-finding.q-card.q-card-selected,
-.cm-question-item.q-card.q-card-selected{
-  background:var(--selection-soft);
-  box-shadow:inset 3px 0 0 var(--selection);
-}
-.cm-finding.q-card.q-card-cat-highlighted,
-.cm-question-item.q-card.q-card-cat-highlighted{
-  background:rgba(178,90,30,.06);
-  box-shadow:inset 3px 0 0 var(--accent-line);
-}
-.cm-table .q-card-header{
-  position:absolute;
-  top:2px;
-  right:0;
-  display:flex;
-  align-items:center;
-  gap:2px;
-  opacity:0;
-  transition:opacity .12s;
-}
-.cm-table .q-card:hover .q-card-header,
-.cm-table .q-card.q-card-selected .q-card-header{
-  opacity:1;
-}
-.cm-table .q-edit,
-.cm-table .q-revert,
-.cm-table .q-del{
-  width:22px;
-  height:22px;
-  padding:0;
-  border:none;
-  background:none;
-  color:var(--text-3);
-}
-.cm-table .q-edit:hover,
-.cm-table .q-revert:hover,
-.cm-table .q-del:hover{
-  color:var(--ink);
-}
-.cm-table .q-hdr-spacer,
-.cm-table .drag-handle,
-.cm-table .fmt-toggle{display:none!important}
-.cm-score{
-  display:inline-block;
-  margin-right:6px;
-  font-size:12px;
-  font-weight:700;
-  color:#002060;
-}
-.cm-quote-line{
-  display:block;
-}
-.cm-quote-mark{
-  font-size:12px;
-  color:var(--ink);
-}
-.cm-table .q-text{
-  display:inline;
-  max-height:none;
-  overflow:visible;
-  font-family:var(--font-serif);
-  font-size:13.5px;
-  line-height:1.68;
-  letter-spacing:.003em;
-  color:var(--text-1);
-}
-.cm-inline-text{display:inline}
-.cm-table .q-text p{
-  display:inline;
-  margin:0;
-}
-.cm-table .q-text p + p::before{
-  content:" ";
-}
-.cm-table .s-tok{
-  background:none!important;
-  border-bottom:none!important;
-  padding:0!important;
-  border-radius:0!important;
-  box-shadow:none!important;
-}
-.cm-table .s-highlight{
-  background:rgba(37,99,235,.12)!important;
-  outline:none!important;
-}
-.cm-question-list{
-  display:grid;
-  gap:6px;
-}
-.cm-question-item{
-  display:flex;
-  align-items:flex-start;
-  gap:8px;
-}
-.cm-question-bullet{
-  flex-shrink:0;
-  width:10px;
-  padding-top:3px;
-  font-size:12px;
-  line-height:1;
-  color:var(--ink);
-}
-.cm-question-body{
-  min-width:0;
-  flex:1;
-}
-.cm-empty{
-  padding:18px 0 6px;
-  font-size:12px;
-  font-style:italic;
-  color:var(--text-3);
 }
 
 /* Banner cover page — shown at the top of the report paper when the banner
@@ -1286,24 +903,6 @@ body{
 .bkt-chevron.closed{transform:rotate(0deg)}
 .bkt-chevron.open{transform:rotate(180deg)}
 .bkt-quotes{padding:2px 0 2px 15px}
-.bkt-bank-group + .bkt-bank-group{
-  margin-top:14px;
-  padding-top:10px;
-  border-top:1px solid var(--rule-3);
-}
-.bkt-bank-label{
-  display:flex;align-items:center;gap:8px;
-  margin:4px 0 10px;
-  font-size:10px;font-weight:700;
-  letter-spacing:.14em;text-transform:uppercase;
-  color:var(--text-3);
-}
-.bkt-bank-label-name{
-  font-size:12px;font-weight:600;
-  letter-spacing:0;text-transform:none;
-  color:var(--ink);
-}
-.bkt-bank-quotes{display:block}
 
 /* Emerging topic review (inside modal) */
 .emg-review-panel{border:1px solid var(--rule-2);border-radius:var(--r-md);background:var(--paper-2);overflow:hidden}
@@ -1731,7 +1330,6 @@ body{
   #transcript-wrap{display:none!important}
   #tp-resize{display:none!important}
   #report-header{display:none!important}
-  #report-top-btn{display:none!important}
   #s-popover{display:none!important}
   .modal-overlay{display:none!important}
   .emg-bar{display:none!important}
@@ -1848,7 +1446,7 @@ body{
 <body>
 <div id="app">
   <div id="app-banner">
-    <span id="banner-title">Capital Markets Readthrough Editor</span>
+    <span id="banner-title">Investor Relations PM Call Summary</span>
     <span id="banner-meta"></span>
   </div>
   <div id="banner-wrap">
@@ -1890,7 +1488,6 @@ body{
                   onclick="toggleHeaderMenu('save', this)" title="Save" aria-label="Save"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg></button>
         </div>
       </div>
-      <button id="report-top-btn" type="button" onclick="scrollReportToTop()" title="Back to top">Top</button>
       <div id="report-body"><div id="report-page" class="attrib-off"></div></div>
     </div>
     <!-- Shared modal overlay. Both header buttons populate the same element
@@ -2044,150 +1641,25 @@ let _attribVisible = false;
 function toggleAttrib() {
   _attribVisible = !_attribVisible;
   document.getElementById('report-page').classList.toggle('attrib-off', !_attribVisible);
+  renderReportSections();
 }
 
-// Transcript scope is UI-only. Default view shows only CM finding blocks;
-// the alternate view expands to the full transcript for the selected bank.
-let _transcriptView = 'findings';
-let _expandedQaAnswers = new Set();
+// Transcript view mode — 'blocks' is the default (paragraph-style speaker
+// blocks) and 'findings' renders each finding as its own bullet list item
+// inside the same speaker block shell. UI chrome only, so it lives outside
+// `state` and doesn't round-trip through save/load.
+let _transcriptView = 'blocks';
 function setTranscriptView(view) {
-  if (view !== 'findings' && view !== 'full') return;
+  if (view !== 'blocks' && view !== 'findings') return;
   if (_transcriptView === view) return;
   _transcriptView = view;
   renderTranscriptBody();
 }
 
-// Flip between filtered and full transcript scopes.
+// Flip between the two transcript views. Bound to the single bullet-list
+// button in #tp-section-label — active = findings, inactive = blocks.
 function toggleTranscriptView() {
-  setTranscriptView(_transcriptView === 'findings' ? 'full' : 'findings');
-}
-
-let _bankSelectorFilter = '';
-
-function getBankTickerLabel(bankId) {
-  const bank = getCurrentBankData(bankId);
-  const raw = bank.symbol || bank.ticker || bank.full_ticker || bankId || '';
-  return String(raw).replace(/-[A-Z]{2,4}$/i, '');
-}
-
-function getBankGroupLabel(bankId) {
-  const bank = getCurrentBankData(bankId);
-  return bank.type || bank.group || 'Banks';
-}
-
-function getBankFindingCount(bankId) {
-  const bank = getCurrentBankData(bankId);
-  if (Number.isFinite(bank.finding_count)) return bank.finding_count;
-  if (Array.isArray(bank.items)) return bank.items.length;
-  return getAllSubquotes(bankId).length;
-}
-
-function getBankSelectorLabel(bankId = state && state.current_bank) {
-  const bank = getCurrentBankData(bankId);
-  const ticker = getBankTickerLabel(bankId);
-  const label = bank.selector_label || ticker || bank.company_name || bank.name || bankId || 'Bank';
-  const count = getBankFindingCount(bankId);
-  return `${label}${Number.isFinite(count) ? ` · ${count}` : ''}`;
-}
-
-function renderBankSelectorMenu() {
-  const bankIds = Object.keys(state.banks || {});
-  const filtered = bankIds.filter(id => {
-    const bank = getCurrentBankData(id);
-    const haystack = [
-      id,
-      getBankTickerLabel(id),
-      bank.company_name,
-      bank.name,
-      bank.full_ticker,
-    ].filter(Boolean).join(' ').toLowerCase();
-    return !_bankSelectorFilter || haystack.includes(_bankSelectorFilter);
-  });
-  if (!filtered.length) {
-    return `<div class="bank-menu-empty">No banks match that search.</div>`;
-  }
-
-  const groups = new Map();
-  filtered.forEach(id => {
-    const group = getBankGroupLabel(id);
-    if (!groups.has(group)) groups.set(group, []);
-    groups.get(group).push(id);
-  });
-
-  return Array.from(groups.entries())
-    .sort((a, b) => a[0].localeCompare(b[0]))
-    .map(([group, ids]) => {
-      const items = ids
-        .sort((a, b) => getBankTickerLabel(a).localeCompare(getBankTickerLabel(b)))
-        .map(id => {
-          const bank = getCurrentBankData(id);
-          return `<button type="button" class="bank-menu-item${id === state.current_bank ? ' active' : ''}"
-              onclick="selectBank('${id}')">
-            <span class="bank-menu-item-main">
-              <span class="bank-menu-item-ticker">${esc(getBankTickerLabel(id))}</span>
-              <span class="bank-menu-item-name">${esc(bank.company_name || bank.name || id)}</span>
-            </span>
-            <span class="bank-menu-item-count">${getBankFindingCount(id)}</span>
-          </button>`;
-        }).join('');
-      return `<div class="bank-menu-group">
-        <div class="bank-menu-group-title">${esc(group.replace(/_/g, ' '))}</div>
-        ${items}
-      </div>`;
-    }).join('');
-}
-
-function closeBankSelector() {
-  document.querySelectorAll('.bank-menu').forEach(menu => menu.remove());
-  document.removeEventListener('click', closeBankSelectorOnOutsideClick);
-}
-
-function closeBankSelectorOnOutsideClick(evt) {
-  if (evt.target.closest('.bank-menu') || evt.target.closest('.tp-bank-btn')) return;
-  closeBankSelector();
-}
-
-function filterBankSelector(value) {
-  _bankSelectorFilter = String(value || '').trim().toLowerCase();
-  const body = document.getElementById('bank-menu-body');
-  if (body) body.innerHTML = renderBankSelectorMenu();
-}
-
-function toggleBankSelector(btnEl) {
-  const existing = document.querySelector('.bank-menu');
-  if (existing) {
-    closeBankSelector();
-    return;
-  }
-
-  const menu = document.createElement('div');
-  menu.className = 'bank-menu';
-  menu.innerHTML = `
-    <div class="bank-menu-header">
-      <div class="bank-menu-title">Select Bank</div>
-      <div class="bank-menu-subtitle">Switch the transcript pane without changing the report layout.</div>
-      <input id="bank-menu-search" class="bank-menu-search" type="text" placeholder="Search by ticker or name"
-             value="${escAttr(_bankSelectorFilter)}" oninput="filterBankSelector(this.value)">
-    </div>
-    <div class="bank-menu-scroll" id="bank-menu-body">${renderBankSelectorMenu()}</div>
-  `;
-  document.body.appendChild(menu);
-
-  const rect = btnEl.getBoundingClientRect();
-  const menuRect = menu.getBoundingClientRect();
-  const left = Math.min(window.innerWidth - menuRect.width - 12, Math.max(12, rect.right - menuRect.width));
-  const top = Math.min(window.innerHeight - menuRect.height - 12, rect.bottom + 6);
-  menu.style.left = `${left}px`;
-  menu.style.top = `${top}px`;
-
-  setTimeout(() => {
-    document.getElementById('bank-menu-search')?.focus();
-    document.addEventListener('click', closeBankSelectorOnOutsideClick);
-  }, 0);
-}
-
-function scrollReportToTop() {
-  document.getElementById('report-body')?.scrollTo({ top: 0, behavior: 'smooth' });
+  setTranscriptView(_transcriptView === 'findings' ? 'blocks' : 'findings');
 }
 
 // ============================================================
@@ -2266,109 +1738,61 @@ function getBannerPeriodLabel() {
 }
 
 function getReportCoverMeta(bankId = state && state.current_bank) {
-  const meta = (state && state.meta) || {};
-  const coverEntity =
-    meta.cover_entity ||
-    meta.report_scope ||
-    (getReportBankIds().length > 1
-      ? `${getReportBankIds().length} Banks`
-      : ((getCurrentBankData(bankId).company_name || getCurrentBankData(bankId).name || '')));
-  return [coverEntity, getReportPeriodLabel()].filter(Boolean).join(' \u2014 ');
+  const bank = getCurrentBankData(bankId);
+  return [bank.company_name || '', getReportPeriodLabel()].filter(Boolean).join(' \u2014 ');
 }
 
 function getReportCoverTitle() {
-  return (((state || {}).meta || {}).report_title) || 'Capital Markets Readthrough';
-}
-
-function getCmMainTitle() {
-  const meta = ((state || {}).meta) || {};
-  if (meta.cm_main_title) return meta.cm_main_title;
-  const fq = meta.fiscal_quarter || '';
-  const fy = String(meta.fiscal_year || '');
-  const shortYear = fy.length === 4 ? fy.slice(2) : fy;
-  return fq && shortYear
-    ? `Read Through For Capital Markets: ${fq}/${shortYear} Select Banks`
-    : getReportCoverTitle();
-}
-
-function getSectionSubtitle(sectionName) {
-  const meta = ((state || {}).meta) || {};
-  const sectionSubtitles = meta.section_subtitles || {};
-  if (sectionName === 'Outlook') {
-    return sectionSubtitles.outlook || sectionSubtitles.Outlook || 'Outlook: Capital markets activity';
-  }
-  if (sectionName === 'Q&A') {
-    return (
-      sectionSubtitles.qa ||
-      sectionSubtitles['Q&A'] ||
-      'Conference calls: Capital markets questions'
-    );
-  }
-  return sectionSubtitles[sectionName] || '';
-}
-
-function getBucketDisplayTitle(bucket) {
-  return (((state || {}).bucket_user_titles || {})[bucket.id] || bucket.name || '').trim();
+  return 'PM Call Summary';
 }
 
 function getReportExportTitle(bankId = state && state.current_bank) {
   return [getReportCoverMeta(bankId), getReportCoverTitle()].filter(Boolean).join(' \u2014 ');
 }
 
-function normalizeSectionName(name) {
-  const raw = String(name || '').trim();
-  return raw || 'Q&A';
-}
-
-function getReportBankIds() {
-  return (state && state.report_bank_order && state.report_bank_order.length)
-    ? state.report_bank_order
-    : Object.keys((state && state.banks) || {});
-}
-
-function getOrderedSections() {
-  const sectionRank = {'Outlook': 0, 'Q&A': 1, 'Other': 2};
+function getOrderedSections(bankId = state && state.current_bank) {
+  const sectionRank = {'Results Summary': 0, 'Earnings Call Q&A': 1, 'Other': 2};
   const sectionOrder = [...new Set(
     state.buckets
-      .filter(bucket => getReportBankIds().some(bankId => getReportSubquotes(bankId, bucket.id).length > 0))
-      .map(bucket => normalizeSectionName(bucket.report_section))
+      .filter(bucket => getReportSubquotes(bankId, bucket.id).length > 0)
+      .map(bucket => bucket.report_section || 'Results Summary')
   )].sort((a, b) => (sectionRank[a] ?? 99) - (sectionRank[b] ?? 99) || a.localeCompare(b));
   return sectionOrder.map(secName => ({
     name: secName,
     buckets: state.buckets.filter(bucket =>
-      normalizeSectionName(bucket.report_section) === secName &&
-      getReportBankIds().some(bankId => getReportSubquotes(bankId, bucket.id).length > 0)
+      (bucket.report_section || 'Results Summary') === secName &&
+      getReportSubquotes(bankId, bucket.id).length > 0
     ),
   })).filter(s => s.buckets.length);
-}
-
-function getReportBucketGroups(bucketId) {
-  return getReportBankIds().map(bankId => ({
-    bankId,
-    quotes: getReportSubquotes(bankId, bucketId).map(sq => ({ ...sq, bank_id: bankId })),
-  })).filter(group => group.quotes.length > 0);
 }
 
 function renderTabs() {
   const bar = document.getElementById('tab-bar');
   const meta = document.getElementById('banner-meta');
   const period = getBannerPeriodLabel();
+  const bankIds = Object.keys(state.banks);
   const currentBank = getCurrentBankData();
-  const bankName = currentBank.company_name || currentBank.name || '';
+  const bankName = currentBank.company_name || '';
 
   if (meta) {
     meta.innerHTML = bankName
       ? `<span class="banner-sep"></span>${esc(bankName)}${period ? `<span class="banner-period">${esc(period)}</span>` : ''}`
       : '';
   }
-  bar.style.display = 'none';
-  bar.innerHTML = '';
+
+  if (bankIds.length > 1) {
+    bar.style.display = '';
+    bar.innerHTML = bankIds.map(id =>
+      `<button class="tab-btn${id === state.current_bank ? ' active' : ''}" onclick="selectBank('${id}')">
+         ${esc(state.banks[id].company_name)}</button>`
+    ).join('');
+  } else {
+    bar.style.display = 'none';
+    bar.innerHTML = '';
+  }
 }
 function selectBank(id) {
-  state.current_bank = id;
-  closeBankSelector();
-  renderTabs();
-  renderCurrentBank();
+  state.current_bank = id; renderTabs(); renderCurrentBank();
 }
 function renderCurrentBank() {
   renderTranscriptPanel(); renderReportPanel();
@@ -2467,13 +1891,6 @@ function scrollToFirstHighlightedSentence() {
 // the transcript lands on the exact text they pointed at. Otherwise fall
 // back to the first sentence of the finding.
 function scrollTranscriptToFinding(card, preferredSentEl) {
-  const bankId = card.dataset.bankId || state.current_bank;
-  const sqId = card.dataset.subquoteId || '';
-  const sq = getAllSubquotes(bankId).find(item => item.id === sqId);
-  if (sq && sq.type === 'qa' && sq.render_mode !== 'question' && sq.conv_id) {
-    _expandedQaAnswers.add(sq.conv_id);
-    renderTranscriptPanel();
-  }
   const sentEl = preferredSentEl || card.querySelector('.s-tok[data-sid]');
   if (!sentEl) return;
   const sid = sentEl.dataset.sid;
@@ -2491,18 +1908,11 @@ function handleReportCardClick(e) {
   const card = e.target.closest('.q-card');
   if (!card) return;
   const clickedSent = e.target.closest('.s-tok[data-sid]');
-  const bankId = card.dataset.bankId || state.current_bank;
-  if (state.current_bank !== bankId) {
-    state.current_bank = bankId;
-    renderTabs();
-    renderTranscriptPanel();
-  }
   // Toggle single-finding selection: clicking the same card a second time
   // clears it, matching the "click to un-highlight" feel of the category
   // highlighter icon.
   const sqId = card.dataset.subquoteId;
-  const isSame = state.selected_subquote_id === sqId && state.selected_subquote_bank_id === bankId;
-  setSelectedFinding(isSame ? null : sqId, isSame ? null : bankId);
+  setSelectedFinding(state.selected_subquote_id === sqId ? null : sqId);
   scrollTranscriptToFinding(card, clickedSent);
 }
 
@@ -2524,13 +1934,12 @@ let _selectedFindingSids = null;
 // changes when the user explicitly selects a different finding (or clicks the
 // same one again). We update DOM classes directly to avoid a full re-render
 // that would tear down the sortable instances on every click.
-function setSelectedFinding(sqId, bankId = state.current_bank) {
+function setSelectedFinding(sqId) {
   state.selected_subquote_id = sqId || null;
-  state.selected_subquote_bank_id = sqId ? bankId : null;
 
   // Refresh the sid cache so transcript borders track the new selection.
   if (state.selected_subquote_id) {
-    const sq = getAllSubquotes(bankId)
+    const sq = getAllSubquotes(state.current_bank)
       .find(s => s.id === state.selected_subquote_id);
     _selectedFindingSids = sq ? new Set(getSubquoteSentenceIds(sq)) : null;
   } else {
@@ -2541,9 +1950,7 @@ function setSelectedFinding(sqId, bankId = state.current_bank) {
   document.querySelectorAll('.q-card.q-card-selected')
     .forEach(el => el.classList.remove('q-card-selected'));
   if (state.selected_subquote_id) {
-    const card = document.querySelector(
-      `.q-card[data-subquote-id="${state.selected_subquote_id}"][data-bank-id="${state.selected_subquote_bank_id}"]`
-    );
+    const card = document.querySelector(`.q-card[data-subquote-id="${state.selected_subquote_id}"]`);
     if (card) card.classList.add('q-card-selected');
   }
 
@@ -2605,43 +2012,7 @@ function bucketLabel(bucket) {
 
 function bucketAppliesTo(bucket, transcriptSection) {
   const applies = (bucket && bucket.transcript_sections) || 'ALL';
-  if (applies === 'MD_QA_ANSWER') {
-    return transcriptSection === 'MD' || transcriptSection === 'QA_ANSWER';
-  }
-  if (applies === 'QA_QUESTION') {
-    return transcriptSection === 'QA_QUESTION';
-  }
   return applies === 'ALL' || applies === transcriptSection;
-}
-
-function getSentenceBucketIds(sent, bankId = state.current_bank) {
-  const ids = new Set();
-  if (!sent) return [];
-  const primary = effectivePrimary(sent.sid, bankId);
-  if (primary) ids.add(primary);
-  if (sent.selected_bucket_id) ids.add(sent.selected_bucket_id);
-  if (sent.primary) ids.add(sent.primary);
-  (sent.candidate_bucket_ids || []).forEach(id => { if (id) ids.add(id); });
-  return [...ids];
-}
-
-function sentenceHasBucketInReportSection(sent, reportSection, bankId = state.current_bank) {
-  return getSentenceBucketIds(sent, bankId).some(id => {
-    const bucket = getBucket(id);
-    return (bucket.report_section || '') === reportSection;
-  });
-}
-
-function getQuestionFindingSentences(conv, bankId = state.current_bank) {
-  return (conv && conv.question_sentences || []).filter(sent =>
-    sentenceHasBucketInReportSection(sent, 'Q&A', bankId)
-  );
-}
-
-function getAnswerFindingSentences(conv, bankId = state.current_bank) {
-  return (conv && conv.answer_sentences || []).filter(sent =>
-    sentenceHasBucketInReportSection(sent, 'Outlook', bankId)
-  );
 }
 
 function getSentenceContext(sid) {
@@ -2652,21 +2023,11 @@ function getSentenceContext(sid) {
     }
   }
   for (const conv of (bank.qa_conversations || [])) {
-    const questionSentence = (conv.question_sentences || []).find(s => s.sid === sid);
-    if (questionSentence) {
-      return {
-        transcriptSection:'QA_QUESTION',
-        editable: sentenceHasBucketInReportSection(questionSentence, 'Q&A'),
-        role:'qa_question',
-      };
+    if ((conv.question_sentences || []).some(s => s.sid === sid)) {
+      return {transcriptSection:'QA', editable:false, role:'qa_question'};
     }
-    const answerSentence = (conv.answer_sentences || []).find(s => s.sid === sid);
-    if (answerSentence) {
-      return {
-        transcriptSection:'QA_ANSWER',
-        editable: sentenceHasBucketInReportSection(answerSentence, 'Outlook'),
-        role:'qa_answer',
-      };
+    if ((conv.answer_sentences || []).some(s => s.sid === sid)) {
+      return {transcriptSection:'QA', editable:true, role:'qa_answer'};
     }
   }
   return {transcriptSection:'ALL', editable:false, role:'unknown'};
@@ -2701,7 +2062,7 @@ function createBucketFromRow(row, options={}) {
   const bucket = {
     id: bucketId,
     name: (row.category_name || '').trim(),
-    report_section: row.report_section || 'Outlook',
+    report_section: row.report_section || 'Results Summary',
     transcript_sections: row.transcript_sections || 'ALL',
     description: row.category_description || '',
     color_bg: colors.bg,
@@ -2713,8 +2074,8 @@ function createBucketFromRow(row, options={}) {
   return bucket;
 }
 
-function getSentenceReviewStatus(sid, bankId = state.current_bank) {
-  const bs = getBankState(bankId);
+function getSentenceReviewStatus(sid) {
+  const bs = getBankState(state.current_bank);
   if (bs.sentence_status_overrides && bs.sentence_status_overrides[sid]) {
     return bs.sentence_status_overrides[sid];
   }
@@ -2722,16 +2083,16 @@ function getSentenceReviewStatus(sid, bankId = state.current_bank) {
   return (sent && sent.status) || 'candidate';
 }
 
-function setSentenceReviewStatus(sids, status, bankId = state.current_bank) {
-  const bs = getBankState(bankId);
+function setSentenceReviewStatus(sids, status) {
+  const bs = getBankState(state.current_bank);
   if (!bs.sentence_status_overrides) bs.sentence_status_overrides = {};
   (Array.isArray(sids) ? sids : [sids]).forEach(sid => {
     bs.sentence_status_overrides[sid] = status;
   });
 }
 
-function effectivePrimary(sid, bankId = state.current_bank) {
-  const bs = getBankState(bankId);
+function effectivePrimary(sid) {
+  const bs = getBankState(state.current_bank);
   return (bs.sentence_user_primary && bs.sentence_user_primary[sid]) ||
          findSentence(sid)?.selected_bucket_id ||
          findSentence(sid)?.primary || '';
@@ -2747,12 +2108,16 @@ function computeIncludedSids(bankId) {
   const bank = state.banks[bankId] || {};
   (bank.md_blocks || []).forEach(blk => {
     (blk.sentences || []).forEach(sent => {
-      if (getSentenceReviewStatus(sent.sid, bankId) === 'selected') inc.add(sent.sid);
+      if (getSentenceReviewStatus(sent.sid) === 'selected') inc.add(sent.sid);
     });
   });
+  // Analyst question sentences are deliberately omitted from the inclusion
+  // set. They are context-only (status="context") and never become a finding
+  // on their own; the analyst_question_summary on the conversation provides
+  // the prefix line that contextualises the executive findings.
   (bank.qa_conversations || []).forEach(conv => {
-    [...getQuestionFindingSentences(conv, bankId), ...getAnswerFindingSentences(conv, bankId)].forEach(sent => {
-      if (getSentenceReviewStatus(sent.sid, bankId) === 'selected') {
+    (conv.answer_sentences || []).forEach(sent => {
+      if (getSentenceReviewStatus(sent.sid) === 'selected') {
         inc.add(sent.sid);
       }
     });
@@ -2778,25 +2143,16 @@ function tSpansWithParas(sentences, btype, inc) {
   return html;
 }
 
-function getConversationFindingSentences(conv) {
-  if (!conv) return [];
-  return [
-    ...getQuestionFindingSentences(conv, state.current_bank),
-    ...getAnswerFindingSentences(conv, state.current_bank),
-  ];
-}
-
-function getSubquoteFindingSentences(sq) {
-  if (!sq) return [];
-  if (sq.type === 'md') return sq.sentences || [];
-  return sq.render_mode === 'question'
-    ? (sq.question_sentences || [])
-    : (sq.answer_sentences || []);
-}
-
-// Body text for a speaker block / QA turn. The layout stays in speaker-block
-// form for CM editor; only the block set changes between filtered and full.
+// Body text for a speaker block / QA turn, routed by the transcript view mode.
+// Blocks view keeps the paragraph layout; findings view renders each finding
+// (each entry in `sentences` is a finding record) as its own <li>.
 function tFindingsBody(sentences, btype, inc) {
+  if (_transcriptView === 'findings') {
+    if (!sentences || !sentences.length) return '';
+    return '<ul class="t-findings-list">'
+      + sentences.map(s => `<li>${tSpan(s, btype, inc)}</li>`).join('')
+      + '</ul>';
+  }
   return tSpansWithParas(sentences, btype, inc);
 }
 
@@ -2805,13 +2161,7 @@ function tSpan(sent, blockType, inc) {
   const bid = effectivePrimary(sent.sid);
   const isQa = blockType === 'qa';
   const status = getSentenceReviewStatus(sent.sid);
-  const cls = status === 'selected'
-    ? 's-incl'
-    : status === 'candidate'
-      ? 's-cand'
-      : status === 'context'
-        ? 's-ctx'
-        : 's-excl';
+  const cls = status === 'selected' ? 's-incl' : status === 'candidate' ? 's-cand' : 's-excl';
   const matchesHighlightedBucket = !!(
     state.highlighted_bucket_id && (
       bid === state.highlighted_bucket_id ||
@@ -2853,18 +2203,12 @@ function sentenceSpan(sent, blockType) {
 function renderTranscriptBodyBlocks() {
   const bank = state.banks[state.current_bank];
   const inc = computeIncludedSids(state.current_bank);
-  const visibleMdBlocks = _transcriptView === 'full'
-    ? (bank.md_blocks || [])
-    : (bank.md_blocks || []).filter(blk => blk.has_findings);
-  const visibleQaConversations = _transcriptView === 'full'
-    ? (bank.qa_conversations || [])
-    : (bank.qa_conversations || []).filter(conv => conv.has_findings);
   let html = '';
   let firstSection = '';
-  if (visibleMdBlocks.length) {
+  if (bank.md_blocks && bank.md_blocks.length) {
     if (!firstSection) firstSection = 'Management Discussion';
     html += `<div class="t-section-header" data-section="Management Discussion">Management Discussion</div>`;
-    visibleMdBlocks.forEach(blk => {
+    bank.md_blocks.forEach(blk => {
       const sentHtml = tFindingsBody(blk.sentences, 'md', inc);
       html += `<div class="t-block">
         <div class="t-block-header"><span class="t-speaker-name">${esc(blk.speaker)}</span>
@@ -2872,27 +2216,19 @@ function renderTranscriptBodyBlocks() {
         <div class="t-block-text">${sentHtml}</div></div>`;
     });
   }
-  if (visibleQaConversations.length) {
+  if (bank.qa_conversations && bank.qa_conversations.length) {
     if (!firstSection) firstSection = 'Questions & Answers';
     html += `<div class="t-section-header" data-section="Questions &amp; Answers">Questions &amp; Answers</div>`;
-    visibleQaConversations.forEach((conv, ci) => {
+    bank.qa_conversations.forEach((conv, ci) => {
       html += renderQAConvBlocks(conv, inc, ci);
     });
   }
-  if (!visibleMdBlocks.length && !visibleQaConversations.length) {
-    html += `<div class="t-block"><div class="t-block-text">No capital markets findings were extracted for this bank. Use "Show full transcript" to review the full call.</div></div>`;
-    firstSection = 'Transcript';
-  }
   const tb = document.getElementById('transcript-body');
-  const bankLabel = getBankSelectorLabel();
-  const scopeLabel = _transcriptView === 'findings' ? 'Show full transcript' : 'Show findings only';
+  const findingsOn = _transcriptView === 'findings';
+  const btnTitle = findingsOn ? 'Switch to speaker blocks view' : 'Switch to findings list view';
   tb.innerHTML = `<div id="tp-section-label">`
     + `<span id="tp-section-text">${esc(firstSection)}</span>`
-    + `<button type="button" class="tp-scope-btn" onclick="toggleTranscriptView()" title="${escAttr(scopeLabel)}" aria-label="${escAttr(scopeLabel)}">${esc(scopeLabel)}</button>`
-    + `<button type="button" class="tp-bank-btn" onclick="toggleBankSelector(this)" title="Select bank" aria-label="Select bank">`
-    + `<span class="tp-bank-btn-label">${esc(bankLabel)}</span>`
-    + `<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>`
-    + `</button>`
+    + `<button type="button" class="tp-view-btn${findingsOn ? ' active' : ''}" onclick="toggleTranscriptView()" title="${btnTitle}" aria-label="${btnTitle}" aria-pressed="${findingsOn}">${VIEW_FINDINGS_SVG}</button>`
     + `</div><div id="tp-scroll">${html}</div>`;
   bindTpSectionLabelScroll();
 }
@@ -2922,9 +2258,31 @@ function bindTpSectionLabelScroll() {
 }
 
 // Build the per-turn rows for the Blocks view, preserving the back-and-forth
-// order of the original transcript.
+// order of the original transcript. Falls back to the legacy
+// question_sentences/answer_sentences split when an older saved state has no
+// `turns` array (e.g. a report rendered before turn ordering was added).
 function _qaConvTurns(conv) {
-  return Array.isArray(conv.turns) ? conv.turns : [];
+  if (Array.isArray(conv.turns) && conv.turns.length) return conv.turns;
+  const turns = [];
+  if ((conv.question_sentences || []).length) {
+    turns.push({
+      role: 'q',
+      speaker: conv.analyst_name || 'Analyst',
+      speaker_title: '',
+      speaker_affiliation: conv.analyst_affiliation || '',
+      sentences: conv.question_sentences,
+    });
+  }
+  if ((conv.answer_sentences || []).length) {
+    turns.push({
+      role: 'a',
+      speaker: conv.executive_name || 'Executive',
+      speaker_title: conv.executive_title || '',
+      speaker_affiliation: '',
+      sentences: conv.answer_sentences,
+    });
+  }
+  return turns;
 }
 
 function _qaTurnLabel(turn) {
@@ -2977,13 +2335,6 @@ function getSubquoteSpeakerMeta(sq) {
       affiliation: sq.speaker_affiliation || '',
     };
   }
-  if (sq.render_mode === 'question') {
-    return {
-      name: sq.analyst_name || 'Analyst',
-      title: '',
-      affiliation: sq.analyst_affiliation || '',
-    };
-  }
   return {
     name: sq.executive_name || 'Executive',
     title: sq.executive_title || '',
@@ -3030,12 +2381,6 @@ function clusterSubquotesBySpeaker(quotes) {
   });
 }
 
-function toggleQaAnswer(convId) {
-  if (_expandedQaAnswers.has(convId)) _expandedQaAnswers.delete(convId);
-  else _expandedQaAnswers.add(convId);
-  renderTranscriptBody();
-}
-
 function buildSpeakerBatchMeta(quotes) {
   const meta = new Map();
   quotes.forEach((sq, idx) => {
@@ -3057,11 +2402,7 @@ function buildSpeakerBatchMeta(quotes) {
 
 function renderQAConvBlocks(conv, inc, convIdx) {
   const turns = _qaConvTurns(conv);
-  const questionTurns = turns.filter(turn => turn.role === 'q');
-  const answerTurns = turns.filter(turn => turn.role === 'a');
-  const showAnswers = _expandedQaAnswers.has(conv.id);
-  const visibleTurns = showAnswers || !questionTurns.length ? turns : questionTurns;
-  const turnsHtml = visibleTurns.map(turn => {
+  const turnsHtml = turns.map(turn => {
     const label = _qaTurnLabel(turn);
     const sentHtml = tFindingsBody(turn.sentences || [], 'qa', inc);
     const cls = turn.role === 'q' ? 't-qa-q' : 't-qa-a';
@@ -3070,12 +2411,9 @@ function renderQAConvBlocks(conv, inc, convIdx) {
     return `<div class="${cls}"><span class="qa-lbl ${lblCls}">${lblText}</span><span class="qa-person">${esc(label)}</span>
       <div class="t-qa-text">${sentHtml}</div></div>`;
   }).join('');
-  const toggleHtml = answerTurns.length
-    ? `<div class="t-qa-toggle-row"><button type="button" class="t-qa-toggle" onclick="toggleQaAnswer('${conv.id}')">${showAnswers ? 'Hide answer' : 'Show answer'}</button></div>`
-    : '';
   return `<div class="t-qa-group">
     <div class="t-qa-num-label">Question ${convIdx + 1}</div>
-    ${turnsHtml}${toggleHtml}</div>`;
+    ${turnsHtml}</div>`;
 }
 
 // ============================================================
@@ -3150,7 +2488,7 @@ function submitAddCategoryForm(evt) {
     category_name: name,
     category_description: '',
     transcript_sections: 'ALL',
-    report_section: 'Outlook',
+    report_section: 'Results Summary',
   }, {
     generated_headline: subtitle,
     source: 'suggested',
@@ -3310,12 +2648,10 @@ function highlightInReport(sid) {
   // or rejected-only sentences — so an incidental click doesn't clear the
   // user's existing selection.
   const sqId = findSubquoteIdForSid(sid);
-  if (sqId) setSelectedFinding(sqId, state.current_bank);
+  if (sqId) setSelectedFinding(sqId);
   // Briefly flash the matching sentence span in the report so the user sees
   // the cross-navigation target.
-  const match = document.querySelector(
-    `#report-body .q-card[data-bank-id="${state.current_bank}"] .s-tok[data-sid="${sid}"]`
-  );
+  const match = document.querySelector(`#report-body .s-tok[data-sid="${sid}"]`);
   if (match) {
     match.classList.add('s-highlight');
     match.scrollIntoView({behavior:'smooth', block:'center'});
@@ -3357,12 +2693,12 @@ function reassignSentence(sid, newBucketId) {
  * Group consecutive sentences with the same effective primary into sub-quotes.
  * Sub-quote ID = "SQ_" + first sentence SID.
  */
-function computeMDSubquotes(blk, bs, bankId = state.current_bank) {
+function computeMDSubquotes(blk, bs) {
   const groups = [];
   let cur = null;
 
   for (const sent of blk.sentences) {
-    if (getSentenceReviewStatus(sent.sid, bankId) !== 'selected') {
+    if (getSentenceReviewStatus(sent.sid) !== 'selected') {
       if (cur) { groups.push(cur); cur = null; }
       continue;
     }
@@ -3396,14 +2732,18 @@ function computeMDSubquotes(blk, bs, bankId = state.current_bank) {
   return groups;
 }
 
-function _computeQaSubquotesForMode(conv, bs, findings, mode, bankId) {
-  if (!findings.length) return [];
-  const questionMode = mode === 'question';
+/**
+ * For QA conversations, group consecutive answer sentences by effective bucket.
+ * The analyst question stays attached as context on each resulting sub-quote.
+ */
+function computeQASubquotes(conv, bs) {
+  const answers = conv.answer_sentences || [];
+  if (!answers.length) return [];
+
   const groups = [];
   let cur = null;
-
-  for (const sent of findings) {
-    if (getSentenceReviewStatus(sent.sid, bankId) !== 'selected') {
+  for (const sent of answers) {
+    if (getSentenceReviewStatus(sent.sid) !== 'selected') {
       if (cur) {
         delete cur._speaker_key;
         groups.push(cur);
@@ -3416,13 +2756,7 @@ function _computeQaSubquotesForMode(conv, bs, findings, mode, bankId) {
       sent.selected_bucket_id ||
       sent.primary ||
       '';
-    const speakerMeta = questionMode
-      ? {
-          name: conv.analyst_name || 'Analyst',
-          title: '',
-          affiliation: conv.analyst_affiliation || '',
-        }
-      : getQaAnswerSpeakerMeta(conv, sent);
+    const speakerMeta = getQaAnswerSpeakerMeta(conv, sent);
     const speakerKey = [
       speakerMeta.name,
       speakerMeta.title,
@@ -3444,7 +2778,6 @@ function _computeQaSubquotesForMode(conv, bs, findings, mode, bankId) {
       cur = {
         id: `SQ_${sent.sid}`,
         type: 'qa',
-        render_mode: questionMode ? 'question' : 'answer',
         conv_id: conv.id,
         analyst_name: conv.analyst_name,
         analyst_affiliation: conv.analyst_affiliation,
@@ -3453,17 +2786,14 @@ function _computeQaSubquotesForMode(conv, bs, findings, mode, bankId) {
         executive_affiliation: speakerMeta.affiliation,
         analyst_question_summary: conv.analyst_question_summary || '',
         effective_bucket: effectiveBucket,
-        question_sentences: questionMode ? [sent] : (conv.question_sentences || []),
-        answer_sentences: questionMode ? [] : [sent],
+        question_sentences: conv.question_sentences || [],
+        answer_sentences: [sent],
         _speaker_key: speakerKey,
       };
-    } else if (questionMode) {
-      cur.question_sentences.push(sent);
     } else {
       cur.answer_sentences.push(sent);
     }
   }
-
   if (cur) {
     delete cur._speaker_key;
     groups.push(cur);
@@ -3471,35 +2801,23 @@ function _computeQaSubquotesForMode(conv, bs, findings, mode, bankId) {
   return groups;
 }
 
-/**
- * For QA conversations, produce two finding streams:
- * - analyst-question findings for the merged Q&A report section
- * - management-answer findings for the Outlook report section
- */
-function computeQASubquotes(conv, bs, bankId = state.current_bank) {
-  return [
-    ..._computeQaSubquotesForMode(conv, bs, getQuestionFindingSentences(conv, bankId), 'question', bankId),
-    ..._computeQaSubquotesForMode(conv, bs, getAnswerFindingSentences(conv, bankId), 'answer', bankId),
-  ];
-}
-
 function getAllSubquotes(bankId) {
   const bank = state.banks[bankId];
   const bs   = getBankState(bankId);
   const result = [];
-  (bank.md_blocks || []).forEach(blk => result.push(...computeMDSubquotes(blk, bs, bankId)));
-  (bank.qa_conversations || []).forEach(conv => result.push(...computeQASubquotes(conv, bs, bankId)));
+  (bank.md_blocks || []).forEach(blk => result.push(...computeMDSubquotes(blk, bs)));
+  (bank.qa_conversations || []).forEach(conv => result.push(...computeQASubquotes(conv, bs)));
   return result;
 }
 
 function getSubquoteImportance(sq) {
-  const sents = getSubquoteFindingSentences(sq);
+  const sents = sq.type === 'md' ? sq.sentences : sq.answer_sentences;
   if (!sents || !sents.length) return 0;
   return Math.max(...sents.map(s => s.importance_score || 0));
 }
 
 function getSubquoteFormats(sq, fmt) {
-  const sents = getSubquoteFindingSentences(sq);
+  const sents = sq.type === 'md' ? sq.sentences : sq.answer_sentences;
   if (!sents) return '';
   const key = fmt === 'verbatim' ? 'text' : fmt;
   return sents.map(s => s[key] || s.text || '').join(' ').trim();
@@ -3507,18 +2825,18 @@ function getSubquoteFormats(sq, fmt) {
 
 function getSubquoteBucketScore(sq) {
   const bucketId = sq.effective_bucket;
-  const sents = getSubquoteFindingSentences(sq);
+  const sents = sq.type === 'md' ? sq.sentences : sq.answer_sentences;
   if (!bucketId || !sents || !sents.length) return 0;
   return Math.max(...sents.map(s => Number((s.scores || {})[bucketId] || 0)));
 }
 
 function getSubquoteSentenceIds(sq) {
-  const sents = getSubquoteFindingSentences(sq);
+  const sents = sq.type === 'md' ? sq.sentences : sq.answer_sentences;
   return (sents || []).map(s => s.sid);
 }
 
-function isSubquoteForceIncluded(sq, bs, bankId = sq.bank_id || state.current_bank) {
-  return getSubquoteSentenceIds(sq).some(sid => getSentenceReviewStatus(sid, bankId) === 'selected');
+function isSubquoteForceIncluded(sq, bs) {
+  return getSubquoteSentenceIds(sq).some(sid => getSentenceReviewStatus(sid) === 'selected');
 }
 
 function getReportSubquotes(bankId, bucketId) {
@@ -3526,7 +2844,7 @@ function getReportSubquotes(bankId, bucketId) {
   const all = getAllSubquotes(bankId);
   let eligible = all.filter(sq =>
     sq.effective_bucket === bucketId &&
-    getSubquoteSentenceIds(sq).some(sid => getSentenceReviewStatus(sid, bankId) === 'selected')
+    getSubquoteSentenceIds(sq).some(sid => getSentenceReviewStatus(sid) === 'selected')
   );
 
   const order = bs.bucket_subquote_order && bs.bucket_subquote_order[bucketId];
@@ -3775,7 +3093,7 @@ function renderEmergingTopicsModalBody() {
         <div class="cfg-emerging-head">
           <div>
             <div class="cfg-emerging-title">${esc(item.target_category_name || proposed.category_name || 'Emerging topic')}</div>
-            <div class="cfg-emerging-meta">${esc(proposed.report_section || 'Outlook')} · ${esc(proposed.transcript_sections || 'ALL')} · ${linkedCount} finding${linkedCount === 1 ? '' : 's'} to reassign</div>
+            <div class="cfg-emerging-meta">${esc(proposed.report_section || 'Results Summary')} · ${esc(proposed.transcript_sections || 'ALL')} · ${linkedCount} finding${linkedCount === 1 ? '' : 's'} to reassign</div>
           </div>
           <label class="cfg-enable-toggle" title="${adopted ? 'Enabled in this report' : 'Not yet enabled'}">
             <input type="checkbox" ${adopted ? 'checked' : ''}
@@ -3907,7 +3225,7 @@ function renderReportPanel() {
 function renderBannerCover() {
   const hasBanner = !!(state.banner_visible && state.banner_src);
   const metaText = getReportCoverMeta();
-  const titleText = getCmMainTitle();
+  const titleText = getReportCoverTitle();
   if (!hasBanner && !metaText && !titleText) return '';
   return `<div class="rpt-cover${hasBanner ? '' : ' rpt-cover-noimg'}">
     ${hasBanner ? `<img src="${escAttr(state.banner_src)}" alt="Banner">` : ''}
@@ -3956,178 +3274,63 @@ function renderTableOfContents(orderedSections) {
 
 function renderReportSections() {
   destroySortables();
-  const orderedSections = getOrderedSections();
+  const orderedSections = getOrderedSections(state.current_bank);
 
-  let html = `<section class="rpt-sheet rpt-sheet-portrait" id="report-top">
-    ${renderBannerCover()}
-    ${renderTableOfContents(orderedSections)}
-  </section>`;
-  orderedSections.forEach(section => {
-    html += renderCmSectionSheet(section);
+  let html = renderBannerCover();
+  html += renderTableOfContents(orderedSections);
+
+  orderedSections.forEach(({name: secName, buckets: sectionBuckets}) => {
+    const secId = 'sec_' + sanitizeId(secName);
+    html += `<div class="rpt-l1" id="${secId}">${secName}</div>`;
+
+    sectionBuckets.forEach(bucket => {
+      const quotes = getReportSubquotes(state.current_bank, bucket.id);
+      if (quotes.length === 0) return;
+      const speakerBatchMeta = buildSpeakerBatchMeta(quotes);
+
+      const userTitle = (state.bucket_user_titles || {})[bucket.id];
+      const titleVal  = userTitle != null ? userTitle : bucket.name;
+
+      // The bucket name takes its own row; the generated subtitle wraps freely
+      // on the line beneath so long titles never get truncated by the headline.
+      // The finding-count badge was removed — the count is implicit from the
+      // bullet list, and dropping it keeps the header lean. The highlight
+      // affordance now uses a highlighter-pen SVG so the action is visually
+      // unmistakable (vs the previous abstract glyph).
+      const isHighlighted = state.highlighted_bucket_id === bucket.id;
+      html += `
+<div class="bkt-section" id="bs_${bucket.id}">
+  <div class="bkt-header" onclick="toggleBucket('${bucket.id}')">
+    <div class="bkt-bar" style="background:${bucket.color_accent}"></div>
+    <div class="bkt-info">
+      <div class="bkt-name-row">
+        <input class="bkt-name-input" value="${escAttr(titleVal)}" readonly
+               onmousedown="if(this.hasAttribute('readonly'))event.preventDefault()"
+               onclick="if(!this.hasAttribute('readonly'))event.stopPropagation()"
+               ondblclick="event.stopPropagation();this.removeAttribute('readonly');this.focus();this.select()"
+               onblur="this.setAttribute('readonly','');saveBucketTitle('${bucket.id}',this.value)"
+               onkeydown="if(event.key==='Enter')this.blur()">
+        <button class="bkt-focus ${isHighlighted ? 'active' : ''}"
+                onclick="event.stopPropagation();toggleCategoryHighlight('${bucket.id}')"
+                title="Highlight this category's findings in the transcript">${HIGHLIGHTER_SVG}</button>
+      </div>
+      ${bucket.generated_headline ? `<span class="bkt-headline">${esc(bucket.generated_headline)}</span>` : ''}
+    </div>
+    <svg class="bkt-chevron open" id="bkv_${bucket.id}" viewBox="0 0 10 10"><path d="M2 4l3 3 3-3"/></svg>
+  </div>
+  <div class="bkt-quotes" id="bq_${bucket.id}" data-bucket-id="${bucket.id}">
+    ${quotes.map(sq => renderSubquoteCard(sq, bucket, speakerBatchMeta.get(sq.id) || {})).join('')}
+  </div>
+</div>`;
+    });
   });
+
   document.getElementById('report-page').innerHTML = html;
   initSortables();
 }
 
-function renderCmSectionSheet(section) {
-  const secId = 'sec_' + sanitizeId(section.name);
-  const tableHtml = section.name === 'Outlook'
-    ? renderCmOutlookTable(section.buckets)
-    : renderCmQaTable(section.buckets);
-  return `<section class="rpt-sheet rpt-sheet-landscape" id="${secId}">
-    ${renderCmPageHeader(section.name)}
-    ${tableHtml}
-  </section>`;
-}
-
-function renderCmPageHeader(sectionName) {
-  const subtitle = getSectionSubtitle(sectionName);
-  return `<div class="cm-page-header">
-    <div class="cm-main-title">${esc(getCmMainTitle())}</div>
-    ${subtitle ? `<div class="cm-section-subtitle">${esc(subtitle)}</div>` : ''}
-  </div>`;
-}
-
-function renderCmOutlookTable(sectionBuckets) {
-  const anchoredBuckets = new Set();
-  const rows = getReportBankIds().map(bankId => {
-    const categoryHtml = sectionBuckets.map(bucket => {
-      const quotes = getReportSubquotes(bankId, bucket.id).map(sq => ({ ...sq, bank_id: bankId }));
-      if (!quotes.length) return '';
-      const anchorAttr = anchoredBuckets.has(bucket.id) ? '' : ` id="bs_${bucket.id}"`;
-      anchoredBuckets.add(bucket.id);
-      return `<div class="cm-outlook-category"${anchorAttr}>
-        <div class="cm-category-title">${esc(getBucketDisplayTitle(bucket))}:</div>
-        ${bucket.generated_headline ? `<div class="cm-category-headline">${esc(bucket.generated_headline)}</div>` : ''}
-        ${quotes.map(sq => renderCmOutlookFinding(sq, bucket, bankId)).join('')}
-      </div>`;
-    }).filter(Boolean).join('');
-    if (!categoryHtml) return '';
-    return `<tr>
-      <td class="cm-bank-cell">${esc(getBankTickerLabel(bankId))}</td>
-      <td class="cm-outlook-cell">${categoryHtml}</td>
-    </tr>`;
-  }).filter(Boolean).join('');
-  if (!rows) {
-    return '<div class="cm-empty">No outlook findings selected.</div>';
-  }
-  return `<table class="cm-table cm-table-outlook">
-    <colgroup>
-      <col class="cm-col-bank">
-      <col>
-    </colgroup>
-    <thead>
-      <tr>
-        <th>Banks</th>
-        <th>Investment Banking and Trading Outlook</th>
-      </tr>
-    </thead>
-    <tbody>${rows}</tbody>
-  </table>`;
-}
-
-function renderCmQaTable(sectionBuckets) {
-  const rows = [];
-  sectionBuckets.forEach(bucket => {
-    const bankGroups = getReportBucketGroups(bucket.id);
-    bankGroups.forEach((group, idx) => {
-      rows.push(`<tr${idx === 0 ? ` id="bs_${bucket.id}"` : ''}>
-        <td class="cm-theme-cell">${idx === 0 ? esc(getBucketDisplayTitle(bucket)) : ''}</td>
-        <td class="cm-bank-cell">${esc(getBankTickerLabel(group.bankId))}</td>
-        <td>
-          <div class="cm-question-list">
-            ${group.quotes.map(sq => renderCmQaFinding(sq, bucket, group.bankId)).join('')}
-          </div>
-        </td>
-      </tr>`);
-    });
-  });
-  if (!rows.length) {
-    return '<div class="cm-empty">No Q&A findings selected.</div>';
-  }
-  return `<table class="cm-table cm-table-qa">
-    <colgroup>
-      <col class="cm-col-theme">
-      <col class="cm-col-question-bank">
-      <col>
-    </colgroup>
-    <thead>
-      <tr>
-        <th>Themes</th>
-        <th>Banks</th>
-        <th>Relevant Questions</th>
-      </tr>
-    </thead>
-    <tbody>${rows.join('')}</tbody>
-  </table>`;
-}
-
-function renderCmFindingHeaderActions(sq, bankId) {
-  const edited = !!getSubquoteTextOverride(sq.id, getBankState(bankId));
-  const revertBtnHtml = edited
-    ? `<button class="q-revert" onclick="event.stopPropagation();revertSubquoteEdit('${sq.id}', '${bankId}')" title="Revert to original text">${REVERT_SVG}</button>`
-    : '';
-  const editBtnHtml = `<button class="q-edit" onclick="event.stopPropagation();editSubquote('${sq.id}', '${bankId}')" title="Edit text">${EDIT_SVG}</button>`;
-  return `<div class="q-card-header">
-    <span class="q-hdr-spacer"></span>
-    ${editBtnHtml}
-    ${revertBtnHtml}
-    <button class="q-del" onclick="event.stopPropagation();deleteSubquote('${sq.id}', '${bankId}')" title="Remove from report">&#215;</button>
-  </div>`;
-}
-
-function renderCmOutlookFinding(sq, bucket, bankId) {
-  const cardStateCls = [];
-  if (state.highlighted_bucket_id && state.highlighted_bucket_id === bucket.id) {
-    cardStateCls.push('q-card-cat-highlighted');
-  }
-  if (state.selected_subquote_id === sq.id && state.selected_subquote_bank_id === bankId) {
-    cardStateCls.push('q-card-selected');
-  }
-  const cardClsAttr = cardStateCls.length ? ' ' + cardStateCls.join(' ') : '';
-  return `<div class="cm-finding q-card${cardClsAttr}" data-subquote-id="${sq.id}" data-bank-id="${bankId}">
-    ${renderCmFindingHeaderActions(sq, bankId)}
-    <div class="cm-quote-line">
-      <span class="cm-quote-mark">"</span><div class="q-text cm-inline-text">${renderSubquoteText(sq, 'verbatim', getBankState(bankId), bankId)}</div><span class="cm-quote-mark">"</span>
-    </div>
-  </div>`;
-}
-
-function renderCmQaFinding(sq, bucket, bankId) {
-  const cardStateCls = [];
-  if (state.highlighted_bucket_id && state.highlighted_bucket_id === bucket.id) {
-    cardStateCls.push('q-card-cat-highlighted');
-  }
-  if (state.selected_subquote_id === sq.id && state.selected_subquote_bank_id === bankId) {
-    cardStateCls.push('q-card-selected');
-  }
-  const cardClsAttr = cardStateCls.length ? ' ' + cardStateCls.join(' ') : '';
-  return `<div class="cm-question-item q-card${cardClsAttr}" data-subquote-id="${sq.id}" data-bank-id="${bankId}">
-    <span class="cm-question-bullet">&bull;</span>
-    <div class="cm-question-body">
-      ${renderCmFindingHeaderActions(sq, bankId)}
-      <div class="q-text">${renderSubquoteText(sq, 'verbatim', getBankState(bankId), bankId)}</div>
-    </div>
-  </div>`;
-}
-
-function renderBucketBankGroup(group, bucket) {
-  const bank = getCurrentBankData(group.bankId);
-  const ticker = getBankTickerLabel(group.bankId);
-  const speakerBatchMeta = buildSpeakerBatchMeta(group.quotes);
-  return `<div class="bkt-bank-group" data-bank-id="${group.bankId}">
-    <div class="bkt-bank-label">
-      <span>${esc(ticker)}</span>
-      <span class="bkt-bank-label-name">${esc(bank.company_name || bank.name || group.bankId)}</span>
-    </div>
-    <div class="bkt-bank-quotes" data-bucket-id="${bucket.id}" data-bank-id="${group.bankId}">
-      ${group.quotes.map(sq => renderSubquoteCard(sq, bucket, speakerBatchMeta.get(sq.id) || {})).join('')}
-    </div>
-  </div>`;
-}
-
 function renderSubquoteCard(sq, bucket, displayMeta = {}) {
-  const bankId = sq.bank_id || state.current_bank;
+  const bankId = state.current_bank;
   const bs     = getBankState(bankId);
   // fmt is now a 2-value toggle: 'verbatim' (off) or 'condensed' (on = summarize).
   const fmt    = (bs.subquote_formats && bs.subquote_formats[sq.id]) || 'verbatim';
@@ -4150,10 +3353,7 @@ function renderSubquoteCard(sq, bucket, displayMeta = {}) {
   const speakerMeta = getSubquoteSpeakerMeta(sq);
   const attribName = speakerMeta.name;
   const attribTitle = speakerMeta.title;
-  const attribLine = attribTitle
-    ? `${attribName}, ${attribTitle}`
-    : (speakerMeta.affiliation ? `${attribName} (${speakerMeta.affiliation})` : attribName);
-  const questionMode = !isMD && sq.render_mode === 'question';
+  const attribLine = attribTitle ? `${attribName}, ${attribTitle}` : attribName;
 
   // QA card shows the analyst question as context above the executive
   // answer text. Prefer the model-generated `analyst_question_summary` (a
@@ -4163,23 +3363,23 @@ function renderSubquoteCard(sq, bucket, displayMeta = {}) {
   // Only the first card of each QA cluster emits the eyebrow — subsequent
   // findings in the same conversation render as plain bullets beneath it.
   let qaContextHtml = '';
-  if (!isMD && !questionMode && displayMeta.showQaContext !== false) {
-    const verbatim = (sq.question_sentences || []).map(s => s.text).join(' ');
-    const summary = (sq.analyst_question_summary || '').trim();
-    const questionText = summary || verbatim;
-    const verbatimTitle = summary ? ` title="${escAttr(verbatim)}"` : '';
-    const analystName = esc(sq.analyst_name || 'Analyst');
-    const analystAffil = sq.analyst_affiliation
-      ? ` <span style="opacity:.7">(${esc(sq.analyst_affiliation)})</span>`
-      : '';
-    qaContextHtml = `
-    <div class="qa-card-q">
+  if (!isMD && displayMeta.showQaContext !== false) {
+    const qaParts = getQaContextParts(sq);
+    if (qaParts) {
+      const verbatimTitle = qaParts.hasSummary ? ` title="${escAttr(qaParts.verbatim)}"` : '';
+      const qaEyebrowHtml = qaParts.showNames
+        ? `
       <div class="qa-card-q-eyebrow">
-        <span>In response to</span>
-        <span class="qa-card-q-eyebrow-name">${analystName}${analystAffil}</span>
-      </div>
-      <div class="qa-card-q-text"${verbatimTitle}>${esc(questionText)}</div>
+        <span>${esc(qaParts.eyebrow)}</span>
+        <span class="qa-card-q-eyebrow-name">${esc(qaParts.name)}</span>
+      </div>`
+        : '';
+      qaContextHtml = `
+    <div class="qa-card-q">
+      ${qaEyebrowHtml}
+      <div class="qa-card-q-text"${verbatimTitle}>${esc(qaParts.question)}</div>
     </div>`;
+    }
   }
 
   // When the user has edited the finding, the Summarize toggle no longer
@@ -4188,16 +3388,16 @@ function renderSubquoteCard(sq, bucket, displayMeta = {}) {
   const summarizeToggleHtml = isEdited ? '' : `
     <label class="fmt-toggle" onclick="event.stopPropagation()">
       <input type="checkbox" ${summarizeOn ? 'checked' : ''}
-             onchange="switchFmt('${sq.id}', '${bankId}', this.checked ? 'condensed' : 'verbatim')">
+             onchange="switchFmt('${sq.id}', this.checked ? 'condensed' : 'verbatim')">
       <span>Summarize</span>
     </label>`;
   const editedBadgeHtml = isEdited
     ? `<span class="q-edited-badge" title="Text has been manually edited">edited</span>`
     : '';
   const revertBtnHtml = isEdited
-    ? `<button class="q-revert" onclick="revertSubquoteEdit('${sq.id}', '${bankId}')" title="Revert to original text">${REVERT_SVG}</button>`
+    ? `<button class="q-revert" onclick="revertSubquoteEdit('${sq.id}')" title="Revert to original text">${REVERT_SVG}</button>`
     : '';
-  const editBtnHtml = `<button class="q-edit" onclick="editSubquote('${sq.id}', '${bankId}')" title="Edit text">${EDIT_SVG}</button>`;
+  const editBtnHtml = `<button class="q-edit" onclick="editSubquote('${sq.id}')" title="Edit text">${EDIT_SVG}</button>`;
 
   // Card-level state classes. Category highlight (blue fill + border) wins
   // over the single-finding border when both would apply — the box-shadow is
@@ -4206,7 +3406,7 @@ function renderSubquoteCard(sq, bucket, displayMeta = {}) {
   if (state.highlighted_bucket_id && state.highlighted_bucket_id === bucket.id) {
     cardStateCls.push('q-card-cat-highlighted');
   }
-  if (state.selected_subquote_id === sq.id && state.selected_subquote_bank_id === bankId) {
+  if (state.selected_subquote_id === sq.id) {
     cardStateCls.push('q-card-selected');
   }
   if (displayMeta.batchClass) {
@@ -4218,7 +3418,7 @@ function renderSubquoteCard(sq, bucket, displayMeta = {}) {
     : `<div class="q-attrib"><span>${esc(attribLine)}</span></div>`;
 
   return `
-<div class="q-card${cardClsAttr}" data-subquote-id="${sq.id}" data-bank-id="${bankId}">
+<div class="q-card${cardClsAttr}" data-subquote-id="${sq.id}">
   <div class="q-card-header">
     <span class="drag-handle">&#8942;</span>
     ${summarizeToggleHtml}
@@ -4226,7 +3426,7 @@ function renderSubquoteCard(sq, bucket, displayMeta = {}) {
     <span class="q-hdr-spacer"></span>
     ${editBtnHtml}
     ${revertBtnHtml}
-    <button class="q-del" onclick="deleteSubquote('${sq.id}', '${bankId}')" title="Remove from report">&#215;</button>
+    <button class="q-del" onclick="deleteSubquote('${sq.id}')" title="Remove from report">&#215;</button>
   </div>
   ${qaContextHtml}
   <div class="q-text">${textContent}</div>
@@ -4241,7 +3441,7 @@ function getSubquoteTextOverride(sqid, bs) {
   return (typeof v === 'string' && v.length) ? v : null;
 }
 
-function renderSubquoteText(sq, fmt, bs, bankId = sq.bank_id || state.current_bank) {
+function renderSubquoteText(sq, fmt, bs) {
   // User-edited override: render as plain paragraphs, no sentence spans.
   // The original remains derivable from sq.sentences/sq.answer_sentences,
   // so "revert" is just deleting this override key.
@@ -4252,7 +3452,7 @@ function renderSubquoteText(sq, fmt, bs, bankId = sq.bank_id || state.current_ba
   }
 
   const useSpans = fmt === 'verbatim' || fmt === 'condensed';
-  const sents = getSubquoteFindingSentences(sq);
+  const sents = sq.type === 'md' ? sq.sentences : sq.answer_sentences;
   const isQA = sq.type === 'qa';
 
   if (!sents) return '';
@@ -4262,7 +3462,7 @@ function renderSubquoteText(sq, fmt, bs, bankId = sq.bank_id || state.current_ba
     // only from the transcript side — clicks here bubble up to the delegated
     // handler on #report-body, which scrolls the transcript to this finding.
     return `<p>${sents.map(s => {
-      const bid = effectivePrimary(s.sid, bankId);
+      const bid = effectivePrimary(s.sid);
       const bkt = getBucket(bid);
       const text = fmt === 'condensed' ? (s.condensed || s.text) : s.text;
       return `<span class="s-tok${isQA?' qa-sent':''}"
@@ -4291,10 +3491,9 @@ function destroySortables() {
 }
 function initSortables() {
   if (typeof Sortable === 'undefined') return;
-  document.querySelectorAll('.bkt-bank-quotes').forEach(container => {
-    const bankId = container.dataset.bankId || '';
+  document.querySelectorAll('.bkt-quotes').forEach(container => {
     sortableInstances.push(Sortable.create(container, {
-      group: `report-subquotes-${bankId}`,
+      group: 'report-subquotes',
       animation: 150,
       handle: '.drag-handle',
       ghostClass: 'sortable-ghost',
@@ -4303,21 +3502,20 @@ function initSortables() {
         const sqid = evt.item.dataset.subquoteId;
         const from = evt.from.dataset.bucketId;
         const to   = evt.to.dataset.bucketId;
-        handleSubquoteDrop(sqid, from, to, evt.to.dataset.bankId || bankId);
+        handleSubquoteDrop(sqid, from, to);
       },
     }));
   });
 }
 
-function handleSubquoteDrop(sqid, fromBid, toBid, bankId = state.current_bank) {
-  const bs = getBankState(bankId);
-  const sq = getAllSubquotes(bankId).find(x => x.id === sqid);
+function handleSubquoteDrop(sqid, fromBid, toBid) {
+  const bs = getBankState(state.current_bank);
+  const sq = getAllSubquotes(state.current_bank).find(x => x.id === sqid);
   const targetBucket = getBucket(toBid);
   const transcriptSection = sq && sq.type === 'md' ? 'MD' : 'QA';
 
   if (!sq || !bucketAppliesTo(targetBucket, transcriptSection)) {
-    renderReportPanel();
-    if (bankId === state.current_bank) renderTranscriptBody();
+    renderCurrentBank();
     return;
   }
 
@@ -4325,10 +3523,10 @@ function handleSubquoteDrop(sqid, fromBid, toBid, bankId = state.current_bank) {
     if (!bs.subquote_bucket_overrides) bs.subquote_bucket_overrides = {};
     bs.subquote_bucket_overrides[sqid] = toBid;
     if (!bs.sentence_user_primary) bs.sentence_user_primary = {};
-    const sents = getSubquoteFindingSentences(sq);
+    const sents = sq.type === 'md' ? sq.sentences : sq.answer_sentences;
     (sents || []).forEach(s => {
       bs.sentence_user_primary[s.sid] = toBid;
-      setSentenceReviewStatus(s.sid, 'selected', bankId);
+      setSentenceReviewStatus(s.sid, 'selected');
     });
   }
 
@@ -4346,40 +3544,38 @@ function handleSubquoteDrop(sqid, fromBid, toBid, bankId = state.current_bank) {
       bs.bucket_subquote_order[fromBid] = ids;
     }
   }
-  renderReportPanel();
-  if (bankId === state.current_bank) renderTranscriptBody();
+  renderCurrentBank();
 }
 
 // ============================================================
 // QUOTE CARD ACTIONS
 // ============================================================
-function switchFmt(sqid, bankId, fmt) {
-  const bs = getBankState(bankId);
+function switchFmt(sqid, fmt) {
+  const bs = getBankState(state.current_bank);
   if (!bs.subquote_formats) bs.subquote_formats = {};
   bs.subquote_formats[sqid] = fmt;
 
-  const card = document.querySelector(`[data-subquote-id="${sqid}"][data-bank-id="${bankId}"]`);
+  const card = document.querySelector(`[data-subquote-id="${sqid}"]`);
   if (!card) return;
-  const sq  = getAllSubquotes(bankId).find(x => x.id === sqid);
+  const sq  = getAllSubquotes(state.current_bank).find(x => x.id === sqid);
   if (!sq) return;
 
   const textDiv = card.querySelector('.q-text');
-  textDiv.innerHTML = renderSubquoteText(sq, fmt, bs, bankId);
+  textDiv.innerHTML = renderSubquoteText(sq, fmt, bs);
 }
 
-function deleteSubquote(sqid, bankId) {
-  const sq = getAllSubquotes(bankId).find(x => x.id === sqid);
+function deleteSubquote(sqid) {
+  const sq = getAllSubquotes(state.current_bank).find(x => x.id === sqid);
   if (!sq) return;
 
-  const sents = getSubquoteFindingSentences(sq);
-  setSentenceReviewStatus((sents || []).map(s => s.sid), 'rejected', bankId);
+  const sents = sq.type === 'md' ? sq.sentences : sq.answer_sentences;
+  setSentenceReviewStatus((sents || []).map(s => s.sid), 'rejected');
 
   // Surgical DOM removal to avoid full re-render
-  const card = document.querySelector(`[data-subquote-id="${sqid}"][data-bank-id="${bankId}"]`);
+  const card = document.querySelector(`[data-subquote-id="${sqid}"]`);
   if (card) card.remove();
   // Update transcript block colors
-  renderReportPanel();
-  if (bankId === state.current_bank) renderTranscriptBody();
+  renderTranscriptBody();
 }
 
 // ------------------------------------------------------------
@@ -4398,14 +3594,14 @@ function getSubquotePlainText(sq, fmt, bs) {
   return subquoteTextForDocx(sq, fmt);
 }
 
-function editSubquote(sqid, bankId) {
-  const sq = getAllSubquotes(bankId).find(x => x.id === sqid);
+function editSubquote(sqid) {
+  const sq = getAllSubquotes(state.current_bank).find(x => x.id === sqid);
   if (!sq) return;
-  const bs = getBankState(bankId);
+  const bs = getBankState(state.current_bank);
   const fmt = (bs.subquote_formats && bs.subquote_formats[sqid]) || 'verbatim';
   const seedText = getSubquotePlainText(sq, fmt, bs);
 
-  const card = document.querySelector(`[data-subquote-id="${sqid}"][data-bank-id="${bankId}"]`);
+  const card = document.querySelector(`[data-subquote-id="${sqid}"]`);
   if (!card) return;
   // If a textarea is already open (double-click), don't re-open.
   if (card.querySelector('.q-edit-area')) return;
@@ -4421,8 +3617,8 @@ function editSubquote(sqid, bankId) {
   textDiv.innerHTML = `
     <textarea class="q-edit-area" rows="${rowsGuess}" aria-label="Edit finding text">${esc(seedText)}</textarea>
     <div class="q-edit-actions">
-      <button class="q-edit-cancel" onclick="cancelSubquoteEdit('${sqid}', '${bankId}')">Cancel</button>
-      <button class="q-edit-save" onclick="saveSubquoteEdit('${sqid}', '${bankId}')">Save</button>
+      <button class="q-edit-cancel" onclick="cancelSubquoteEdit('${sqid}')">Cancel</button>
+      <button class="q-edit-save" onclick="saveSubquoteEdit('${sqid}')">Save</button>
     </div>
   `;
   const ta = textDiv.querySelector('textarea');
@@ -4434,8 +3630,8 @@ function editSubquote(sqid, bankId) {
   if (existingExpand) existingExpand.style.display = 'none';
 }
 
-function cancelSubquoteEdit(sqid, bankId) {
-  const card = document.querySelector(`[data-subquote-id="${sqid}"][data-bank-id="${bankId}"]`);
+function cancelSubquoteEdit(sqid) {
+  const card = document.querySelector(`[data-subquote-id="${sqid}"]`);
   if (!card) return;
   const textDiv = card.querySelector('.q-text');
   if (!textDiv) return;
@@ -4449,8 +3645,8 @@ function cancelSubquoteEdit(sqid, bankId) {
   if (existingExpand) existingExpand.style.display = '';
 }
 
-function saveSubquoteEdit(sqid, bankId) {
-  const card = document.querySelector(`[data-subquote-id="${sqid}"][data-bank-id="${bankId}"]`);
+function saveSubquoteEdit(sqid) {
+  const card = document.querySelector(`[data-subquote-id="${sqid}"]`);
   if (!card) return;
   const ta = card.querySelector('.q-edit-area');
   if (!ta) return;
@@ -4458,26 +3654,24 @@ function saveSubquoteEdit(sqid, bankId) {
   if (!newText) {
     // Empty text is treated as cancel — deleting the finding has its own
     // affordance (the × button) and shouldn't happen by accident here.
-    cancelSubquoteEdit(sqid, bankId);
+    cancelSubquoteEdit(sqid);
     return;
   }
 
-  const bs = getBankState(bankId);
+  const bs = getBankState(state.current_bank);
   if (!bs.subquote_text_overrides) bs.subquote_text_overrides = {};
   bs.subquote_text_overrides[sqid] = newText;
 
   // Full re-render of the card so header toggles/badges reflect edited state.
-  renderReportPanel();
-  if (bankId === state.current_bank) renderTranscriptBody();
+  renderCurrentBank();
 }
 
-function revertSubquoteEdit(sqid, bankId) {
-  const bs = getBankState(bankId);
+function revertSubquoteEdit(sqid) {
+  const bs = getBankState(state.current_bank);
   if (!bs.subquote_text_overrides) return;
   if (!(sqid in bs.subquote_text_overrides)) return;
   delete bs.subquote_text_overrides[sqid];
-  renderReportPanel();
-  if (bankId === state.current_bank) renderTranscriptBody();
+  renderCurrentBank();
 }
 
 function showAddMenu(convId, anchor) {
@@ -4507,13 +3701,9 @@ function addConvToReport(convId, bucketId) {
   const bank = state.banks[state.current_bank];
   const conv = (bank.qa_conversations || []).find(c => c.id === convId);
   if (!conv) return;
-  const bucket = getBucket(bucketId);
-  const findings = bucket.report_section === 'Outlook'
-    ? getAnswerFindingSentences(conv, state.current_bank)
-    : getQuestionFindingSentences(conv, state.current_bank);
 
   if (!bs.sentence_user_primary) bs.sentence_user_primary = {};
-  findings.forEach(s => {
+  conv.answer_sentences.forEach(s => {
     bs.sentence_user_primary[s.sid] = bucketId;
     setSentenceReviewStatus(s.sid, 'selected');
   });
@@ -4584,7 +3774,7 @@ function saveReport() {
   const blob = new Blob([newHtml], {type:'text/html;charset=utf-8'});
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement('a');
-  a.href = url; a.download = `cm_readthrough_${ts}.html`; a.click();
+  a.href = url; a.download = `call_summary_${ts}.html`; a.click();
   URL.revokeObjectURL(url);
 }
 
@@ -4670,7 +3860,7 @@ function subquoteTextForDocx(sq, fmt, bs) {
   const bankState = bs || (state && state.current_bank ? getBankState(state.current_bank) : null);
   const override = bankState ? getSubquoteTextOverride(sq.id, bankState) : null;
   if (override) return override;
-  const sents = getSubquoteFindingSentences(sq);
+  const sents = sq.type === 'md' ? sq.sentences : sq.answer_sentences;
   if (!sents || !sents.length) return '';
   const key = fmt === 'verbatim' ? 'text' : (fmt || 'text');
   return sents.map(s => (s[key] || s.text || '').trim()).filter(Boolean).join(' ');
@@ -4678,221 +3868,9 @@ function subquoteTextForDocx(sq, fmt, bs) {
 
 function getFindingAttribution(sq) {
   const isMD = sq.type === 'md';
-  const questionMode = !isMD && sq.render_mode === 'question';
-  const affiliation = questionMode ? (sq.analyst_affiliation || '') : '';
-  const name = isMD
-    ? sq.speaker
-    : questionMode
-      ? (sq.analyst_name || 'Analyst')
-      : (sq.executive_name || 'Executive');
-  const title = isMD
-    ? (sq.speaker_title || '')
-    : questionMode
-      ? ''
-      : (sq.executive_title || '');
-  if (title) return `${name}, ${title}`;
-  if (affiliation) return `${name} (${affiliation})`;
-  return name;
-}
-
-function docxPlainTextBlocks(text) {
-  return String(text || '')
-    .replace(/\r\n/g, '\n')
-    .split(/\n+/)
-    .map(part => part.trim())
-    .filter(Boolean);
-}
-
-function docxCmParagraph(docxLib, text, runOptions = {}, paragraphOptions = {}) {
-  const { Paragraph, TextRun } = docxLib;
-  return new Paragraph({
-    ...paragraphOptions,
-    children: [new TextRun({ ...runOptions, text: String(text || '') })],
-  });
-}
-
-function docxCmEmptyParagraph(docxLib) {
-  return docxCmParagraph(docxLib, '', {}, { spacing: { before: 0, after: 0 } });
-}
-
-function docxCmCellBorders(docxLib) {
-  const style = docxLib.BorderStyle ? docxLib.BorderStyle.SINGLE : 'single';
-  return {
-    top: { style, size: 4, color: 'E7DFCC' },
-    bottom: { style, size: 4, color: 'E7DFCC' },
-    left: { style, size: 4, color: 'E7DFCC' },
-    right: { style, size: 4, color: 'E7DFCC' },
-  };
-}
-
-function docxCmTableBorders(docxLib) {
-  const style = docxLib.BorderStyle ? docxLib.BorderStyle.SINGLE : 'single';
-  return {
-    top: { style, size: 6, color: 'D9D0BC' },
-    bottom: { style, size: 6, color: 'D9D0BC' },
-    left: { style, size: 6, color: 'D9D0BC' },
-    right: { style, size: 6, color: 'D9D0BC' },
-    insideHorizontal: { style, size: 4, color: 'E7DFCC' },
-    insideVertical: { style, size: 4, color: 'E7DFCC' },
-  };
-}
-
-function docxCmCell(docxLib, children, widthPct, options = {}) {
-  const { TableCell, WidthType, VerticalAlign } = docxLib;
-  const cellOptions = {
-    width: { size: widthPct, type: WidthType.PERCENTAGE },
-    margins: { top: 130, bottom: 130, left: 150, right: 150 },
-    borders: docxCmCellBorders(docxLib),
-    children: children && children.length ? children : [docxCmEmptyParagraph(docxLib)],
-  };
-  if (VerticalAlign && VerticalAlign.TOP) cellOptions.verticalAlign = VerticalAlign.TOP;
-  if (options.shading) cellOptions.shading = options.shading;
-  return new TableCell(cellOptions);
-}
-
-function docxCmHeaderCell(docxLib, text, widthPct) {
-  return docxCmCell(
-    docxLib,
-    [docxCmParagraph(docxLib, text, {
-      bold: true,
-      color: '0F1B2D',
-      size: 18,
-    }, { spacing: { before: 0, after: 0 } })],
-    widthPct,
-    { shading: { fill: 'F5F1E8' } }
-  );
-}
-
-function docxCmFindingParagraphs(docxLib, sq, bankId, options = {}) {
-  const bs = getBankState(bankId);
-  const fmt = (bs.subquote_formats && bs.subquote_formats[sq.id]) || 'verbatim';
-  let text = subquoteTextForDocx(sq, fmt, bs);
-  if (!text) return [];
-  if (options.quote) text = `\u201C${text}\u201D`;
-  const blocks = docxPlainTextBlocks(text);
-  return blocks.map((block, idx) => new docxLib.Paragraph({
-    spacing: { before: idx === 0 ? 40 : 10, after: 35 },
-    indent: { left: 220, hanging: 140 },
-    children: [
-      new docxLib.TextRun({ text: idx === 0 ? '\u2022 ' : '', bold: true, color: '14213A' }),
-      new docxLib.TextRun({ text: block, color: '14213A', size: 20 }),
-    ],
-  }));
-}
-
-function docxCmOutlookCellChildren(docxLib, sectionBuckets, bankId) {
-  const children = [];
-  sectionBuckets.forEach(bucket => {
-    const quotes = getReportSubquotes(bankId, bucket.id).map(sq => ({ ...sq, bank_id: bankId }));
-    if (!quotes.length) return;
-    children.push(docxCmParagraph(docxLib, `${getBucketDisplayTitle(bucket)}:`, {
-      bold: true,
-      color: 'B25A1E',
-      size: 20,
-    }, { spacing: { before: children.length ? 120 : 0, after: 30 } }));
-    if (bucket.generated_headline) {
-      children.push(docxCmParagraph(docxLib, bucket.generated_headline, {
-        italics: true,
-        color: '4A5268',
-        size: 19,
-      }, { spacing: { before: 0, after: 45 } }));
-    }
-    quotes.forEach(sq => {
-      children.push(...docxCmFindingParagraphs(docxLib, sq, bankId, { quote: true }));
-    });
-  });
-  return children;
-}
-
-function docxCmTable(docxLib, rows) {
-  const { Table, WidthType, TableLayoutType } = docxLib;
-  const tableOptions = {
-    width: { size: 100, type: WidthType.PERCENTAGE },
-    borders: docxCmTableBorders(docxLib),
-    rows,
-  };
-  if (TableLayoutType && TableLayoutType.FIXED) {
-    tableOptions.layout = TableLayoutType.FIXED;
-  }
-  return new Table(tableOptions);
-}
-
-function buildCmOutlookDocxTable(docxLib, sectionBuckets) {
-  const { TableRow } = docxLib;
-  const bodyRows = [];
-  getReportBankIds().forEach(bankId => {
-    const contentChildren = docxCmOutlookCellChildren(docxLib, sectionBuckets, bankId);
-    if (!contentChildren.length) return;
-    bodyRows.push(new TableRow({
-      children: [
-        docxCmCell(docxLib, [docxCmParagraph(docxLib, getBankTickerLabel(bankId), {
-          bold: true,
-          color: '0F1B2D',
-          size: 18,
-        })], 12),
-        docxCmCell(docxLib, contentChildren, 88),
-      ],
-    }));
-  });
-  if (!bodyRows.length) {
-    return docxCmParagraph(docxLib, 'No outlook findings selected.', { color: '7A7364' });
-  }
-  return docxCmTable(docxLib, [
-    new TableRow({
-      tableHeader: true,
-      children: [
-        docxCmHeaderCell(docxLib, 'Banks', 12),
-        docxCmHeaderCell(docxLib, 'Investment Banking and Trading Outlook', 88),
-      ],
-    }),
-    ...bodyRows,
-  ]);
-}
-
-function buildCmQaDocxTable(docxLib, sectionBuckets) {
-  const { TableRow } = docxLib;
-  const bodyRows = [];
-  sectionBuckets.forEach(bucket => {
-    const groups = getReportBucketGroups(bucket.id);
-    groups.forEach((group, idx) => {
-      const quoteChildren = [];
-      group.quotes.forEach(sq => {
-        quoteChildren.push(...docxCmFindingParagraphs(docxLib, sq, group.bankId));
-      });
-      if (!quoteChildren.length) return;
-      bodyRows.push(new TableRow({
-        children: [
-          docxCmCell(docxLib, idx === 0
-            ? [docxCmParagraph(docxLib, getBucketDisplayTitle(bucket), {
-                bold: true,
-                color: '0F1B2D',
-                size: 18,
-              })]
-            : [docxCmEmptyParagraph(docxLib)], 22),
-          docxCmCell(docxLib, [docxCmParagraph(docxLib, getBankTickerLabel(group.bankId), {
-            bold: true,
-            color: '0F1B2D',
-            size: 18,
-          })], 10),
-          docxCmCell(docxLib, quoteChildren, 68),
-        ],
-      }));
-    });
-  });
-  if (!bodyRows.length) {
-    return docxCmParagraph(docxLib, 'No Q&A findings selected.', { color: '7A7364' });
-  }
-  return docxCmTable(docxLib, [
-    new TableRow({
-      tableHeader: true,
-      children: [
-        docxCmHeaderCell(docxLib, 'Themes', 22),
-        docxCmHeaderCell(docxLib, 'Banks', 10),
-        docxCmHeaderCell(docxLib, 'Relevant Questions', 68),
-      ],
-    }),
-    ...bodyRows,
-  ]);
+  const name = isMD ? sq.speaker : (sq.executive_name || 'Executive');
+  const title = isMD ? (sq.speaker_title || '') : (sq.executive_title || '');
+  return title ? `${name}, ${title}` : name;
 }
 
 function sanitizeFilenamePart(value, fallback = 'report') {
@@ -4921,18 +3899,14 @@ function formatExportTimestamp(date = new Date()) {
 function buildExportFilename(ext, bankId = state && state.current_bank) {
   const bank = getCurrentBankData(bankId);
   const bankLabel = sanitizeFilenamePart(bank.company_name || bank.ticker || bankId, 'Bank');
-  const bankIds = getReportBankIds();
-  const scopeLabel = bankIds.length > 1
-    ? sanitizeFilenamePart(((state || {}).meta || {}).cover_entity || `${bankIds.length} Banks`, 'Banks')
-    : bankLabel;
   const periodLabel = sanitizeFilenamePart(getReportPeriodLabel(), 'Period');
   const reportScope = sanitizeFilenamePart(
-    [scopeLabel, periodLabel].filter(Boolean).join(' '),
-    scopeLabel || periodLabel || 'Report'
+    [bankLabel, periodLabel].filter(Boolean).join(' '),
+    bankLabel || periodLabel || 'Report'
   );
   const timestamp = sanitizeFilenamePart(formatExportTimestamp(), 'Date Time');
   const extension = String(ext || '').replace(/^\.+/, '') || 'txt';
-  return `CM Readthrough - ${reportScope} - ${timestamp}.${extension}`;
+  return `PM Call Summary - ${reportScope} - ${timestamp}.${extension}`;
 }
 
 function pdfWrapText(doc, text, maxWidth, fontName, fontStyle, fontSize) {
@@ -4981,15 +3955,23 @@ function padTwoDigit(n) {
 // Used by both the PDF and DOCX renderers so the editorial eyebrow + italic
 // quote treatment stays consistent across formats.
 function getQaContextParts(sq) {
-  if (!sq || sq.type !== 'qa' || sq.render_mode === 'question') return null;
+  if (!sq || sq.type !== 'qa') return null;
   const verbatim = (sq.question_sentences || []).map(s => s.text).join(' ').trim();
   const summary = (sq.analyst_question_summary || '').trim();
   const question = summary || verbatim;
   if (!question) return null;
+  const showNames = !!_attribVisible;
   const analystName = (sq.analyst_name || 'Analyst').trim();
   const analystAffil = (sq.analyst_affiliation || '').trim();
   const eyebrowName = analystAffil ? `${analystName} (${analystAffil})` : analystName;
-  return { eyebrow: 'In response to', name: eyebrowName, question };
+  return {
+    eyebrow: 'In response to',
+    name: eyebrowName,
+    question,
+    verbatim,
+    hasSummary: !!summary,
+    showNames,
+  };
 }
 
 function getPdfLayout(doc) {
@@ -5221,7 +4203,7 @@ function measurePdfFinding(doc, sq, bs, layout, displayMeta = {}) {
   // Eyebrow line: "IN RESPONSE TO   ANALYST NAME (AFFIL)" — measured on a
   // single uppercase line. We size it with helvetica-bold + char-spacing
   // so the small-caps feel comes through in the export.
-  const eyebrowText = qaParts
+  const eyebrowText = qaParts && qaParts.showNames
     ? `${qaParts.eyebrow.toUpperCase()}   ${qaParts.name.toUpperCase()}`
     : '';
   const eyebrowLines = eyebrowText
@@ -5700,9 +4682,9 @@ async function savePdf() {
   );
 
   doc.setProperties({
-    title: getReportExportTitle(bankId) || 'Capital Markets Readthrough',
-    subject: 'Capital Markets Readthrough',
-    creator: 'CM Readthrough Editor',
+    title: getReportExportTitle(bankId) || 'PM Call Summary',
+    subject: 'PM Call Summary',
+    creator: 'Call Summary Editor',
   });
 
   let tocY = drawPdfCoverIntro(doc, layout, coverMetrics, raster);
@@ -5717,7 +4699,7 @@ async function savePdf() {
 
   // Running header pulls the publication name from the cover meta — same
   // string that anchors the masthead. Falls back to a generic label.
-  const runningHeaderLeft = (getReportCoverMeta(bankId) || 'Capital Markets Readthrough').trim();
+  const runningHeaderLeft = (getReportCoverMeta(bankId) || 'PM Call Summary').trim();
   renderPdfBody(doc, layout, orderedSections, bankId, runningHeaderLeft);
   drawPdfPageNumbers(doc, layout);
 
@@ -5751,8 +4733,9 @@ async function saveDocx() {
   } = docxLib;
 
   const bankId = state.current_bank;
-  const orderedSections = getOrderedSections();
-  const titleText = getReportCoverMeta(bankId) || 'Capital Markets Readthrough';
+  const bs = getBankState(bankId);
+  const orderedSections = getOrderedSections(bankId);
+  const titleText = getReportCoverMeta(bankId) || 'Call Summary';
   const subtitleText = getReportCoverTitle();
   const children = [];
 
@@ -5839,33 +4822,12 @@ async function saveDocx() {
       ],
     }));
 
-    const sectionSubtitle = getSectionSubtitle(secName);
-    if (sectionSubtitle) {
-      children.push(new Paragraph({
-        spacing: { before: 0, after: 180 },
-        children: [new TextRun({
-          text: sectionSubtitle,
-          italics: true,
-          color: '4A5268',
-          size: 22,
-        })],
-      }));
-    }
-
-    if (secName === 'Outlook') {
-      children.push(buildCmOutlookDocxTable(docxLib, sectionBuckets));
-      return;
-    }
-    if (secName === 'Q&A') {
-      children.push(buildCmQaDocxTable(docxLib, sectionBuckets));
-      return;
-    }
-
     let bucketNum = 0;
     sectionBuckets.forEach(bucket => {
-      const groups = getReportBucketGroups(bucket.id);
-      if (!groups.length) return;
+      const quotes = getReportSubquotes(bankId, bucket.id);
+      if (!quotes.length) return;
       bucketNum += 1;
+      const batchMeta = buildSpeakerBatchMeta(quotes);
       const title = (state.bucket_user_titles || {})[bucket.id] || bucket.name;
 
       children.push(new Paragraph({
@@ -5887,29 +4849,18 @@ async function saveDocx() {
         }));
       }
 
-      groups.forEach(group => {
-        const groupBs = getBankState(group.bankId);
-        const batchMeta = buildSpeakerBatchMeta(group.quotes);
-        children.push(new Paragraph({
-          spacing: { before: 80, after: 40 },
-          children: [new TextRun({
-            text: getBankTickerLabel(group.bankId),
-            bold: true,
-            color: '0F1B2D',
-          })],
-        }));
+      quotes.forEach(sq => {
+        const fmt = (bs.subquote_formats && bs.subquote_formats[sq.id]) || 'verbatim';
+        const text = subquoteTextForDocx(sq, fmt, bs);
+        if (!text) return;
 
-        group.quotes.forEach(sq => {
-          const fmt = (groupBs.subquote_formats && groupBs.subquote_formats[sq.id]) || 'verbatim';
-          const text = subquoteTextForDocx(sq, fmt, groupBs);
-          if (!text) return;
-
-          // QA context — small-caps eyebrow + italic question, mirroring HTML/PDF.
-          // Only render for the first subquote of each QA cluster; follow-on
-          // findings in the same conversation appear as bare bullets beneath.
-          const meta = batchMeta.get(sq.id) || {};
-          const qaParts = meta.showQaContext === false ? null : getQaContextParts(sq);
-          if (qaParts) {
+        // QA context — small-caps eyebrow + italic question, mirroring HTML/PDF.
+        // Only render for the first subquote of each QA cluster; follow-on
+        // findings in the same conversation appear as bare bullets beneath.
+        const meta = batchMeta.get(sq.id) || {};
+        const qaParts = meta.showQaContext === false ? null : getQaContextParts(sq);
+        if (qaParts) {
+          if (qaParts.showNames) {
             children.push(new Paragraph({
               spacing: { before: 120, after: 30 },
               indent: { left: 360 },
@@ -5930,54 +4881,54 @@ async function saveDocx() {
                 }),
               ],
             }));
-            children.push(new Paragraph({
-              spacing: { before: 0, after: 60 },
-              indent: { left: 360 },
-              children: [new TextRun({
-                text: '\u201C' + qaParts.question + '\u201D',
-                italics: true,
-                color: '4A5268',
-                size: 20,
-              })],
-            }));
           }
-
           children.push(new Paragraph({
-            bullet: { level: 0 },
-            spacing: { before: 40, after: 40 },
-            children: [new TextRun({ text })],
+            spacing: { before: 0, after: 60 },
+            indent: { left: 360 },
+            children: [new TextRun({
+              text: '\u201C' + qaParts.question + '\u201D',
+              italics: true,
+              color: '4A5268',
+              size: 20,
+            })],
           }));
+        }
 
-          if (_attribVisible) {
-            // Small-caps attribution — leading em-dash stands in for the
-            // visual lead-in rule used in HTML/PDF.
-            children.push(new Paragraph({
-              alignment: AlignmentType.RIGHT,
-              spacing: { before: 80, after: 160 },
-              children: [
-                new TextRun({
-                  text: '\u2014\u2014\u2014   ',
-                  color: 'D9D0BC',
-                  size: 16,
-                }),
-                new TextRun({
-                  text: getFindingAttribution(sq).toUpperCase(),
-                  bold: true,
-                  size: 14,
-                  color: '7A7364',
-                  characterSpacing: 36,
-                }),
-              ],
-            }));
-          }
-        });
+        children.push(new Paragraph({
+          bullet: { level: 0 },
+          spacing: { before: 40, after: 40 },
+          children: [new TextRun({ text })],
+        }));
+
+        if (_attribVisible) {
+          // Small-caps attribution — leading em-dash stands in for the
+          // visual lead-in rule used in HTML/PDF.
+          children.push(new Paragraph({
+            alignment: AlignmentType.RIGHT,
+            spacing: { before: 80, after: 160 },
+            children: [
+              new TextRun({
+                text: '\u2014\u2014\u2014   ',
+                color: 'D9D0BC',
+                size: 16,
+              }),
+              new TextRun({
+                text: getFindingAttribution(sq).toUpperCase(),
+                bold: true,
+                size: 14,
+                color: '7A7364',
+                characterSpacing: 36,
+              }),
+            ],
+          }));
+        }
       });
     });
   });
 
   const doc = new Document({
-    creator: 'CM Readthrough Editor',
-    title: getReportExportTitle(bankId) || 'Capital Markets Readthrough',
+    creator: 'Call Summary Editor',
+    title: getReportExportTitle(bankId) || 'PM Call Summary',
     description: subtitleText,
     styles: {
       default: {

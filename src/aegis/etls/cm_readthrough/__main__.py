@@ -1,4 +1,4 @@
-"""Entry point for running cm_readthrough as a module: python -m aegis.etls.cm_readthrough."""
+"""Entry point for running cm_readthrough as a module."""
 
 from aegis.etls.cm_readthrough.main import main
 

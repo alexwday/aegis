@@ -1,5 +1,5 @@
-# CM Readthrough ETL - Pinned Dependencies
-# Auto-generated on 2025-11-19
+# CM Readthrough Editor ETL - Pinned Dependencies
+# Updated on 2026-02-13
 
 # Database connectivity
 sqlalchemy==2.0.36
