@@ -18,7 +18,7 @@ import sys
 from dataclasses import dataclass
 from datetime import datetime
 from functools import lru_cache
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 from sqlalchemy import text
 import pandas as pd
 import yaml
@@ -495,103 +495,6 @@ def _resolve_requested_banks(bank_identifier: Optional[str]) -> List[Dict[str, A
     return _all_banks_from_config()
 
 
-async def find_latest_available_quarter(
-    bank_id: int,
-    min_fiscal_year: int,
-    min_quarter: str,
-    bank_name: str = "",
-) -> Optional[Tuple[int, str]]:
-    """
-    Find the latest transcript quarter available for a bank at or after a minimum period.
-
-    Args:
-        bank_id: Bank ID from monitored institutions.
-        min_fiscal_year: Minimum fiscal year to consider.
-        min_quarter: Minimum fiscal quarter to consider.
-        bank_name: Optional display name for logging.
-
-    Returns:
-        ``(fiscal_year, quarter)`` when transcript data is available, otherwise ``None``.
-    """
-    quarter_map = {"Q1": 1, "Q2": 2, "Q3": 3, "Q4": 4}
-    min_quarter_num = quarter_map.get(min_quarter, 1)
-
-    query = text(
-        """
-        SELECT fiscal_year, quarter
-        FROM aegis_data_availability
-        WHERE bank_id = :bank_id
-          AND 'transcripts' = ANY(database_names)
-          AND (
-              fiscal_year > :min_year
-              OR (
-                  fiscal_year = :min_year
-                  AND CASE quarter
-                      WHEN 'Q1' THEN 1
-                      WHEN 'Q2' THEN 2
-                      WHEN 'Q3' THEN 3
-                      WHEN 'Q4' THEN 4
-                  END >= :min_quarter
-              )
-          )
-        ORDER BY fiscal_year DESC,
-                 CASE quarter
-                     WHEN 'Q4' THEN 4
-                     WHEN 'Q3' THEN 3
-                     WHEN 'Q2' THEN 2
-                     WHEN 'Q1' THEN 1
-                 END DESC
-        LIMIT 1
-        """
-    )
-
-    async with get_connection() as conn:
-        result = await conn.execute(
-            query,
-            {
-                "bank_id": bank_id,
-                "min_year": min_fiscal_year,
-                "min_quarter": min_quarter_num,
-            },
-        )
-        row = result.fetchone()
-
-    if not row:
-        logger.warning(
-            "No transcript availability found at or after requested period",
-            bank_id=bank_id,
-            bank_name=bank_name,
-            fiscal_year=min_fiscal_year,
-            quarter=min_quarter,
-        )
-        return None
-
-    latest_year = row.fiscal_year
-    latest_quarter = row.quarter
-    latest_quarter_num = quarter_map.get(latest_quarter, 0)
-    if latest_year > min_fiscal_year or (
-        latest_year == min_fiscal_year and latest_quarter_num > min_quarter_num
-    ):
-        logger.info(
-            "Using later transcript period for CM readthrough",
-            bank_id=bank_id,
-            bank_name=bank_name,
-            requested_fiscal_year=min_fiscal_year,
-            requested_quarter=min_quarter,
-            selected_fiscal_year=latest_year,
-            selected_quarter=latest_quarter,
-        )
-    else:
-        logger.info(
-            "Using requested transcript period for CM readthrough",
-            bank_id=bank_id,
-            bank_name=bank_name,
-            fiscal_year=latest_year,
-            quarter=latest_quarter,
-        )
-    return latest_year, latest_quarter
-
-
 def _scope_slug(requested_banks: List[Dict[str, Any]], requested_all_banks: bool) -> str:
     """Build a filename-safe scope label."""
     if requested_all_banks:
@@ -984,7 +887,7 @@ async def generate_cm_readthrough_editor(  # pylint: disable=too-many-statements
     if use_latest:
         logger.info(
             "CM readthrough editor received use_latest=True; "
-            "selecting latest available transcript period per bank",
+            "skipping database availability checks and querying NAS for the requested period",
             fiscal_year=fiscal_year,
             quarter=quarter,
         )
@@ -1033,24 +936,6 @@ async def generate_cm_readthrough_editor(  # pylint: disable=too-many-statements
                 ticker = bank_info.get("full_ticker") or bank_info["bank_symbol"]
                 transcript_year = fiscal_year
                 transcript_quarter = quarter
-
-                if use_latest:
-                    latest_period = await find_latest_available_quarter(
-                        bank_id=int(bank_info["bank_id"]),
-                        min_fiscal_year=fiscal_year,
-                        min_quarter=quarter,
-                        bank_name=bank_info["bank_name"],
-                    )
-                    if latest_period is None:
-                        return {
-                            "ticker": ticker,
-                            "bank_name": bank_info["bank_name"],
-                            "status": "skipped",
-                            "reason": "no transcript availability in database",
-                            "requested_fiscal_year": fiscal_year,
-                            "requested_quarter": quarter,
-                        }
-                    transcript_year, transcript_quarter = latest_period
 
                 async with nas_lock:
                     xml_result = await asyncio.to_thread(
@@ -1385,18 +1270,6 @@ async def preflight_cm_readthrough_editor(
             try:
                 transcript_year = fiscal_year
                 transcript_quarter = quarter
-                if use_latest:
-                    latest_period = await find_latest_available_quarter(
-                        bank_id=int(bank_info["bank_id"]),
-                        min_fiscal_year=fiscal_year,
-                        min_quarter=quarter,
-                        bank_name=bank_info["bank_name"],
-                    )
-                    if latest_period is None:
-                        status["failure"] = "no transcript availability in database"
-                        summary["statuses"].append(status)
-                        continue
-                    transcript_year, transcript_quarter = latest_period
                 status["source_fiscal_year"] = transcript_year
                 status["source_quarter"] = transcript_quarter
 
@@ -1496,7 +1369,10 @@ def main():
     parser.add_argument(
         "--use-latest",
         action="store_true",
-        help="Use the latest available transcript period at or after --year/--quarter.",
+        help=(
+            "Accepted for scheduler compatibility; CM readthrough queries NAS for "
+            "the requested --year/--quarter."
+        ),
     )
     parser.add_argument("--output", type=str, help="Optional DOCX output file path.")
     parser.add_argument(

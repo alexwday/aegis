@@ -80,33 +80,55 @@ async def test_generate_cm_readthrough_wrapper_preserves_legacy_api(monkeypatch)
 
 
 @pytest.mark.asyncio
-async def test_find_latest_available_quarter_uses_transcript_availability(monkeypatch) -> None:
-    """use_latest should resolve through aegis_data_availability transcript rows."""
+async def test_use_latest_preflight_queries_nas_without_availability_check(monkeypatch) -> None:
+    """use_latest remains accepted but must not gate CM readthrough on availability rows."""
+    requested_period = {}
 
-    class FakeRow:
-        fiscal_year = 2025
-        quarter = "Q4"
+    class FakeNasConnection:
+        def close(self) -> None:
+            pass
 
-    class FakeResult:
-        def fetchone(self):
-            return FakeRow()
+    class FakeXmlResult:
+        file_path = "/nas/2026/Q1/test.xml"
+        xml_bytes = b"<xml />"
 
-    class FakeConnection:
-        async def __aenter__(self):
-            return self
+    def fail_get_connection():
+        raise AssertionError("cm_readthrough should not query aegis_data_availability")
 
-        async def __aexit__(self, exc_type, exc, traceback):
-            return False
+    def fake_find_transcript_xml(conn, bank_info, fiscal_year, quarter):
+        del conn, bank_info
+        requested_period["fiscal_year"] = fiscal_year
+        requested_period["quarter"] = quarter
+        return FakeXmlResult()
 
-        async def execute(self, query, params):
-            assert "aegis_data_availability" in str(query)
-            assert "'transcripts' = ANY(database_names)" in str(query)
-            assert params == {"bank_id": 7, "min_year": 2025, "min_quarter": 2}
-            return FakeResult()
-
-    monkeypatch.setattr(main, "get_connection", lambda: FakeConnection())
-
-    assert await main.find_latest_available_quarter(7, 2025, "Q2", "Test Bank") == (
-        2025,
-        "Q4",
+    monkeypatch.setattr(
+        main,
+        "_resolve_requested_banks",
+        lambda bank_name: [
+            {
+                "bank_id": 7,
+                "bank_name": "Test Bank",
+                "bank_symbol": "TB",
+                "bank_type": "US_Banks",
+                "path_safe_name": "TB_Test_Bank",
+            }
+        ],
     )
+    monkeypatch.setattr(main, "load_categories_from_xlsx", lambda: [{"category": "x"}])
+    monkeypatch.setattr(main, "get_nas_connection", lambda: FakeNasConnection())
+    monkeypatch.setattr(main, "get_connection", fail_get_connection)
+    monkeypatch.setattr(main, "find_transcript_xml", fake_find_transcript_xml)
+    monkeypatch.setattr(main, "parse_transcript_xml", lambda xml_bytes: {"xml": xml_bytes})
+    monkeypatch.setattr(main, "extract_raw_blocks", lambda transcript, ticker: ([{}], []))
+
+    result = await main.preflight_cm_readthrough_editor(
+        bank_name=None,
+        fiscal_year=2026,
+        quarter="Q1",
+        use_latest=True,
+    )
+
+    assert result["ok_banks"] == 1
+    assert result["statuses"][0]["source_fiscal_year"] == 2026
+    assert result["statuses"][0]["source_quarter"] == "Q1"
+    assert requested_period == {"fiscal_year": 2026, "quarter": "Q1"}
