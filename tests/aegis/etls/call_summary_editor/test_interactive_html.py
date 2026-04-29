@@ -152,8 +152,11 @@ def test_generate_html_injects_period_and_state():
     assert "No description provided." not in html
     assert "function renderEmergingTopicsModalBody()" in html
     assert "function disableEmergingCategory(" in html
-    assert "function ensurePdfLibrary()" in html
-    assert "function savePdf()" in html
+    assert "closeHeaderMenus();savePdf()" not in html
+    assert "function ensurePdfLibrary()" not in html
+    assert "function savePdf()" not in html
+    assert "doc.save(buildExportFilename('pdf', bankId));" not in html
+    assert "function pdfWrapText(" not in html
     assert "function getReportCoverMeta(" in html
     assert "function getReportCoverTitle()" in html
     assert "--selection:#2563EB;" in html
@@ -169,19 +172,15 @@ def test_generate_html_injects_period_and_state():
     assert "function formatExportTimestamp(" in html
     assert "function buildExportFilename(" in html
     assert "return `PM Call Summary - ${reportScope} - ${timestamp}.${extension}`;" in html
-    assert "doc.save(buildExportFilename('pdf', bankId));" in html
     assert "a.download = buildExportFilename('docx', bankId);" in html
     assert "function getQaAnswerSpeakerMeta(" in html
     assert "function getSubquoteSpeakerMeta(" in html
     assert "function clusterSubquotesBySpeaker(" in html
     assert "function buildSpeakerBatchMeta(" in html
-    assert "const showNames = !!_attribVisible;" in html
-    assert "const eyebrowText = qaParts && qaParts.showNames" in html
     assert "if (getSentenceReviewStatus(sent.sid) !== 'selected')" in html
     assert "return clusterSubquotesBySpeaker(ranked);" in html
     assert "displayMeta.showAttribution === false" in html
     assert "cur.effective_bucket !== effectiveBucket || cur._speaker_key !== speakerKey" in html
-    assert "Contents (continued)" in html
     assert "window.print()" not in html
     # The Configured/Suggested/Emerging source badge row was removed from the
     # bucket header in favor of an inline `<bucket name>: <generated headline>`

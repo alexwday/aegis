@@ -17,6 +17,38 @@ def _docx_text(path) -> str:
     return "\n".join(part for part in parts if part)
 
 
+def _docx_header_repeats(row) -> bool:
+    """Return True when a DOCX table row is marked as a repeated header."""
+    from docx.oxml.ns import qn
+
+    tr_pr = row._tr.trPr  # pylint: disable=protected-access
+    return tr_pr is not None and tr_pr.find(qn("w:tblHeader")) is not None
+
+
+def _docx_cell_widths_twips(row) -> list[int]:
+    """Return exact DOCX cell widths in twips for one row."""
+    return [
+        int(cell._tc.tcPr.tcW.w)  # pylint: disable=protected-access
+        for cell in row.cells
+    ]
+
+
+def _docx_table_has_borders(table) -> bool:
+    """Return True when a DOCX table has explicit table borders."""
+    from docx.oxml.ns import qn
+
+    tbl_pr = table._tbl.tblPr  # pylint: disable=protected-access
+    return tbl_pr is not None and tbl_pr.find(qn("w:tblBorders")) is not None
+
+
+def _docx_cell_has_borders(cell) -> bool:
+    """Return True when a DOCX cell has explicit cell borders."""
+    from docx.oxml.ns import qn
+
+    tc_pr = cell._tc.tcPr  # pylint: disable=protected-access
+    return tc_pr is not None and tc_pr.find(qn("w:tcBorders")) is not None
+
+
 def test_docx_export_uses_cm_bank_grouped_tables() -> None:
     """DOCX export should mirror the visible multi-bank CM report tables."""
     banks_data = {
@@ -68,8 +100,21 @@ def test_docx_export_uses_cm_bank_grouped_tables() -> None:
     assert "function buildCmQaDocxTable(" in html
     assert "children.push(buildCmOutlookDocxTable(docxLib, sectionBuckets));" in html
     assert "children.push(buildCmQaDocxTable(docxLib, sectionBuckets));" in html
-    assert "docxCmHeaderCell(docxLib, 'Banks', 12)" in html
-    assert "docxCmHeaderCell(docxLib, 'Relevant Questions', 68)" in html
+    assert "closeHeaderMenus();savePdf()" not in html
+    assert "function ensurePdfLibrary()" not in html
+    assert "function savePdf()" not in html
+    assert "doc.save(buildExportFilename('pdf', bankId));" not in html
+    assert "function pdfWrapText(" not in html
+    assert "function scheduleTranscriptPanelRender(" in html
+    assert "renderReportPanel();\n  scheduleTranscriptPanelRender({ showLoading: true });" in html
+    assert "function invalidateDerivedCaches(" in html
+    assert "let _allSubquoteCache = new Map();" in html
+    assert "let _reportSubquoteCache = new Map();" in html
+    assert "let _transcriptHtmlCache = new Map();" in html
+    assert "if (_reportSubquoteCache.has(cacheKey))" in html
+    assert "updateHeaderBadges();\n  scheduleTranscriptPanelRender({ showLoading: true });" in html
+    assert "docxCmHeaderCell(docxLib, 'Banks', 8)" in html
+    assert "docxCmHeaderCell(docxLib, 'Relevant Questions', 80)" in html
     assert "const groups = getReportBucketGroups(bucket.id);" in html
     assert "const scopeLabel = bankIds.length > 1" in html
     assert "computeMDSubquotes(blk, bs, bankId)" in html
@@ -137,6 +182,25 @@ def test_server_docx_export_uses_cm_initial_report_state(tmp_path) -> None:
 
     assert output_path.exists()
     assert output_path.stat().st_size > 0
+
+    from docx import Document
+
+    document = Document(str(output_path))
+    full_text = _docx_text(output_path)
+    assert "Capital Markets Readthrough" in full_text
+    assert "Contents" in full_text
+    assert "Outlook: Capital markets activity" in full_text
+    assert "Conference calls: Capital markets questions" in full_text
+    assert document.sections[0].page_width < document.sections[0].page_height
+    assert document.sections[-1].page_width > document.sections[-1].page_height
+    assert _docx_header_repeats(document.tables[0].rows[0])
+    assert _docx_header_repeats(document.tables[1].rows[0])
+    assert _docx_cell_widths_twips(document.tables[0].rows[0]) == [1080, 13608]
+    assert _docx_cell_widths_twips(document.tables[1].rows[0]) == [1800, 1008, 11880]
+    assert _docx_table_has_borders(document.tables[0])
+    assert _docx_table_has_borders(document.tables[1])
+    assert _docx_cell_has_borders(document.tables[0].rows[0].cells[0])
+    assert _docx_cell_has_borders(document.tables[1].rows[1].cells[2])
 
 
 def test_server_docx_export_matches_cm_preview_grouping_and_verbatim_text(tmp_path) -> None:

@@ -203,7 +203,11 @@ def generate_html(
     if banner_b64 and not state_with_banner.get("banner_src"):
         state_with_banner["banner_src"] = banner_b64
 
-    state_json = json.dumps(state_with_banner, ensure_ascii=False, indent=2).translate(
+    state_json = json.dumps(
+        state_with_banner,
+        ensure_ascii=False,
+        separators=(",", ":"),
+    ).translate(
         {
             ord("<"): "\\u003c",
             ord(">"): "\\u003e",

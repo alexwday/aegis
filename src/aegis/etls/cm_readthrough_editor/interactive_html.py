@@ -230,8 +230,13 @@ def build_report_state(
             "version": "2.0",
             "report_title": report_title or "Capital Markets Readthrough",
             "cover_entity": cover_entity,
-            "cm_main_title": cm_main_title
-            or f"Read Through For Capital Markets: {fiscal_quarter}/{str(fiscal_year)[2:]} Select Banks",
+            "cm_main_title": (
+                cm_main_title
+                or (
+                    "Read Through For Capital Markets: "
+                    f"{fiscal_quarter}/{str(fiscal_year)[2:]} Select Banks"
+                )
+            ),
             "section_subtitles": normalized_section_subtitles,
         },
         "buckets": buckets,
@@ -267,7 +272,11 @@ def generate_html(
     if banner_b64 and not state_with_banner.get("banner_src"):
         state_with_banner["banner_src"] = banner_b64
 
-    state_json = json.dumps(state_with_banner, ensure_ascii=False, indent=2).translate(
+    state_json = json.dumps(
+        state_with_banner,
+        ensure_ascii=False,
+        separators=(",", ":"),
+    ).translate(
         {
             ord("<"): "\\u003c",
             ord(">"): "\\u003e",

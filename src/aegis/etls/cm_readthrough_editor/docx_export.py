@@ -8,10 +8,10 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Tuple
 
 from docx import Document
-from docx.enum.section import WD_ORIENTATION
+from docx.enum.section import WD_ORIENTATION, WD_SECTION
 from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.oxml import parse_xml
-from docx.oxml.ns import nsdecls
+from docx.oxml import OxmlElement, parse_xml
+from docx.oxml.ns import nsdecls, qn
 from docx.shared import Inches, Pt, RGBColor
 
 
@@ -19,6 +19,8 @@ _METRIC_PATTERN = re.compile(
     r"(-?\$[\d,]+(?:\.\d+)?\s*(?:MM|BN|TN|K|M|B)?\b|\d+(?:\.\d+)?\s*bps\b|\d+(?:\.\d+)?%)",
     re.IGNORECASE,
 )
+_OUTLOOK_COLUMN_WIDTHS = (Inches(0.75), Inches(9.45))
+_QA_COLUMN_WIDTHS = (Inches(1.25), Inches(0.7), Inches(8.25))
 
 
 def _clean_text(value: Any) -> str:
@@ -388,10 +390,99 @@ def _shade_cell(cell, fill: str = "002060") -> None:
     cell._tc.get_or_add_tcPr().append(shading)  # pylint: disable=protected-access
 
 
+def _replace_child(parent, child) -> None:
+    """Replace an OOXML child element with the same tag."""
+    existing = parent.find(child.tag)
+    if existing is not None:
+        parent.remove(existing)
+    parent.append(child)
+
+
+def _border_element(name: str, *, size: int, color: str) -> OxmlElement:
+    """Build one Word border element."""
+    element = OxmlElement(f"w:{name}")
+    element.set(qn("w:val"), "single")
+    element.set(qn("w:sz"), str(size))
+    element.set(qn("w:space"), "0")
+    element.set(qn("w:color"), color)
+    return element
+
+
+def _set_cell_borders(cell, *, size: int = 4, color: str = "D9D0BC") -> None:
+    """Apply visible borders to one table cell."""
+    tc_pr = cell._tc.get_or_add_tcPr()  # pylint: disable=protected-access
+    borders = OxmlElement("w:tcBorders")
+    for edge in ("top", "left", "bottom", "right"):
+        borders.append(_border_element(edge, size=size, color=color))
+    _replace_child(tc_pr, borders)
+
+
+def _set_cell_width(cell, width: Inches) -> None:
+    """Set an exact Word cell width."""
+    cell.width = width
+    tc_pr = cell._tc.get_or_add_tcPr()  # pylint: disable=protected-access
+    tc_width = tc_pr.tcW
+    tc_width.type = "dxa"
+    tc_width.w = round(width.inches * 1440)
+
+
+def _set_table_width(table, widths: Tuple[Inches, ...]) -> None:
+    """Apply fixed table layout and exact column widths to all rows."""
+    table.autofit = False
+    table.allow_autofit = False
+    total_width = sum(width.inches for width in widths)
+    tbl_pr = table._tbl.tblPr  # pylint: disable=protected-access
+
+    tbl_width = tbl_pr.find(qn("w:tblW"))
+    if tbl_width is None:
+        tbl_width = OxmlElement("w:tblW")
+        tbl_pr.append(tbl_width)
+    tbl_width.set(qn("w:type"), "dxa")
+    tbl_width.set(qn("w:w"), str(round(total_width * 1440)))
+
+    tbl_layout = tbl_pr.find(qn("w:tblLayout"))
+    if tbl_layout is None:
+        tbl_layout = OxmlElement("w:tblLayout")
+        tbl_pr.append(tbl_layout)
+    tbl_layout.set(qn("w:type"), "fixed")
+
+    for row in table.rows:
+        for cell, width in zip(row.cells, widths):
+            _set_cell_width(cell, width)
+            _set_cell_borders(cell)
+
+
+def _set_table_borders(table) -> None:
+    """Apply visible outer and inner table borders."""
+    tbl_pr = table._tbl.tblPr  # pylint: disable=protected-access
+    borders = OxmlElement("w:tblBorders")
+    for edge, size, color in (
+        ("top", 6, "B8AD94"),
+        ("left", 6, "B8AD94"),
+        ("bottom", 6, "B8AD94"),
+        ("right", 6, "B8AD94"),
+        ("insideH", 4, "D9D0BC"),
+        ("insideV", 4, "D9D0BC"),
+    ):
+        borders.append(_border_element(edge, size=size, color=color))
+    _replace_child(tbl_pr, borders)
+
+
+def _repeat_header_row(row) -> None:
+    """Mark a Word table row to repeat at the top of each page."""
+    tr_pr = row._tr.get_or_add_trPr()  # pylint: disable=protected-access
+    tbl_header = tr_pr.find(qn("w:tblHeader"))
+    if tbl_header is None:
+        tbl_header = OxmlElement("w:tblHeader")
+        tr_pr.append(tbl_header)
+    tbl_header.set(qn("w:val"), "true")
+
+
 def _set_header_cell(cell, text: str, width: Inches) -> None:
     """Format a table header cell."""
     cell.text = text
-    cell.width = width
+    _set_cell_width(cell, width)
+    _set_cell_borders(cell, size=6, color="B8AD94")
     _shade_cell(cell)
     for paragraph in cell.paragraphs:
         paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
@@ -410,10 +501,125 @@ def _main_title(report_state: Dict[str, Any]) -> str:
     )
 
 
+def _report_period_label(report_state: Dict[str, Any]) -> str:
+    """Return the report fiscal period label."""
+    meta = report_state.get("meta", {})
+    return " ".join(
+        _clean_text(value)
+        for value in (meta.get("fiscal_quarter"), meta.get("fiscal_year"))
+        if _clean_text(value)
+    )
+
+
+def _cover_meta(report_state: Dict[str, Any]) -> str:
+    """Return the cover-page metadata line used by the editor export."""
+    meta = report_state.get("meta", {})
+    cover_entity = _clean_text(meta.get("cover_entity"))
+    period = _report_period_label(report_state)
+    return " - ".join(part for part in (cover_entity, period) if part)
+
+
+def _cover_title(report_state: Dict[str, Any]) -> str:
+    """Return the cover-page report title."""
+    meta = report_state.get("meta", {})
+    return _clean_text(meta.get("report_title")) or "Capital Markets Readthrough"
+
+
 def _section_subtitle(report_state: Dict[str, Any], key: str, fallback: str) -> str:
     """Return a section subtitle from editor state metadata."""
     subtitles = report_state.get("meta", {}).get("section_subtitles", {})
     return _clean_text(subtitles.get(key)) or fallback
+
+
+def _set_portrait_section(section) -> None:
+    """Apply portrait title/contents page layout."""
+    section.orientation = WD_ORIENTATION.PORTRAIT
+    section.page_width = Inches(8.5)
+    section.page_height = Inches(11)
+    section.top_margin = Inches(0.7)
+    section.bottom_margin = Inches(0.7)
+    section.left_margin = Inches(0.75)
+    section.right_margin = Inches(0.75)
+
+
+def _set_landscape_section(section) -> None:
+    """Apply landscape CM report formatting."""
+    section.orientation = WD_ORIENTATION.LANDSCAPE
+    section.page_width = Inches(11)
+    section.page_height = Inches(8.5)
+    section.top_margin = Inches(0.3)
+    section.bottom_margin = Inches(0.5)
+    section.left_margin = Inches(0.3)
+    section.right_margin = Inches(0.3)
+
+
+def _add_paragraph_bottom_border(paragraph, *, size: int, color: str) -> None:
+    """Add a bottom border to a paragraph."""
+    p_pr = paragraph._p.get_or_add_pPr()  # pylint: disable=protected-access
+    borders = p_pr.find(qn("w:pBdr"))
+    if borders is None:
+        borders = OxmlElement("w:pBdr")
+        p_pr.append(borders)
+    _replace_child(borders, _border_element("bottom", size=size, color=color))
+
+
+def _add_cover_and_contents(doc: Document, report_state: Dict[str, Any]) -> None:
+    """Add title page and contents before the landscape report tables."""
+    cover_meta = _cover_meta(report_state) or "Capital Markets Readthrough"
+    meta_para = doc.add_paragraph()
+    meta_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    meta_para.paragraph_format.space_before = Pt(24)
+    meta_para.paragraph_format.space_after = Pt(42)
+    _add_paragraph_bottom_border(meta_para, size=4, color="D9D0BC")
+    meta_run = meta_para.add_run(cover_meta.upper())
+    meta_run.font.bold = True
+    meta_run.font.size = Pt(11)
+    meta_run.font.color.rgb = RGBColor(122, 115, 100)
+
+    title_para = doc.add_paragraph()
+    title_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    title_para.paragraph_format.space_before = Pt(72)
+    title_para.paragraph_format.space_after = Pt(24)
+    title_run = title_para.add_run(_cover_title(report_state))
+    title_run.font.bold = True
+    title_run.font.size = Pt(28)
+    title_run.font.color.rgb = RGBColor(15, 27, 45)
+
+    accent_para = doc.add_paragraph()
+    accent_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    accent_para.paragraph_format.left_indent = Inches(3.0)
+    accent_para.paragraph_format.right_indent = Inches(3.0)
+    accent_para.paragraph_format.space_after = Pt(96)
+    _add_paragraph_bottom_border(accent_para, size=16, color="B25A1E")
+
+    contents_title = doc.add_paragraph()
+    contents_title.paragraph_format.space_after = Pt(12)
+    contents_run = contents_title.add_run("Contents")
+    contents_run.font.bold = True
+    contents_run.font.size = Pt(18)
+    contents_run.font.color.rgb = RGBColor(15, 27, 45)
+    _add_paragraph_bottom_border(contents_title, size=4, color="D9D0BC")
+
+    contents = [
+        ("I.", "Outlook", _section_subtitle(report_state, "outlook", "Outlook")),
+        ("II.", "Q&A", _section_subtitle(report_state, "qa", "Q&A")),
+    ]
+    for ordinal, section_name, subtitle in contents:
+        paragraph = doc.add_paragraph()
+        paragraph.paragraph_format.space_after = Pt(3)
+        ordinal_run = paragraph.add_run(f"{ordinal}   ")
+        ordinal_run.font.bold = True
+        ordinal_run.font.color.rgb = RGBColor(178, 90, 30)
+        name_run = paragraph.add_run(section_name)
+        name_run.font.bold = True
+        name_run.font.size = Pt(12)
+        if subtitle and subtitle != section_name:
+            subtitle_para = doc.add_paragraph()
+            subtitle_para.paragraph_format.left_indent = Inches(0.35)
+            subtitle_run = subtitle_para.add_run(subtitle)
+            subtitle_run.font.italic = True
+            subtitle_run.font.size = Pt(10)
+            subtitle_run.font.color.rgb = RGBColor(74, 82, 104)
 
 
 def _add_title(doc: Document, report_state: Dict[str, Any], subtitle: str) -> None:
@@ -433,16 +639,14 @@ def _add_title(doc: Document, report_state: Dict[str, Any], subtitle: str) -> No
 
 
 def _setup_document(doc: Document) -> None:
-    """Apply landscape CM report formatting."""
-    section = doc.sections[0]
-    section.orientation = WD_ORIENTATION.LANDSCAPE
-    section.page_width = Inches(11)
-    section.page_height = Inches(8.5)
-    for section in doc.sections:
-        section.top_margin = Inches(0.3)
-        section.bottom_margin = Inches(0.5)
-        section.left_margin = Inches(0.3)
-        section.right_margin = Inches(0.3)
+    """Apply initial title/contents document formatting."""
+    _set_portrait_section(doc.sections[0])
+
+
+def _start_landscape_body(doc: Document) -> None:
+    """Start the landscape report body after the title/contents section."""
+    section = doc.add_section(WD_SECTION.NEW_PAGE)
+    _set_landscape_section(section)
 
 
 def _bucket_lookup(report_state: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
@@ -554,10 +758,15 @@ def _add_outlook_section(doc: Document, report_state: Dict[str, Any]) -> None:
     )
     outlook = _collect_outlook(report_state)
     table = doc.add_table(rows=max(len(outlook), 1) + 1, cols=2)
-    table.autofit = False
-    table.allow_autofit = False
-    _set_header_cell(table.rows[0].cells[0], "Banks", Inches(1.0))
-    _set_header_cell(table.rows[0].cells[1], "Investment Banking and Trading Outlook", Inches(9.0))
+    _set_table_width(table, _OUTLOOK_COLUMN_WIDTHS)
+    _set_table_borders(table)
+    _repeat_header_row(table.rows[0])
+    _set_header_cell(table.rows[0].cells[0], "Banks", _OUTLOOK_COLUMN_WIDTHS[0])
+    _set_header_cell(
+        table.rows[0].cells[1],
+        "Investment Banking and Trading Outlook",
+        _OUTLOOK_COLUMN_WIDTHS[1],
+    )
 
     if not outlook:
         table.rows[1].cells[0].text = "-"
@@ -614,11 +823,12 @@ def _add_qa_section(doc: Document, report_state: Dict[str, Any]) -> None:
         len(group["bank_groups"]) for group in grouped.values()
     ) or 1
     table = doc.add_table(rows=row_count + 1, cols=3)
-    table.autofit = False
-    table.allow_autofit = False
-    _set_header_cell(table.rows[0].cells[0], "Themes", Inches(1.6))
-    _set_header_cell(table.rows[0].cells[1], "Banks", Inches(1.0))
-    _set_header_cell(table.rows[0].cells[2], "Relevant Questions", Inches(8.0))
+    _set_table_width(table, _QA_COLUMN_WIDTHS)
+    _set_table_borders(table)
+    _repeat_header_row(table.rows[0])
+    _set_header_cell(table.rows[0].cells[0], "Themes", _QA_COLUMN_WIDTHS[0])
+    _set_header_cell(table.rows[0].cells[1], "Banks", _QA_COLUMN_WIDTHS[1])
+    _set_header_cell(table.rows[0].cells[2], "Relevant Questions", _QA_COLUMN_WIDTHS[2])
 
     if not grouped:
         table.rows[1].cells[0].text = "-"
@@ -686,6 +896,8 @@ def create_cm_readthrough_docx_from_state(
     """Create a DOCX CM readthrough report from the editor's initial report state."""
     doc = Document()
     _setup_document(doc)
+    _add_cover_and_contents(doc, report_state)
+    _start_landscape_body(doc)
     _add_outlook_section(doc, report_state)
     _add_qa_section(doc, report_state)
     _validate_document(doc)
