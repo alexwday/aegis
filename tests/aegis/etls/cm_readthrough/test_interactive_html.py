@@ -108,6 +108,9 @@ def test_docx_export_uses_cm_bank_grouped_tables() -> None:
     assert "function scheduleTranscriptPanelRender(" in html
     assert "renderReportPanel();\n  scheduleTranscriptPanelRender({ showLoading: true });" in html
     assert "function invalidateDerivedCaches(" in html
+    assert "function padTwoDigit(" in html
+    assert "function toRomanNumeral(" in html
+    assert "function getQaContextParts(" in html
     assert "let _allSubquoteCache = new Map();" in html
     assert "let _reportSubquoteCache = new Map();" in html
     assert "let _transcriptHtmlCache = new Map();" in html

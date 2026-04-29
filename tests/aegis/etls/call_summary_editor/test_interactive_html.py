@@ -171,6 +171,9 @@ def test_generate_html_injects_period_and_state():
     assert "function sanitizeFilenamePart(" in html
     assert "function formatExportTimestamp(" in html
     assert "function buildExportFilename(" in html
+    assert "function padTwoDigit(" in html
+    assert "function toRomanNumeral(" in html
+    assert "function getQaContextParts(" in html
     assert "return `PM Call Summary - ${reportScope} - ${timestamp}.${extension}`;" in html
     assert "a.download = buildExportFilename('docx', bankId);" in html
     assert "function getQaAnswerSpeakerMeta(" in html
