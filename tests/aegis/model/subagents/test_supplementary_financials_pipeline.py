@@ -77,6 +77,17 @@ def test_group_combinations_by_period_preserves_period_order() -> None:
     ]
 
 
+def test_combo_params_uses_base_ticker_for_supplementary_sql() -> None:
+    """Supplementary SQL filters use base tickers, not country-suffixed IDs."""
+    assert pipeline.combo_params(
+        {
+            "bank_symbol": "BMO-CA",
+            "fiscal_year": "FY2026",
+            "quarter": "q1",
+        }
+    ) == {"bank_symbol": "BMO", "fiscal_year": "2026", "quarter": "Q1"}
+
+
 @pytest.mark.asyncio
 async def test_run_retrieval_pipeline_parallelizes_combos_by_period(
     monkeypatch: pytest.MonkeyPatch,
@@ -264,6 +275,66 @@ def test_load_stage_prompt_falls_back_to_yaml_when_db_prompt_missing(
     assert prompt["stage"] == "query_prep"
     assert prompt["tool_choice"] == "required"
     assert prompt["tools"][0]["function"]["name"] == "prepare_query"
+
+
+def test_resolve_tool_choice_forces_single_named_tool() -> None:
+    """Single-tool prompts force that exact function instead of generic required mode."""
+    prompt = {
+        "tool_choice": "required",
+        "tools": [{"type": "function", "function": {"name": "filter_chunks"}}],
+    }
+
+    assert pipeline.resolve_tool_choice(prompt) == {
+        "type": "function",
+        "function": {"name": "filter_chunks"},
+    }
+
+
+@pytest.mark.asyncio
+async def test_call_tool_prompt_passes_named_tool_choice(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Stage tool prompts pass an explicit function choice to the LLM connector."""
+
+    def fake_load_stage_prompt(_prompt_name: str, execution_id: str | None = None) -> dict:
+        assert execution_id == "test"
+        return {
+            "system_prompt": "Use the tool.",
+            "user_prompt": "Rank {candidates}",
+            "tool_choice": "required",
+            "tools": [{"type": "function", "function": {"name": "filter_chunks"}}],
+        }
+
+    async def fake_complete_with_tools(**kwargs: object) -> dict:
+        assert kwargs["llm_params"]["tool_choice"] == {
+            "type": "function",
+            "function": {"name": "filter_chunks"},
+        }
+        return {
+            "choices": [
+                {
+                    "message": {
+                        "tool_calls": [
+                            {"function": {"arguments": '{"remove_indices": [1]}'}}
+                        ]
+                    }
+                }
+            ],
+            "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
+        }
+
+    monkeypatch.setattr(pipeline, "load_stage_prompt", fake_load_stage_prompt)
+    monkeypatch.setattr(pipeline, "complete_with_tools", fake_complete_with_tools)
+
+    parsed, usage = await pipeline.call_tool_prompt(
+        prompt_name="rerank",
+        replacements={"candidates": "candidate list"},
+        context={"execution_id": "test"},
+        max_tokens=800,
+    )
+
+    assert parsed == {"remove_indices": [1]}
+    assert usage == {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15}
 
 
 @pytest.mark.asyncio

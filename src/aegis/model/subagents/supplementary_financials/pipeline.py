@@ -1163,10 +1163,21 @@ async def call_tool_prompt(
         llm_params={
             "temperature": 0,
             "max_tokens": max_tokens,
-            "tool_choice": prompt.get("tool_choice", "required"),
+            "tool_choice": resolve_tool_choice(prompt),
         },
     )
     return extract_tool_arguments(response), response_usage(response)
+
+
+def resolve_tool_choice(prompt: Dict[str, Any]) -> Any:
+    """Resolve prompt tool choice, forcing the named function when unambiguous."""
+    tool_choice = prompt.get("tool_choice", "required")
+    tools = prompt.get("tools") or []
+    if tool_choice == "required" and len(tools) == 1:
+        function_name = tools[0].get("function", {}).get("name")
+        if function_name:
+            return {"type": "function", "function": {"name": function_name}}
+    return tool_choice
 
 
 def load_stage_prompt(prompt_name: str, execution_id: Optional[str] = None) -> Dict[str, Any]:
@@ -1294,10 +1305,18 @@ def combo_params(combo: Dict[str, Any]) -> Dict[str, Any]:
     fiscal_year = re.sub(r"^FY", "", fiscal_year, flags=re.IGNORECASE)
     bank_symbol = combo.get("bank_symbol") or combo.get("bank") or combo.get("ticker") or ""
     return {
-        "bank_symbol": str(bank_symbol).strip().upper(),
+        "bank_symbol": normalize_supplementary_bank_symbol(bank_symbol),
         "fiscal_year": fiscal_year,
         "quarter": str(combo.get("quarter", "")).strip().upper(),
     }
+
+
+def normalize_supplementary_bank_symbol(bank_symbol: Any) -> str:
+    """Return the base ticker used by supplementary financial tables."""
+    symbol = str(bank_symbol or "").strip().upper()
+    if "-" in symbol:
+        return symbol.split("-", 1)[0]
+    return symbol
 
 
 def combo_bank_label(combo: Dict[str, Any]) -> str:
