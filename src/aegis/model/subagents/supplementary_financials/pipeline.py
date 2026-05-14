@@ -27,7 +27,8 @@ BM25_TERM_CAP = 10
 CONTAINMENT_LIMIT = 50
 RERANK_CANDIDATE_LIMIT = 30
 RERANK_MIN_KEEP = 10
-RESEARCH_MAX_ITERATIONS = 3
+RESEARCH_MAX_ITERATIONS = 2
+RESEARCH_CONFIDENCE_STOP_THRESHOLD = 0.8
 RESEARCH_ADDITIONAL_SEARCH_TOP_K = 10
 MAX_ADDITIONAL_QUERIES = 3
 MAX_PARALLEL_COMBOS_PER_PERIOD = 6
@@ -212,11 +213,16 @@ async def process_combo_retrieval(
 ) -> Dict[str, Any]:
     """Run retrieval and research for one bank-period combination."""
     combo_start = perf_counter()
-    availability = await count_available_chunks(combo)
-    if availability == 0:
+    candidates = await multi_strategy_search(
+        combo=combo,
+        prepared=prepared,
+        top_k=search_top_k,
+        search_semaphore=search_semaphore,
+    )
+    if not candidates:
         return {
             "combo": combo,
-            "availability": availability,
+            "availability": None,
             "search_candidates": [],
             "reranked_chunks": [],
             "expanded_chunks": [],
@@ -224,23 +230,23 @@ async def process_combo_retrieval(
             "research_iterations": [],
             "metrics": {
                 "wall_time_seconds": round(perf_counter() - combo_start, 3),
-                "skipped": "no_available_chunks",
+                "skipped": "no_search_candidates",
             },
         }
 
-    candidates = await multi_strategy_search(
-        combo=combo,
-        prepared=prepared,
-        top_k=search_top_k,
-        search_semaphore=search_semaphore,
-    )
-    reranked = await rerank_candidates(
-        query=prepared["rewritten_query"],
-        combo=combo,
-        candidates=candidates[:RERANK_CANDIDATE_LIMIT],
-        context=context,
-    )
+    rerank_pool = candidates[:RERANK_CANDIDATE_LIMIT]
+    if len(candidates) > search_top_k:
+        reranked = await rerank_candidates(
+            query=prepared["rewritten_query"],
+            combo=combo,
+            candidates=rerank_pool,
+            context=context,
+        )
+    else:
+        reranked = candidates
+    reranked = reranked[:search_top_k]
     expanded = await gap_fill_one_sheet_gaps(reranked, search_semaphore=search_semaphore)
+    expanded = cap_gap_filled_chunks(expanded, reranked, search_top_k)
     if expanded:
         research = await run_research_loop(
             prepared=prepared,
@@ -253,7 +259,7 @@ async def process_combo_retrieval(
         research = {"chunks": [], "findings": [], "iterations": []}
     return {
         "combo": combo,
-        "availability": availability,
+        "availability": None,
         "search_candidates": candidates,
         "reranked_chunks": reranked,
         "expanded_chunks": research["chunks"],
@@ -261,7 +267,6 @@ async def process_combo_retrieval(
         "research_iterations": research["iterations"],
         "metrics": {
             "wall_time_seconds": round(perf_counter() - combo_start, 3),
-            "availability": availability,
             "search_candidates": len(candidates),
             "reranked_chunks": len(reranked),
             "expanded_chunks": len(research["chunks"]),
@@ -379,23 +384,6 @@ async def embed_prepared_query(prepared: Dict[str, Any], context: Dict[str, Any]
             error=str(exc),
         )
         prepared["embeddings"] = {}
-
-
-async def count_available_chunks(combo: Dict[str, Any]) -> int:
-    """Count source chunks for one bank-period combination."""
-    query = text(
-        f"""
-        SELECT COUNT(*) AS count
-        FROM {DATA_TABLE}
-        WHERE bank = :bank_symbol
-          AND fiscal_year = :fiscal_year
-          AND quarter = :quarter
-        """
-    )
-    async with get_connection() as conn:
-        result = await conn.execute(query, combo_params(combo))
-        row = result.fetchone()
-        return int(row.count) if row else 0
 
 
 async def multi_strategy_search(
@@ -559,6 +547,9 @@ async def search_embedding_type(
         WHERE d.bank = :bank_symbol
           AND d.fiscal_year = :fiscal_year
           AND d.quarter = :quarter
+          AND e.bank = :bank_symbol
+          AND e.fiscal_year = :fiscal_year
+          AND e.quarter = :quarter
           AND e.embedding_type = :embedding_type
           AND e.embedding IS NOT NULL
         ORDER BY e.embedding <=> CAST(:embedding AS vector)
@@ -614,6 +605,9 @@ async def search_section_summary(
         WHERE d.bank = :bank_symbol
           AND d.fiscal_year = :fiscal_year
           AND d.quarter = :quarter
+          AND e.bank = :bank_symbol
+          AND e.fiscal_year = :fiscal_year
+          AND e.quarter = :quarter
           AND e.embedding_type = 'section_summary'
           AND e.embedding IS NOT NULL
         ORDER BY e.embedding <=> CAST(:embedding AS vector)
@@ -998,6 +992,9 @@ async def run_research_loop(
             iteration.get("additional_queries", []),
             MAX_ADDITIONAL_QUERIES,
         )
+        if float(iteration.get("confidence", 0.0) or 0.0) >= RESEARCH_CONFIDENCE_STOP_THRESHOLD:
+            stopping_reason = "high_confidence"
+            break
         if not additional_queries:
             stopping_reason = "no_additional_queries"
             break
@@ -1284,7 +1281,7 @@ def extract_json_object_text(text_value: str) -> str:
     start = stripped.find("{")
     end = stripped.rfind("}")
     if start >= 0 and end > start:
-        return stripped[start:end + 1]
+        return stripped[start : end + 1]
     return stripped
 
 
@@ -1444,6 +1441,40 @@ def chunk_sort_key(chunk: Dict[str, Any]) -> Tuple[str, str, int, int, str]:
         parse_sheet_minor(chunk.get("chunk_id", "")),
         str(chunk.get("chunk_id", "")),
     )
+
+
+def cap_gap_filled_chunks(
+    chunks: List[Dict[str, Any]],
+    anchor_chunks: List[Dict[str, Any]],
+    limit: int,
+) -> List[Dict[str, Any]]:
+    """Keep retrieved anchors first, then gap-fill chunks only if space remains."""
+    if limit <= 0:
+        return []
+    if len(chunks) <= limit:
+        return chunks
+
+    anchor_keys = {candidate_key(chunk) for chunk in anchor_chunks}
+    selected = []
+    selected_keys = set()
+    for chunk in sorted(chunks, key=chunk_sort_key):
+        key = candidate_key(chunk)
+        if key not in anchor_keys or key in selected_keys:
+            continue
+        selected.append(chunk)
+        selected_keys.add(key)
+        if len(selected) >= limit:
+            return selected
+
+    for chunk in sorted(chunks, key=chunk_sort_key):
+        key = candidate_key(chunk)
+        if key in selected_keys:
+            continue
+        selected.append(chunk)
+        selected_keys.add(key)
+        if len(selected) >= limit:
+            break
+    return selected
 
 
 def sanitize_search_query(query_text: str) -> str:
@@ -1823,6 +1854,8 @@ def format_retrieval_response(results: Dict[str, Any]) -> str:
                 metric_text = format_metric_fields(finding)
                 source_text = format_finding_references(finding)
                 lines.append(f"- {finding['finding']} " f"{metric_text}\n  Source: {source_text}")
+        elif combo_result.get("metrics", {}).get("skipped") == "no_search_candidates":
+            lines.append("- No supplementary financials content was found for this bank/period.")
         else:
             lines.append("- No structured findings extracted.")
         lines.append("")

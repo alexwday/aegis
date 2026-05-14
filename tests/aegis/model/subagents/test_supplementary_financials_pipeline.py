@@ -109,8 +109,15 @@ async def test_run_retrieval_pipeline_parallelizes_combos_by_period(
             "embeddings": {},
         }
 
-    async def fake_count_available_chunks(combo: dict) -> int:
+    async def fake_process_combo_retrieval(
+        combo: dict,
+        prepared: dict,
+        context: dict,
+        search_top_k: int,
+        search_semaphore: asyncio.Semaphore,
+    ) -> dict:
         nonlocal active_combos, max_active_combos, mixed_periods
+        _ = prepared, context, search_top_k, search_semaphore
         period = (combo["fiscal_year"], combo["quarter"])
         active_combos += 1
         max_active_combos = max(max_active_combos, active_combos)
@@ -120,30 +127,14 @@ async def test_run_retrieval_pipeline_parallelizes_combos_by_period(
         await asyncio.sleep(0.01)
         active_period_counts[period] -= 1
         active_combos -= 1
-        return 1
-
-    async def fake_multi_strategy_search(**_kwargs: object) -> list[dict]:
-        return [_candidate("sheet_1.1", score=0.5)]
-
-    async def fake_rerank_candidates(**kwargs: object) -> list[dict]:
-        return list(kwargs["candidates"])
-
-    async def fake_gap_fill_one_sheet_gaps(
-        chunks: list[dict],
-        search_semaphore: asyncio.Semaphore | None = None,
-    ) -> list[dict]:
-        _ = search_semaphore
-        return chunks
-
-    async def fake_run_research_loop(**kwargs: object) -> dict:
-        return {"chunks": kwargs["initial_chunks"], "findings": [], "iterations": []}
+        return {
+            "combo": combo,
+            "expanded_chunks": [_candidate("sheet_1.1", score=0.5)],
+            "findings": [],
+        }
 
     monkeypatch.setattr(pipeline, "prepare_query", fake_prepare_query)
-    monkeypatch.setattr(pipeline, "count_available_chunks", fake_count_available_chunks)
-    monkeypatch.setattr(pipeline, "multi_strategy_search", fake_multi_strategy_search)
-    monkeypatch.setattr(pipeline, "rerank_candidates", fake_rerank_candidates)
-    monkeypatch.setattr(pipeline, "gap_fill_one_sheet_gaps", fake_gap_fill_one_sheet_gaps)
-    monkeypatch.setattr(pipeline, "run_research_loop", fake_run_research_loop)
+    monkeypatch.setattr(pipeline, "process_combo_retrieval", fake_process_combo_retrieval)
 
     results = await pipeline.run_retrieval_pipeline(
         query_text="test",
@@ -229,6 +220,131 @@ async def test_multi_strategy_search_uses_shared_search_limit(
     assert max_active_searches == 2
 
 
+@pytest.mark.asyncio
+async def test_process_combo_caps_fused_results_after_rerank(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Combo retrieval keeps a global top-k after matrix fusion and rerank."""
+    candidates = [_candidate(f"sheet_{index}.1", score=100 - index) for index in range(1, 26)]
+    rerank_inputs = []
+    research_inputs = []
+
+    async def fake_multi_strategy_search(**kwargs: object) -> list[dict]:
+        assert kwargs["top_k"] == 20
+        return candidates
+
+    async def fake_rerank_candidates(**kwargs: object) -> list[dict]:
+        rerank_inputs.append(list(kwargs["candidates"]))
+        return list(kwargs["candidates"])
+
+    async def fake_gap_fill_one_sheet_gaps(
+        chunks: list[dict],
+        search_semaphore: asyncio.Semaphore | None = None,
+    ) -> list[dict]:
+        _ = search_semaphore
+        return chunks
+
+    async def fake_run_research_loop(**kwargs: object) -> dict:
+        research_inputs.append(list(kwargs["initial_chunks"]))
+        return {"chunks": kwargs["initial_chunks"], "findings": [], "iterations": []}
+
+    monkeypatch.setattr(pipeline, "multi_strategy_search", fake_multi_strategy_search)
+    monkeypatch.setattr(pipeline, "rerank_candidates", fake_rerank_candidates)
+    monkeypatch.setattr(pipeline, "gap_fill_one_sheet_gaps", fake_gap_fill_one_sheet_gaps)
+    monkeypatch.setattr(pipeline, "run_research_loop", fake_run_research_loop)
+
+    result = await pipeline.process_combo_retrieval(
+        combo=_combo("CM"),
+        prepared={"rewritten_query": "revenue"},
+        context={"execution_id": "test"},
+        search_top_k=20,
+        search_semaphore=asyncio.Semaphore(10),
+    )
+
+    assert len(rerank_inputs) == 1
+    assert len(rerank_inputs[0]) == 25
+    assert len(result["reranked_chunks"]) == 20
+    assert len(research_inputs[0]) == 20
+    assert [chunk["chunk_id"] for chunk in result["reranked_chunks"]] == [
+        candidate["chunk_id"] for candidate in candidates[:20]
+    ]
+
+
+@pytest.mark.asyncio
+async def test_process_combo_skips_rerank_when_fused_results_are_within_top_k(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Rerank is skipped when fused retrieval already fits inside the global cap."""
+    candidates = [_candidate(f"sheet_{index}.1", score=100 - index) for index in range(1, 6)]
+
+    async def fake_multi_strategy_search(**_kwargs: object) -> list[dict]:
+        return candidates
+
+    async def fake_rerank_candidates(**_kwargs: object) -> list[dict]:
+        raise AssertionError("rerank should not run for small fused candidate sets")
+
+    async def fake_gap_fill_one_sheet_gaps(
+        chunks: list[dict],
+        search_semaphore: asyncio.Semaphore | None = None,
+    ) -> list[dict]:
+        _ = search_semaphore
+        return chunks
+
+    async def fake_run_research_loop(**kwargs: object) -> dict:
+        return {"chunks": kwargs["initial_chunks"], "findings": [], "iterations": []}
+
+    monkeypatch.setattr(pipeline, "multi_strategy_search", fake_multi_strategy_search)
+    monkeypatch.setattr(pipeline, "rerank_candidates", fake_rerank_candidates)
+    monkeypatch.setattr(pipeline, "gap_fill_one_sheet_gaps", fake_gap_fill_one_sheet_gaps)
+    monkeypatch.setattr(pipeline, "run_research_loop", fake_run_research_loop)
+
+    result = await pipeline.process_combo_retrieval(
+        combo=_combo("CM"),
+        prepared={"rewritten_query": "revenue"},
+        context={"execution_id": "test"},
+        search_top_k=20,
+        search_semaphore=asyncio.Semaphore(10),
+    )
+
+    assert [chunk["chunk_id"] for chunk in result["reranked_chunks"]] == [
+        candidate["chunk_id"] for candidate in candidates
+    ]
+
+
+@pytest.mark.asyncio
+async def test_research_loop_stops_on_high_confidence(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """High-confidence research does not spend another embedding/search pass."""
+
+    async def fake_call_research_iteration(**kwargs: object) -> dict:
+        assert kwargs["iteration_number"] == 1
+        return {
+            "iteration": 1,
+            "findings": [],
+            "additional_queries": ["revenue details"],
+            "confidence": pipeline.RESEARCH_CONFIDENCE_STOP_THRESHOLD,
+            "usage": {},
+        }
+
+    async def fake_search_additional_queries(**_kwargs: object) -> list[dict]:
+        raise AssertionError("additional searches should not run after high confidence")
+
+    monkeypatch.setattr(pipeline, "call_research_iteration", fake_call_research_iteration)
+    monkeypatch.setattr(pipeline, "search_additional_queries", fake_search_additional_queries)
+
+    result = await pipeline.run_research_loop(
+        prepared={"original_query": "revenue"},
+        combo=_combo("CM"),
+        initial_chunks=[_candidate("sheet_1.1")],
+        context={"execution_id": "test"},
+        search_semaphore=asyncio.Semaphore(10),
+    )
+
+    assert result["stopping_reason"] == "high_confidence"
+    assert len(result["iterations"]) == 1
+
+
 def test_apply_min_keep_floor_restores_highest_scoring_removals() -> None:
     """Rerank cannot remove below the configured keep floor."""
     candidates = [_candidate(f"sheet_{index}.1", score=index) for index in range(12)]
@@ -239,6 +355,25 @@ def test_apply_min_keep_floor_restores_highest_scoring_removals() -> None:
     kept = [index for index in range(12) if index not in adjusted]
     assert len(kept) == pipeline.RERANK_MIN_KEEP
     assert kept == list(range(2, 12))
+
+
+def test_cap_gap_filled_chunks_preserves_global_limit_and_anchor_chunks() -> None:
+    """Gap fill can use spare evidence slots but cannot exceed the top-k cap."""
+    anchors = [_candidate(f"sheet_{index}.1", score=index) for index in (1, 3, 5)]
+    gap_filled = [
+        anchors[0],
+        _candidate("sheet_2.1", score=0.0),
+        anchors[1],
+        _candidate("sheet_4.1", score=0.0),
+        anchors[2],
+    ]
+
+    capped = pipeline.cap_gap_filled_chunks(gap_filled, anchors, limit=4)
+
+    assert len(capped) == 4
+    assert {chunk["chunk_id"] for chunk in anchors}.issubset(
+        {chunk["chunk_id"] for chunk in capped}
+    )
 
 
 def test_normalize_remove_indices_accepts_stringified_indices() -> None:
@@ -507,3 +642,25 @@ def test_format_retrieval_response_only_shows_findings_and_sources() -> None:
     assert "Query preparation" not in output
     assert "Evidence catalog" not in output
     assert "Pipeline counts" not in output
+
+
+def test_format_retrieval_response_reports_no_content_for_empty_search() -> None:
+    """No search candidates render as no available supplementary content."""
+    output = pipeline.format_retrieval_response(
+        {
+            "combo_results": [
+                {
+                    "combo": {
+                        "bank_symbol": "CM",
+                        "bank_name": "CIBC",
+                        "quarter": "Q1",
+                        "fiscal_year": "2026",
+                    },
+                    "findings": [],
+                    "metrics": {"skipped": "no_search_candidates"},
+                }
+            ]
+        }
+    )
+
+    assert "No supplementary financials content was found for this bank/period." in output
