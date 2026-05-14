@@ -201,8 +201,8 @@ def _get_model_config(
         tier_config = getattr(config.llm, default_tier)
         return (
             tier_config.model,
-            temperature or tier_config.temperature,
-            max_tokens or tier_config.max_tokens,
+            temperature if temperature is not None else tier_config.temperature,
+            max_tokens if max_tokens is not None else tier_config.max_tokens,
             default_tier,
         )
 
@@ -210,29 +210,29 @@ def _get_model_config(
     if model == config.llm.small.model:
         return (
             model,
-            temperature or config.llm.small.temperature,
-            max_tokens or config.llm.small.max_tokens,
+            temperature if temperature is not None else config.llm.small.temperature,
+            max_tokens if max_tokens is not None else config.llm.small.max_tokens,
             "small",
         )
     if model == config.llm.large.model:
         return (
             model,
-            temperature or config.llm.large.temperature,
-            max_tokens or config.llm.large.max_tokens,
+            temperature if temperature is not None else config.llm.large.temperature,
+            max_tokens if max_tokens is not None else config.llm.large.max_tokens,
             "large",
         )
     if model == config.llm.medium.model:
         return (
             model,
-            temperature or config.llm.medium.temperature,
-            max_tokens or config.llm.medium.max_tokens,
+            temperature if temperature is not None else config.llm.medium.temperature,
+            max_tokens if max_tokens is not None else config.llm.medium.max_tokens,
             "medium",
         )
     # Unknown model, use medium defaults
     return (
         model,
-        temperature or config.llm.medium.temperature,
-        max_tokens or config.llm.medium.max_tokens,
+        temperature if temperature is not None else config.llm.medium.temperature,
+        max_tokens if max_tokens is not None else config.llm.medium.max_tokens,
         "medium",
     )
 

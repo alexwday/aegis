@@ -241,6 +241,16 @@ def test_apply_min_keep_floor_restores_highest_scoring_removals() -> None:
     assert kept == list(range(2, 12))
 
 
+def test_normalize_remove_indices_accepts_stringified_indices() -> None:
+    """Rerank removal parsing accepts common integer-like tool outputs."""
+    parsed = pipeline.normalize_remove_indices(
+        [1, "2", " 3 ", 4.0, True, False, "x", 99, -1],
+        candidate_count=12,
+    )
+
+    assert parsed == {1, 2, 3, 4}
+
+
 def test_normalize_db_stage_prompt_accepts_prompt_table_row() -> None:
     """DB prompt rows are normalized into the local stage-prompt schema."""
     prompt = pipeline.normalize_db_stage_prompt(
@@ -306,6 +316,8 @@ async def test_call_tool_prompt_passes_named_tool_choice(
         }
 
     async def fake_complete_with_tools(**kwargs: object) -> dict:
+        assert kwargs["llm_params"]["model"] == pipeline.config.llm.small.model
+        assert kwargs["llm_params"]["temperature"] == 0
         assert kwargs["llm_params"]["tool_choice"] == {
             "type": "function",
             "function": {"name": "filter_chunks"},
@@ -314,9 +326,7 @@ async def test_call_tool_prompt_passes_named_tool_choice(
             "choices": [
                 {
                     "message": {
-                        "tool_calls": [
-                            {"function": {"arguments": '{"remove_indices": [1]}'}}
-                        ]
+                        "tool_calls": [{"function": {"arguments": '{"remove_indices": [1]}'}}]
                     }
                 }
             ],
@@ -335,6 +345,47 @@ async def test_call_tool_prompt_passes_named_tool_choice(
 
     assert parsed == {"remove_indices": [1]}
     assert usage == {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15}
+
+
+def test_extract_tool_arguments_accepts_json_content_fallback() -> None:
+    """Plain JSON content is accepted when a model omits the forced tool call."""
+    parsed = pipeline.extract_tool_arguments(
+        {
+            "choices": [
+                {
+                    "message": {
+                        "content": '```json\n{"remove_indices": ["1", 2]}\n```',
+                    }
+                }
+            ]
+        }
+    )
+
+    assert parsed == {"remove_indices": ["1", 2]}
+
+
+@pytest.mark.asyncio
+async def test_rerank_candidates_coerces_string_indices(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Rerank candidates applies valid stringified removal indices."""
+    candidates = [_candidate(f"sheet_{index}.1", score=index) for index in range(12)]
+
+    async def fake_call_tool_prompt(**_kwargs: object) -> tuple[dict, dict]:
+        return {"remove_indices": ["1", "2", True, "99", "bad"]}, {}
+
+    monkeypatch.setattr(pipeline, "call_tool_prompt", fake_call_tool_prompt)
+
+    reranked = await pipeline.rerank_candidates(
+        query="revenue",
+        combo=_combo("CM"),
+        candidates=candidates,
+        context={"execution_id": "test"},
+    )
+
+    assert [candidate["chunk_id"] for candidate in reranked] == [
+        candidate["chunk_id"] for index, candidate in enumerate(candidates) if index not in {1, 2}
+    ]
 
 
 @pytest.mark.asyncio
@@ -384,7 +435,9 @@ def test_parse_research_findings_enriches_source_references() -> None:
     assert findings[0]["source_ref_ids"] == ["S1"]
     assert findings[0]["references"][0]["filename"] == "supp.xlsx"
     assert findings[0]["references"][0]["s3_key"] == "supp.xlsx"
-    assert findings[0]["references"][0]["link_marker"].startswith("{{S3_LINK:download:xlsx:")
+    assert findings[0]["references"][0]["link_marker"] == (
+        "{{S3_LINK:download:xlsx:supp.xlsx:CM Q1 2026 source}}"
+    )
 
 
 def test_parse_research_findings_falls_back_to_page_reference() -> None:
@@ -447,7 +500,10 @@ def test_format_retrieval_response_only_shows_findings_and_sources() -> None:
 
     assert "## Research Findings" in output
     assert "Revenue increased." in output
-    assert "{{S3_LINK:download:xlsx:supp.xlsx:" in output
+    assert "{{S3_LINK:download:xlsx:supp.xlsx:CM Q1 2026 source}}" in output
+    assert "Sheet: sheet_11.1" in output
+    assert "Page 11" not in output
+    assert "Chunk:" not in output
     assert "Query preparation" not in output
     assert "Evidence catalog" not in output
     assert "Pipeline counts" not in output

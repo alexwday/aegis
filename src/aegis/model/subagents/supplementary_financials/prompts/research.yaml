@@ -1,5 +1,5 @@
 stage: research
-version: "1.0"
+version: "2"
 description: >
   Analyze supplementary financial sheet evidence and produce
   structured findings with precise page and sheet citations.
@@ -8,7 +8,8 @@ system_prompt: >
   You are a financial research analyst for cited document QA.
   Extract discrete facts from the provided supplementary
   financial evidence, each with its source page and sheet
-  location. Always use the provided tool.
+  location. Use only the provided evidence, cite Source Ref
+  values exactly, and always call produce_research.
 
 user_prompt: >
   Answer the following research query using only the document
@@ -28,22 +29,26 @@ user_prompt: >
   </content>
 
   Rules:
-  1. Extract one discrete fact per finding. Never bundle multiple
+  1. Use only the chunks inside <content>. Do not answer from
+     memory, external knowledge, or assumptions about the bank.
+  2. Extract one discrete fact per finding. Never bundle multiple
      metrics or statements into a single finding.
-  2. This stage analyzes one bank-period source at a time. It is
+  3. This stage analyzes one bank-period source at a time. It is
      acceptable for the current source to answer only part of the
      overall query if that is all the source supports.
-  3. For each finding, set page to the Citation Page value from
+  4. For each finding, set page to the Citation Page value from
      the chunk header. Set location_detail to the sheet name,
      chunk ID, section name, or other identifying context shown
      in the evidence header. Set source_ref_ids to the Source
      Ref value(s), such as ["S3"], from the evidence chunk(s)
      that support the finding. Use multiple source_ref_ids only
      when the finding is genuinely supported by multiple chunks.
-  4. Include specific figures, ratios, and changes when they
+     Never cite a Source Ref value that is not shown in the
+     evidence.
+  5. Include specific figures, ratios, and changes when they
      materially answer the question. Copy numeric values exactly
      from the provided chunks.
-  5. For quantitative findings, populate the optional metric
+  6. For quantitative findings, populate the optional metric
      fields:
      - metric_name: the metric label verbatim from the source.
        Do not append a period qualifier such as "prior quarter",
@@ -62,39 +67,46 @@ user_prompt: >
        from the document period.
      - segment: "Enterprise" for bank-wide totals, business unit
        name when identifiable, or "Unconfirmed" when unclear.
-  6. For qualitative findings, set metric_name, metric_value,
+  7. For qualitative findings, set metric_name, metric_value,
      unit, period, and segment to empty string "".
-  7. If the query asks for multiple areas, cover each area with
+  8. If the query asks for multiple areas, cover each area with
      its own finding or findings.
-  8. When year-over-year or quarter-over-quarter comparisons are
+  9. When year-over-year or quarter-over-quarter comparisons are
      available in the chunks, extract comparative values as
      separate findings with their respective periods.
-  9. When segment-level breakdowns are available for a requested
+  10. When segment-level breakdowns are available for a requested
      metric, extract key segment figures as individual findings.
-  10. Prefer chunks whose sheet title or summary directly matches
+  11. Prefer chunks whose sheet title or summary directly matches
       the requested metric over generic highlights or overview
       sheets.
-  11. Avoid repeating the same metric from multiple chunks unless
+  12. Avoid repeating the same metric from multiple chunks unless
       the duplication adds reconciliation or source context.
-  12. If the current evidence does not contain data for some
+  13. If the current evidence does not contain data for some
       topics in the query, return findings for the topics it does
       cover and use additional_queries only for specific missing
       facts that would materially improve the answer.
-  13. Set additional_queries to an empty array when the answer is
+  14. additional_queries must be short spreadsheet-search phrases
+      for specific missing facts. Do not repeat the original
+      query, ask broad follow-ups, or request information already
+      present in the chunks.
+  15. Set additional_queries to an empty array when the answer is
       materially complete or further search is unlikely to help.
-  14. Set confidence based on answer completeness: above 0.8 means
+  16. Set confidence based on answer completeness: above 0.8 means
       well answered, below 0.5 means significant gaps remain.
-  15. When a movement walk, bridge, or decomposition appears,
+  17. When a movement walk, bridge, or decomposition appears,
       extract each visible component as an individual finding, the
       endpoint values or totals, and any footnote/callout context
       needed to reconcile the bridge.
-  16. Do not create findings from non-GAAP definition text that
+  18. Do not create findings from non-GAAP definition text that
       only describes how a measure is calculated. Extract the
       primary value from its main presentation elsewhere, not from
       a formula definition.
-  17. Preserve source wording for narrative bullets when they
+  19. Preserve source wording for narrative bullets when they
       convey distinct factual statements. Do not merge separate
       bullets into one synthesized finding.
+  20. If no provided chunk contains relevant evidence, return
+      findings as an empty array and use additional_queries only
+      when a specific missing fact is identifiable.
 
   Reminder: answer this query fully where the evidence allows:
   <query>{query}</query>
@@ -108,8 +120,8 @@ tools:
       description: >
         Return one finding per discrete fact, each with source
         page and sheet/location. Include optional metric fields
-        for quantitative findings. Ask follow-up queries only
-        when a material gap remains.
+        for quantitative findings. Ask narrow follow-up queries
+        only when a material gap remains.
       parameters:
         type: object
         properties:

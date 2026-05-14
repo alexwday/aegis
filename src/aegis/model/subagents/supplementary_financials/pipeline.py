@@ -14,10 +14,12 @@ from ....connections.llm_connector import complete_with_tools, embed_batch
 from ....connections.postgres_connector import get_connection
 from ....utils.logging import get_logger
 from ....utils.prompt_loader import load_prompt_from_db
+from ....utils.settings import config
 
 DATA_TABLE = 'public."aegis-financial-supp-data"'
 EMBEDDINGS_TABLE = 'public."aegis-financial-supp-embeddings"'
 PROMPTS_DIR = Path(__file__).resolve().parent / "prompts"
+SUPPLEMENTARY_FINANCIALS_MODEL_TIER = "small"
 
 SEARCH_TOP_K = 20
 BM25_TOP_K = 20
@@ -826,23 +828,25 @@ async def rerank_candidates(
             context=context,
             max_tokens=800,
         )
-        remove_indices = parsed.get("remove_indices", [])
-        if not isinstance(remove_indices, list):
-            raise ValueError("remove_indices must be a list")
+        valid_remove = normalize_remove_indices(parsed.get("remove_indices", []), len(candidates))
     except Exception as exc:  # pylint: disable=broad-except
         logger.warning(
             "subagent.supplementary_financials.rerank_keep_all",
             execution_id=context.get("execution_id"),
+            candidate_count=len(candidates),
+            error_type=type(exc).__name__,
             error=str(exc),
         )
         return candidates
 
-    valid_remove = {
-        int(index)
-        for index in remove_indices
-        if isinstance(index, int) and 0 <= index < len(candidates)
-    }
     valid_remove = apply_min_keep_floor(candidates, valid_remove)
+    logger.info(
+        "subagent.supplementary_financials.rerank_complete",
+        execution_id=context.get("execution_id"),
+        candidate_count=len(candidates),
+        removed_count=len(valid_remove),
+        kept_count=len(candidates) - len(valid_remove),
+    )
     return [candidate for index, candidate in enumerate(candidates) if index not in valid_remove]
 
 
@@ -1161,6 +1165,7 @@ async def call_tool_prompt(
         tools=prompt["tools"],
         context=context,
         llm_params={
+            "model": getattr(config.llm, SUPPLEMENTARY_FINANCIALS_MODEL_TIER).model,
             "temperature": 0,
             "max_tokens": max_tokens,
             "tool_choice": resolve_tool_choice(prompt),
@@ -1239,10 +1244,48 @@ def extract_tool_arguments(response: Dict[str, Any]) -> Dict[str, Any]:
         raise ValueError("LLM response did not include choices")
     message = choices[0].get("message", {})
     tool_calls = message.get("tool_calls") or []
-    if not tool_calls:
-        raise ValueError("LLM response did not include a tool call")
-    raw_arguments = tool_calls[0].get("function", {}).get("arguments", "{}")
-    return json.loads(raw_arguments)
+    if tool_calls:
+        raw_arguments = tool_calls[0].get("function", {}).get("arguments", "{}")
+        return parse_tool_arguments(raw_arguments)
+    content = message.get("content")
+    if content:
+        return parse_tool_arguments(content)
+    raise ValueError("LLM response did not include a tool call or JSON content")
+
+
+def parse_tool_arguments(raw_arguments: Any) -> Dict[str, Any]:
+    """Parse tool arguments from a function call or JSON text response."""
+    if isinstance(raw_arguments, dict):
+        return raw_arguments
+    if isinstance(raw_arguments, list):
+        parts = []
+        for part in raw_arguments:
+            if isinstance(part, dict):
+                parts.append(str(part.get("text") or part.get("content") or ""))
+            elif part:
+                parts.append(str(part))
+        raw_arguments = "\n".join(parts)
+    if not isinstance(raw_arguments, str):
+        raise ValueError("LLM tool arguments must be JSON object text")
+    parsed = json.loads(extract_json_object_text(raw_arguments))
+    if not isinstance(parsed, dict):
+        raise ValueError("LLM tool arguments must decode to an object")
+    return parsed
+
+
+def extract_json_object_text(text_value: str) -> str:
+    """Return the JSON object substring from plain text or fenced JSON."""
+    stripped = text_value.strip()
+    if stripped.startswith("```"):
+        stripped = re.sub(r"^```(?:json)?\s*", "", stripped, flags=re.IGNORECASE)
+        stripped = re.sub(r"\s*```$", "", stripped)
+    if stripped.startswith("{") and stripped.endswith("}"):
+        return stripped
+    start = stripped.find("{")
+    end = stripped.rfind("}")
+    if start >= 0 and end > start:
+        return stripped[start:end + 1]
+    return stripped
 
 
 def response_usage(response: Dict[str, Any]) -> Dict[str, int]:
@@ -1492,6 +1535,27 @@ def apply_min_keep_floor(candidates: List[Dict[str, Any]], remove_set: set[int])
     restore_count = min_keep - would_keep
     restored = set(scored_removals[-restore_count:])
     return remove_set - restored
+
+
+def normalize_remove_indices(raw_indices: Any, candidate_count: int) -> set[int]:
+    """Validate reranker removals while accepting stringified integer indices."""
+    if not isinstance(raw_indices, list):
+        raise ValueError("remove_indices must be a list")
+    valid_indices: set[int] = set()
+    for raw_index in raw_indices:
+        if isinstance(raw_index, bool):
+            continue
+        if isinstance(raw_index, int):
+            index = raw_index
+        elif isinstance(raw_index, float) and raw_index.is_integer():
+            index = int(raw_index)
+        elif isinstance(raw_index, str) and raw_index.strip().isdigit():
+            index = int(raw_index.strip())
+        else:
+            continue
+        if 0 <= index < candidate_count:
+            valid_indices.add(index)
+    return valid_indices
 
 
 def queries_are_repeats(previous_queries: List[str], current_queries: List[str]) -> bool:
@@ -1775,10 +1839,7 @@ def format_finding_references(finding: Dict[str, Any]) -> str:
         return f"Page {finding['page']}, {finding['location_detail']}"
     rendered = []
     for reference in references:
-        rendered.append(
-            f"{reference['link_marker']} | Page {reference['page']} | "
-            f"Sheet: {reference['sheet']} | Chunk: {reference['chunk_id']}"
-        )
+        rendered.append(f"{reference['link_marker']} | Sheet: {reference['sheet']}")
     return "; ".join(rendered)
 
 
