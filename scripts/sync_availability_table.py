@@ -15,6 +15,9 @@ Usage:
     # Run in rebuild mode (clear and rebuild tags)
     python scripts/sync_availability_table.py --mode rebuild
 
+    # Run for one configured tag only
+    python scripts/sync_availability_table.py --only-tag supplementary_financials
+
     # Verify current state
     python scripts/sync_availability_table.py --verify-only
 """
@@ -84,6 +87,15 @@ TABLE_CONFIGS = [
         # Optional: These columns also exist in the table for additional info
         bank_name_field="bank_name",
         bank_symbol_field="bank_symbol"
+    ),
+    TableConfig(
+        table_name='public."aegis-financial-supp-data"',
+        bank_id_type="symbol",
+        bank_id_field="bank",
+        year_field="fiscal_year",
+        quarter_field="quarter",
+        tag="supplementary_financials",
+        enabled=True,
     ),
 
     # EXAMPLE: Table that only has bank symbols (no ID or name columns)
@@ -203,17 +215,19 @@ def get_bank_info(value: str, id_type: str) -> Optional[Tuple[int, str, str]]:
     # Step 1: Convert the provided identifier to bank_id
     bank_id = None
 
+    normalized_value = str(value).strip()
+
     if id_type == 'id':
         try:
-            bank_id = int(value)
+            bank_id = int(normalized_value)
         except (ValueError, TypeError):
             return None
     elif id_type == 'name':
         # Look up bank ID using the name mapping from YAML
-        bank_id = BANK_NAME_TO_ID.get(value)
+        bank_id = BANK_NAME_TO_ID.get(normalized_value)
     elif id_type == 'symbol':
         # Look up bank ID using the symbol mapping from YAML
-        bank_id = BANK_SYMBOL_TO_ID.get(value)
+        bank_id = BANK_SYMBOL_TO_ID.get(normalized_value.upper())
 
     # Step 2: If we found a bank_id, get the full canonical details from YAML
     if bank_id and bank_id in BANK_MAPPINGS:
@@ -287,13 +301,26 @@ async def get_table_availability(config: TableConfig) -> Dict[Tuple[int, int, st
             else:
                 bank_symbol = resolved_bank_symbol
 
-            key = (bank_id, row.fiscal_year, row.quarter)
+            try:
+                fiscal_year = int(str(row.fiscal_year).removeprefix("FY"))
+            except (ValueError, TypeError):
+                skipped_count += 1
+                logger.debug(f"Skipping record with invalid fiscal year: {row.fiscal_year}")
+                continue
+
+            quarter = str(row.quarter).strip().upper()
+            if quarter not in {"Q1", "Q2", "Q3", "Q4"}:
+                skipped_count += 1
+                logger.debug(f"Skipping record with invalid quarter: {row.quarter}")
+                continue
+
+            key = (bank_id, fiscal_year, quarter)
             availability[key] = {
                 'bank_id': bank_id,
                 'bank_name': bank_name,
                 'bank_symbol': bank_symbol,
-                'fiscal_year': row.fiscal_year,
-                'quarter': row.quarter
+                'fiscal_year': fiscal_year,
+                'quarter': quarter
             }
 
         if skipped_count > 0:
@@ -549,7 +576,11 @@ async def verify_results():
             logger.info(f"  {row.bank_name} ({row.bank_symbol}): {row.periods} period-tags [{tags}]")
 
 
-async def sync_all_tables(mode: str = 'update', dry_run: bool = False):
+async def sync_all_tables(
+    mode: str = 'update',
+    dry_run: bool = False,
+    only_tag: Optional[str] = None
+):
     """
     Sync all enabled tables based on configuration.
 
@@ -559,13 +590,19 @@ async def sync_all_tables(mode: str = 'update', dry_run: bool = False):
     """
     # Filter to enabled tables only
     enabled_tables = [config for config in TABLE_CONFIGS if config.enabled]
+    if only_tag:
+        enabled_tables = [config for config in enabled_tables if config.tag == only_tag]
 
     if not enabled_tables:
         logger.error("No tables enabled for sync")
+        if only_tag:
+            logger.error(f"No enabled table found for tag: {only_tag}")
         return
 
     logger.info(f"Syncing {len(enabled_tables)} table(s)")
     logger.info(f"Mode: {mode}")
+    if only_tag:
+        logger.info(f"Only tag: {only_tag}")
     if dry_run:
         logger.info("DRY RUN - No changes will be made")
 
@@ -650,6 +687,10 @@ async def async_main():
         action="store_true",
         help="Only show verification summary, don't sync"
     )
+    parser.add_argument(
+        "--only-tag",
+        help="Only sync one configured database tag, e.g. supplementary_financials"
+    )
 
     args = parser.parse_args()
 
@@ -659,7 +700,7 @@ async def async_main():
             return
 
         # Run the sync
-        await sync_all_tables(mode=args.mode, dry_run=args.dry_run)
+        await sync_all_tables(mode=args.mode, dry_run=args.dry_run, only_tag=args.only_tag)
 
         # Show verification unless dry-run
         if not args.dry_run:

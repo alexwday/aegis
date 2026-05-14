@@ -1,0 +1,63 @@
+stage: rerank
+version: "1.0"
+description: >
+  Filter candidate supplementary financial chunks by relevance
+  using metadata and summaries only.
+
+system_prompt: >
+  You are a conservative noise filter for financial research
+  retrieval. Remove only chunks that are clearly unrelated to
+  the query. When relevance is plausible or indirect, keep the
+  chunk. Always use the provided tool.
+
+user_prompt: >
+  Given this research query and scope, review the candidate
+  chunk metadata below and identify any candidates that are
+  clearly unrelated.
+
+  <query>{user_input}</query>
+
+  <research_scope>
+  {research_scope}
+  </research_scope>
+
+  <candidates>
+  {candidates}
+  </candidates>
+
+  Rules:
+  1. Remove only chunks that are unquestionably unrelated to
+     the query topic, bank, period, or requested metrics.
+  2. Keep chunks with indirect relevance: related sheet titles,
+     metric definitions, segment tables, comparative-period
+     columns, footnotes, and nearby financial schedules.
+  3. Judge from sheet name, summary, keywords, metrics, source
+     metadata, and fusion score. Raw sheet content is not shown
+     at this stage.
+  4. Do not remove chunks just because a stronger candidate
+     already covers the same topic. Corroborating evidence can
+     be useful.
+  5. Return an empty array if all chunks are potentially relevant.
+
+tool_choice: required
+
+tools:
+  - type: function
+    function:
+      name: filter_chunks
+      description: >
+        Return only the indices of clearly unrelated candidate
+        chunks. Keep anything with plausible relevance.
+      parameters:
+        type: object
+        properties:
+          remove_indices:
+            type: array
+            items:
+              type: integer
+            description: >
+              Indices of candidates to remove. Return an empty
+              array to keep all candidates.
+        required:
+          - remove_indices
+        additionalProperties: false

@@ -80,6 +80,31 @@ databases:
       Institution Coverage:
       Available for: All major Canadian and US banks in scope
 
+  - id: supplementary_financials
+    name: Supplementary Financials Database
+    content: |
+      Data Contains:
+      Placeholder supplementary financials agent for the new database buildout. This is currently
+      used to test routing and streaming before the actual retriever and research logic are built.
+
+      WHEN TO USE:
+      ✓ When the user explicitly selects Supplementary Financials in the interface
+      ✓ Testing the new supplementary_financials subagent path
+      ✓ Future supplementary financial package retrieval and research workflows
+
+      DO NOT USE FOR:
+      ✗ IR benchmarking output from the existing supplementary subagent
+      ✗ Management commentary (use transcripts instead)
+      ✗ Report to shareholders or 10-Q/10-K document content (use RTS)
+
+      Query Requirements:
+      - Fiscal Year (e.g., FY2024, FY2025)
+      - Quarter (e.g., Q1, Q2, Q3, Q4)
+      - Bank(s) (e.g., RBC, TD, BMO, Scotia, CIBC)
+
+      Institution Coverage:
+      Placeholder coverage while the actual retriever is being built
+
   - id: pillar3
     name: Pillar 3 Regulatory Database
     content: |
