@@ -90,6 +90,9 @@ def load_prompt_from_db(
     Raises:
         FileNotFoundError: If prompt doesn't exist in database
     """
+    if sql_prompt.prompt_manager is None:
+        sql_prompt.postgresql_prompts()
+
     # Load prompt from database
     prompt_data = sql_prompt.prompt_manager.get_latest_prompt(
         model="aegis",

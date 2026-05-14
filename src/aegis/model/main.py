@@ -552,7 +552,7 @@ async def model(
             logger.info("model.stage.planner.started", execution_id=execution_id)
             planner_start = datetime.now(timezone.utc)
 
-            from aegis.model.agents.planner import plan_database_queries
+            from .agents.planner import plan_database_queries
 
             # Build planner context
             planner_context = {
